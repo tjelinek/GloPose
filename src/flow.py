@@ -17,7 +17,7 @@ args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None
                  position_and_content=False)
 
 model = torch.nn.DataParallel(RAFTGMA(args=args))
-checkpoint_path = Path('GMA/checkpoints/gma-sintel.pth')
+checkpoint_path = Path('../GMA/checkpoints/gma-sintel.pth')
 model.load_state_dict(torch.load(checkpoint_path))
 print(f"Loaded checkpoint at {checkpoint_path}")
 
