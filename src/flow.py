@@ -1,5 +1,6 @@
 import glob
 import os
+from argparse import Namespace
 from typing import Iterable
 
 import imageio
@@ -11,7 +12,11 @@ from GMA.core.utils.utils import InputPadder
 from GMA.evaluate_single import load_image
 from cfg import *
 
-model = torch.nn.DataParallel(RAFTGMA(args=None))  # TODO add some args
+
+args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1, position_only=False,
+                 position_and_content=False)
+
+model = torch.nn.DataParallel(RAFTGMA(args=args))
 checkpoint_path = Path('GMA/checkpoints/gma-sintel.pth')
 model.load_state_dict(torch.load(checkpoint_path))
 print(f"Loaded checkpoint at {checkpoint_path}")
