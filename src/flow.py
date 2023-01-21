@@ -68,3 +68,10 @@ def export_flow_from_files(files_source_dir: Path, flows_target_dir: Path = FLOW
 
         flow_image_path = flows_target_dir / Path('flow_' + filename1 + '_' + filename2 + '.png')
         imageio.imwrite(flow_image_path, flow_up)
+
+
+if __name__ == "__main__":
+
+    path_to_dataset = Path("data/coin_tracking/images/pingpong1")
+    export_flow_from_files(path_to_dataset)
+
