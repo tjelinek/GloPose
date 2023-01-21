@@ -65,7 +65,10 @@ def export_flow_from_files(files_source_dir: Path, flows_target_dir: Path = FLOW
         # map flow to rgb image
         flow_up = flow_viz.flow_to_image(flow_up)
 
-        flow_image_path = flows_target_dir / Path('flow_' + filename1 + '_' + filename2 + '.png')
+        file1_stem = Path(filename1).stem
+        file2_stem = Path(filename2).stem
+
+        flow_image_path = flows_target_dir / Path('flow_' + file1_stem + '_' + file2_stem + '.png')
         imageio.imwrite(flow_image_path, flow_up)
 
 
