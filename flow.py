@@ -60,7 +60,7 @@ def export_flow_from_files(files_source_dir: Path, flows_target_dir: Path = FLOW
 
     for (filename1, filename2), (flow_low, flow_up) in get_flow_from_files(files_source_dir):
         # flow_low = flow_low[0].permute(1, 2, 0).cpu().numpy()
-        flow_up = flow_up[0].permute(1, 2, 0).cpu().detach.numpy()
+        flow_up = flow_up[0].permute(1, 2, 0).cpu().detach().numpy()
 
         # map flow to rgb image
         flow_up = flow_viz.flow_to_image(flow_up)
