@@ -13,10 +13,8 @@ from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
 from GMA.evaluate_single import load_image
 
-
-
 args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1, position_only=False,
-                 position_and_content=False)
+                 position_and_content=False, mixed_precision=True)
 
 model = torch.nn.DataParallel(RAFTGMA(args=args))
 checkpoint_path = Path('GMA/checkpoints/gma-sintel.pth')
@@ -43,7 +41,6 @@ def get_flow_from_sequence(images_pairs: Iterable):
 
 
 def get_flow_from_files(files_source_dir: Path):
-
     images = glob.glob(os.path.join(files_source_dir, '*.png')) + \
              glob.glob(os.path.join(files_source_dir, '*.jpg'))
 
@@ -73,7 +70,5 @@ def export_flow_from_files(files_source_dir: Path, flows_target_dir: Path = FLOW
 
 
 if __name__ == "__main__":
-
     path_to_dataset = Path("data/coin_tracking/images/pingpong1")
     export_flow_from_files(path_to_dataset)
-
