@@ -6,11 +6,13 @@ from typing import Iterable
 import imageio
 import torch
 
+from cfg import *
+
 from GMA.core.network import RAFTGMA
 from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
 from GMA.evaluate_single import load_image
-from cfg import *
+
 
 
 args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1, position_only=False,
