@@ -1,5 +1,5 @@
-FOLDER=/cluster/scratch/denysr/dataset
-WEIGHTS=/cluster/home/denysr/scratch/tmp
+FOLDER=/cluster/scratch/denysr/dataset/
+WEIGHTS=/cluster/home/denysr/scratch/tmp/
 scp jelint19@ptak.felk.cvut.cz:/datagrid/personal/jelint19/360photo/360photo.zip $FOLDER/360photo/
 unzip $FOLDER/360photo/360photo.zip -d $FOLDER/360photo/
 
