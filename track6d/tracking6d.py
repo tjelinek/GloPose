@@ -1,6 +1,5 @@
 import copy
 import os
-import sys
 import time
 
 import cv2
@@ -10,7 +9,6 @@ import torchvision.ops.boxes as bops
 from torch import nn
 from torchvision.utils import save_image
 
-sys.path.append('./models')
 from S2DNet.s2dnet import S2DNet
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
