@@ -1,7 +1,3 @@
-[submodule "track6d"]
-	path = track6d
-	url = https://github.com/rozumden/track6d.git
-	
 [submodule "track6d/OSTrack"]
 	path = track6d/OSTrack
 	url = https://github.com/botaoye/OSTrack.git
