@@ -1,10 +1,10 @@
 import meshzoo
 import numpy as np
 
-def generate_initial_mesh(meshsize):
-	vertices, faces = meshzoo.icosa_sphere(meshsize)
-	face_features = generate_face_features(vertices, faces)
-	return vertices, faces, face_features
+# def generate_initial_mesh(meshsize):
+# 	vertices, faces = meshzoo.icosa_sphere(meshsize)
+# 	face_features = generate_face_features(vertices, faces)
+# 	return vertices, faces, face_features
 
 def generate_face_features(vertices, faces):
 	face_features = np.zeros([faces.shape[0],3,2])
