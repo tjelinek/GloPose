@@ -1,7 +1,6 @@
 import os
 import sys
 sys.path.append('OSTrack')
-print(sys.path)
 import time
 
 import numpy as np
