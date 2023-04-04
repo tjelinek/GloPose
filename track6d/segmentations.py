@@ -12,11 +12,9 @@ from scipy import ndimage
 
 import sys
 
-sys.path.insert(0, './OSTrack')
 from OSTrack.lib.test.evaluation import Tracker
 from OSTrack.lib.test.tracker.ostrack import OSTrack
 from OSTrack.lib.test.parameter.ostrack import parameters
-
 
 
 def compute_segments(segment, I, width, height):
