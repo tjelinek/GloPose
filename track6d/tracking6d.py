@@ -1,6 +1,7 @@
 import copy
 import os
 import time
+import types
 
 import cv2
 import numpy as np
@@ -12,6 +13,8 @@ from torchvision.utils import save_image
 from S2DNet.s2dnet import S2DNet
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
+available_modules = [mod_name for mod_name, mod in globals().items() if isinstance(mod, types.ModuleType)]
+print(available_modules)
 from models.encoder import Encoder, qmult, qnorm
 from models.initial_mesh import generate_initial_mesh, generate_face_features
 from models.kaolin_wrapper import load_obj, write_obj_mesh
