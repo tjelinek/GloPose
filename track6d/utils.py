@@ -1,17 +1,14 @@
-import numpy as np
-import math 
+import math
 
-from main_settings import *
-
-from skimage.draw import line_aa
-from skimage import measure
-import skimage.transform
-from scipy import signal
-from skimage.measure import label, regionprops
-import skimage.metrics as metrics
-import scipy.misc
 import cv2
+import numpy as np
 import yaml
+from scipy import signal
+from skimage.draw import line_aa
+from skimage.measure import label, regionprops
+
+from main_settings import tmp_folder
+
 
 def segment2bbox(segment):
 	inds = segment.nonzero(as_tuple=False)
