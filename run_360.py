@@ -1,24 +1,16 @@
+import argparse
 import os
-import sys
-sys.path.append('./OSTrack')
-sys.path.append('./OSTrack/lib')
-sys.path.append('./OSTrack/S2DNet')
-# sys.path.append('./models')
+import torch
 import time
 
-import numpy as np
-import torch
-from setuptools import glob
-
-from main_settings import tmp_folder, dataset_folder
-from tracking6d import Tracking6D
-from utils import load_config
-
-
-import argparse
-
+import sys
+sys.path.append('OSTrack/S2DNet')
+from utils import *
+from dataloaders.tbd_loader import *
+from tracking6d import *
+from models.rendering import generate_novel_views
+from segmentations import *
 import shutil
-
 
 # TODO: Copy data:
 # scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
@@ -48,18 +40,16 @@ def main():
     if os.path.exists(write_folder):
         shutil.rmtree(write_folder)
     os.makedirs(write_folder)
-    os.makedirs(os.path.join(write_folder, 'imgs'))
-    shutil.copyfile(os.path.join('.', 'prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+    os.makedirs(os.path.join(write_folder,'imgs'))
+    shutil.copyfile(os.path.join('track6d', 'prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
     config["sequence"] = args.sequence
 
     t0 = time.time()
-    files = np.array(
-        glob.glob(os.path.join(dataset_folder, '360photo', 'original', args.dataset, args.sequence, '*.*')))
+    files = np.array(glob.glob(os.path.join(dataset_folder, '360photo', 'original', args.dataset, args.sequence, '*.*')))
     files.sort()
-    segms = np.array(
-        glob.glob(os.path.join(dataset_folder, '360photo', 'masks_U2Net', args.dataset, args.sequence, '*.*')))
+    segms = np.array(glob.glob(os.path.join(dataset_folder, '360photo', 'masks_U2Net', args.dataset, args.sequence, '*.*')))
     segms.sort()
-    print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
+    print('Data loading took {:.2f} seconds'.format((time.time() - t0)/1))
     if args.length is None:
         args.length = len(files)
 
@@ -79,9 +69,7 @@ def main():
     t0 = time.time()
     sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
     best_model = sfb.run_tracking(files, baseline_dict)
-    print(
-        '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"], (time.time() - t0) / 1,
-                                                                          best_model["value"]))
+    print('{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"], (time.time() - t0)/1, best_model["value"]))
     breakpoint()
 
 

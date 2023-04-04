@@ -7,7 +7,7 @@ import argparse
 
 import sys
 
-sys.path.insert(0, '../')
+sys.path.insert(0, '../track6d/')
 from shapefromblur import *
 from utils import load_config
 

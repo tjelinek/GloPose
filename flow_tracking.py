@@ -8,11 +8,10 @@ import torchvision.ops.boxes as bops
 from S2DNet.s2dnet import S2DNet
 from flow import get_flow_from_images
 from segmentations import *
-from track6d.models.encoder import *
-from track6d.models.initial_mesh import generate_initial_mesh, generate_face_features
-from track6d.models.kaolin_wrapper import load_obj, write_obj_mesh
-from track6d.models.loss import *
-from track6d.models.rendering import *
+from models.encoder import *
+from models.initial_mesh import generate_face_features
+from models.loss import *
+from models.rendering import *
 
 
 @dataclass
