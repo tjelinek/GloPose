@@ -4,7 +4,7 @@ import numpy as np
 import torchvision.ops.boxes as bops
 
 from utils import *
-from models.initial_mesh import generate_initial_mesh, generate_face_features
+from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj, write_obj_mesh
 
 from models.encoder import *
@@ -52,8 +52,8 @@ class Tracking6D():
             ivertices = ivertices / ivertices.max()
             faces = mesh.faces.numpy().copy()
             iface_features = generate_face_features(ivertices, faces)
-        elif prot == 'sphere':
-            ivertices, faces, iface_features = generate_initial_mesh(self.config["mesh_size"])
+        # elif prot == 'sphere':
+        #     ivertices, faces, iface_features = generate_initial_mesh(self.config["mesh_size"])
         else:
             mesh = load_obj(os.path.join('/cluster/home/denysr/src/ShapeFromBlur/prototypes',prot+'.obj'))
             ivertices = mesh.vertices.numpy()
