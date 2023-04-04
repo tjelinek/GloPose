@@ -13,9 +13,9 @@ from scipy import ndimage
 import sys
 
 sys.path.insert(0, './OSTrack')
-from lib.test.evaluation import Tracker
-from lib.test.tracker.ostrack import OSTrack
-from lib.test.parameter.ostrack import parameters
+from OSTrack.lib.test.evaluation import Tracker
+from OSTrack.lib.test.tracker.ostrack import OSTrack
+from OSTrack.lib.test.parameter.ostrack import parameters
 
 
 
