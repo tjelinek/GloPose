@@ -41,7 +41,7 @@ def main():
         shutil.rmtree(write_folder)
     os.makedirs(write_folder)
     os.makedirs(os.path.join(write_folder,'imgs'))
-    shutil.copyfile(os.path.join('track6d', 'prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+    shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
     config["sequence"] = args.sequence
 
     t0 = time.time()
