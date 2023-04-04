@@ -1,5 +1,7 @@
 import os
 import sys
+sys.path.append('OSTrack')
+print(sys.path)
 import time
 
 import numpy as np
@@ -10,7 +12,6 @@ from main_settings import tmp_folder, dataset_folder
 from tracking6d import Tracking6D
 from utils import load_config
 
-sys.path.append('OSTrack')
 
 import argparse
 
