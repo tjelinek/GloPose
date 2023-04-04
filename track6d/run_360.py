@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.append('OSTrack')
+sys.path.append('OSTrack/S2DNet')
 import time
 
 import numpy as np
