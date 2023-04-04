@@ -9,8 +9,8 @@ if not os.path.exists(dataset_folder):
 
 # TODO: put your paths here:
 if not os.path.exists(dataset_folder):
-	dataset_folder = '/my/path/'
-	tmp_folder = '/my/path/'
+	dataset_folder = './data/'
+	tmp_folder = './tmp/'
 
 g_tbd_folder = dataset_folder+'TbD/'
 g_tbd3d_folder = dataset_folder+'TbD-3D/'
