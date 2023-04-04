@@ -3,7 +3,7 @@ import sys
 sys.path.append('./OSTrack')
 sys.path.append('./OSTrack/lib')
 sys.path.append('./OSTrack/S2DNet')
-sys.path.append('./OSTrack/models')
+sys.path.append('./models')
 import time
 
 import numpy as np
