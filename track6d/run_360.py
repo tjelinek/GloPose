@@ -1,3 +1,6 @@
+import sys
+sys.path.append('OSTrack')
+
 import argparse
 import os
 import torch
@@ -8,8 +11,6 @@ from tracking6d import *
 from models.rendering import generate_novel_views
 from segmentations import *
 import shutil
-
-sys.path.append('OSTrack')
 
 # TODO: Copy data:
 # scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
