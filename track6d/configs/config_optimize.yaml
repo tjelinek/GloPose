@@ -1,0 +1,38 @@
+# MAIN SETTINGS
+iterations: 1000
+learning_rate: 0.1
+
+inc_step: 5
+accumulate: False
+keyframes: False
+
+mesh_size: 11
+camera_distance: 5
+mesh_normalize: False
+texture_size: 300 # 0 for none
+sigmainv: 7000
+factor: 1
+mask_iou_th: 0
+
+# LOSS FUNCTION
+loss_laplacian_weight: 1000.0
+loss_model_weight: 1.0
+loss_tv_weight: 0.5
+loss_silh_weight: 0.5
+
+# which silh version
+loss_jointm_iou_weight: 0
+loss_iou_weight: 1.0
+loss_rgb_weight: 0 
+loss_mask_weight: 0
+
+erode_renderer_mask_init: 3
+rotation_divide: 8
+
+shapes:
+  - sphere
+predict_vertices_list: 
+  - True
+
+write_results: True
+verbose: True

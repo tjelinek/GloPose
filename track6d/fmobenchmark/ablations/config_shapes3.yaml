@@ -1,0 +1,39 @@
+# MAIN SETTINGS
+iterations: 500
+learning_rate: 0.1
+
+mesh_size: 11
+camera_distance: 5
+mesh_normalize: False
+texture_size: 100 # 0 for none
+sigmainv: 7000
+factor: 1
+mask_iou_th: 0
+
+# LOSS FUNCTION
+loss_laplacian_weight: 1000.0
+loss_normal_weight: 0.0
+loss_ael_weight: 0 
+loss_use_supervised: True
+loss_use_model: True
+do_flip: True
+loss_jointm_iou_weight: 0.0
+loss_iou_weight: 1.0
+loss_rgb_weight: 0.0
+loss_mask_weight: 0
+loss_total_variation: 1.0
+erode_renderer_mask: 3
+apply_blur: 0
+
+shapes:
+  - sphere
+  - sphere_voronoi
+  - torus_voronoi
+predict_vertices_list: 
+  - True
+
+input_defmo: 1
+input_frames: 1
+
+write_results: False
+verbose: False
