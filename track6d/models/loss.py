@@ -1,9 +1,7 @@
-import torch.nn as nn
-import torch
-from helpers.torch_helpers import *
-from kornia.losses import total_variation
 import numpy as np
-from segmentations import compute_weights
+import torch
+import torch.nn as nn
+from kornia.losses import total_variation
 
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
