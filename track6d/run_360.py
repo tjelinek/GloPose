@@ -1,8 +1,9 @@
 import os
 import sys
-sys.path.append('./OSTrack')
-sys.path.append('./OSTrack/lib')
-sys.path.append('./OSTrack/S2DNet')
+# sys.path.append('./OSTrack')
+# sys.path.append('./OSTrack/lib')
+# sys.path.append('./OSTrack/S2DNet')
+sys.path.insert(0, './OSTrack')
 import time
 
 import numpy as np
