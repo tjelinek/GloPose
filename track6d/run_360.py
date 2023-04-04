@@ -9,6 +9,8 @@ from models.rendering import generate_novel_views
 from segmentations import *
 import shutil
 
+sys.path.append('./OSTrack')
+
 # TODO: Copy data:
 # scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
 # unzip ~/scratch/dataset/360photo/360photo.zip -d ~/scratch/dataset/360photo/
