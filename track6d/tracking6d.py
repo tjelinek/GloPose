@@ -1,22 +1,14 @@
-import os
-import torch
-import numpy as np
+import copy
+import time
+
 import torchvision.ops.boxes as bops
 
-from utils import *
-from models.initial_mesh import generate_initial_mesh, generate_face_features
-from models.kaolin_wrapper import load_obj, write_obj_mesh
-
-from models.encoder import *
-from models.rendering import *
-from models.loss import *
-
-from helpers.torch_helpers import write_renders
-from scipy.ndimage.filters import gaussian_filter
-import copy
-from segmentations import *
-import time
 from S2DNet.s2dnet import S2DNet
+from models.encoder import *
+from models.initial_mesh import generate_face_features
+from models.loss import *
+from models.rendering import *
+from segmentations import PrecomputedTracker, get_bbox, OSTracker, MyTracker, CSRTrack, create_mask_from_string
 
 
 class Tracking6D():
