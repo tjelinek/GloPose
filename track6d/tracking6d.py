@@ -13,6 +13,7 @@ from torchvision.utils import save_image
 from S2DNet.s2dnet import S2DNet
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
+print(os.getcwd())
 available_modules = [mod_name for mod_name, mod in globals().items() if isinstance(mod, types.ModuleType)]
 print(available_modules)
 from models.encoder import Encoder, qmult, qnorm
