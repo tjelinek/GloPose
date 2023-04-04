@@ -3,10 +3,12 @@ import meshio
 import meshzoo
 import plyfile
 import numpy as np
-from models.initial_mesh import generate_initial_mesh
 import torch
 
 import pyvista as pv
+
+from models.initial_mesh import generate_face_features
+
 
 def load_obj(path):
     return kaolin.io.obj.import_mesh(path,with_materials=True)
@@ -35,7 +37,14 @@ def subdivide_mesh(vertices, faces, config, divide_scale = 1, subfilter = 'loop'
 	subdivided_vertices = np.array(mesh2.points)
 	subdivided_faces = np.array(mesh2.faces).reshape( int(mesh2.faces.shape[0]/4), 4)[:,1:]
 
-	ivertices, ifaces, iface_features = generate_initial_mesh(config["mesh_size"])
+	mesh = load_obj(config["init_shape"])
+	ivertices = mesh.vertices.numpy()
+	ivertices = ivertices - ivertices.mean(0)
+	ivertices = ivertices / ivertices.max()
+	ifaces = mesh.faces.numpy().copy()
+	iface_features = generate_face_features(ivertices, faces)
+
+	# ivertices, ifaces, iface_features = generate_initial_mesh(config["mesh_size"])
 	icells = 3*np.ones((ifaces.shape[0],4),'int64')
 	icells[:,1:] = ifaces
 	imesh = pv.PolyData(ivertices, icells)
