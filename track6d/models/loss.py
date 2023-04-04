@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from helpers.torch_helpers import *
-from kornia import total_variation
+from kornia.losses import total_variation
 import numpy as np
 from segmentations import compute_weights
 
