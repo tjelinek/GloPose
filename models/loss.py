@@ -1,3 +1,5 @@
+import math
+
 import torch.nn as nn
 import torch
 from helpers.torch_helpers import *
@@ -46,17 +48,26 @@ class FMOLoss(nn.Module):
             losses["tdiff"] = self.config["loss_qt_weight"]*tdiff[-1]
             losses["qdiff"] = self.config["loss_qt_weight"]*qdiff[-1]
 
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print(self.config["loss_dist_weight"])
         if self.config["loss_dist_weight"] > 0:
             dists = (segments[:,:,0]*renders[:,:,0,-1])
             losses["dist"] = self.config["loss_dist_weight"]*(dists.sum((0,2,3))/renders[:,:,0,-1].sum((0,2,3))).mean()
 
+        # print(self.config["loss_tv_weight"])
         if self.config["loss_tv_weight"] > 0:
             texture_maps_rep = torch.cat((texture_maps[:,:,-1:],texture_maps,texture_maps[:,:,:1]),2)
             texture_maps_rep = torch.cat((texture_maps_rep[:,:,:,-1:],texture_maps_rep,texture_maps_rep[:,:,:,:1]),3)
             texture_maps_rep = torch.cat((texture_maps_rep[:,:,-1:],texture_maps_rep,texture_maps_rep[:,:,:1]),2)
-            losses["tv"] = self.config["loss_tv_weight"]*total_variation(texture_maps_rep)/(3*self.config["texture_size"]**2) 
+            losses["tv"] = self.config["loss_tv_weight"]*total_variation(texture_maps_rep, reduction='sum')/(3*self.config["texture_size"]**2)
+            # TODO check with Denys, now for image of dim. (C, H, W) returns los for each of C channels
+            # TODO fixing by using summing the losses across channels, however, maybe L2 norm should be used
+            # TODO to compute difference across each channel, current definition also corresponds to 'sum' reduction
+            losses["tv"] = losses["tv"].sum()
 
+        # print(texture_maps_rep.shape)
         loss = 0
+        # print(losses['tv'])
         for ls in losses:
             loss += losses[ls]
         return losses_all, losses, loss

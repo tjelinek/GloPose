@@ -42,7 +42,7 @@ erode_renderer_mask: 3
 rotation_divide: 8
 
 shapes:
-  - sphere
+  - sphere_voronoi
 predict_vertices: True
 
 write_results: True

@@ -11,7 +11,8 @@ from models.initial_mesh import generate_face_features
 
 
 def load_obj(path):
-    return kaolin.io.obj.import_mesh(path,with_materials=True)
+	print("Loading mesh located at", path)
+	return kaolin.io.obj.import_mesh(path,with_materials=True)
 
 def get_lapsmooth(vertices, faces):
 	nver = kaolin.metrics.trianglemesh.uniform_laplacian_smoothing(vertices, faces)
