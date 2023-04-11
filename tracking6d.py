@@ -2,17 +2,19 @@ import copy
 import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
 import cv2
+import imageio
 import numpy as np
 import torch
 import torchvision.ops.boxes as bops
 from torch import nn
+from torchvision import transforms
 from torchvision.utils import save_image
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-# from flow import get_flow_from_images
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, qmult, qnorm
@@ -21,7 +23,10 @@ from models.kaolin_wrapper import load_obj, write_obj_mesh
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, create_mask_from_string
-from utils import segment2bbox, write_video
+from utils import segment2bbox, write_video, imread
+from flow import get_flow_from_images, visualize_flow_with_images
+from flow_gma import get_flow_model
+from cfg import FLOW_OUT_DEFAULT_DIR
 
 
 @dataclass
@@ -66,6 +71,9 @@ class Tracking6D:
         self.tracker_config = TrackerConfig()
         self.config["fmo_steps"] = 1
         self.device = device
+
+        self.model_flow = get_flow_model()
+
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
             self.tracker = PrecomputedTracker(self.config["image_downsample"],
@@ -140,6 +148,11 @@ class Tracking6D:
         self.keyframes = [0]
 
     def run_tracking(self, files, bboxes, depths_dict=None):
+        # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
+        if type(bboxes) is dict:
+            sorted_bb_keys = sorted(list(bboxes.keys()))
+            bboxes = {i: bboxes[sorted_bb_keys[i]] for i, key in zip(range(len(bboxes)), sorted_bb_keys)}
+
         all_input = cv2.VideoWriter(os.path.join(self.write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
                                     10, (self.images.shape[4], self.images.shape[3]), True)
         all_segm = cv2.VideoWriter(os.path.join(self.write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
@@ -166,9 +179,19 @@ class Tracking6D:
                 segment = segment_clean
             self.images = torch.cat((self.images, image), 1)
 
-            image_prev = self.images[0, -2, :, :, :]
-            image_new = self.images[0, -1, :, :, :]
-            # flow = get_flow_from_images(image1, image2, model)
+            image_prev = self.images[:, -2, :, :, :]
+            image_new = self.images[:, -1, :, :, :]
+            flow_video_up, _ = get_flow_from_images(image_prev, image_new, self.model_flow)
+            # print(flow_video_up.shape, image_new.shape)
+            flow = visualize_flow_with_images(image_prev[0], image_new[0], flow_video_up[0])
+            flow_image_path = FLOW_OUT_DEFAULT_DIR / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            imageio.imwrite(flow_image_path, flow)
+
+            transform = transforms.ToPILImage()
+
+            # Convert the tensor to a PIL image
+            image_new_pil = transform(image_prev[0])
+            imageio.imwrite(flow_image_path, image_new_pil)
 
             # print(self.images.shape)
             # TODO here are the silhouettes, find out, where to put the loss
@@ -248,6 +271,7 @@ class Tracking6D:
                                    os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
                         save_image(feat_renders_crop[0, tmpi, 0, :],
                                    os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
+                    # breakpoint()
                     if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
                         gt_segm = None
                         if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
@@ -257,7 +281,18 @@ class Tracking6D:
                             offset_[0]:offset_[0] + m_.shape[1]] = torch.from_numpy(m_)
                         elif stepi in bboxes:
                             gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
-                        if not gt_segm is None:
+                            image_gt_segm_control = (imread(bboxes[stepi]) * 255).astype('uint8')
+                            # gt_segm = image_gt_segm_control
+                        if gt_segm is not None:
+                            image_gt_segm = (gt_segm * 255).cpu().detach().numpy().astype('uint8')
+                            # image_gt_segm = gt_segm
+
+                            image_our_segm = segment[0, 0, -1].cpu().detach().numpy().astype('uint8') * 255
+                            # breakpoint()
+                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt.png'), image_gt_segm)
+                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt_control.png'), image_gt_segm_control)
+                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_our.png'), image_our_segm)
+
                             baseline_iou[stepi - 1] = float((segment[0, 0, -1] * gt_segm > 0).sum()) / float(
                                 ((segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
                             our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(

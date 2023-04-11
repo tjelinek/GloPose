@@ -34,7 +34,7 @@ def compute_segments_dist(segment, width, height):
     return segments
 
 
-class PrecomputedTracker():
+class PrecomputedTracker:
     def __init__(self, perc, max_width, baseline_dict, grabcut=False):
         self.perc = perc
         self.max_width = max_width
@@ -68,15 +68,24 @@ class PrecomputedTracker():
         return image, segments
 
     def process_segm(self, segm_path):
-        segment = cv.resize(imread(segm_path), self.shape[1::-1]).astype(np.float64)
+        img = (imread(segm_path) * 255).astype('uint8')
+        # breakpoint(mg
+        import imageio
+
+        # imageio.imwrite("control1.png", img)
+        segment = cv2.resize(img, self.shape[1::-1], interpolation=cv2.INTER_NEAREST)  # .astype(np.float64)
+        # imageio.imwrite("control2.png", segment)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        # imageio.imwrite("control3.png", segment)
 
-        labels = label(segment)
-        if labels.max() > 0:
-            segment = (labels == np.argmax(np.bincount(labels.flat)[1:]) + 1)
+        # labels = label(segment)
+        # if labels.max() > 0:
+        #     segment = (labels == np.argmax(np.bincount(labels.flat)[1:]) + 1)
 
+        # imageio.imwrite("control4.png", segment.astype('uint8') * 255)
+        # breakpoint()
         segm = transforms.ToTensor()(segment)
         return segm
 
@@ -125,7 +134,8 @@ class MyTracker():
         return image, segments
 
     def process_segm(self, segm_path):
-        segment = cv.resize(imread(segm_path), self.shape[1::-1]).astype(np.float64)
+        img = imread(segm_path)
+        segment = cv.resize(img, self.shape[1::-1]).astype(np.float64)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
@@ -146,7 +156,7 @@ class MyTracker():
         return image, segments
 
 
-class CSRTrack():
+class CSRTrack:
     def __init__(self, perc, max_width, grabcut):
         params = vot_params.parameters()
         self.tracker = cv2.TrackerCSRT_create()

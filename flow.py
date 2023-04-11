@@ -104,6 +104,8 @@ def get_flow_from_images(image1, image2, model):
     width = image2.size()[-1]
     transposed = False
 
+    # print(image1.shape)
+
     if height > width:
         transposed = True
         image1 = image1.transpose(-1, -2)
