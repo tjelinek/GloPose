@@ -281,17 +281,17 @@ class Tracking6D:
                             offset_[0]:offset_[0] + m_.shape[1]] = torch.from_numpy(m_)
                         elif stepi in bboxes:
                             gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
-                            image_gt_segm_control = (imread(bboxes[stepi]) * 255).astype('uint8')
+                            # image_gt_segm_control = (imread(bboxes[stepi]) * 255).astype('uint8')
                             # gt_segm = image_gt_segm_control
                         if gt_segm is not None:
                             image_gt_segm = (gt_segm * 255).cpu().detach().numpy().astype('uint8')
                             # image_gt_segm = gt_segm
 
-                            image_our_segm = segment[0, 0, -1].cpu().detach().numpy().astype('uint8') * 255
+                            # image_our_segm = segment[0, 0, -1].cpu().detach().numpy().astype('uint8') * 255
                             # breakpoint()
-                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt.png'), image_gt_segm)
-                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt_control.png'), image_gt_segm_control)
-                            imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_our.png'), image_our_segm)
+                            # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt.png'), image_gt_segm)
+                            # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt_control.png'), image_gt_segm_control)
+                            # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_our.png'), image_our_segm)
 
                             baseline_iou[stepi - 1] = float((segment[0, 0, -1] * gt_segm > 0).sum()) / float(
                                 ((segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
