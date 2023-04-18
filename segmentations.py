@@ -8,6 +8,7 @@ from scipy import ndimage
 from scipy.ndimage import uniform_filter
 from torchvision import transforms
 
+from flow import load_image
 from utils import *
 
 sys.path.insert(0, 'OSTrack')
@@ -99,6 +100,10 @@ class PrecomputedTracker:
         image, segments = self.process(I, ind)
         return image, segments
 
+    def next_high_resolution(self, file):
+        I = imread(file)
+        I = transforms.ToTensor()(I).float()
+        return I[None]
 
 class MyTracker():
     def __init__(self, perc, max_width, grabcut):

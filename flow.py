@@ -39,29 +39,48 @@ def get_flow_from_files(files_source_dir: Path, model):
         yield (imfile1, imfile2), (flow_low, flow_up)
 
 
-def visualize_flow_with_images(image1, image2, flow):
+def visualize_flow_with_images(image1, image2, flow_low, flow_up):
+    """
+
+    :param image1: uint8 image with 0-255 as color
+    :param image2: uint8 image with 0-255 as color
+    :param flow_low:
+    :param flow_up:
+    :return:
+    """
     width, height = image1.shape[-1], image1.shape[-2]
+
+    flow_up_image = flow_viz.flow_to_image(flow_up)
+    flow_low_image = flow_viz.flow_to_image(flow_low)
 
     # Tensors to PIL Images
     transform = T.ToPILImage()
-    image1 = transform(image1[0] * 255.0)
-    image2 = transform(image2[0] * 255.0)
-    flow = transform(flow)
+    image1 = transform(image1)
+    image2 = transform(image2)
+    flow_pil = transform(flow_up_image)
 
     draw1 = ImageDraw.Draw(image1)
     draw2 = ImageDraw.Draw(image2)
-    step = 100
+    step = max(width, height) // 20
 
-    r = 5 # radius of the drawn point
+    r = max(height // 400, 1) # radius of the drawn point
 
-    for x in range(step, width, step):
-        for y in range(step, height, step):
+    # breakpoint()
+
+    for y in range(step, height, step):
+        for x in range(step, width, step):
             draw1.ellipse((x - r, y - r, x + r, y + r), fill='red')
-            draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
+
+            shift_up_x = flow_up[y, x, 0]
+            shift_up_y = flow_up[y, x, 1]
+            end_up = (x - shift_up_x, y + shift_up_y)
+
+            draw2.ellipse((x - r, y - r, x + r, y + r), fill='green')
+            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r), fill='red')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
-    canvas.paste(flow, (width, 0))
+    canvas.paste(flow_pil, (width, 0))
     canvas.paste(image2, (2 * width, 0))
 
     return canvas
@@ -75,8 +94,8 @@ def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path
         flow_low = flow_low[0].permute(1, 2, 0).cpu().detach().numpy()
 
         # map flow to rgb image
-        flow_up = flow_viz.flow_to_image(flow_up)
-        flow_low = flow_viz.flow_to_image(flow_low)
+        flow_up_img = flow_viz.flow_to_image(flow_up)
+        flow_low_img = flow_viz.flow_to_image(flow_low)
 
         file1_stem = Path(filename1).stem
         file2_stem = Path(filename2).stem
@@ -84,11 +103,13 @@ def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path
         image1 = load_image(filename1)
         image2 = load_image(filename2)
 
-        flow = visualize_flow_with_images(image1, image2, flow_up)
+        flow = visualize_flow_with_images(image1[0] * 255, image2[0] * 255, flow_low, flow_up)
 
         flow_image_path = flows_target_dir / Path('flow_' + file1_stem + '_' + file2_stem + '.png')
         print("Writing flow to ", flow_image_path)
         imageio.imwrite(flow_image_path, flow)
+        pure_flow_image_path = flows_target_dir / Path('flow_pure_' + file1_stem + '_' + file2_stem + '.png')
+        imageio.imwrite(pure_flow_image_path, flow_up_img)
 
 
 def get_flow_from_sequence(images_pairs: Iterable, model):
@@ -97,37 +118,63 @@ def get_flow_from_sequence(images_pairs: Iterable, model):
 
 
 def get_flow_from_images(image1, image2, model):
+    # with torch.no_grad():
+
     padder = InputPadder(image1.shape)
 
     image1, image2 = padder.pad(image1, image2)
-    height = image1.size()[-2]
-    width = image2.size()[-1]
-    transposed = False
 
-    # print(image1.shape)
-
-    if height > width:
-        transposed = True
-        image1 = image1.transpose(-1, -2)
-        image2 = image2.transpose(-1, -2)
-        width, height = height, width
-
-    resizer = torchvision.transforms.Resize((1024, 440))
-
-    image1 = resizer(image1)
-    image2 = resizer(image2)
+    # breakpoint()
 
     flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
 
-    flow_low = torchvision.transforms.Resize((height, width))(flow_low)
-    flow_up = torchvision.transforms.Resize((height, width))(flow_up)
-
-    if transposed:
-        width, height = height, width
-        flow_low = flow_low.transpose(-1, -2)
-        flow_up = flow_up.transpose(-1, -2)
-
     flow_low = padder.unpad(flow_low)
     flow_up = padder.unpad(flow_up)
+
+    return flow_low, flow_up
+
+
+def get_flow_from_images_raft(image1, image2, model):
+    with torch.no_grad():
+        padder = InputPadder(image1.shape)
+
+        image1, image2 = padder.pad(image1, image2)
+        height = image1.size()[-1]
+        width = image2.size()[-2]
+        transposed = False
+
+        if height > width:
+            transposed = True
+            image1 = image1.transpose(-1, -2)
+            image2 = image2.transpose(-1, -2)
+            width, height = height, width
+
+        resizer = torchvision.transforms.Resize((1024, 440))
+
+        height_scale = height / 440
+        width_scale = width / 1024
+
+        image1 = resizer(image1)
+        image2 = resizer(image2)
+
+        flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
+
+        flow_low = torchvision.transforms.Resize((width, height))(flow_low)
+        flow_up = torchvision.transforms.Resize((width, height))(flow_up)
+
+        if transposed:
+            width, height = height, width
+            flow_low = flow_low.transpose(-1, -2)
+            flow_up = flow_up.transpose(-1, -2)
+
+            flow_low[:, :, 0], flow_low[:, :, 1] = flow_low[:, :, 1], flow_low[:, :, 0]
+            flow_up[:, :, 0], flow_up[:, :, 1] = flow_up[:, :, 1], flow_up[:, :, 0]
+
+        flow_low = padder.unpad(flow_low)
+
+        flow_up[:, :, 0] *= width_scale
+        flow_up[:, :, 1] *= height_scale
+
+        flow_up = padder.unpad(flow_up)
 
     return flow_low, flow_up

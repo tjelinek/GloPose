@@ -1,4 +1,5 @@
 import copy
+import fnmatch
 import os
 import time
 from dataclasses import dataclass
@@ -14,7 +15,9 @@ from torch import nn
 from torchvision import transforms
 from torchvision.utils import save_image
 
+from GMA.core.utils import flow_viz
 from OSTrack.S2DNet.s2dnet import S2DNet
+from RAFT.core.utils.utils import InputPadder
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, qmult, qnorm
@@ -24,8 +27,8 @@ from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, create_mask_from_string
 from utils import segment2bbox, write_video, imread
-from flow import get_flow_from_images, visualize_flow_with_images
-from flow_gma import get_flow_model
+from flow import get_flow_from_images, visualize_flow_with_images, load_image, get_flow_from_images_raft
+from flow_raft import get_flow_model
 from cfg import FLOW_OUT_DEFAULT_DIR
 
 
@@ -96,8 +99,14 @@ class Tracking6D:
             self.feat = lambda x: x
         self.images, self.segments, self.config["image_downsample"] = self.tracker.init_bbox(file0, bbox0, init_mask)
         self.images, self.segments = self.images[None].to(self.device), self.segments[None].to(self.device)
-        self.flows: List = []
+        self.images_high_resolution = load_image(file0)
+
+        self.images_high_resolution: torch.Tensor = self.images_high_resolution[None].to(self.device)
+        self.flows: torch.Tensor = torch.zeros(self.images.shape, dtype=self.images.dtype)
+        self.flows_high_resolution: torch.Tensor = torch.zeros(self.images_high_resolution.shape,
+                                                               dtype=self.images_high_resolution.dtype)
         self.images_feat = self.feat(self.images).detach()
+
         shape = self.segments.shape
         prot = self.config["shapes"][0]
         if not config["init_shape"] is False:
@@ -168,9 +177,30 @@ class Tracking6D:
         self.config["loss_rgb_weight"] = 0
         removed_count = 0
 
+        # TODO this is an auxiliary code, to be removed
+        # breakpoint()
+
+        directory_path = Path('./data/flow_out/gma/')
+
+        # Get a list of all files in the directory
+        flow_files = os.listdir(directory_path)
+
+        # Filter the list to include only files containing "flow_pure" in their name
+        filtered_files = fnmatch.filter(flow_files, '*flow_pure*')
+        flow_image_files = list(sorted(filtered_files))
+
+        # breakpoint()
+
+        # TODO END this was an auxiliary code, to be removed
+
         b0 = None
         for stepi in range(1, self.config["input_frames"]):
             image_raw, segment = self.tracker.next(files[stepi])
+            # image_high_resolution = self.tracker.next_high_resolution(files[stepi])[None].to(self.device)
+            image_high_resolution = load_image(files[stepi])[None]
+
+            # breakpoint()
+
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
             if b0 is not None:
                 segment_clean = segment * 0
@@ -179,21 +209,59 @@ class Tracking6D:
                 segment = segment_clean
             self.images = torch.cat((self.images, image), 1)
 
-            image_prev = self.images[:, -2, :, :, :]
-            image_new = self.images[:, -1, :, :, :]
-            flow_video_up, _ = get_flow_from_images(image_prev, image_new, self.model_flow)
-            # print(flow_video_up.shape, image_new.shape)
-            flow = visualize_flow_with_images(image_prev[0], image_new[0], flow_video_up[0])
+            self.images_high_resolution = torch.cat((self.images_high_resolution, image_high_resolution), 1)
+
+            image_prev = (self.images[:, -2, :, :, :]).float() * 255
+            image_new = (self.images[:, -1, :, :, :]).float() * 255
+
+            flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
+            flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().detach().numpy()
+            flow_video_low = flow_video_low[0].permute(1, 2, 0).cpu().detach().numpy()
+
+            flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
+            # flow_image = transforms.ToTensor()(imageio.v2.imread(directory_path / flow_image_files[stepi]))
+
+            image_small_dims = image.shape[-2], image.shape[-1]
+
+            flow_image_small = transforms.Resize(image_small_dims)(flow_image)
+
+            segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
+
+            # breakpoint()
+
+            flow_image_segmented = flow_image_small.mul(segmentation_mask)
+
+            image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
+            image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
+            flow_image_reformatted: torch.Tensor = (flow_image * 255).to(torch.uint8)
+
+            # breakpoint()
+
+            flow_illustration = visualize_flow_with_images(image_prev_reformatted,
+                                                           image_new_reformatted,
+                                                           flow_video_low, flow_video_up)
+
             flow_image_path = FLOW_OUT_DEFAULT_DIR / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-            imageio.imwrite(flow_image_path, flow)
+            imageio.imwrite(flow_image_path, flow_illustration)
 
             transform = transforms.ToPILImage()
 
-            # Convert the tensor to a PIL image
-            image_new_pil = transform(image_prev[0])
-            imageio.imwrite(flow_image_path, image_new_pil)
+            image_pure_flow = transform(flow_image)
+            image_pure_flow_small = transform(flow_image_small)
+            image_pure_flow_segmented = transform(flow_image_segmented)
+            image_new_pil = transform(image_new[0] / 255.0)
+            image_old_pil = transform(image_prev[0] / 255.0 )
+            prev_image_path = FLOW_OUT_DEFAULT_DIR / Path('prev_img_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            new_image_path = FLOW_OUT_DEFAULT_DIR / Path('next_img_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            pure_flow_path = FLOW_OUT_DEFAULT_DIR / Path('pure_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            flow_small_path = FLOW_OUT_DEFAULT_DIR / Path('flow_small_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            flow_segm_path = FLOW_OUT_DEFAULT_DIR / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+            imageio.imwrite(pure_flow_path, image_pure_flow)
+            imageio.imwrite(flow_small_path, image_pure_flow_small)
+            imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
+            imageio.imwrite(new_image_path, image_new_pil)
+            imageio.imwrite(prev_image_path, image_old_pil)
 
-            # print(self.images.shape)
             # TODO here are the silhouettes, find out, where to put the loss
             image_feat = self.feat(image).detach()
             self.images_feat = torch.cat((self.images_feat, image_feat), 1)
@@ -207,7 +275,6 @@ class Tracking6D:
                     self.encoder.used_tran[:, :, stepi - 1] + self.encoder.offsets[:, :, stepi - 1, :3])
             self.encoder.offsets[:, 0, stepi, 3:] = qmult(qnorm(self.encoder.used_quat[:, stepi - 1]),
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
-            encoder_backup = copy.deepcopy(self.encoder.state_dict())
 
             self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                        self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
@@ -271,7 +338,6 @@ class Tracking6D:
                                    os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
                         save_image(feat_renders_crop[0, tmpi, 0, :],
                                    os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
-                    # breakpoint()
                     if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
                         gt_segm = None
                         if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
@@ -284,7 +350,7 @@ class Tracking6D:
                             # image_gt_segm_control = (imread(bboxes[stepi]) * 255).astype('uint8')
                             # gt_segm = image_gt_segm_control
                         if gt_segm is not None:
-                            image_gt_segm = (gt_segm * 255).cpu().detach().numpy().astype('uint8')
+                            # image_gt_segm = (gt_segm * 255).cpu().detach().numpy().astype('uint8')
                             # image_gt_segm = gt_segm
 
                             # image_our_segm = segment[0, 0, -1].cpu().detach().numpy().astype('uint8') * 255
