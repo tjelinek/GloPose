@@ -95,6 +95,7 @@ class Tracking6D:
         if self.config["features"] == 'deep':
             self.net = S2DNet(device=device, checkpoint_path=g_ext_folder).to(device)
             self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
+            self.feat_rgb = lambda x: x
         else:
             self.feat = lambda x: x
         self.images, self.segments, self.config["image_downsample"] = self.tracker.init_bbox(file0, bbox0, init_mask)
@@ -196,7 +197,6 @@ class Tracking6D:
         b0 = None
         for stepi in range(1, self.config["input_frames"]):
             image_raw, segment = self.tracker.next(files[stepi])
-            # image_high_resolution = self.tracker.next_high_resolution(files[stepi])[None].to(self.device)
             image_high_resolution = load_image(files[stepi])[None]
 
             # breakpoint()
@@ -226,8 +226,6 @@ class Tracking6D:
             flow_image_small = transforms.Resize(image_small_dims)(flow_image)
 
             segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
-
-            # breakpoint()
 
             flow_image_segmented = flow_image_small.mul(segmentation_mask)
 
@@ -263,7 +261,9 @@ class Tracking6D:
             imageio.imwrite(prev_image_path, image_old_pil)
 
             # TODO here are the silhouettes, find out, where to put the loss
+            # This gives the deep features of the image
             image_feat = self.feat(image).detach()
+
             self.images_feat = torch.cat((self.images_feat, image_feat), 1)
             self.segments = torch.cat((self.segments, segment), 1)
             self.keyframes.append(stepi)
@@ -296,12 +296,12 @@ class Tracking6D:
                     translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
                     if self.config["features"] == 'rgb':
                         tex = texture_maps
-                    feat_renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
-                                                       texture_maps, lights, True)
-                    depth_map_crop = feat_renders_crop[:, :, :, -1]
+                    feat_renders_crop, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
+                                                         texture_maps, lights, True)
+
                     feat_renders_crop = feat_renders_crop[:, :, :, :-1]
                     feat_renders_crop = torch.cat((feat_renders_crop[:, :, :, :3], feat_renders_crop[:, :, :, -1:]), 3)
-                    renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features, tex,
+                    renders_crop, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features, tex,
                                                   lights)
                     renders_crop = torch.cat((renders_crop[:, :, :, :3], renders_crop[:, :, :, -1:]), 3)
                     renders = torch.zeros(renders_crop.shape[:4] + self.images_feat.shape[-2:]).to(self.device)
@@ -436,8 +436,13 @@ class Tracking6D:
         iters_without_change = 0
         for epoch in range(self.config["iterations"]):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(opt_frames)
-            renders = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
-                                     lights)
+            renders, theoretical_flow = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
+                                                       texture_maps, lights)
+
+            renders_rgb, theoretical_flow = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
+                                                       texture_maps, lights)
+
+            breakpoint()
             # TODO here comes the flow loss computation rendering computation
             # print(self.images.shape)
             # image1 =
@@ -489,7 +494,7 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
         for epoch in range(self.config["rgb_iters"]):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.rgb_encoder(opt_frames)
-            renders = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
+            renders, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
                                      lights)
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
                                                                tdiff, qdiff)
@@ -519,7 +524,7 @@ class Tracking6D:
             if self.config["write_results"]:
                 with torch.no_grad():
                     translation, quaternion, vertices, texture_maps, lights, _, _ = self.encoder(list(range(0, en)))
-                    renders = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
+                    renders, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
                                              texture_maps, lights)
                     write_renders(renders, self.write_folder, self.config["inc_step"], en)
                     write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],

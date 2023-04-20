@@ -6,6 +6,7 @@ from typing import List
 
 from vgg16 import vgg16_layers
 
+
 class AdapLayers(nn.Module):
     """Small adaptation layers.
     """
