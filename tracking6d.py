@@ -179,7 +179,6 @@ class Tracking6D:
         removed_count = 0
 
         # TODO this is an auxiliary code, to be removed
-        # breakpoint()
 
         directory_path = Path('./data/flow_out/gma/')
 
@@ -190,7 +189,6 @@ class Tracking6D:
         filtered_files = fnmatch.filter(flow_files, '*flow_pure*')
         flow_image_files = list(sorted(filtered_files))
 
-        # breakpoint()
 
         # TODO END this was an auxiliary code, to be removed
 
@@ -198,8 +196,6 @@ class Tracking6D:
         for stepi in range(1, self.config["input_frames"]):
             image_raw, segment = self.tracker.next(files[stepi])
             image_high_resolution = load_image(files[stepi])[None]
-
-            # breakpoint()
 
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
             if b0 is not None:
@@ -219,6 +215,7 @@ class Tracking6D:
             flow_video_low = flow_video_low[0].permute(1, 2, 0).cpu().detach().numpy()
 
             flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
+
             # flow_image = transforms.ToTensor()(imageio.v2.imread(directory_path / flow_image_files[stepi]))
 
             image_small_dims = image.shape[-2], image.shape[-1]
@@ -248,7 +245,7 @@ class Tracking6D:
             image_pure_flow_small = transform(flow_image_small)
             image_pure_flow_segmented = transform(flow_image_segmented)
             image_new_pil = transform(image_new[0] / 255.0)
-            image_old_pil = transform(image_prev[0] / 255.0 )
+            image_old_pil = transform(image_prev[0] / 255.0)
             prev_image_path = FLOW_OUT_DEFAULT_DIR / Path('prev_img_' + str(stepi) + '_' + str(stepi + 1) + '.png')
             new_image_path = FLOW_OUT_DEFAULT_DIR / Path('next_img_' + str(stepi) + '_' + str(stepi + 1) + '.png')
             pure_flow_path = FLOW_OUT_DEFAULT_DIR / Path('pure_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
@@ -277,7 +274,7 @@ class Tracking6D:
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
             self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
+                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0, stepi=stepi)
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
             our_losses[stepi - 1] = silh_losses[-1]
@@ -297,12 +294,12 @@ class Tracking6D:
                     if self.config["features"] == 'rgb':
                         tex = texture_maps
                     feat_renders_crop, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
-                                                         texture_maps, lights, True)
+                                                          texture_maps, lights, True)
 
                     feat_renders_crop = feat_renders_crop[:, :, :, :-1]
                     feat_renders_crop = torch.cat((feat_renders_crop[:, :, :, :3], feat_renders_crop[:, :, :, -1:]), 3)
                     renders_crop, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features, tex,
-                                                  lights)
+                                                     lights)
                     renders_crop = torch.cat((renders_crop[:, :, :, :3], renders_crop[:, :, :, -1:]), 3)
                     renders = torch.zeros(renders_crop.shape[:4] + self.images_feat.shape[-2:]).to(self.device)
                     renders[:, :, :, :, b0[0]:b0[1], b0[2]:b0[3]] = renders_crop
@@ -354,7 +351,6 @@ class Tracking6D:
                             # image_gt_segm = gt_segm
 
                             # image_our_segm = segment[0, 0, -1].cpu().detach().numpy().astype('uint8') * 255
-                            # breakpoint()
                             # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt.png'), image_gt_segm)
                             # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_gt_control.png'), image_gt_segm_control)
                             # imageio.imwrite(FLOW_OUT_DEFAULT_DIR / (str(stepi) + '_segm_our.png'), image_our_segm)
@@ -421,7 +417,7 @@ class Tracking6D:
 
         return self.best_model
 
-    def apply(self, input_batch, segments, opt_frames=None, bounds=None):
+    def apply(self, input_batch, segments, opt_frames=None, bounds=None, stepi=0):
         if self.config["write_results"]:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config["max_keyframes"] + 1)
@@ -434,15 +430,24 @@ class Tracking6D:
         self.best_model["value"] = 100
         self.best_model["losses"] = None
         iters_without_change = 0
+
+        # print(opt_frames)
+
         for epoch in range(self.config["iterations"]):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(opt_frames)
             renders, theoretical_flow = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
                                                        texture_maps, lights)
 
-            renders_rgb, theoretical_flow = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
-                                                       texture_maps, lights)
+            theoretical_flow_detached = theoretical_flow[0].to('cpu').detach().numpy()
 
-            breakpoint()
+            theoretical_flow_img = flow_viz.flow_to_image(theoretical_flow_detached)
+            theoretical_flow_path = FLOW_OUT_DEFAULT_DIR / \
+                                    Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+
+            imageio.imwrite(theoretical_flow_path, theoretical_flow_img)
+
+            # renders_rgb, theoretical_flow = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
+            #                                            texture_maps, lights)
             # TODO here comes the flow loss computation rendering computation
             # print(self.images.shape)
             # image1 =
@@ -495,7 +500,7 @@ class Tracking6D:
         for epoch in range(self.config["rgb_iters"]):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.rgb_encoder(opt_frames)
             renders, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
-                                     lights)
+                                        lights)
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
                                                                tdiff, qdiff)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
@@ -515,7 +520,7 @@ class Tracking6D:
                 st = stepi * self.config["inc_step"]
             en = (stepi + 1) * self.config["inc_step"]
             opt_frames = self.keyframes + list(range(st, en))
-            breakpoint()
+
             self.apply(input_batch[:, opt_frames], segments[:, opt_frames][:, :, 0, :2], opt_frames)
             self.encoder = self.best_model["encoder"]
             all_parameters = list(self.encoder.parameters())
@@ -525,7 +530,7 @@ class Tracking6D:
                 with torch.no_grad():
                     translation, quaternion, vertices, texture_maps, lights, _, _ = self.encoder(list(range(0, en)))
                     renders, _ = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
-                                             texture_maps, lights)
+                                                texture_maps, lights)
                     write_renders(renders, self.write_folder, self.config["inc_step"], en)
                     write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
                                    self.encoder.face_features[0].cpu().numpy(),

@@ -43,7 +43,7 @@ def main():
 	sfb = ShapeFromBlur(config=config)
 
 	def deblur_sfb(I,B,bbox_tight,nsplits,radius,obj_dim):
-		best_model = sfb.apply(I,B,bbox_tight,nsplits,radius,None)
+		best_model = sfb.apply(I, B, bbox_tight, nsplits)
 		est_hs_crop = rev_crop_resize(best_model["renders"][0,0].transpose(2,3,1,0), sfb.bbox, np.zeros((I.shape[0],I.shape[1],4)))
 		est_hs = rgba2hs(est_hs_crop, B)
 		est_traj = renders2traj(torch.from_numpy(best_model["renders"][0]), 'cpu')[0].T

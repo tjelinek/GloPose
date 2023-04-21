@@ -1,26 +1,14 @@
-from itertools import product
-from pathlib import Path
+import math
 
+import kaolin
+import numpy as np
 import torch
 import torch.nn as nn
+from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis
+from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
+from kornia.morphology import erosion
 
-import cfg
-from GMA.core.utils import flow_viz
-from cfg import FLOW_OUT_DEFAULT_DIR
-from main_settings import *
-import kaolin
 from models.kaolin_wrapper import *
-from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis, \
-    rotation_matrix_to_quaternion
-from kornia.geometry.conversions import quaternion_to_rotation_matrix, rotation_matrix_to_angle_axis, \
-    QuaternionCoeffOrder
-from kornia.morphology import erosion, dilation
-from kornia.filters import GaussianBlur2d
-from utils import *
-from torchvision.utils import save_image
-from torchvision import transforms
-
-import math
 
 
 def deringing(coeffs, window):
@@ -59,7 +47,6 @@ class RenderingKaolin(nn.Module):
             translation.device)
 
         img_texture_maps = []
-        sample_points_image_frames = []
 
         all_renders = []
         for frmi in range(quaternion.shape[1]):
@@ -73,39 +60,27 @@ class RenderingKaolin(nn.Module):
                                                                                     self.camera_rot, self.camera_trans,
                                                                                     self.camera_proj)
 
-            sample_points_image = face_vertices_image.flatten(1, 2)
-            sample_points_image_frames.append(sample_points_image)
-            # breakpoint()
-
             face_vertices_z = face_vertices_cam[:, :, :, -1]
             face_normals_z = face_normals[:, :, -1]
-            ren_features_coords, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                                             face_vertices_z,
-                                                                                             face_vertices_image,
-                                                                                             face_features,
-                                                                                             face_normals_z,
-                                                                                             sigmainv=self.config[
-                                                                                                 "sigmainv"],
-                                                                                             boxlen=0.02, knum=30,
-                                                                                             multiplier=1000)
+            ren_mesh_vertices_features, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height,
+                                                                                                    self.width,
+                                                                                                    face_vertices_z,
+                                                                                                    face_vertices_image,
+                                                                                                    face_features,
+                                                                                                    face_normals_z,
+                                                                                                    sigmainv=
+                                                                                                    self.config[
+                                                                                                        "sigmainv"],
+                                                                                                    boxlen=0.02,
+                                                                                                    knum=30,
+                                                                                                    multiplier=1000)
 
             if texture_maps is not None:
-                ren_features = kaolin.render.mesh.texture_mapping(ren_features_coords, texture_maps, mode='bilinear')
+                ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features, texture_maps,
+                                                                  mode='bilinear')
 
-            # Here we define the rendered image to texture mapping
-            # Texture that contains the coordinates at each texture point
-            # create row and column indices
-            rows = torch.arange(texture_maps.shape[-2])
-            cols = torch.arange(texture_maps.shape[-1])
-
-            auxiliary_texture = torch.cartesian_prod(rows, cols).reshape(rows.shape[0], cols.shape[0], 2)
-            auxiliary_texture = auxiliary_texture.permute(2, 0, 1).to(torch.float)
-            # create the meshgrid and stack them along the last dimension
-            auxiliary_texture = auxiliary_texture[None].to(cfg.DEVICE)
-
-            # For each point in the image, get the texture coord it gets mapped to
-            img_texture_map = kaolin.render.mesh.texture_mapping(ren_features_coords, auxiliary_texture, mode='nearest')
-            img_texture_maps.append(img_texture_map)
+            # The rendered mesh vertices features are the coordinates in the texture that are rendered onto the image
+            img_texture_maps.append(ren_mesh_vertices_features)
 
             if lights is not None:
                 im_normals = face_normals[0, red_index, :]
@@ -141,8 +116,8 @@ class RenderingKaolin(nn.Module):
             all_renders.append(renders)
 
         # TODO The flow in texture does not correspond to the flow in the image
-        sample_points_image_frames = torch.stack(sample_points_image_frames, dim=0)
-        theoretical_flow = sample_points_image_frames[1] - sample_points_image_frames[0]
+        img_texture_maps = torch.stack(img_texture_maps, dim=0)
+        theoretical_flow = img_texture_maps[-2] - img_texture_maps[-1]
 
         all_renders = torch.stack(all_renders, 1).contiguous()
         return all_renders, theoretical_flow
