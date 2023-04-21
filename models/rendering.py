@@ -41,7 +41,6 @@ class RenderingKaolin(nn.Module):
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
 
-
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
         kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
@@ -107,21 +106,31 @@ class RenderingKaolin(nn.Module):
         return all_renders, theoretical_flow
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
+        # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
+
+        # Apply the translation to the vertices
         vertices = vertices + translation_vector
+
+        # Prepare the vertices for rendering by computing their camera coordinates, image coordinates, and face normals
         face_vertices_cam, face_vertices_image, face_normals = prepare_vertices(vertices, self.faces,
                                                                                 self.camera_rot, self.camera_trans,
                                                                                 self.camera_proj)
+
+        # Extract the z-coordinates of the face vertices in camera space
         face_vertices_z = face_vertices_cam[:, :, :, -1]
+
+        # Extract the z-components of the face normals
         face_normals_z = face_normals[:, :, -1]
+
+        # Perform dibr rasterization
         ren_mesh_vertices_features, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height,
                                                                                                 self.width,
                                                                                                 face_vertices_z,
                                                                                                 face_vertices_image,
                                                                                                 face_features,
                                                                                                 face_normals_z,
-                                                                                                sigmainv=
-                                                                                                self.config[
+                                                                                                sigmainv=self.config[
                                                                                                     "sigmainv"],
                                                                                                 boxlen=0.02,
                                                                                                 knum=30,
