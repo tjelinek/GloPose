@@ -110,7 +110,7 @@ class Tracking6D:
 
         shape = self.segments.shape
         prot = self.config["shapes"][0]
-        if not config["init_shape"] is False:
+        if config["init_shape"] is not False:
             mesh = load_obj(config["init_shape"])
             ivertices = mesh.vertices.numpy()
             ivertices = ivertices - ivertices.mean(0)
@@ -120,12 +120,11 @@ class Tracking6D:
         # elif prot == 'sphere':
         #     ivertices, faces, iface_features = generate_initial_mesh(self.config["mesh_size"])
         else:
-            # print("-*---------------------------------------")
-            # print(prot, self.config["shapes"])
             mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
             ivertices = mesh.vertices.numpy()
             faces = mesh.faces.numpy().copy()
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
+
         self.faces = faces
         self.rendering = RenderingKaolin(self.config, self.faces, shape[-1], shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
@@ -177,20 +176,6 @@ class Tracking6D:
         our_losses = -np.ones((files.shape[0] - 1, 1))
         self.config["loss_rgb_weight"] = 0
         removed_count = 0
-
-        # TODO this is an auxiliary code, to be removed
-
-        directory_path = Path('./data/flow_out/gma/')
-
-        # Get a list of all files in the directory
-        flow_files = os.listdir(directory_path)
-
-        # Filter the list to include only files containing "flow_pure" in their name
-        filtered_files = fnmatch.filter(flow_files, '*flow_pure*')
-        flow_image_files = list(sorted(filtered_files))
-
-
-        # TODO END this was an auxiliary code, to be removed
 
         b0 = None
         for stepi in range(1, self.config["input_frames"]):
