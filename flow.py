@@ -75,8 +75,8 @@ def visualize_flow_with_images(image1, image2, flow_low, flow_up):
             shift_up_y = flow_up[y, x, 1]
             end_up = (x - shift_up_x, y + shift_up_y)
 
-            draw2.ellipse((x - r, y - r, x + r, y + r), fill='green')
-            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r), fill='red')
+            draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
+            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r), fill='green')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
