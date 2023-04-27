@@ -1,5 +1,8 @@
 import math
+import time
+from itertools import product
 
+import imageio
 import kaolin
 import numpy as np
 import torch
@@ -8,6 +11,7 @@ from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternio
 from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
 from kornia.morphology import erosion
 
+import cfg
 from models.kaolin_wrapper import *
 
 
@@ -37,33 +41,42 @@ class RenderingKaolin(nn.Module):
                                                                                 camera_up_direction)
         self.register_buffer('camera_rot', camera_rot)
         self.set_faces(faces)
+        # self.faces = torch.LongTensor(faces).to(cfg.DEVICE)
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
+        self.register_buffer('face_indices', torch.tensor(self.faces, dtype=torch.long, device=cfg.DEVICE))
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
         kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
             translation.device)
 
-        img_texture_maps = []
-
+        rendered_vertices_positions = []
         all_renders = []
+
         for frmi in range(quaternion.shape[1]):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
 
             renders = []
 
-            face_normals, face_vertices_z, red_index, ren_mask, ren_mesh_vertices_features = self.render_mesh_with_dibr(
-                face_features, rotation_matrix, translation_vector, unit_vertices)
+            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords\
+                = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
+
+            face_vertices_z = face_vertices_cam[:, :, :, -1]
 
             if texture_maps is not None:
-                ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features, texture_maps,
+                ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features,
+                                                                  texture_maps,
                                                                   mode='bilinear')
 
-            # The rendered mesh vertices features are the coordinates in the texture that are rendered onto the image
-            img_texture_maps.append(ren_mesh_vertices_features)
+            vertices_cam_flattened = ren_mesh_vertices_coords.flatten(1, 2)
+            vertices_positions_image_flat = kaolin.render.camera.perspective_camera(vertices_cam_flattened,
+                                                                                    self.camera_proj)
+            vertices_positions_image = vertices_positions_image_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
+            vertices_positions_image = vertices_positions_image.nan_to_num()
+            rendered_vertices_positions.append(vertices_positions_image)
 
             if lights is not None:
                 im_normals = face_normals[0, red_index, :]
@@ -98,12 +111,32 @@ class RenderingKaolin(nn.Module):
             renders = torch.stack(renders, 1).contiguous()
             all_renders.append(renders)
 
-        # TODO The flow in texture does not correspond to the flow in the image
-        img_texture_maps = torch.stack(img_texture_maps, dim=0)
-        theoretical_flow = img_texture_maps[-2] - img_texture_maps[-1]
+        rendered_vertices_positions = torch.stack(rendered_vertices_positions, dim=0)
 
         all_renders = torch.stack(all_renders, 1).contiguous()
-        return all_renders, theoretical_flow
+        return all_renders, rendered_vertices_positions
+
+    def compute_texture_to_img_map(self, ren_mesh_vertices_features, texture_maps):
+        # TODO this is an experimental inverse mapping computation, remove
+        # Compute the inverse mapping
+        texture_img_map = torch.zeros(texture_maps.shape[-2], texture_maps.shape[-1], 2)
+        for x, y in product(range(texture_maps.shape[-2]), range(texture_maps.shape[-1])):
+            # start_time = time.time()
+            texture_map_coordinates_x = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), x,
+                                                   device=cfg.DEVICE)
+            texture_map_coordinates_y = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), y,
+                                                   device=cfg.DEVICE)
+            texture_map_coordinates = torch.cat((texture_map_coordinates_x, texture_map_coordinates_y), dim=-1)
+            # print(time.time() - start_time)
+
+            rendering_difference_map = ren_mesh_vertices_features - texture_map_coordinates
+            rendering_difference_map = rendering_difference_map[..., 0] ** 2 + rendering_difference_map[..., 1] ** 2
+            # print(time.time() - start_time)
+            texture_img_map[x, y] = (rendering_difference_map == torch.max(rendering_difference_map)).nonzero()[0, 1:]
+            # print(time.time() - start_time)
+
+        return texture_img_map
+        # TODO this is an experimental inverse mapping computation, remove END
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
@@ -124,8 +157,7 @@ class RenderingKaolin(nn.Module):
         face_normals_z = face_normals[:, :, -1]
 
         # Perform dibr rasterization
-        ren_mesh_vertices_features, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height,
-                                                                                                self.width,
+        ren_mesh_vertices_features, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
                                                                                                 face_vertices_z,
                                                                                                 face_vertices_image,
                                                                                                 face_features,
@@ -135,7 +167,19 @@ class RenderingKaolin(nn.Module):
                                                                                                 boxlen=0.02,
                                                                                                 knum=30,
                                                                                                 multiplier=1000)
-        return face_normals, face_vertices_z, red_index, ren_mask, ren_mesh_vertices_features
+
+        ren_mesh_vertices_coords, _, _ = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                               face_vertices_z,
+                                                                               face_vertices_image,
+                                                                               face_vertices_cam,
+                                                                               face_normals_z,
+                                                                               sigmainv=self.config[
+                                                                                   "sigmainv"],
+                                                                               boxlen=0.02,
+                                                                               knum=30,
+                                                                               multiplier=1000)
+
+        return face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
         kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
@@ -146,8 +190,8 @@ class RenderingKaolin(nn.Module):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
 
-            face_normals, face_vertices_z, red_index, ren_mask, ren_mesh_vertices_features = self.render_mesh_with_dibr(
-                face_features, rotation_matrix, translation_vector, unit_vertices)
+            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords\
+                = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
 
             coord = torch.round((1 - ren_mesh_vertices_features) * self.config["texture_size"]).to(int)
             coord[coord >= self.config["texture_size"]] = self.config["texture_size"] - 1

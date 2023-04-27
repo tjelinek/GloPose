@@ -44,8 +44,8 @@ def visualize_flow_with_images(image1, image2, flow_low, flow_up):
 
     :param image1: uint8 image with 0-255 as color
     :param image2: uint8 image with 0-255 as color
-    :param flow_low:
-    :param flow_up:
+    :param flow_low: np.ndarray [h, w, 2] coarse flow
+    :param flow_up: np.ndarray [H, W, 2] fine flow
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
@@ -61,6 +61,7 @@ def visualize_flow_with_images(image1, image2, flow_low, flow_up):
 
     draw1 = ImageDraw.Draw(image1)
     draw2 = ImageDraw.Draw(image2)
+
     step = max(width, height) // 20
 
     r = max(height // 400, 1) # radius of the drawn point
