@@ -7,6 +7,7 @@ import kaolin
 import numpy as np
 import torch
 import torch.nn as nn
+from kaolin.render.camera import rotate_translate_points
 from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis
 from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
 from kornia.morphology import erosion
@@ -71,12 +72,7 @@ class RenderingKaolin(nn.Module):
                                                                   texture_maps,
                                                                   mode='bilinear')
 
-            vertices_cam_flattened = ren_mesh_vertices_coords.flatten(1, 2)
-            vertices_positions_image_flat = kaolin.render.camera.perspective_camera(vertices_cam_flattened,
-                                                                                    self.camera_proj)
-            vertices_positions_image = vertices_positions_image_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
-            vertices_positions_image = vertices_positions_image.nan_to_num()
-            rendered_vertices_positions.append(vertices_positions_image)
+            rendered_vertices_positions.append(ren_mesh_vertices_coords)
 
             if lights is not None:
                 im_normals = face_normals[0, red_index, :]
@@ -112,6 +108,31 @@ class RenderingKaolin(nn.Module):
             all_renders.append(renders)
 
         rendered_vertices_positions = torch.stack(rendered_vertices_positions, dim=0)
+
+        q1 = quaternion[:, -2]
+        q1_inv = q1 * torch.tensor([1, -1, -1, -1]).to(cfg.DEVICE)
+        q2 = quaternion[:, -1]
+
+        t1 = translation[:, :, -2]
+        t2 = translation[:, :, -1]
+
+        td = t2 - t1
+        qd = torch.mul(q2, q1_inv)
+
+        breakpoint()
+
+        r1 = quaternion_to_rotation_matrix(q1, order=QuaternionCoeffOrder.WXYZ)
+        rendered_vertices_positions_new = rendered_vertices_positions[-2, ...].flatten(1, 2)
+        rendered_vertices_positions_new = rotate_translate_points(rendered_vertices_positions_new, r1,
+                                                                  self.obj_center)
+        rendered_vertices_positions_new = rendered_vertices_positions_new + t1
+
+        vertices_positions_image_flat = kaolin.render.camera.perspective_camera(rendered_vertices_positions_new,
+                                                                                self.camera_proj)
+        vertices_positions_image = vertices_positions_image_flat.reshape(*rendered_vertices_positions.shape[1:-1], 2)
+        vertices_positions_image = vertices_positions_image.nan_to_num()
+
+        breakpoint()
 
         all_renders = torch.stack(all_renders, 1).contiguous()
         return all_renders, rendered_vertices_positions
@@ -157,27 +178,21 @@ class RenderingKaolin(nn.Module):
         face_normals_z = face_normals[:, :, -1]
 
         # Perform dibr rasterization
-        ren_mesh_vertices_features, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                                                face_vertices_z,
-                                                                                                face_vertices_image,
-                                                                                                face_features,
-                                                                                                face_normals_z,
-                                                                                                sigmainv=self.config[
-                                                                                                    "sigmainv"],
-                                                                                                boxlen=0.02,
-                                                                                                knum=30,
-                                                                                                multiplier=1000)
+        ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                                 face_vertices_z,
+                                                                                 face_vertices_image,
+                                                                                 torch.cat(
+                                                                                     (face_features, face_vertices_cam),
+                                                                                     dim=-1),
+                                                                                 face_normals_z,
+                                                                                 sigmainv=self.config["sigmainv"],
+                                                                                 boxlen=0.02,
+                                                                                 knum=30,
+                                                                                 multiplier=1000)
 
-        ren_mesh_vertices_coords, _, _ = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                               face_vertices_z,
-                                                                               face_vertices_image,
-                                                                               face_vertices_cam,
-                                                                               face_normals_z,
-                                                                               sigmainv=self.config[
-                                                                                   "sigmainv"],
-                                                                               boxlen=0.02,
-                                                                               knum=30,
-                                                                               multiplier=1000)
+        # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
+        ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
+        ren_mesh_vertices_coords = ren_outputs[..., face_features.shape[-1]:]
 
         return face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords
 
