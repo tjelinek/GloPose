@@ -39,19 +39,17 @@ def get_flow_from_files(files_source_dir: Path, model):
         yield (imfile1, imfile2), (flow_low, flow_up)
 
 
-def visualize_flow_with_images(image1, image2, flow_low, flow_up):
+def visualize_flow_with_images(image1, image2, flow_up):
     """
 
     :param image1: uint8 image with 0-255 as color
     :param image2: uint8 image with 0-255 as color
-    :param flow_low: np.ndarray [h, w, 2] coarse flow
     :param flow_up: np.ndarray [H, W, 2] fine flow
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
 
     flow_up_image = flow_viz.flow_to_image(flow_up)
-    flow_low_image = flow_viz.flow_to_image(flow_low)
 
     # Tensors to PIL Images
     transform = T.ToPILImage()
@@ -104,7 +102,7 @@ def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path
         image1 = load_image(filename1)
         image2 = load_image(filename2)
 
-        flow = visualize_flow_with_images(image1[0] * 255, image2[0] * 255, flow_low, flow_up)
+        flow = visualize_flow_with_images(image1[0] * 255, image2[0] * 255, flow_up)
 
         flow_image_path = flows_target_dir / Path('flow_' + file1_stem + '_' + file2_stem + '.png')
         print("Writing flow to ", flow_image_path)

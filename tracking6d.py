@@ -1,5 +1,6 @@
 import copy
 import fnmatch
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -8,9 +9,12 @@ from typing import List
 
 import cv2
 import imageio
+import kaolin
 import numpy as np
 import torch
 import torchvision.ops.boxes as bops
+from kaolin.render.camera import rotate_translate_points
+from kornia.geometry.conversions import QuaternionCoeffOrder, quaternion_to_rotation_matrix
 from torch import nn
 from torchvision import transforms
 from torchvision.utils import save_image
@@ -26,7 +30,7 @@ from models.kaolin_wrapper import load_obj, write_obj_mesh
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, create_mask_from_string
-from utils import segment2bbox, write_video, imread
+from utils import segment2bbox, write_video, imread, euler_from_quaternion
 from flow import get_flow_from_images, visualize_flow_with_images, load_image, get_flow_from_images_raft
 from flow_raft import get_flow_model
 from cfg import FLOW_OUT_DEFAULT_DIR, DEVICE
@@ -77,9 +81,7 @@ def visualize_flow(flow_video_low, flow_video_up, image, image_new, image_prev, 
     image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
     # breakpoint()
-    flow_illustration = visualize_flow_with_images(image_prev_reformatted,
-                                                   image_new_reformatted,
-                                                   flow_video_low, flow_video_up)
+    flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up)
     transform = transforms.ToPILImage()
     image_pure_flow = transform(flow_image)
     image_pure_flow_small = transform(flow_image_small)
@@ -256,6 +258,7 @@ class Tracking6D:
 
             self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                        self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0, stepi=stepi)
+
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
             our_losses[stepi - 1] = silh_losses[-1]
@@ -272,6 +275,16 @@ class Tracking6D:
                     tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
                 with torch.no_grad():
                     translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
+
+                    last_quaternion = quaternion[0, -1]
+                    first_quaternion = quaternion[0, 0]
+                    euler_angles_last = euler_from_quaternion(last_quaternion[0], last_quaternion[1], last_quaternion[1], last_quaternion[2])
+                    euler_angles_first = euler_from_quaternion(first_quaternion[0], first_quaternion[1],
+                                                              first_quaternion[1], first_quaternion[2])
+                    print("Last estimated rotation:", [(float(euler_angles_last[i]) * 180 / math.pi -
+                                                        float(euler_angles_first[i]) * 180 / math.pi) % 360
+                                                       for i in range(len(euler_angles_last))])
+
                     if self.config["features"] == 'rgb':
                         tex = texture_maps
                     feat_renders_crop = self.get_rendered_image_features(lights, quaternion, texture_maps, translation,
@@ -384,9 +397,9 @@ class Tracking6D:
         return self.best_model
 
     def get_rendered_image_features(self, lights, quaternion, texture_maps, translation, vertices):
-        feat_renders_crop, rendered_vertices_positions = self.rendering(translation, quaternion, vertices,
-                                                                        self.encoder.face_features,
-                                           texture_maps, lights, True)
+        feat_renders_crop, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
+                                                                           self.encoder.face_features,
+                                                                           texture_maps, lights, True)
         feat_renders_crop = feat_renders_crop[:, :, :, :-1]
         feat_renders_crop = torch.cat((feat_renders_crop[:, :, :, :3], feat_renders_crop[:, :, :, -1:]), 3)
         return feat_renders_crop
@@ -404,12 +417,22 @@ class Tracking6D:
             renders_cropped: [4, 272, 224] RGB-A rendering of the image
             renders: [4, 300, 225] RGB-A rendering of the image, where the rendering is put inside the bounding box
         """
-        renders_crop, rendered_vertices_positions = self.rendering(translation, quaternion, vertices,
-                                                                   self.encoder.face_features, texture, lights)
+        renders_crop, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
+                                                                      self.encoder.face_features, texture, lights)
         renders_crop = torch.cat((renders_crop[:, :, :, :3], renders_crop[:, :, :, -1:]), 3)
-        renders = torch.zeros(renders_crop.shape[:4] + self.images_feat.shape[-2:]).to(self.device)
-        renders[:, :, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
+        renders = self.write_image_into_bbox(bounding_box, renders_crop)
         return renders, renders_crop
+
+    def write_image_into_bbox(self, bounding_box, renders_crop):
+        """
+
+        :param bounding_box: List specifying the bounding box starts, resp. end
+        :param renders_crop: Image of shape ..., C, H, W
+        :return:
+        """
+        renders = torch.zeros(renders_crop.shape[:-2] + self.images_feat.shape[-2:]).to(self.device)
+        renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
+        return renders
 
     def apply(self, input_batch, segments, opt_frames=None, bounds=None, stepi=0):
         if self.config["write_results"]:
@@ -425,71 +448,14 @@ class Tracking6D:
         self.best_model["losses"] = None
         iters_without_change = 0
 
-        # print(opt_frames)
-        b0 = get_bbox(self.segments)
-
         for epoch in range(self.config["iterations"]):
-            opt_frames_prime = copy.deepcopy(opt_frames)
-            if stepi > 2:
-                opt_frames_prime.insert(-2, opt_frames[-1] - 2)
-                # print(stepi, opt_frames)
-
-            translation_prime, quaternion_prime, vertices_prime, \
-                texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = self.encoder(opt_frames_prime)
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(
                 opt_frames)
 
-            renders, rendered_vertices_positions = self.rendering(translation, quaternion, vertices,
-                                     self.encoder.face_features,
-                                     texture_maps, lights)
+            renders, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
+                                                                     self.encoder.face_features,
+                                                                     texture_maps, lights)
 
-            if epoch == 300:
-                self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                               self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
-
-                tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map)
-
-                # Render the image given the estimated shape of it
-                rendered_keyframe_images, _ = self.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
-                                                                      translation_prime, vertices_prime)
-
-                # The rendered images return renders of all keyframes, the previous and the current image
-                if stepi <= 2:
-                    current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
-                    previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
-                else:
-                    current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
-                    previous_rendered_image_rgba = rendered_keyframe_images[0, 0, ...]
-                current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
-                previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
-
-                flow_render_low, flow_render_up = get_flow_from_images(current_rendered_image_rgb,
-                                                                       previous_rendered_image_rgb,
-                                                                       self.model_flow)
-
-                theoretical_flow_path = FLOW_OUT_DEFAULT_DIR / \
-                                        Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-                rendering_1_path = FLOW_OUT_DEFAULT_DIR / \
-                                   Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-                rendering_2_path = FLOW_OUT_DEFAULT_DIR / \
-                                   Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
-
-                print("Keyframes", opt_frames_prime)
-                prev_img_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-                    'uint8')
-                new_img_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-                    'uint8')
-                imageio.imwrite(rendering_1_path, prev_img_np)
-                imageio.imwrite(rendering_2_path, new_img_np)
-
-                flow_render_low_ = flow_render_low[0].permute(1, 2, 0).detach().cpu().numpy()
-                flow_render_up_ = flow_render_up[0].permute(1, 2, 0).detach().cpu().numpy()
-
-                flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
-                                                               current_rendered_image_rgb[0],
-                                                               flow_render_low_, flow_render_up_)
-
-                imageio.imwrite(theoretical_flow_path, flow_illustration)
 
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, vertices, texture_maps,
                                                            tdiff, qdiff)
@@ -527,7 +493,56 @@ class Tracking6D:
                 self.optimizer.zero_grad()
                 jloss.backward()
                 self.optimizer.step()
+
+        self.visualize_theoretical_flow(texture_flow, theoretical_flow, opt_frames, stepi)
+
         self.encoder.load_state_dict(self.best_model["encoder"])
+
+    def visualize_theoretical_flow(self, texture_flow, theoretical_flow, opt_frames, stepi):
+        b0 = get_bbox(self.segments)
+        opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
+        translation_prime, quaternion_prime, vertices_prime, \
+            texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = self.encoder(opt_frames_prime)
+        tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map)
+        # Render the image given the estimated shape of it
+        rendered_keyframe_images, _ = self.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
+                                                              translation_prime, vertices_prime)
+        # The rendered images return renders of all keyframes, the previous and the current image
+        current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
+        previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
+        current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
+        previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
+        theoretical_flow_path = FLOW_OUT_DEFAULT_DIR / \
+                                Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+        texture_flow_path = FLOW_OUT_DEFAULT_DIR / \
+                            Path('texture_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+        rendering_1_path = FLOW_OUT_DEFAULT_DIR / \
+                           Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
+        rendering_2_path = FLOW_OUT_DEFAULT_DIR / \
+                           Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
+
+        prev_img_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
+            'uint8')
+        new_img_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
+            'uint8')
+        imageio.imwrite(rendering_1_path, prev_img_np)
+        imageio.imwrite(rendering_2_path, new_img_np)
+
+        flow_render_up_ = theoretical_flow.detach().cpu()[0].permute(2, 0, 1)
+        theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
+        # Convert the resized tensor back to a NumPy array and remove the batch dimension
+        theoretical_flow_up_ = theoretical_flow_up_.detach().cpu().numpy()  # Remove batch dimension
+        # Select the first channel
+        theoretical_flow_up_ = theoretical_flow_up_.transpose(1, 2, 0)
+        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
+                                                       current_rendered_image_rgb[0], theoretical_flow_up_)
+        texture_flow_up_ = self.write_image_into_bbox(b0, texture_flow[0].permute(2, 0, 1))
+        texture_flow_up_ = texture_flow_up_.detach().cpu().numpy()
+        texture_flow_up_ = texture_flow_up_.transpose(1, 2, 0)
+        texture_flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
+                                                               current_rendered_image_rgb[0], texture_flow_up_)
+        imageio.imwrite(theoretical_flow_path, flow_illustration)
+        imageio.imwrite(texture_flow_path, texture_flow_illustration)
 
     def rgb_apply(self, input_batch, segments, opt_frames=None, bounds=None):
         self.best_model["value"] = 100
@@ -538,8 +553,8 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
         for epoch in range(self.config["rgb_iters"]):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.rgb_encoder(opt_frames)
-            renders, rendered_vertices_positions = self.rendering(translation, quaternion, vertices,
-                                                                  self.encoder.face_features, texture_maps, lights)
+            renders, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
+                                                                     self.encoder.face_features, texture_maps, lights)
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
                                                                tdiff, qdiff)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
@@ -568,9 +583,9 @@ class Tracking6D:
             if self.config["write_results"]:
                 with torch.no_grad():
                     translation, quaternion, vertices, texture_maps, lights, _, _ = self.encoder(list(range(0, en)))
-                    renders, rendered_vertices_positions = self.rendering(translation, quaternion, vertices,
-                                                                          self.encoder.face_features, texture_maps,
-                                                                          lights)
+                    renders, theoretical_flow = self.rendering(translation, quaternion, vertices,
+                                                               self.encoder.face_features, texture_maps,
+                                                               lights)
                     write_renders(renders, self.write_folder, self.config["inc_step"], en)
                     write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
                                    self.encoder.face_features[0].cpu().numpy(),

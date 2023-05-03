@@ -25,7 +25,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
     parser.add_argument("--dataset", required=False, default="concept")
-    parser.add_argument("--sequence", required=False, default="09")
+    parser.add_argument("--sequence", required=False, default="100")
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=72)
     parser.add_argument("--skip", required=False, default=1)
@@ -75,12 +75,11 @@ def main():
 
     t0 = time.time()
     sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
+
     best_model = sfb.run_tracking(files, baseline_dict)
     print(
         '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"], (time.time() - t0) / 1,
                                                                           best_model["value"]))
-    breakpoint()
-
 
 if __name__ == "__main__":
     main()

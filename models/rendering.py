@@ -1,11 +1,7 @@
 import math
-import time
+from dataclasses import dataclass
 from itertools import product
 
-import imageio
-import kaolin
-import numpy as np
-import torch
 import torch.nn as nn
 from kaolin.render.camera import rotate_translate_points
 from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis
@@ -48,6 +44,12 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('faces', torch.LongTensor(faces))
         self.register_buffer('face_indices', torch.tensor(self.faces, dtype=torch.long, device=cfg.DEVICE))
 
+    @dataclass
+    class RenderingResult:
+        all_renders: torch.TensorType
+        theoretical_flow: torch.TensorType
+        texture_flow: torch.TensorType
+
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
         kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
@@ -55,6 +57,7 @@ class RenderingKaolin(nn.Module):
 
         rendered_vertices_positions = []
         all_renders = []
+        ren_mesh_vertices_features_list = []
 
         for frmi in range(quaternion.shape[1]):
             translation_vector = translation[:, :, frmi]
@@ -62,7 +65,7 @@ class RenderingKaolin(nn.Module):
 
             renders = []
 
-            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords\
+            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords \
                 = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
 
             face_vertices_z = face_vertices_cam[:, :, :, -1]
@@ -71,8 +74,8 @@ class RenderingKaolin(nn.Module):
                 ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features,
                                                                   texture_maps,
                                                                   mode='bilinear')
-
             rendered_vertices_positions.append(ren_mesh_vertices_coords)
+            ren_mesh_vertices_features_list.append(ren_mesh_vertices_features)
 
             if lights is not None:
                 im_normals = face_normals[0, red_index, :]
@@ -110,32 +113,42 @@ class RenderingKaolin(nn.Module):
         rendered_vertices_positions = torch.stack(rendered_vertices_positions, dim=0)
 
         q1 = quaternion[:, -2]
-        q1_inv = q1 * torch.tensor([1, -1, -1, -1]).to(cfg.DEVICE)
         q2 = quaternion[:, -1]
+        q1_inv = q1 * torch.tensor([1, -1, -1, -1]).to(cfg.DEVICE)
 
         t1 = translation[:, :, -2]
         t2 = translation[:, :, -1]
 
+        r1 = quaternion_to_rotation_matrix(q1, order=QuaternionCoeffOrder.WXYZ)
+        r2 = quaternion_to_rotation_matrix(q2, order=QuaternionCoeffOrder.WXYZ)
+
         td = t2 - t1
         qd = torch.mul(q2, q1_inv)
+        rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
 
-        breakpoint()
+        rendered_vertices_positions2 = rendered_vertices_positions[-2, ...].flatten(1, 2)
+        rendered_vertices_positions2 = rotate_translate_points(rendered_vertices_positions2, rd,
+                                                               self.obj_center)
+        rendered_vertices_positions2 = rendered_vertices_positions2 + t2
 
-        r1 = quaternion_to_rotation_matrix(q1, order=QuaternionCoeffOrder.WXYZ)
-        rendered_vertices_positions_new = rendered_vertices_positions[-2, ...].flatten(1, 2)
-        rendered_vertices_positions_new = rotate_translate_points(rendered_vertices_positions_new, r1,
-                                                                  self.obj_center)
-        rendered_vertices_positions_new = rendered_vertices_positions_new + t1
+        rendered_vertices_positions1 = rendered_vertices_positions[-2, ...].flatten(1, 2)
 
-        vertices_positions_image_flat = kaolin.render.camera.perspective_camera(rendered_vertices_positions_new,
-                                                                                self.camera_proj)
-        vertices_positions_image = vertices_positions_image_flat.reshape(*rendered_vertices_positions.shape[1:-1], 2)
-        vertices_positions_image = vertices_positions_image.nan_to_num()
+        vertices_positions_image_flat1 = kaolin.render.camera.perspective_camera(rendered_vertices_positions1,
+                                                                                 self.camera_proj)
+        vertices_positions_image_flat2 = kaolin.render.camera.perspective_camera(rendered_vertices_positions2,
+                                                                                 self.camera_proj)
 
-        breakpoint()
+        vertices_positions_image2 = vertices_positions_image_flat2.reshape(*rendered_vertices_positions.shape[1:-1], 2)
+        vertices_positions_image2 = vertices_positions_image2.nan_to_num()
+
+        vertices_positions_image1 = vertices_positions_image_flat1.reshape(*rendered_vertices_positions.shape[1:-1], 2)
+        vertices_positions_image1 = vertices_positions_image1.nan_to_num()
+
+        theoretical_flow = vertices_positions_image2 - vertices_positions_image1
+        texture_flow = ren_mesh_vertices_features_list[-1] - ren_mesh_vertices_features_list[-2]
 
         all_renders = torch.stack(all_renders, 1).contiguous()
-        return all_renders, rendered_vertices_positions
+        return all_renders, theoretical_flow, texture_flow
 
     def compute_texture_to_img_map(self, ren_mesh_vertices_features, texture_maps):
         # TODO this is an experimental inverse mapping computation, remove
@@ -205,7 +218,7 @@ class RenderingKaolin(nn.Module):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
 
-            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords\
+            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords \
                 = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
 
             coord = torch.round((1 - ren_mesh_vertices_features) * self.config["texture_size"]).to(int)

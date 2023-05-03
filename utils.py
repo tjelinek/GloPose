@@ -1,11 +1,14 @@
 import math
+from typing import Tuple
 
 import cv2
 import numpy as np
+import torch
 import yaml
 from scipy import signal
 from skimage.draw import line_aa
 from skimage.measure import label, regionprops
+from torch import Tensor
 
 from main_settings import *
 
@@ -400,6 +403,71 @@ def rev_crop_resize_traj(inp, bbox, res):
     inp[0] += bbox[0]
     inp[1] += bbox[1]
     return np.array(inp[[1, 0]])
+
+
+def quaternion_from_euler(roll: Tensor, pitch: Tensor, yaw: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    """Convert Euler angles to quaternion coefficients.
+
+    Euler angles are assumed to be in radians in XYZ convention.
+
+    Args:
+        roll: the roll euler angle.
+        pitch: the pitch euler angle.
+        yaw: the yaw euler angle.
+
+    Return:
+        A tuple with quaternion coefficients in order of `wxyz`.
+    """
+
+    roll_half = roll * 0.5
+    pitch_half = pitch * 0.5
+    yaw_half = yaw * 0.5
+
+    cy = yaw_half.cos()
+    sy = yaw_half.sin()
+    cp = pitch_half.cos()
+    sp = pitch_half.sin()
+    cr = roll_half.cos()
+    sr = roll_half.sin()
+
+    qw = cy * cp * cr + sy * sp * sr
+    qx = cy * cp * sr - sy * sp * cr
+    qy = sy * cp * sr + cy * sp * cr
+    qz = sy * cp * cr - cy * sp * sr
+
+    return qw, qx, qy, qz
+
+
+def euler_from_quaternion(w: Tensor, x: Tensor, y: Tensor, z: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    """Convert a quaternion coefficients to Euler angles.
+
+    Returned angles are in radians in XYZ convention.
+
+    Args:
+        w: quaternion :math:`q_w` coefficient.
+        x: quaternion :math:`q_x` coefficient.
+        y: quaternion :math:`q_y` coefficient.
+        z: quaternion :math:`q_z` coefficient.
+
+    Return:
+        A tuple with euler angles`roll`, `pitch`, `yaw`.
+    """
+
+    yy = y * y
+
+    sinr_cosp = 2.0 * (w * x + y * z)
+    cosr_cosp = 1.0 - 2.0 * (x * x + yy)
+    roll = sinr_cosp.atan2(cosr_cosp)
+
+    sinp = 2.0 * (w * y - z * x)
+    sinp = sinp.clamp(min=-1.0, max=1.0)
+    pitch = sinp.asin()
+
+    siny_cosp = 2.0 * (w * z + x * y)
+    cosy_cosp = 1.0 - 2.0 * (yy + z * z)
+    yaw = siny_cosp.atan2(cosy_cosp)
+
+    return roll, pitch, yaw
 
 
 def rev_crop_resize(inp, bbox, I):
