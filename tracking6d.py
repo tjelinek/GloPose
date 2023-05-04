@@ -3,7 +3,7 @@ import fnmatch
 import math
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import List
 
@@ -42,11 +42,55 @@ SILHOUETTE_LOSS_THRESHOLD = 0.3
 
 @dataclass
 class TrackerConfig:
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    # General settings
     tracker_type: str = 'ostrack'
-    feature: str = 'deep'
+    features: str = 'deep'
+    verbose: bool = True
+    write_results: bool = True
+    write_intermediate: bool = True
+
+    # Frame and keyframe settings
+    input_frames: int = 0
+    max_keyframes: int = 0
+    keyframes: int = None
+    fmo_steps: int = 1
+
+    # Shape settings
     shapes: List = list
     init_shape: str = 'sphere'
-    fmo_steps: int = 1
+    predict_vertices: bool = None
+
+    # Mesh settings
+    mesh_size: int = None
+    mesh_normalize: bool = None
+    texture_size: int = None
+    use_lights: bool = None
+
+    # Camera settings
+    camera_distance: float = None
+    max_width: int = 1024
+    image_downsample: float = 1.0
+    grabcut: bool = False
+
+    # Tracking settings
+    tran_init: float = None
+    rot_init: List[float] = None
+    inc_step: float = None
+    learning_rate: float = None
+    iterations: int = None
+    stop_value: float = None
+    rgb_iters: int = None
+    project_coin: bool = None
+    connect_frames: bool = None
+    accumulate: bool = None
+    weight_by_gradient: bool = None
+    mot_opt_all: bool = None
+    motion_only_last: bool = None
 
     # Loss function coefficients
     loss_laplacian_weight: float = 0.0
@@ -57,14 +101,14 @@ class TrackerConfig:
     loss_rgb_weight: float = 0.0
     loss_flow_weight: float = 0.0
 
-    # Image properties
-    image_downsample: float = 1.0
-    max_width: int = 1024
-    grabcut = None  # Todo find out what is the data type
+    # Additional settings
+    sigmainv: float = None
+    factor: float = None
+    mask_iou_th: float = None
+    erode_renderer_mask: int = None
+    rotation_divide: int = None
+    sequence: str = None
 
-    # Miscellaneous
-    verbose = True
-    write_results = True
 
 
 @dataclass
@@ -126,36 +170,36 @@ def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi):
 class Tracking6D:
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
         self.write_folder = write_folder
-        self.config = config.copy()
-        self.tracker_config = TrackerConfig()
-        self.config["fmo_steps"] = 1
-        self.tracker_config.fmo_steps = 1
+
+        self.config = TrackerConfig(**config)
+
+        self.config.fmo_steps = 1
         self.device = device
 
         self.model_flow = get_flow_model()
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
-            self.tracker = PrecomputedTracker(self.config["image_downsample"],
-                                              self.config["max_width"], bbox0,
-                                              self.config["grabcut"])
+            self.tracker = PrecomputedTracker(self.config.image_downsample,
+                                              self.config.max_width, bbox0,
+                                              self.config.grabcut)
         else:
-            if self.config["tracker_type"] == 'csrt':
-                self.tracker = CSRTrack(self.config["image_downsample"], self.config["max_width"],
-                                        self.config["grabcut"])
-            elif self.config["tracker_type"] == 'ostrack':
-                self.tracker = OSTracker(self.config["image_downsample"], self.config["max_width"],
-                                         self.config["grabcut"])
+            if self.config.tracker_type == 'csrt':
+                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width,
+                                        self.config.grabcut)
+            elif self.config.tracker_type == 'ostrack':
+                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width,
+                                         self.config.grabcut)
             else:  # d3s
-                self.tracker = MyTracker(self.config["image_downsample"], self.config["max_width"],
-                                         self.config["grabcut"])
-        if self.config["features"] == 'deep':
+                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width,
+                                         self.config.grabcut)
+        if self.config.features == 'deep':
             self.net = S2DNet(device=device, checkpoint_path=g_ext_folder).to(device)
             self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
             self.feat_rgb = lambda x: x
         else:
             self.feat = lambda x: x
-        self.images, self.segments, self.config["image_downsample"] = self.tracker.init_bbox(file0, bbox0, init_mask)
+        self.images, self.segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
         self.images, self.segments = self.images[None].to(self.device), self.segments[None].to(self.device)
         self.images_high_resolution = load_image(file0)
 
@@ -166,9 +210,9 @@ class Tracking6D:
         self.images_feat = self.feat(self.images).detach()
 
         shape = self.segments.shape
-        prot = self.config["shapes"][0]
-        if config["init_shape"] is not False:
-            mesh = load_obj(config["init_shape"])
+        prot = self.config.shapes[0]
+        if self.config.init_shape is not False:
+            mesh = load_obj(self.config.init_shape)
             ivertices = mesh.vertices.numpy()
             ivertices = ivertices - ivertices.mean(0)
             ivertices = ivertices / ivertices.max()
@@ -185,25 +229,25 @@ class Tracking6D:
         self.encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
                                self.images_feat.shape[2]).to(self.device)
         all_parameters = list(self.encoder.parameters())
-        self.optimizer = torch.optim.Adam(all_parameters, lr=self.config["learning_rate"])
+        self.optimizer = torch.optim.Adam(all_parameters, lr=self.config.learning_rate)
         self.encoder.train()
         self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
-        if self.config["features"] == 'deep':
-            config = self.config.copy()
-            config["features"] = 'rgb'
+        if self.config.features == 'deep':
+            config = copy.deepcopy(self.config)
+            config.features = 'rgb'
             self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(
                 self.device)
             rgb_parameters = list(self.rgb_encoder.parameters())[-1:]
-            self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config["learning_rate"])
+            self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
             self.rgb_encoder.train()
-            config["loss_laplacian_weight"] = 0
-            config["loss_tv_weight"] = 1.0
-            config["loss_iou_weight"] = 0
-            config["loss_dist_weight"] = 0
-            config["loss_qt_weight"] = 0
-            config["loss_flow_weight"] = 0.0
+            config.loss_laplacian_weight = 0
+            config.loss_tv_weight = 1.0
+            config.loss_iou_weight = 0
+            config.loss_dist_weight = 0
+            config.loss_qt_weight = 0
+            config.loss_flow_weight = 0.0
             self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
-        if self.config["verbose"]:
+        if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
         self.best_model = {"value": 100,
                            "face_features": self.encoder.face_features.detach().clone(),
@@ -229,11 +273,11 @@ class Tracking6D:
         baseline_iou = -np.ones((files.shape[0] - 1, 1))
         our_iou = -np.ones((files.shape[0] - 1, 1))
         our_losses = -np.ones((files.shape[0] - 1, 1))
-        self.config["loss_rgb_weight"] = 0
+        self.config.loss_rgb_weight = 0
         removed_count = 0
 
         b0 = None
-        for stepi in range(1, self.config["input_frames"]):
+        for stepi in range(1, self.config.input_frames):
             image_raw, segment = self.tracker.next(files[stepi])
             image_high_resolution = load_image(files[stepi])[None]
 
@@ -280,12 +324,12 @@ class Tracking6D:
 
             our_losses[stepi - 1] = silh_losses[-1]
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", stepi, "out of",
-                  self.config['input_frames'])
+                  self.config.input_frames)
             if silh_losses[-1] < 0.8:
                 self.encoder.used_tran[:, :, stepi] = self.encoder.translation[:, :, stepi].detach()
                 self.encoder.used_quat[:, stepi] = self.encoder.quaternion[:, stepi].detach()
 
-            if self.config["write_results"]:
+            if self.config.write_results:
                 qdiff, renders, tdiff, texture_maps, vertices = self.write_results(all_input, all_proj,
                                                                                    all_proj_filtered, all_segm, b0,
                                                                                    baseline_iou, bboxes, our_iou,
@@ -324,15 +368,15 @@ class Tracking6D:
                 self.segments = torch.cat((self.segments[:, :-2], segment), 1)
             else:
                 removed_count = 0
-        if len(self.keyframes) > self.config["max_keyframes"]:
-            self.keyframes = self.keyframes[-self.config["max_keyframes"]:]
-            self.images = self.images[:, -self.config["max_keyframes"]:]
-            self.images_feat = self.images_feat[:, -self.config["max_keyframes"]:]
-            self.segments = self.segments[:, -self.config["max_keyframes"]:]
+        if len(self.keyframes) > self.config.max_keyframes:
+            self.keyframes = self.keyframes[-self.config.max_keyframes:]
+            self.images = self.images[:, -self.config.max_keyframes:]
+            self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
+            self.segments = self.segments[:, -self.config.max_keyframes:]
 
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
                       our_losses, segment, silh_losses, stepi):
-        if self.config["features"] == 'deep':
+        if self.config.features == 'deep':
             self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                            self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
@@ -349,18 +393,18 @@ class Tracking6D:
                                                 float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                for i in range(len(euler_angles_last))])
 
-            if self.config["features"] == 'rgb':
+            if self.config.features == 'rgb':
                 tex = texture_maps
             feat_renders_crop = self.get_rendered_image_features(lights, quaternion, texture_maps, translation,
                                                                  vertices)
 
             renders, renders_crop = self.get_rendered_image(b0, lights, quaternion, tex, translation, vertices)
             # breakpoint()
-            write_renders(feat_renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=0)
-            write_renders(renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=1)
+            write_renders(feat_renders_crop, self.write_folder, self.config.max_keyframes + 1, ids=0)
+            write_renders(renders_crop, self.write_folder, self.config.max_keyframes + 1, ids=1)
             write_renders(torch.cat(
                 (self.images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
-                self.write_folder, self.config["max_keyframes"] + 1, ids=2)
+                self.write_folder, self.config.max_keyframes + 1, ids=2)
             write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
                            self.encoder.face_features[0].cpu().numpy(),
                            os.path.join(self.write_folder, 'mesh.obj'))
@@ -403,7 +447,7 @@ class Tracking6D:
                     our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
                         ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
             elif bboxes is not None:
-                bbox = self.config["image_downsample"] * torch.tensor(
+                bbox = self.config.image_downsample * torch.tensor(
                     [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
                 baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(segment[0, 0, -1])],
                                                                           dtype=torch.float64))
@@ -468,12 +512,12 @@ class Tracking6D:
         return renders
 
     def apply(self, input_batch, segments, opt_frames=None, step_i=0):
-        if self.config["write_results"]:
+        if self.config.write_results:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
-                       nrow=self.config["max_keyframes"] + 1)
+                       nrow=self.config.max_keyframes + 1)
             save_image(torch.cat((input_batch[0, :, :3], segments[0, :, [1]]), 1),
-                       os.path.join(self.write_folder, 'segments.png'), nrow=self.config["max_keyframes"] + 1)
-            if self.config["weight_by_gradient"]:
+                       os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
+            if self.config.weight_by_gradient:
                 save_image(torch.cat((segments[0, :, [0, 0, 0]], 0 * input_batch[0, :, :1] + 1), 1),
                            os.path.join(self.write_folder, 'weights.png'))
 
@@ -481,7 +525,7 @@ class Tracking6D:
         self.best_model["losses"] = None
         iters_without_change = 0
 
-        for epoch in range(self.config["iterations"]):
+        for epoch in range(self.config.iterations):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(
                 opt_frames)
 
@@ -497,7 +541,7 @@ class Tracking6D:
                 model_loss = losses["model"].mean().item()
             else:
                 model_loss = losses["silh"].mean().item()
-            if self.config["verbose"] and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
+            if self.config.verbose and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
                 print("Epoch {:4d}".format(epoch + 1), end=" ")
                 for ls in losses:
                     print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
@@ -508,20 +552,20 @@ class Tracking6D:
                 self.best_model["value"] = model_loss
                 self.best_model["losses"] = losses_all
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-                if self.config["write_intermediate"]:
+                if self.config.write_intermediate:
                     write_renders(torch.cat((renders[:, :, :, :3], renders[:, :, :, -1:]), 3), self.write_folder,
-                                  self.config["max_keyframes"] + 1)
+                                  self.config.max_keyframes + 1)
             else:
                 iters_without_change += 1
 
-            if self.config["loss_rgb_weight"] == 0:
+            if self.config.loss_rgb_weight == 0:
                 if epoch > 100 or model_loss < 0.1:
-                    self.config["loss_rgb_weight"] = 1.0
+                    self.config.loss_rgb_weight = 1.0
                     self.best_model["value"] = 100
             else:
-                if epoch > 50 and self.best_model["value"] < self.config["stop_value"] and iters_without_change > 10:
+                if epoch > 50 and self.best_model["value"] < self.config.stop_value and iters_without_change > 10:
                     break
-            if epoch < self.config["iterations"] - 1:
+            if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
                 self.optimizer.zero_grad()
                 jloss.backward()
@@ -584,7 +628,7 @@ class Tracking6D:
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
         model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
-        for epoch in range(self.config["rgb_iters"]):
+        for epoch in range(self.config.rgb_iters):
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.rgb_encoder(opt_frames)
             renders, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
                                                                      self.encoder.face_features, texture_maps, lights)
@@ -592,7 +636,7 @@ class Tracking6D:
                                                                tdiff, qdiff)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
                 break
-            if epoch < self.config["iterations"] - 1:
+            if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
                 self.rgb_optimizer.zero_grad()
                 jloss.backward()
@@ -600,26 +644,26 @@ class Tracking6D:
 
     def apply_incremental(self, input_batch, segments):
         input_batch, segments = input_batch[None].to(self.device), segments[None].to(self.device)
-        for stepi in range(int(self.config["input_frames"] / self.config["inc_step"])):
-            if self.config["accumulate"]:
+        for stepi in range(int(self.config.input_frames / self.config.inc_step)):
+            if self.config.accumulate:
                 st = 0
             else:
-                st = stepi * self.config["inc_step"]
-            en = (stepi + 1) * self.config["inc_step"]
+                st = stepi * self.config.inc_step
+            en = (stepi + 1) * self.config.inc_step
             opt_frames = self.keyframes + list(range(st, en))
 
             self.apply(input_batch[:, opt_frames], segments[:, opt_frames][:, :, 0, :2], opt_frames)
             self.encoder = self.best_model["encoder"]
             all_parameters = list(self.encoder.parameters())
-            self.optimizer = torch.optim.Adam(all_parameters, lr=self.config["learning_rate"])
+            self.optimizer = torch.optim.Adam(all_parameters, lr=self.config.learning_rate)
             self.encoder.train()
-            if self.config["write_results"]:
+            if self.config.write_results:
                 with torch.no_grad():
                     translation, quaternion, vertices, texture_maps, lights, _, _ = self.encoder(list(range(0, en)))
                     renders, theoretical_flow = self.rendering(translation, quaternion, vertices,
                                                                self.encoder.face_features, texture_maps,
                                                                lights)
-                    write_renders(renders, self.write_folder, self.config["inc_step"], en)
+                    write_renders(renders, self.write_folder, self.config.inc_step, en)
                     write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
                                    self.encoder.face_features[0].cpu().numpy(),
                                    os.path.join(self.write_folder, 'mesh.obj'))
@@ -631,7 +675,7 @@ class Tracking6D:
                     write_video((input_batch[0, 0:en, :3] * segments[0, 0:en, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
                                 os.path.join(self.write_folder, 'segments.avi'), fps=6)
 
-            if self.config["keyframes"] and not self.config["accumulate"]:
+            if self.config.keyframes and not self.config.accumulate:
                 self.keyframes.append(st)
 
         return self.best_model

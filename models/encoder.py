@@ -6,7 +6,6 @@ from kornia.geometry.conversions import quaternion_to_rotation_matrix, rotation_
     angle_axis_to_quaternion, QuaternionCoeffOrder
 from main_settings import *
 
-
 def mesh_normalize(vertices):
     mesh_max = torch.max(vertices, dim=1, keepdim=True)[0]
     mesh_min = torch.min(vertices, dim=1, keepdim=True)[0]
@@ -65,36 +64,36 @@ class Encoder(nn.Module):
     def __init__(self, config, ivertices, faces, face_features, width, height, n_feat):
         super(Encoder, self).__init__()
         self.config = config
-        translation_init = torch.zeros(1, 1, config["input_frames"], 3)
-        translation_init[:, :, 0, 2] = self.config["tran_init"]
+        translation_init = torch.zeros(1, 1, config.input_frames, 3)
+        translation_init[:, :, 0, 2] = self.config.tran_init
         self.translation = nn.Parameter(translation_init)
-        qinit = torch.zeros(1, config["input_frames"], 4)  # *0.005
+        qinit = torch.zeros(1, config.input_frames, 4)  # *0.005
         qinit[:, :, 0] = 1.0
-        init_angle = torch.Tensor(self.config["rot_init"])
+        init_angle = torch.Tensor(self.config.rot_init)
         init_quat = angle_axis_to_quaternion(init_angle, order=QuaternionCoeffOrder.WXYZ)
         self.register_buffer('init_quat', init_quat)
         qinit[:, 0, :] = init_quat.clone()
         self.quaternion = nn.Parameter(qinit)
-        offsets = torch.zeros(1, 1, config["input_frames"], 7)
+        offsets = torch.zeros(1, 1, config.input_frames, 7)
         offsets[:, :, :, 3] = 1.0
         self.register_buffer('offsets', offsets)
         self.register_buffer('used_tran', translation_init.clone())
         self.register_buffer('used_quat', qinit.clone())
-        if self.config["use_lights"]:
+        if self.config.use_lights:
             lights = torch.zeros(1, 3, 9)
             lights[:, :, 0] = 0.5
             self.lights = nn.Parameter(lights)
         else:
             self.lights = None
-        if self.config["predict_vertices"]:
+        if self.config.predict_vertices:
             self.vertices = nn.Parameter(torch.zeros(1, ivertices.shape[0], 3))
         self.register_buffer('face_features', torch.from_numpy(face_features).unsqueeze(0).type(self.translation.dtype))
-        self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config["texture_size"], self.config["texture_size"]))
+        self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.texture_size, self.config.texture_size))
         ivertices = torch.from_numpy(ivertices).unsqueeze(0).type(self.translation.dtype)
         ivertices = mesh_normalize(ivertices)
         self.register_buffer('ivertices', ivertices)
         self.aspect_ratio = height / width
-        if self.config["project_coin"]:
+        if self.config.project_coin:
             thr = 0.025
             x_coor = ivertices[:, :, 0]
             x_coor[x_coor > thr] = thr
@@ -103,20 +102,20 @@ class Encoder(nn.Module):
 
     def set_grad_mesh(self, req_grad):
         self.texture_map.requires_grad = req_grad
-        if self.config["predict_vertices"]:
+        if self.config.predict_vertices:
             self.vertices.requires_grad = req_grad
-        if self.config["use_lights"]:
+        if self.config.use_lights:
             self.lights.requires_grad = req_grad
 
     def forward(self, opt_frames):
         motion_frames = opt_frames
-        if self.config["predict_vertices"]:
+        if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
-            if self.config["mesh_normalize"]:
+            if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)
             else:
                 vertices = vertices - vertices.mean(1)[:, None, :]  ## make center of mass in origin
-            if self.config["project_coin"]:
+            if self.config.project_coin:
                 vertices[:, :, 0] = self.x_coor
         else:
             vertices = self.ivertices
@@ -148,7 +147,7 @@ class Encoder(nn.Module):
             key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
         # breakpoint()
         qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
-        if self.config["features"] == 'deep':
+        if self.config.features == 'deep':
             texture_map = self.texture_map
         else:
             texture_map = nn.Sigmoid()(self.texture_map)
@@ -157,9 +156,9 @@ class Encoder(nn.Module):
 
     def forward_normalize(self):
         exp = 0
-        if self.config["connect_frames"]:
+        if self.config.connect_frames:
             exp = nn.Sigmoid()(self.exposure_fraction)
-        thr = self.config["camera_distance"] - 2
+        thr = self.config.camera_distance - 2
         thrn = thr * 4
         translation_all = []
         quaternion_all = []
@@ -173,11 +172,11 @@ class Encoder(nn.Module):
             translation_new[:, :, :, :, 2][translation[:, :, :, :, 2] < 0] = translation[:, :, :, :, 2][
                                                                                  translation[:, :, :, :, 2] < 0] * thrn
             translation_new[:, :, :, :, :2] = translation[:, :, :, :, :2] * (
-                        (self.config["camera_distance"] - translation_new[:, :, :, :, 2:]) / 2)
+                        (self.config.camera_distance - translation_new[:, :, :, :, 2:]) / 2)
             translation = translation_new
             translation[:, :, :, :, 1] = self.aspect_ratio * translation_new[:, :, :, :, 1]
 
-            if frmi > 0 and self.config["connect_frames"]:
+            if frmi > 0 and self.config.connect_frames:
                 translation[:, :, :, 1, :] = translation_all[-1][:, :, :, 1, :] + (1 + exp) * translation_all[-1][:, :,
                                                                                               :, 0, :]
 
@@ -191,9 +190,9 @@ class Encoder(nn.Module):
 
         translation = torch.stack(translation_all, 2).contiguous()[:, :, :, 0]
         quaternion = torch.stack(quaternion_all, 1).contiguous()[:, :, 0]
-        if self.config["predict_vertices"]:
+        if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
-            if self.config["mesh_normalize"]:
+            if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)
             else:
                 vertices = vertices - vertices.mean(1)[:, None, :]  ## make center of mass in origin

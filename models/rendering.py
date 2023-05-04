@@ -32,7 +32,7 @@ class RenderingKaolin(nn.Module):
         camera_proj = kaolin.render.camera.generate_perspective_projection(1.57 / 2,
                                                                            self.width / self.height)  # 45 degrees
         self.register_buffer('camera_proj', camera_proj)
-        self.register_buffer('camera_trans', torch.Tensor([0, 0, self.config["camera_distance"]])[None])
+        self.register_buffer('camera_trans', torch.Tensor([0, 0, self.config.camera_distance])[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
         camera_up_direction = torch.Tensor((0, 1, 0))[None]
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
@@ -53,7 +53,7 @@ class RenderingKaolin(nn.Module):
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
-        kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
+        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
             translation.device)
 
         rendered_vertices_positions = []
@@ -99,7 +99,7 @@ class RenderingKaolin(nn.Module):
                 lighting[red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
                 ren_features = ren_features * lighting
             result = ren_features.permute(0, 3, 1, 2)
-            if self.config["erode_renderer_mask"] > 0:
+            if self.config.erode_renderer_mask > 0:
                 ren_mask = erosion(ren_mask[:, None], kernel)[:, 0]
             if render_depth:
                 depth_map = face_vertices_z[0, red_index, :].mean(3)[:, None]
@@ -203,7 +203,7 @@ class RenderingKaolin(nn.Module):
                                                                                      (face_features, face_vertices_cam),
                                                                                      dim=-1),
                                                                                  face_normals_z,
-                                                                                 sigmainv=self.config["sigmainv"],
+                                                                                 sigmainv=self.config.sigmainv,
                                                                                  boxlen=0.02,
                                                                                  knum=30,
                                                                                  multiplier=1000)
@@ -215,10 +215,10 @@ class RenderingKaolin(nn.Module):
         return face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
-        kernel = torch.ones(self.config["erode_renderer_mask"], self.config["erode_renderer_mask"]).to(
+        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
             translation.device)
-        tex = torch.zeros(1, 3, self.config["texture_size"], self.config["texture_size"])
-        cnt = torch.zeros(self.config["texture_size"], self.config["texture_size"])
+        tex = torch.zeros(1, 3, self.config.texture_size, self.config.texture_size)
+        cnt = torch.zeros(self.config.texture_size, self.config.texture_size)
         for frmi in range(quaternion.shape[1]):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
@@ -226,11 +226,11 @@ class RenderingKaolin(nn.Module):
             face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords \
                 = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
 
-            coord = torch.round((1 - ren_mesh_vertices_features) * self.config["texture_size"]).to(int)
-            coord[coord >= self.config["texture_size"]] = self.config["texture_size"] - 1
+            coord = torch.round((1 - ren_mesh_vertices_features) * self.config.texture_size).to(int)
+            coord[coord >= self.config.texture_size] = self.config.texture_size - 1
             coord[coord < 0] = 0
             xc = coord[0, :, :, 1].reshape([coord.shape[1] * coord.shape[2]])
-            yc = (self.config["texture_size"] - 1 - coord[0, :, :, 0]).reshape([coord.shape[1] * coord.shape[2]])
+            yc = (self.config.texture_size - 1 - coord[0, :, :, 0]).reshape([coord.shape[1] * coord.shape[2]])
             cr = input_batch[0, frmi, 0].reshape([coord.shape[1] * coord.shape[2]])
             cg = input_batch[0, frmi, 1].reshape([coord.shape[1] * coord.shape[2]])
             cb = input_batch[0, frmi, 2].reshape([coord.shape[1] * coord.shape[2]])
@@ -254,13 +254,13 @@ def generate_rotation(rotation_current, my_rot, steps=3):
 
 def generate_all_views(best_model, static_translation, rotation_matrix, rendering, small_step, extreme_step=None,
                        num_small_steps=1):
-    rendering.config["fmo_steps"] = 2
+    rendering.config.fmo_steps = 2
     if not extreme_step is None:
         ext_renders = rendering(static_translation, generate_rotation(rotation_matrix, extreme_step, 0),
                                 best_model["vertices"], best_model["face_features"], best_model["texture_maps"])
         ext_renders_neg = rendering(static_translation, generate_rotation(rotation_matrix, -np.array(extreme_step), 0),
                                     best_model["vertices"], best_model["face_features"], best_model["texture_maps"])
-    rendering.config["fmo_steps"] = num_small_steps + 1
+    rendering.config.fmo_steps = num_small_steps + 1
     renders = rendering(static_translation, generate_rotation(rotation_matrix, small_step, 0), best_model["vertices"],
                         best_model["face_features"], best_model["texture_maps"])
     renders_neg = rendering(static_translation, generate_rotation(rotation_matrix, -np.array(small_step), 0),
@@ -276,8 +276,8 @@ def generate_all_views(best_model, static_translation, rotation_matrix, renderin
 def generate_novel_views(best_model, config):
     width = best_model["renders"].shape[-1]
     height = best_model["renders"].shape[-2]
-    config["erode_renderer_mask"] = 7
-    config["fmo_steps"] = best_model["renders"].shape[-4]
+    config.erode_renderer_mask = 7
+    config.fmo_steps = best_model["renders"].shape[-4]
     rendering = RenderingKaolin(config, best_model["faces"], width, height).to(best_model["translation"].device)
     static_translation = best_model["translation"].clone()
     static_translation[:, :, :, 1] = static_translation[:, :, :, 1] + 0.5 * static_translation[:, :, :, 0]
@@ -286,8 +286,8 @@ def generate_novel_views(best_model, config):
     quaternion = best_model["quaternion"][:, :1].clone()
     rotation_matrix = angle_axis_to_rotation_matrix(quaternion_to_angle_axis(quaternion[:, 0, 1]))
     rotation_matrix_step = angle_axis_to_rotation_matrix(
-        quaternion_to_angle_axis(quaternion[:, 0, 0]) / config["fmo_steps"] / 2)
-    for ki in range(int(config["fmo_steps"] / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
+        quaternion_to_angle_axis(quaternion[:, 0, 0]) / config.fmo_steps / 2)
+    for ki in range(int(config.fmo_steps / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
 
     vertical = generate_all_views(best_model, static_translation, rotation_matrix, rendering, [math.pi / 2 / 9, 0, 0],
                                   [math.pi / 3, 0, 0], 3)
@@ -302,8 +302,8 @@ def generate_novel_views(best_model, config):
 def generate_video_views(best_model, config):
     width = best_model["renders"].shape[-1]
     height = best_model["renders"].shape[-2]
-    config["erode_renderer_mask"] = 7
-    config["fmo_steps"] = best_model["renders"].shape[-4]
+    config.erode_renderer_mask = 7
+    config.fmo_steps = best_model["renders"].shape[-4]
     rendering = RenderingKaolin(config, best_model["faces"], width, height).to(best_model["translation"].device)
     static_translation = best_model["translation"].clone()
     static_translation[:, :, :, 1] = static_translation[:, :, :, 1] + 0.5 * static_translation[:, :, :, 0]
@@ -312,8 +312,8 @@ def generate_video_views(best_model, config):
     quaternion = best_model["quaternion"][:, :1].clone()
     rotation_matrix = angle_axis_to_rotation_matrix(quaternion_to_angle_axis(quaternion[:, 0, 1]))
     rotation_matrix_step = angle_axis_to_rotation_matrix(
-        quaternion_to_angle_axis(quaternion[:, 0, 0]) / config["fmo_steps"] / 2)
-    for ki in range(int(config["fmo_steps"] / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
+        quaternion_to_angle_axis(quaternion[:, 0, 0]) / config.fmo_steps / 2)
+    for ki in range(int(config.fmo_steps / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
 
     views = generate_all_views(best_model, static_translation, rotation_matrix, rendering, [math.pi / 2 / 9 / 10, 0, 0],
                                None, 45)
@@ -323,8 +323,8 @@ def generate_video_views(best_model, config):
 def generate_tsr_video(best_model, config, steps=8):
     width = best_model["renders"].shape[-1]
     height = best_model["renders"].shape[-2]
-    config["erode_renderer_mask"] = 7
-    config["fmo_steps"] = steps
+    config.erode_renderer_mask = 7
+    config.fmo_steps = steps
     rendering = RenderingKaolin(config, best_model["faces"], width, height).to(best_model["translation"].device)
     renders = rendering(best_model["translation"], best_model["quaternion"], best_model["vertices"],
                         best_model["face_features"], best_model["texture_maps"])
