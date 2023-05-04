@@ -10,6 +10,7 @@ from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import *
+from utils import quaternion_multiply
 
 
 def deringing(coeffs, window):
@@ -123,13 +124,15 @@ class RenderingKaolin(nn.Module):
         r2 = quaternion_to_rotation_matrix(q2, order=QuaternionCoeffOrder.WXYZ)
 
         td = t2 - t1
-        qd = torch.mul(q2, q1_inv)
+        qd = quaternion_multiply(q2, q1_inv)
         rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
 
         rendered_vertices_positions2 = rendered_vertices_positions[-2, ...].flatten(1, 2)
+
         rendered_vertices_positions2 = rotate_translate_points(rendered_vertices_positions2, rd,
-                                                               self.obj_center)
-        rendered_vertices_positions2 = rendered_vertices_positions2 + t2
+                                                               torch.zeros((1, 3), device=cfg.DEVICE))
+
+        rendered_vertices_positions2 = rendered_vertices_positions2 + td
 
         rendered_vertices_positions1 = rendered_vertices_positions[-2, ...].flatten(1, 2)
 
@@ -145,6 +148,8 @@ class RenderingKaolin(nn.Module):
         vertices_positions_image1 = vertices_positions_image1.nan_to_num()
 
         theoretical_flow = vertices_positions_image2 - vertices_positions_image1
+        theoretical_flow = (theoretical_flow * ren_mask.unsqueeze(3))
+
         texture_flow = ren_mesh_vertices_features_list[-1] - ren_mesh_vertices_features_list[-2]
 
         all_renders = torch.stack(all_renders, 1).contiguous()

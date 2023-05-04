@@ -35,6 +35,10 @@ from flow import get_flow_from_images, visualize_flow_with_images, load_image, g
 from flow_raft import get_flow_model
 from cfg import FLOW_OUT_DEFAULT_DIR, DEVICE
 
+TRAINING_PRINT_STATUS_FREQUENCY = 20
+
+SILHOUETTE_LOSS_THRESHOLD = 0.3
+
 
 @dataclass
 class TrackerConfig:
@@ -71,16 +75,29 @@ class ModelParams:
     value: float = 100
 
 
-def visualize_flow(flow_video_low, flow_video_up, image, image_new, image_prev, segment, stepi):
+def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi):
+    """
+    Visualize optical flow between two images and save the results as image files.
+
+    Args:
+        flow_video_up (torch.Tensor): Upsampled optical flow tensor.
+        image (torch.Tensor): Original image tensor.
+        image_new (torch.Tensor): New (second) image tensor.
+        image_prev (torch.Tensor): Previous (first) image tensor.
+        segment (torch.Tensor): Segmentation mask tensor.
+        stepi (int): Index of the current step in the frame sequence.
+
+    Returns:
+        None. The function saves multiple visualization images to the disk.
+    """
     flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
-    # flow_image = transforms.ToTensor()(imageio.v2.imread(directory_path / flow_image_files[stepi]))
     image_small_dims = image.shape[-2], image.shape[-1]
     flow_image_small = transforms.Resize(image_small_dims)(flow_image)
     segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
     flow_image_segmented = flow_image_small.mul(segmentation_mask)
     image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
-    # breakpoint()
+
     flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up)
     transform = transforms.ToPILImage()
     image_pure_flow = transform(flow_image)
@@ -88,12 +105,16 @@ def visualize_flow(flow_video_low, flow_video_up, image, image_new, image_prev, 
     image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
     image_old_pil = transform(image_prev[0] / 255.0)
+
+    # Define output file paths
     prev_image_path = FLOW_OUT_DEFAULT_DIR / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
     new_image_path = FLOW_OUT_DEFAULT_DIR / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
     pure_flow_path = FLOW_OUT_DEFAULT_DIR / Path('pure_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_small_path = FLOW_OUT_DEFAULT_DIR / Path('flow_small_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_segm_path = FLOW_OUT_DEFAULT_DIR / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_image_path = FLOW_OUT_DEFAULT_DIR / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+
+    # Save the images to disk
     imageio.imwrite(pure_flow_path, image_pure_flow)
     imageio.imwrite(flow_small_path, image_pure_flow_small)
     imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
@@ -108,6 +129,7 @@ class Tracking6D:
         self.config = config.copy()
         self.tracker_config = TrackerConfig()
         self.config["fmo_steps"] = 1
+        self.tracker_config.fmo_steps = 1
         self.device = device
 
         self.model_flow = get_flow_model()
@@ -152,15 +174,11 @@ class Tracking6D:
             ivertices = ivertices / ivertices.max()
             faces = mesh.faces.numpy().copy()
             iface_features = generate_face_features(ivertices, faces)
-        # elif prot == 'sphere':
-        #     ivertices, faces, iface_features = generate_initial_mesh(self.config["mesh_size"])
         else:
             mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
             ivertices = mesh.vertices.numpy()
             faces = mesh.faces.numpy().copy()
-            iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()  # mesh.uvs is mapping vertices -> texture coords
-            mesh_uvs = mesh.uvs  # Points in the texture space
-            mesh_uvs_idx = mesh.face_uvs_idx  # Assigns each vertex of each face an index of mesh.uvs
+            iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
         self.faces = faces
         self.rendering = RenderingKaolin(self.config, self.faces, shape[-1], shape[-2]).to(self.device)
@@ -234,10 +252,9 @@ class Tracking6D:
 
             flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
             flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().detach().numpy()
-            flow_video_low = flow_video_low[0].permute(1, 2, 0).cpu().detach().numpy()
 
             # Visualize flow we get from the video
-            visualize_flow(flow_video_low, flow_video_up, image, image_new, image_prev, segment, stepi)
+            visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi)
 
             # This gives the deep features of the image
             image_feat = self.feat(image).detach()
@@ -257,7 +274,7 @@ class Tracking6D:
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
             self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0, stepi=stepi)
+                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, step_i=stepi)
 
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
@@ -269,132 +286,148 @@ class Tracking6D:
                 self.encoder.used_quat[:, stepi] = self.encoder.quaternion[:, stepi].detach()
 
             if self.config["write_results"]:
-                if self.config["features"] == 'deep':
-                    self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                   self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
-                    tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
-                with torch.no_grad():
-                    translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
-
-                    last_quaternion = quaternion[0, -1]
-                    first_quaternion = quaternion[0, 0]
-                    euler_angles_last = euler_from_quaternion(last_quaternion[0], last_quaternion[1], last_quaternion[1], last_quaternion[2])
-                    euler_angles_first = euler_from_quaternion(first_quaternion[0], first_quaternion[1],
-                                                              first_quaternion[1], first_quaternion[2])
-                    print("Last estimated rotation:", [(float(euler_angles_last[i]) * 180 / math.pi -
-                                                        float(euler_angles_first[i]) * 180 / math.pi) % 360
-                                                       for i in range(len(euler_angles_last))])
-
-                    if self.config["features"] == 'rgb':
-                        tex = texture_maps
-                    feat_renders_crop = self.get_rendered_image_features(lights, quaternion, texture_maps, translation,
-                                                                         vertices)
-
-                    renders, renders_crop = self.get_rendered_image(b0, lights, quaternion, tex, translation, vertices)
-                    # breakpoint()
-                    write_renders(feat_renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=0)
-                    write_renders(renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=1)
-                    write_renders(torch.cat(
-                        (self.images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
-                        self.write_folder, self.config["max_keyframes"] + 1, ids=2)
-                    write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
-                                   self.encoder.face_features[0].cpu().numpy(),
-                                   os.path.join(self.write_folder, 'mesh.obj'))
-                    save_image(texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-                    save_image(tex, os.path.join(self.write_folder, 'tex.png'))
-                    write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
-                                os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
-                    write_video(self.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
-                                os.path.join(self.write_folder, 'input.avi'), fps=6)
-                    write_video((self.images[0, :, :3] * self.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
-                                os.path.join(self.write_folder, 'segments.avi'), fps=6)
-                    for tmpi in range(renders.shape[1]):
-                        img = self.images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                        seg = self.segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
-                        save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
-                        seg[seg == 0] = 0.35
-                        save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                        save_image(self.images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
-                                   os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
-                        save_image(torch.cat((img, seg), 0),
-                                   os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
-                        save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
-                                   os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
-                        save_image(renders_crop[0, tmpi, 0, :],
-                                   os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
-                        save_image(feat_renders_crop[0, tmpi, 0, :],
-                                   os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
-                    if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
-                        gt_segm = None
-                        if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
-                            m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
-                            gt_segm = segment[0, 0, -1] * 0
-                            gt_segm[offset_[1]:offset_[1] + m_.shape[0],
-                            offset_[0]:offset_[0] + m_.shape[1]] = torch.from_numpy(m_)
-                        elif stepi in bboxes:
-                            gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
-                        if gt_segm is not None:
-                            baseline_iou[stepi - 1] = float((segment[0, 0, -1] * gt_segm > 0).sum()) / float(
-                                ((segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
-                            our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
-                                ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
-                    elif bboxes is not None:
-                        bbox = self.config["image_downsample"] * torch.tensor(
-                            [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
-                        baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(segment[0, 0, -1])],
-                                                                                  dtype=torch.float64))
-                        our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
-                                                                             dtype=torch.float64))
-                    print('Baseline IoU {}, our IoU {}'.format(baseline_iou[stepi - 1], our_iou[stepi - 1]))
-                    np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), baseline_iou, fmt='%.10f',
-                               delimiter='\n')
-                    np.savetxt(os.path.join(self.write_folder, 'iou.txt'), our_iou, fmt='%.10f', delimiter='\n')
-                    np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
-                    all_input.write((self.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
-                                     [2, 1, 0], -1] * 255).astype(np.uint8))
-                    all_segm.write(((self.images[0, :, :3] * self.segments[0, :, 1:2]).clamp(min=0,
-                                                                                             max=1).cpu().numpy().transpose(
-                        2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
-                    all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
-                                                                                                              0)[:, :,
-                                    [2, 1, 0], -1] * 255).astype(np.uint8))
-                    if silh_losses[-1] > 0.3:
-                        renders[0, -1, 0, 3] = segment[0, 0, -1]
-                        renders[0, -1, 0, :3] = self.images[0, -1, :3] * segment[0, 0, -1]
-                    all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
-                        2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+                qdiff, renders, tdiff, texture_maps, vertices = self.write_results(all_input, all_proj,
+                                                                                   all_proj_filtered, all_segm, b0,
+                                                                                   baseline_iou, bboxes, our_iou,
+                                                                                   our_losses, segment, silh_losses,
+                                                                                   stepi)
             keep_keyframes = (silh_losses <= 0.8)
-            if silh_losses[-1] > 0.3:
+            if silh_losses[-1] > SILHOUETTE_LOSS_THRESHOLD:
                 keep_keyframes[-1] = False
             keep_keyframes[np.argmin(silh_losses)] = True
             self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
             self.images = self.images[:, keep_keyframes]
             self.images_feat = self.images_feat[:, keep_keyframes]
             self.segments = self.segments[:, keep_keyframes]
-            if len(self.keyframes) >= 3:
-                l1, _, _ = self.loss_function(renders[:, -1:], renders[:, -2:-1, 0][:, :, [-1, -1]],
-                                              renders[:, -2:-1, 0, :3], vertices, texture_maps, tdiff, qdiff)
-                l2, _, _ = self.loss_function(renders[:, -2:-1], renders[:, -3:-2, 0][:, :, [-1, -1]],
-                                              renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff)
-                if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 30:
-                    removed_count += 1
-                    self.keyframes = self.keyframes[:-2] + [stepi]
-                    self.images = torch.cat((self.images[:, :-2], image), 1)
-                    self.images_feat = torch.cat((self.images_feat[:, :-2], image_feat), 1)
-                    self.segments = torch.cat((self.segments[:, :-2], segment), 1)
-                else:
-                    removed_count = 0
-            if len(self.keyframes) > self.config["max_keyframes"]:
-                self.keyframes = self.keyframes[-self.config["max_keyframes"]:]
-                self.images = self.images[:, -self.config["max_keyframes"]:]
-                self.images_feat = self.images_feat[:, -self.config["max_keyframes"]:]
-                self.segments = self.segments[:, -self.config["max_keyframes"]:]
+
+            self.update_keyframes(image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
+                                  vertices)
         all_input.release()
         all_segm.release()
         all_proj.release()
         all_proj_filtered.release()
 
         return self.best_model
+
+    def update_keyframes(self, image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
+                         vertices):
+        if len(self.keyframes) >= 3:
+            l1, _, _ = self.loss_function(renders[:, -1:], renders[:, -2:-1, 0][:, :, [-1, -1]],
+                                          renders[:, -2:-1, 0, :3], vertices, texture_maps, tdiff, qdiff)
+            l2, _, _ = self.loss_function(renders[:, -2:-1], renders[:, -3:-2, 0][:, :, [-1, -1]],
+                                          renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff)
+            if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 30:
+                removed_count += 1
+                self.keyframes = self.keyframes[:-2] + [stepi]
+                self.images = torch.cat((self.images[:, :-2], image), 1)
+                self.images_feat = torch.cat((self.images_feat[:, :-2], image_feat), 1)
+                self.segments = torch.cat((self.segments[:, :-2], segment), 1)
+            else:
+                removed_count = 0
+        if len(self.keyframes) > self.config["max_keyframes"]:
+            self.keyframes = self.keyframes[-self.config["max_keyframes"]:]
+            self.images = self.images[:, -self.config["max_keyframes"]:]
+            self.images_feat = self.images_feat[:, -self.config["max_keyframes"]:]
+            self.segments = self.segments[:, -self.config["max_keyframes"]:]
+
+    def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
+                      our_losses, segment, silh_losses, stepi):
+        if self.config["features"] == 'deep':
+            self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
+            tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
+        with torch.no_grad():
+            translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
+
+            last_quaternion = quaternion[0, -1]
+            first_quaternion = quaternion[0, 0]
+            euler_angles_last = euler_from_quaternion(last_quaternion[0], last_quaternion[1], last_quaternion[1],
+                                                      last_quaternion[2])
+            euler_angles_first = euler_from_quaternion(first_quaternion[0], first_quaternion[1],
+                                                       first_quaternion[1], first_quaternion[2])
+            print("Last estimated rotation:", [(float(euler_angles_last[i]) * 180 / math.pi -
+                                                float(euler_angles_first[i]) * 180 / math.pi) % 360
+                                               for i in range(len(euler_angles_last))])
+
+            if self.config["features"] == 'rgb':
+                tex = texture_maps
+            feat_renders_crop = self.get_rendered_image_features(lights, quaternion, texture_maps, translation,
+                                                                 vertices)
+
+            renders, renders_crop = self.get_rendered_image(b0, lights, quaternion, tex, translation, vertices)
+            # breakpoint()
+            write_renders(feat_renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=0)
+            write_renders(renders_crop, self.write_folder, self.config["max_keyframes"] + 1, ids=1)
+            write_renders(torch.cat(
+                (self.images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
+                self.write_folder, self.config["max_keyframes"] + 1, ids=2)
+            write_obj_mesh(vertices[0].cpu().numpy(), self.best_model["faces"],
+                           self.encoder.face_features[0].cpu().numpy(),
+                           os.path.join(self.write_folder, 'mesh.obj'))
+            save_image(texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
+            save_image(tex, os.path.join(self.write_folder, 'tex.png'))
+            write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
+                        os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
+            write_video(self.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
+                        os.path.join(self.write_folder, 'input.avi'), fps=6)
+            write_video((self.images[0, :, :3] * self.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
+                        os.path.join(self.write_folder, 'segments.avi'), fps=6)
+            for tmpi in range(renders.shape[1]):
+                img = self.images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
+                seg = self.segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
+                seg[seg == 0] = 0.35
+                save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
+                save_image(self.images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
+                           os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
+                save_image(torch.cat((img, seg), 0),
+                           os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
+                save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
+                           os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
+                save_image(renders_crop[0, tmpi, 0, :],
+                           os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
+                save_image(feat_renders_crop[0, tmpi, 0, :],
+                           os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
+            if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
+                gt_segm = None
+                if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
+                    m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
+                    gt_segm = segment[0, 0, -1] * 0
+                    gt_segm[offset_[1]:offset_[1] + m_.shape[0],
+                    offset_[0]:offset_[0] + m_.shape[1]] = torch.from_numpy(m_)
+                elif stepi in bboxes:
+                    gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
+                if gt_segm is not None:
+                    baseline_iou[stepi - 1] = float((segment[0, 0, -1] * gt_segm > 0).sum()) / float(
+                        ((segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
+                    our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
+                        ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
+            elif bboxes is not None:
+                bbox = self.config["image_downsample"] * torch.tensor(
+                    [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
+                baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(segment[0, 0, -1])],
+                                                                          dtype=torch.float64))
+                our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
+                                                                     dtype=torch.float64))
+            print('Baseline IoU {}, our IoU {}'.format(baseline_iou[stepi - 1], our_iou[stepi - 1]))
+            np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), baseline_iou, fmt='%.10f',
+                       delimiter='\n')
+            np.savetxt(os.path.join(self.write_folder, 'iou.txt'), our_iou, fmt='%.10f', delimiter='\n')
+            np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
+            all_input.write((self.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
+                             [2, 1, 0], -1] * 255).astype(np.uint8))
+            all_segm.write(((self.images[0, :, :3] * self.segments[0, :, 1:2]).clamp(min=0,
+                                                                                     max=1).cpu().numpy().transpose(
+                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+            all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
+                                                                                                      0)[:, :,
+                            [2, 1, 0], -1] * 255).astype(np.uint8))
+            if silh_losses[-1] > 0.3:
+                renders[0, -1, 0, 3] = segment[0, 0, -1]
+                renders[0, -1, 0, :3] = self.images[0, -1, :3] * segment[0, 0, -1]
+            all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
+                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+        return qdiff, renders, tdiff, texture_maps, vertices
 
     def get_rendered_image_features(self, lights, quaternion, texture_maps, translation, vertices):
         feat_renders_crop, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
@@ -434,7 +467,7 @@ class Tracking6D:
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
-    def apply(self, input_batch, segments, opt_frames=None, bounds=None, stepi=0):
+    def apply(self, input_batch, segments, opt_frames=None, step_i=0):
         if self.config["write_results"]:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config["max_keyframes"] + 1)
@@ -464,7 +497,7 @@ class Tracking6D:
                 model_loss = losses["model"].mean().item()
             else:
                 model_loss = losses["silh"].mean().item()
-            if self.config["verbose"] and epoch % 20 == 0:
+            if self.config["verbose"] and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
                 print("Epoch {:4d}".format(epoch + 1), end=" ")
                 for ls in losses:
                     print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
@@ -494,7 +527,7 @@ class Tracking6D:
                 jloss.backward()
                 self.optimizer.step()
 
-        self.visualize_theoretical_flow(texture_flow, theoretical_flow, opt_frames, stepi)
+        self.visualize_theoretical_flow(texture_flow, theoretical_flow, opt_frames, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
