@@ -1,10 +1,6 @@
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis, \
-    rotation_matrix_to_quaternion
-from kornia.geometry.conversions import quaternion_to_rotation_matrix, rotation_matrix_to_angle_axis, \
-    angle_axis_to_quaternion, QuaternionCoeffOrder
-from main_settings import *
+from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
 
 def mesh_normalize(vertices):
     mesh_max = torch.max(vertices, dim=1, keepdim=True)[0]

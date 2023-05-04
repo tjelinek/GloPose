@@ -35,6 +35,10 @@ from flow import get_flow_from_images, visualize_flow_with_images, load_image, g
 from flow_raft import get_flow_model
 from cfg import FLOW_OUT_DEFAULT_DIR, DEVICE
 
+BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
+
+ALLOW_BREAK_AFTER = 50
+
 TRAINING_PRINT_STATUS_FREQUENCY = 20
 
 SILHOUETTE_LOSS_THRESHOLD = 0.3
@@ -108,15 +112,6 @@ class TrackerConfig:
     erode_renderer_mask: int = None
     rotation_divide: int = None
     sequence: str = None
-
-
-
-@dataclass
-class ModelParams:
-    face_features: List
-    faces: List
-    encoder = None
-    value: float = 100
 
 
 def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi):
@@ -318,7 +313,7 @@ class Tracking6D:
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
             self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, step_i=stepi)
+                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], None, self.keyframes, step_i=stepi)
 
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
@@ -355,6 +350,24 @@ class Tracking6D:
 
     def update_keyframes(self, image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
                          vertices):
+        """
+        Updates the keyframes, images, image features, and segments based on the current step and loss values.
+
+        Parameters:
+        image (Tensor): The current image tensor.
+        image_feat (Tensor): The current image features tensor.
+        qdiff (List[float]): The quaternion difference between consecutive frames.
+        removed_count (int): The number of removed keyframes.
+        renders (Tensor): The renders tensor.
+        segment (Tensor): The current segment tensor.
+        stepi (int): The current step iteration.
+        tdiff (List[float]): The translation difference between consecutive frames.
+        texture_maps (List[Tensor]): The list of texture maps for the objects.
+        vertices (List[Tensor]): The list of vertices for the objects.
+
+        Returns:
+        None
+        """
         if len(self.keyframes) >= 3:
             l1, _, _ = self.loss_function(renders[:, -1:], renders[:, -2:-1, 0][:, :, [-1, -1]],
                                           renders[:, -2:-1, 0, :3], vertices, texture_maps, tdiff, qdiff)
@@ -362,17 +375,16 @@ class Tracking6D:
                                           renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff)
             if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 30:
                 removed_count += 1
-                self.keyframes = self.keyframes[:-2] + [stepi]
+                # self.keyframes = self.keyframes[:-2] + [stepi]
+                self.keyframes = self.keyframes[-2:-1] + [stepi]
                 self.images = torch.cat((self.images[:, :-2], image), 1)
                 self.images_feat = torch.cat((self.images_feat[:, :-2], image_feat), 1)
                 self.segments = torch.cat((self.segments[:, :-2], segment), 1)
-            else:
-                removed_count = 0
-        if len(self.keyframes) > self.config.max_keyframes:
-            self.keyframes = self.keyframes[-self.config.max_keyframes:]
-            self.images = self.images[:, -self.config.max_keyframes:]
-            self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
-            self.segments = self.segments[:, -self.config.max_keyframes:]
+        # if len(self.keyframes) > self.config.max_keyframes:
+        #     self.keyframes = self.keyframes[-self.config.max_keyframes:]
+        #     self.images = self.images[:, -self.config.max_keyframes:]
+        #     self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
+        #     self.segments = self.segments[:, -self.config.max_keyframes:]
 
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
                       our_losses, segment, silh_losses, stepi):
@@ -511,7 +523,7 @@ class Tracking6D:
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
-    def apply(self, input_batch, segments, opt_frames=None, step_i=0):
+    def apply(self, input_batch, segments, observed_flow, opt_frames=None, step_i=0):
         if self.config.write_results:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
@@ -563,7 +575,8 @@ class Tracking6D:
                     self.config.loss_rgb_weight = 1.0
                     self.best_model["value"] = 100
             else:
-                if epoch > 50 and self.best_model["value"] < self.config.stop_value and iters_without_change > 10:
+                if epoch > ALLOW_BREAK_AFTER and self.best_model["value"] < self.config.stop_value and \
+                        iters_without_change > BREAK_AFTER_ITERS_WITH_NO_CHANGE:
                     break
             if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
@@ -652,7 +665,7 @@ class Tracking6D:
             en = (stepi + 1) * self.config.inc_step
             opt_frames = self.keyframes + list(range(st, en))
 
-            self.apply(input_batch[:, opt_frames], segments[:, opt_frames][:, :, 0, :2], opt_frames)
+            self.apply(input_batch[:, opt_frames], segments[:, opt_frames][:, :, 0, :2], None, opt_frames)
             self.encoder = self.best_model["encoder"]
             all_parameters = list(self.encoder.parameters())
             self.optimizer = torch.optim.Adam(all_parameters, lr=self.config.learning_rate)
