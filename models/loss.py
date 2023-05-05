@@ -11,7 +11,8 @@ class FMOLoss(nn.Module):
         if self.config.loss_laplacian_weight > 0:
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
-    def forward(self, renders, segments, input_batch, vertices, texture_maps, tdiff, qdiff):
+    def forward(self, renders, segments, input_batch, vertices, texture_maps, tdiff, qdiff, observed_flow,
+                flow_from_tracking):
         losses = {}
         losses_all = {}
         if self.config.loss_rgb_weight > 0:

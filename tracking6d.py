@@ -33,7 +33,7 @@ from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, ge
 from utils import segment2bbox, write_video, imread, euler_from_quaternion
 from flow import get_flow_from_images, visualize_flow_with_images, load_image, get_flow_from_images_raft
 from flow_raft import get_flow_model
-from cfg import FLOW_OUT_DEFAULT_DIR, DEVICE
+from cfg import FLOW_OUT_DEFAULT_DIR
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 
@@ -312,8 +312,9 @@ class Tracking6D:
             self.encoder.offsets[:, 0, stepi, 3:] = qmult(qnorm(self.encoder.used_quat[:, stepi - 1]),
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
-            self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], None, self.keyframes, step_i=stepi)
+            theoretical_flow = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                          self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], None, self.keyframes,
+                                          step_i=stepi)
 
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
@@ -329,7 +330,7 @@ class Tracking6D:
                                                                                    all_proj_filtered, all_segm, b0,
                                                                                    baseline_iou, bboxes, our_iou,
                                                                                    our_losses, segment, silh_losses,
-                                                                                   stepi)
+                                                                                   stepi, flow_video_up)
             keep_keyframes = (silh_losses <= 0.8)
             if silh_losses[-1] > SILHOUETTE_LOSS_THRESHOLD:
                 keep_keyframes[-1] = False
@@ -340,7 +341,7 @@ class Tracking6D:
             self.segments = self.segments[:, keep_keyframes]
 
             self.update_keyframes(image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
-                                  vertices)
+                                  vertices, flow_video_up, theoretical_flow)
         all_input.release()
         all_segm.release()
         all_proj.release()
@@ -349,7 +350,7 @@ class Tracking6D:
         return self.best_model
 
     def update_keyframes(self, image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
-                         vertices):
+                         vertices, observed_flow, flow_from_tracking):
         """
         Updates the keyframes, images, image features, and segments based on the current step and loss values.
 
@@ -367,12 +368,16 @@ class Tracking6D:
 
         Returns:
         None
+        :param observed_flow:
+        :param flow_from_tracking:
         """
         if len(self.keyframes) >= 3:
             l1, _, _ = self.loss_function(renders[:, -1:], renders[:, -2:-1, 0][:, :, [-1, -1]],
-                                          renders[:, -2:-1, 0, :3], vertices, texture_maps, tdiff, qdiff)
+                                          renders[:, -2:-1, 0, :3], vertices, texture_maps, tdiff, qdiff,
+                                          observed_flow, flow_from_tracking)
             l2, _, _ = self.loss_function(renders[:, -2:-1], renders[:, -3:-2, 0][:, :, [-1, -1]],
-                                          renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff)
+                                          renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff,
+                                          observed_flow, flow_from_tracking)
             if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 30:
                 removed_count += 1
                 # self.keyframes = self.keyframes[:-2] + [stepi]
@@ -387,10 +392,11 @@ class Tracking6D:
         #     self.segments = self.segments[:, -self.config.max_keyframes:]
 
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
-                      our_losses, segment, silh_losses, stepi):
+                      our_losses, segment, silh_losses, stepi, observed_flow):
         if self.config.features == 'deep':
             self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], self.keyframes, b0)
+                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow, self.keyframes)
+
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
         with torch.no_grad():
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
@@ -545,9 +551,8 @@ class Tracking6D:
                                                                      self.encoder.face_features,
                                                                      texture_maps, lights)
 
-
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, vertices, texture_maps,
-                                                           tdiff, qdiff)
+                                                           tdiff, qdiff, observed_flow, theoretical_flow)
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()
@@ -587,6 +592,8 @@ class Tracking6D:
         self.visualize_theoretical_flow(texture_flow, theoretical_flow, opt_frames, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
+
+        return theoretical_flow
 
     def visualize_theoretical_flow(self, texture_flow, theoretical_flow, opt_frames, stepi):
         b0 = get_bbox(self.segments)
@@ -634,7 +641,7 @@ class Tracking6D:
         imageio.imwrite(theoretical_flow_path, flow_illustration)
         imageio.imwrite(texture_flow_path, texture_flow_illustration)
 
-    def rgb_apply(self, input_batch, segments, opt_frames=None, bounds=None):
+    def rgb_apply(self, input_batch, segments, observed_flow, opt_frames=None):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -646,7 +653,7 @@ class Tracking6D:
             renders, theoretical_flow, texture_flow = self.rendering(translation, quaternion, vertices,
                                                                      self.encoder.face_features, texture_maps, lights)
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
-                                                               tdiff, qdiff)
+                                                               tdiff, qdiff, observed_flow, theoretical_flow)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
                 break
             if epoch < self.config.iterations - 1:
