@@ -1,9 +1,8 @@
 import copy
-import fnmatch
 import math
 import os
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
@@ -13,15 +12,12 @@ import kaolin
 import numpy as np
 import torch
 import torchvision.ops.boxes as bops
-from kaolin.render.camera import rotate_translate_points
-from kornia.geometry.conversions import QuaternionCoeffOrder, quaternion_to_rotation_matrix
 from torch import nn
 from torchvision import transforms
 from torchvision.utils import save_image
 
 from GMA.core.utils import flow_viz
 from OSTrack.S2DNet.s2dnet import S2DNet
-from RAFT.core.utils.utils import InputPadder
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, qmult, qnorm
@@ -30,7 +26,7 @@ from models.kaolin_wrapper import load_obj, write_obj_mesh
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, create_mask_from_string
-from utils import segment2bbox, write_video, imread, euler_from_quaternion
+from utils import segment2bbox, write_video, euler_from_quaternion
 from flow import get_flow_from_images, visualize_flow_with_images, load_image, get_flow_from_images_raft
 from flow_raft import get_flow_model
 from cfg import FLOW_OUT_DEFAULT_DIR
@@ -103,7 +99,7 @@ class TrackerConfig:
     loss_dist_weight: float = 0.0
     loss_qt_weight: float = 0.0
     loss_rgb_weight: float = 0.0
-    loss_flow_weight: float = 0.0
+    loss_flow_weight: float = 1.0
 
     # Additional settings
     sigmainv: float = None
@@ -167,10 +163,8 @@ class Tracking6D:
         self.write_folder = write_folder
 
         self.config = TrackerConfig(**config)
-
         self.config.fmo_steps = 1
         self.device = device
-
         self.model_flow = get_flow_model()
 
         torch.backends.cudnn.benchmark = True
@@ -206,7 +200,7 @@ class Tracking6D:
 
         shape = self.segments.shape
         prot = self.config.shapes[0]
-        if self.config.init_shape is not False:
+        if self.config.init_shape:
             mesh = load_obj(self.config.init_shape)
             ivertices = mesh.vertices.numpy()
             ivertices = ivertices - ivertices.mean(0)
@@ -240,7 +234,7 @@ class Tracking6D:
             config.loss_iou_weight = 0
             config.loss_dist_weight = 0
             config.loss_qt_weight = 0
-            config.loss_flow_weight = 0.0
+            config.loss_flow_weight = 1.0
             self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
@@ -250,7 +244,7 @@ class Tracking6D:
                            "encoder": None}
         self.keyframes = [0]
 
-    def run_tracking(self, files, bboxes, depths_dict=None):
+    def run_tracking(self, files, bboxes):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
         if type(bboxes) is dict:
             sorted_bb_keys = sorted(list(bboxes.keys()))
@@ -274,7 +268,6 @@ class Tracking6D:
         b0 = None
         for stepi in range(1, self.config.input_frames):
             image_raw, segment = self.tracker.next(files[stepi])
-            image_high_resolution = load_image(files[stepi])[None]
 
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
             if b0 is not None:
@@ -284,16 +277,8 @@ class Tracking6D:
                 segment = segment_clean
             self.images = torch.cat((self.images, image), 1)
 
-            self.images_high_resolution = torch.cat((self.images_high_resolution, image_high_resolution), 1)
-
             image_prev = (self.images[:, -2, :, :, :]).float() * 255
             image_new = (self.images[:, -1, :, :, :]).float() * 255
-
-            flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
-            flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().detach().numpy()
-
-            # Visualize flow we get from the video
-            visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi)
 
             # This gives the deep features of the image
             image_feat = self.feat(image).detach()
@@ -305,6 +290,14 @@ class Tracking6D:
             start = time.time()
             b0 = get_bbox(self.segments)
 
+            flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
+            flow_video_up = flow_video_up
+            flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
+            observed_flow = flow_video_up[..., b0[0]:b0[1], b0[2]:b0[3]].permute(0, 2, 3, 1)
+
+            # Visualize flow we get from the video
+            visualize_flow(flow_video_up_np, image, image_new, image_prev, segment, stepi)
+
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             self.encoder.offsets[:, :, stepi, :3] = (
@@ -313,8 +306,8 @@ class Tracking6D:
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
             theoretical_flow = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                          self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], None, self.keyframes,
-                                          step_i=stepi)
+                                          self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow,
+                                          self.keyframes, step_i=stepi)
 
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
@@ -330,7 +323,7 @@ class Tracking6D:
                                                                                    all_proj_filtered, all_segm, b0,
                                                                                    baseline_iou, bboxes, our_iou,
                                                                                    our_losses, segment, silh_losses,
-                                                                                   stepi, flow_video_up)
+                                                                                   stepi, observed_flow)
             keep_keyframes = (silh_losses <= 0.8)
             if silh_losses[-1] > SILHOUETTE_LOSS_THRESHOLD:
                 keep_keyframes[-1] = False
@@ -341,7 +334,7 @@ class Tracking6D:
             self.segments = self.segments[:, keep_keyframes]
 
             self.update_keyframes(image, image_feat, qdiff, removed_count, renders, segment, stepi, tdiff, texture_maps,
-                                  vertices, flow_video_up, theoretical_flow)
+                                  vertices, observed_flow, theoretical_flow)
         all_input.release()
         all_segm.release()
         all_proj.release()
@@ -641,7 +634,7 @@ class Tracking6D:
         imageio.imwrite(theoretical_flow_path, flow_illustration)
         imageio.imwrite(texture_flow_path, texture_flow_illustration)
 
-    def rgb_apply(self, input_batch, segments, observed_flow, opt_frames=None):
+    def rgb_apply(self, input_batch, segments, observed_flow, opt_frames):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -663,6 +656,7 @@ class Tracking6D:
                 self.rgb_optimizer.step()
 
     def apply_incremental(self, input_batch, segments):
+        # raise AssertionError("This method should never have been called")
         input_batch, segments = input_batch[None].to(self.device), segments[None].to(self.device)
         for stepi in range(int(self.config.input_frames / self.config.inc_step)):
             if self.config.accumulate:

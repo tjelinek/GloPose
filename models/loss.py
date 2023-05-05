@@ -68,9 +68,11 @@ class FMOLoss(nn.Module):
                         3 * self.config.texture_size ** 2)
             losses["tv"] = losses["tv"].sum()
 
-        # print(texture_maps_rep.shape)
+        if self.config.loss_flow_weight:
+            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).sum()
+            losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
+
         loss = 0
-        # print(losses['tv'])
         for ls in losses:
             loss += losses[ls]
         return losses_all, losses, loss
