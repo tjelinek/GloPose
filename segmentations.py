@@ -1,15 +1,17 @@
 import glob
+import os
 import sys
 
-import cv2 as cv
+import cv2
 import torch
+import numpy as np
+
 from kornia.filters import gaussian_blur2d, spatial_gradient
 from scipy import ndimage
 from scipy.ndimage import uniform_filter
 from torchvision import transforms
 
-from flow import load_image
-from utils import *
+from utils import imread
 
 sys.path.insert(0, 'OSTrack')
 from OSTrack.lib.test.tracker.ostrack import OSTrack
@@ -49,7 +51,7 @@ class PrecomputedTracker:
         self.shape = I.shape
         if self.max_width / I.shape[1] < self.perc:
             self.perc = self.max_width / I.shape[1]
-        segment = cv.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
         if len(segment.shape) > 2:
             segment = segment[:, :, :1]
         segment = (segment > 0.5).astype(segment.dtype)
@@ -123,7 +125,7 @@ class MyTracker():
         self.shape = I.shape
         if self.max_width / I.shape[1] < self.perc:
             self.perc = self.max_width / I.shape[1]
-        segment = cv.resize(self.tracker.mask, I.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(self.tracker.mask, I.shape[1::-1]).astype(np.float64)
         width = int(I.shape[1] * self.perc)
         height = int(I.shape[0] * self.perc)
         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
@@ -140,7 +142,7 @@ class MyTracker():
 
     def process_segm(self, segm_path):
         img = imread(segm_path)
-        segment = cv.resize(img, self.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
@@ -247,7 +249,7 @@ class OSTracker():
         return image, segments
 
     def process_segm(self, segm_path):
-        segment = cv.resize(imread(segm_path), self.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(imread(segm_path), self.shape[1::-1]).astype(np.float64)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
@@ -299,7 +301,7 @@ def segment_d3s_vot(files, bboxes):
         else:
             prediction = tracker.track(I)
 
-        segment = cv.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
 
         width = int(I.shape[1] * perc)
         height = int(I.shape[0] * perc)
@@ -455,16 +457,16 @@ def get_bbox(segments):
 #         # mask = np.zeros(I.shape[:2],np.uint8)
 #         bgdModel = np.zeros((1,65),np.float64)
 #         fgdModel = np.zeros((1,65),np.float64)
-#         # mask, bgdModel, fgdModel = cv.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv.GC_INIT_WITH_RECT)
+#         # mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
 
-#         mask = cv.GC_PR_BGD*np.ones(I.shape[:2],np.uint8)
-#         mask[500:900,150:400] = cv.GC_FGD
-#         mask[0:200] = cv.GC_BGD
-#         mask[950:] = cv.GC_BGD
-#         mask[:,:70] = cv.GC_BGD
-#         mask[:,-200:] = cv.GC_BGD
-#         mask, bgdModel, fgdModel = cv.grabCut(I.astype(np.uint8),mask,None,bgdModel,fgdModel,5,cv.GC_INIT_WITH_MASK)
-#         segment = ((mask == cv.GC_PR_FGD) | (mask == cv.GC_FGD)).astype(np.float64)
+#         mask = cv2.GC_PR_BGD*np.ones(I.shape[:2],np.uint8)
+#         mask[500:900,150:400] = cv2.GC_FGD
+#         mask[0:200] = cv2.GC_BGD
+#         mask[950:] = cv2.GC_BGD
+#         mask[:,:70] = cv2.GC_BGD
+#         mask[:,-200:] = cv2.GC_BGD
+#         mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
+#         segment = ((mask == cv2.GC_PR_FGD) | (mask == cv2.GC_FGD)).astype(np.float64)
 #         width = int(I.shape[1] * perc)
 #         height = int(I.shape[0] * perc)
 #         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
@@ -494,8 +496,8 @@ def get_bbox(segments):
 #             mask = np.zeros(I.shape[:2],np.uint8)
 #             bgdModel = np.zeros((1,65),np.float64)
 #             fgdModel = np.zeros((1,65),np.float64)
-#             mask, bgdModel, fgdModel = cv.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv.GC_INIT_WITH_RECT)
-#             segment = ((mask == cv.GC_PR_FGD) | (mask == cv.GC_FGD)).astype(np.float64)
+#             mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
+#             segment = ((mask == cv2.GC_PR_FGD) | (mask == cv2.GC_FGD)).astype(np.float64)
 #             regions = regionprops(label(segment))
 #             ind = -1
 #             maxarea = 0
@@ -507,7 +509,7 @@ def get_bbox(segments):
 #             tracker.initialize(I, gt_rect, init_mask=segment)
 #         else:
 #             prediction = tracker.track(I)
-#             segment = cv.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
+#             segment = cv2.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
 
 #         width = int(I.shape[1] * perc)
 #         height = int(I.shape[0] * perc)
