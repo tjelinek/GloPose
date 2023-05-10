@@ -388,7 +388,7 @@ class Tracking6D:
                       our_losses, segment, silh_losses, stepi, observed_flow):
         if self.config.features == 'deep':
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
-            
+
         with torch.no_grad():
             translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.encoder(self.keyframes)
 
