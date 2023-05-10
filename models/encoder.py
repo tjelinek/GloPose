@@ -123,7 +123,7 @@ class Encoder(nn.Module):
             translation_all = [self.translation[:, :, 0].detach()]
         diffs = []
         dists = [qdist(quaternion_all[-1], quaternion_all[-1]), qdist(quaternion_all[-1], quaternion_all[-1])]
-        for frmi in range(0, opt_frames[-1] + 1):  # TODO this has been experimentally changed, change back to range(1, opt_frames[-1] + 1)
+        for frmi in range(1, opt_frames[-1] + 1):
             quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.offsets[:, 0, frmi, 3:]))
             translation0 = self.translation[:, :, frmi] + self.offsets[:, :, frmi, :3]
             if not frmi in opt_frames:
