@@ -99,7 +99,7 @@ class TrackerConfig:
     loss_dist_weight: float = 0.0
     loss_qt_weight: float = 0.0
     loss_rgb_weight: float = 0.0
-    loss_flow_weight: float = 0
+    loss_flow_weight: float = 1.0
 
     # Additional settings
     sigmainv: float = None
@@ -290,10 +290,11 @@ class Tracking6D:
             start = time.time()
             b0 = get_bbox(self.segments)
 
-            flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
-            flow_video_up = flow_video_up
-            flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
-            observed_flow = flow_video_up[..., b0[0]:b0[1], b0[2]:b0[3]].permute(0, 2, 3, 1)
+            with torch.no_grad():
+                flow_video_low, flow_video_up = get_flow_from_images(image_prev, image_new, self.model_flow)
+                flow_video_up = flow_video_up
+                flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
+                observed_flow = flow_video_up[..., b0[0]:b0[1], b0[2]:b0[3]].permute(0, 2, 3, 1)
 
             # Visualize flow we get from the video
             visualize_flow(flow_video_up_np, image, image_new, image_prev, segment, stepi)
