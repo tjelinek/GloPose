@@ -3,3 +3,4 @@ lsf.*
 output/*
 saved_models/*
 *._*
+/GMA/
