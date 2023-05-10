@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
     parser.add_argument("--dataset", required=False, default="concept")
     parser.add_argument("--sequence", required=False, default="100")
+    parser.add_argument("--gt_texture", required=False, default="data/360photo/tex_100_gt.png")
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=72)
     parser.add_argument("--skip", required=False, default=1)
@@ -40,6 +41,7 @@ def main():
     config["image_downsample"] = args.perc
     config["tran_init"] = 2.5
     config["loss_dist_weight"] = 0
+    config["gt_texture"] = args.gt_texture
 
     write_folder = os.path.join(tmp_folder, args.folder_name, args.sequence)
     if os.path.exists(write_folder):
@@ -65,7 +67,6 @@ def main():
     config["input_frames"] = len(files)
     if config["inc_step"] == 0:
         config["inc_step"] = len(files)
-    # print(config)
 
     inds = [os.path.splitext(os.path.basename(temp))[0] for temp in segms]
     baseline_dict = dict(zip(inds, segms))
