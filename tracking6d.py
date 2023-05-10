@@ -73,8 +73,8 @@ class TrackerConfig:
 
     # Camera settings
     camera_distance: float = None
-    max_width: int = 1024
-    image_downsample: float = 1.0
+    max_width: int = None
+    image_downsample: float = None
     grabcut: bool = False
 
     # Tracking settings
@@ -93,13 +93,13 @@ class TrackerConfig:
     motion_only_last: bool = None
 
     # Loss function coefficients
-    loss_laplacian_weight: float = 0.0
-    loss_tv_weight: float = 1.0
-    loss_iou_weight: float = 0.0
-    loss_dist_weight: float = 0.0
-    loss_qt_weight: float = 0.0
-    loss_rgb_weight: float = 0.0
-    loss_flow_weight: float = 1.0
+    loss_laplacian_weight: float = None
+    loss_tv_weight: float = None
+    loss_iou_weight: float = None
+    loss_dist_weight: float = None
+    loss_qt_weight: float = None
+    loss_rgb_weight: float = None
+    loss_flow_weight: float = None
 
     # Additional settings
     sigmainv: float = None

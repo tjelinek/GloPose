@@ -38,6 +38,7 @@ loss_rgb_weight: 1.0
 #loss_qt_weight: 1.0
 loss_qt_weight: 0.1
 weight_by_gradient: False
+loss_flow_weight: 1.0
 
 erode_renderer_mask: 3
 rotation_divide: 8
