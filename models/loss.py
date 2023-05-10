@@ -5,9 +5,6 @@ import torch
 from kornia.losses import total_variation
 
 
-# from helpers.torch_helpers import *
-
-
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
         super(FMOLoss, self).__init__()
@@ -51,14 +48,11 @@ class FMOLoss(nn.Module):
             losses["tdiff"] = self.config.loss_qt_weight * tdiff[-1]
             losses["qdiff"] = self.config.loss_qt_weight * qdiff[-1]
 
-        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        # print(self.config.loss_dist_weight)
         if self.config.loss_dist_weight > 0:
             dists = (segments[:, :, 0] * renders[:, :, 0, -1])
             losses["dist"] = self.config.loss_dist_weight * (
                         dists.sum((0, 2, 3)) / renders[:, :, 0, -1].sum((0, 2, 3))).mean()
 
-        # print(self.config.loss_tv_weight)
         if self.config.loss_tv_weight > 0:
             texture_maps_rep = torch.cat((texture_maps[:, :, -1:], texture_maps, texture_maps[:, :, :1]), 2)
             texture_maps_rep = torch.cat(
@@ -66,7 +60,7 @@ class FMOLoss(nn.Module):
             texture_maps_rep = torch.cat((texture_maps_rep[:, :, -1:], texture_maps_rep, texture_maps_rep[:, :, :1]), 2)
             losses["tv"] = self.config.loss_tv_weight * total_variation(texture_maps_rep, reduction='sum') / (
                         3 * self.config.texture_size ** 2)
-            losses["tv"] = losses["tv"].sum()
+            losses["tv"] = losses["tv"].sum()[None]
 
         if self.config.loss_flow_weight:
             flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2))
