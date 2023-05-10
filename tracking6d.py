@@ -388,6 +388,8 @@ class Tracking6D:
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
                       our_losses, segment, silh_losses, stepi, observed_flow):
         if self.config.features == 'deep':
+            self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow, self.keyframes)
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
 
         with torch.no_grad():
