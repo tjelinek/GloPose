@@ -99,7 +99,7 @@ class TrackerConfig:
     loss_dist_weight: float = 0.0
     loss_qt_weight: float = 0.0
     loss_rgb_weight: float = 0.0
-    loss_flow_weight: float = 0
+    loss_flow_weight: float = 1.0
 
     # Additional settings
     sigmainv: float = None

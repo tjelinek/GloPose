@@ -69,7 +69,8 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum()
 
         if self.config.loss_flow_weight:
-            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).sum()
+            breakpoint()
+            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean()
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         loss = 0
