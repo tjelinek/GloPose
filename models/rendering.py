@@ -195,18 +195,16 @@ class RenderingKaolin(nn.Module):
         # Extract the z-components of the face normals
         face_normals_z = face_normals[:, :, -1]
 
+        features_for_rendering = torch.cat((face_features, face_vertices_cam), dim=-1)
+
         # Perform dibr rasterization
         ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
                                                                                  face_vertices_z,
                                                                                  face_vertices_image,
-                                                                                 torch.cat(
-                                                                                     (face_features, face_vertices_cam),
-                                                                                     dim=-1),
+                                                                                 features_for_rendering,
                                                                                  face_normals_z,
                                                                                  sigmainv=self.config.sigmainv,
-                                                                                 boxlen=0.02,
-                                                                                 knum=30,
-                                                                                 multiplier=1000)
+                                                                                 boxlen=0.02, knum=30, multiplier=1000)
 
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
         ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
