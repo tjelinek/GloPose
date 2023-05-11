@@ -9,6 +9,7 @@ from scipy import signal
 from skimage.draw import line_aa
 from skimage.measure import label, regionprops
 from torch import Tensor
+from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
 
 from main_settings import *
 
@@ -509,7 +510,7 @@ def quaternion_raw_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 def quaternion_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """
     Multiply two quaternions representing rotations, returning the quaternion
-    representing their composition, i.e. the versor with nonnegative real part.
+    representing their composition, i.e. the tensor with non-negative real part.
     Usual torch rules for broadcasting apply.
 
     Args:
@@ -530,3 +531,27 @@ def rev_crop_resize(inp, bbox, I):
                                                                       (bbox[3] - bbox[1], bbox[2] - bbox[0]),
                                                                       interpolation=cv2.INTER_CUBIC)
     return est_hs
+
+
+def calculate_rotation_difference(q1, q2):
+    """
+    Calculates the difference in rotation between two given quaternions q1 and q2.
+
+    The function calculates the inverse of the quaternion q1 and multiplies it with q2 to
+    get the difference quaternion qd. It also converts q1, q2, and qd to rotation matrices
+    using the WXYZ order.
+
+    Args:
+        q1 (torch.Tensor): The first quaternion represented in WXYZ format.
+        q2 (torch.Tensor): The second quaternion represented in WXYZ format.
+
+    Returns:
+        qd (torch.Tensor): The difference quaternion obtained by multiplying q2 and the inverse of q1.
+
+    Note:
+        The quaternion format used is WXYZ (scalar-first), where W is the scalar (real) part,
+        and X, Y, and Z form the vector (imaginary) part.
+    """
+    q1_inv = q1 * torch.tensor([1, -1, -1, -1], device=q1.device)
+    qd = quaternion_multiply(q2, q1_inv)
+    return qd
