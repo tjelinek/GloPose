@@ -4,6 +4,7 @@ import meshzoo
 import plyfile
 import numpy as np
 import torch
+import re
 
 import pyvista as pv
 
@@ -86,8 +87,13 @@ def subdivide_mesh(vertices, faces, config, divide_scale=1, subfilter='loop'):
 
 
 def write_obj_mesh(vertices, faces, face_features, name):
+    match = re.search(r'_\d+', name)
+    index = ""
+    if match:
+        index = match.group()
+
     file = open(name, "w")
-    file.write("mtllib model.mtl\n")
+    file.write("mtllib model" + index + ".mtl\n")
     file.write("o FMO\n")
     for ver in vertices:
         file.write("v {:.6f} {:.6f} {:.6f} \n".format(ver[0], ver[1], ver[2]))
