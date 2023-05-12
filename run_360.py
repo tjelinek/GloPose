@@ -11,6 +11,7 @@ import torch
 
 from main_settings import tmp_folder, dataset_folder
 from utils import load_config
+from types import SimpleNamespace
 
 sys.path.append('OSTrack/S2DNet')
 
@@ -25,8 +26,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
     parser.add_argument("--dataset", required=False, default="concept")
-    parser.add_argument("--sequence", required=False, default="100")
-    parser.add_argument("--gt_texture", required=False, default="data/360photo/tex_100_gt.png")
+    parser.add_argument("--sequence", required=False, default="09")
+    # parser.add_argument("--gt_texture", required=False, default="data/360photo/tex_100_gt.png")
+    parser.add_argument("--gt_texture", required=False, default=None)
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=72)
     parser.add_argument("--skip", required=False, default=1)
