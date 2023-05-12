@@ -10,7 +10,8 @@ from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import *
-from utils import quaternion_multiply
+from utils import quaternion_multiply, calculate_rotation_difference
+from models.encoder import qdifference, qnorm
 
 
 def deringing(coeffs, window):
@@ -56,7 +57,7 @@ class RenderingKaolin(nn.Module):
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
             translation.device)
 
-        rendered_vertices_positions = []
+        rendered_verts_positions = []
         all_renders = []
         ren_mesh_vertices_features_list = []
 
@@ -75,7 +76,7 @@ class RenderingKaolin(nn.Module):
                 ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features,
                                                                   texture_maps,
                                                                   mode='bilinear')
-            rendered_vertices_positions.append(ren_mesh_vertices_coords)
+            rendered_verts_positions.append(ren_mesh_vertices_coords)
             ren_mesh_vertices_features_list.append(ren_mesh_vertices_features)
 
             if lights is not None:
@@ -111,28 +112,27 @@ class RenderingKaolin(nn.Module):
             renders = torch.stack(renders, 1).contiguous()
             all_renders.append(renders)
 
-        rendered_vertices_positions = torch.stack(rendered_vertices_positions, dim=0)
+        rendered_verts_positions = torch.stack(rendered_verts_positions, dim=0)
 
         q1 = quaternion[:, -2]
         q2 = quaternion[:, -1]
-        q1_inv = q1 * torch.tensor([1, -1, -1, -1]).to(cfg.DEVICE)
+        # qd = calculate_rotation_difference(q1, q2)
+        qd = qdifference(q1, q2)
+        rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
+
+        # rd.register_hook(lambda grad: breakpoint())
 
         t1 = translation[:, :, -2]
         t2 = translation[:, :, -1]
-
-        r1 = quaternion_to_rotation_matrix(q1, order=QuaternionCoeffOrder.WXYZ)
-        r2 = quaternion_to_rotation_matrix(q2, order=QuaternionCoeffOrder.WXYZ)
-
         td = t2 - t1
-        qd = quaternion_multiply(q2, q1_inv)
-        rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
 
-        rendered_vertices_positions2 = rendered_vertices_positions[-2, ...].flatten(1, 2)
+        rendered_3d_coords_camera_i1 = rendered_verts_positions[-2, ...].flatten(1, 2)
 
-        rendered_vertices_positions2 = rotate_translate_points(rendered_vertices_positions2, rd,
+        rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i1.clone()
+        rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd,
                                                                torch.zeros((1, 3), device=cfg.DEVICE))
 
-        rendered_vertices_positions2 = rendered_vertices_positions2 + td
+        rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
 
         rendered_vertices_positions1 = rendered_vertices_positions[-2, ...].flatten(1, 2)
 
@@ -141,10 +141,10 @@ class RenderingKaolin(nn.Module):
         vertices_positions_image_flat2 = kaolin.render.camera.perspective_camera(rendered_vertices_positions2,
                                                                                  self.camera_proj)
 
-        vertices_positions_image2 = vertices_positions_image_flat2.reshape(*rendered_vertices_positions.shape[1:-1], 2)
+        vertices_positions_image2 = projected_3d_coords_to_2d_i2_flat.reshape(*rendered_verts_positions.shape[1:-1], 2)
         vertices_positions_image2 = vertices_positions_image2.nan_to_num()
 
-        vertices_positions_image1 = vertices_positions_image_flat1.reshape(*rendered_vertices_positions.shape[1:-1], 2)
+        vertices_positions_image1 = projected_3d_coords_to_2d_i1_flat.reshape(*rendered_verts_positions.shape[1:-1], 2)
         vertices_positions_image1 = vertices_positions_image1.nan_to_num()
 
         theoretical_flow = vertices_positions_image2 - vertices_positions_image1
@@ -160,19 +160,14 @@ class RenderingKaolin(nn.Module):
         # Compute the inverse mapping
         texture_img_map = torch.zeros(texture_maps.shape[-2], texture_maps.shape[-1], 2)
         for x, y in product(range(texture_maps.shape[-2]), range(texture_maps.shape[-1])):
-            # start_time = time.time()
             texture_map_coordinates_x = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), x,
                                                    device=cfg.DEVICE)
             texture_map_coordinates_y = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), y,
                                                    device=cfg.DEVICE)
             texture_map_coordinates = torch.cat((texture_map_coordinates_x, texture_map_coordinates_y), dim=-1)
-            # print(time.time() - start_time)
-
             rendering_difference_map = ren_mesh_vertices_features - texture_map_coordinates
             rendering_difference_map = rendering_difference_map[..., 0] ** 2 + rendering_difference_map[..., 1] ** 2
-            # print(time.time() - start_time)
             texture_img_map[x, y] = (rendering_difference_map == torch.max(rendering_difference_map)).nonzero()[0, 1:]
-            # print(time.time() - start_time)
 
         return texture_img_map
         # TODO this is an experimental inverse mapping computation, remove END
