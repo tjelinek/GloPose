@@ -40,7 +40,6 @@ class RenderingKaolin(nn.Module):
                                                                                 camera_up_direction)
         self.register_buffer('camera_rot', camera_rot)
         self.set_faces(faces)
-        # self.faces = torch.LongTensor(faces).to(cfg.DEVICE)
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
@@ -134,12 +133,10 @@ class RenderingKaolin(nn.Module):
 
         rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
 
-        rendered_vertices_positions1 = rendered_vertices_positions[-2, ...].flatten(1, 2)
-
-        vertices_positions_image_flat1 = kaolin.render.camera.perspective_camera(rendered_vertices_positions1,
-                                                                                 self.camera_proj)
-        vertices_positions_image_flat2 = kaolin.render.camera.perspective_camera(rendered_vertices_positions2,
-                                                                                 self.camera_proj)
+        projected_3d_coords_to_2d_i1_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i1,
+                                                                               self.camera_proj)
+        projected_3d_coords_to_2d_i2_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i2,
+                                                                               self.camera_proj)
 
         vertices_positions_image2 = projected_3d_coords_to_2d_i2_flat.reshape(*rendered_verts_positions.shape[1:-1], 2)
         vertices_positions_image2 = vertices_positions_image2.nan_to_num()
