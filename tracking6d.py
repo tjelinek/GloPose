@@ -161,12 +161,14 @@ def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi, 
 
 class Tracking6D:
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
-        self.write_folder = write_folder
+        self.write_folder = Path(write_folder)
 
         self.config = TrackerConfig(**config)
         self.config.fmo_steps = 1
         self.device = device
         self.model_flow = get_flow_model()
+
+        self.tracking_log = open(Path(self.write_folder) / "tracking_log.txt", "w")
 
         self.gt_texture = None
         if self.config.gt_texture is not None:
@@ -412,12 +414,20 @@ class Tracking6D:
             euler_angles_prev = euler_from_quaternion(prev_quaternion[0], prev_quaternion[1], prev_quaternion[2],
                                                       prev_quaternion[3])
 
+            print("Keyframes:", self.keyframes)
+
             print("Last estimated rotation:", [(float(euler_angles_last[i]) * 180 / math.pi -
                                                 float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                for i in range(len(euler_angles_last))])
             print("Previous estimated rotation:", [(float(euler_angles_prev[i]) * 180 / math.pi -
                                                     float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                    for i in range(len(euler_angles_last))])
+
+            self.tracking_log.write("Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
+                                                                  float(euler_angles_first[i]) * 180 / math.pi) % 360
+                                                                 for i in range(len(euler_angles_last))]))
+            self.tracking_log.write('\n')
+            self.tracking_log.flush()
 
             if self.config.features == 'rgb':
                 tex = texture_maps
@@ -435,7 +445,18 @@ class Tracking6D:
                            self.encoder.face_features[0].cpu().numpy(),
                            os.path.join(self.write_folder, f'mesh_{stepi}.obj'))
             save_image(texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-            save_image(tex, os.path.join(self.write_folder, 'tex.png'))
+            save_image(tex, os.path.join(self.write_folder, f'tex_{stepi}.png'))
+
+            with open(self.write_folder / "model.mtl", "r") as file:
+                lines = file.readlines()
+
+            # Replace the last line
+            lines[-1] = f"map_Kd tex_{stepi}.png\n"
+
+            # Write the result to a new file
+            with open(self.write_folder / f"model_{stepi}.mtl", "w") as file:
+                file.writelines(lines)
+
             write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
                         os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
             write_video(self.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
