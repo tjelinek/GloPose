@@ -380,17 +380,19 @@ class Tracking6D:
             l2, _, _ = self.loss_function(renders[:, -2:-1], renders[:, -3:-2, 0][:, :, [-1, -1]],
                                           renders[:, -3:-2, 0, :3], vertices, texture_maps, tdiff, qdiff,
                                           observed_flow, flow_from_tracking)
-            if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 30:
+            if l1["silh"][-1] < 0.7 and l2["silh"][-1] < 0.7 and removed_count < 10:
                 removed_count += 1
-                self.keyframes = self.keyframes[-2:-1] + [stepi]
+                self.keyframes = self.keyframes[:-3] + [stepi - 1, stepi]
                 self.images = torch.cat((self.images[:, :-2], image), 1)
                 self.images_feat = torch.cat((self.images_feat[:, :-2], image_feat), 1)
                 self.segments = torch.cat((self.segments[:, :-2], segment), 1)
-        # if len(self.keyframes) > self.config.max_keyframes:
-        #     self.keyframes = self.keyframes[-self.config.max_keyframes:]
-        #     self.images = self.images[:, -self.config.max_keyframes:]
-        #     self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
-        #     self.segments = self.segments[:, -self.config.max_keyframes:]
+            else:
+                removed_count = 0
+        if len(self.keyframes) > self.config.max_keyframes:
+            self.keyframes = self.keyframes[-self.config.max_keyframes:]
+            self.images = self.images[:, -self.config.max_keyframes:]
+            self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
+            self.segments = self.segments[:, -self.config.max_keyframes:]
 
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
                       our_losses, segment, silh_losses, stepi, observed_flow):
