@@ -303,6 +303,9 @@ class Tracking6D:
                 flow_video_up = flow_video_up
                 flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
                 observed_flow = flow_video_up[..., b0[0]:b0[1], b0[2]:b0[3]].permute(0, 2, 3, 1)
+                flow_segment_mask = segment[:, 0, -1, :, :].to(torch.bool).repeat(1, 2, 1, 1).permute(0, 2, 3, 1)
+                flow_segment_mask = flow_segment_mask[:, b0[0]:b0[1], b0[2]:b0[3], :]
+                observed_flow *= flow_segment_mask
 
             # Visualize flow we get from the video
             visualize_flow(flow_video_up_np, image, image_new, image_prev, segment, stepi, self.write_folder)
@@ -370,8 +373,6 @@ class Tracking6D:
 
         Returns:
         None
-        :param observed_flow:
-        :param flow_from_tracking:
         """
         if len(self.keyframes) >= 3:
             l1, _, _ = self.loss_function(renders[:, -1:], renders[:, -2:-1, 0][:, :, [-1, -1]],
@@ -386,8 +387,6 @@ class Tracking6D:
                 self.images = torch.cat((self.images[:, :-2], image), 1)
                 self.images_feat = torch.cat((self.images_feat[:, :-2], image_feat), 1)
                 self.segments = torch.cat((self.segments[:, :-2], segment), 1)
-            else:
-                removed_count = 0
         if len(self.keyframes) > self.config.max_keyframes:
             self.keyframes = self.keyframes[-self.config.max_keyframes:]
             self.images = self.images[:, -self.config.max_keyframes:]
@@ -426,8 +425,9 @@ class Tracking6D:
                                                    for i in range(len(euler_angles_last))])
 
             self.tracking_log.write("Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
-                                                                  float(euler_angles_first[i]) * 180 / math.pi) % 360
-                                                                 for i in range(len(euler_angles_last))]))
+                                                                       float(
+                                                                           euler_angles_first[i]) * 180 / math.pi) % 360
+                                                                      for i in range(len(euler_angles_last))]))
             self.tracking_log.write('\n')
             self.tracking_log.flush()
 
@@ -486,8 +486,8 @@ class Tracking6D:
                 if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
                     m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
                     gt_segm = segment[0, 0, -1] * 0
-                    gt_segm[offset_[1]:offset_[1] + m_.shape[0],
-                    offset_[0]:offset_[0] + m_.shape[1]] = torch.from_numpy(m_)
+                    gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
+                        torch.from_numpy(m_)
                 elif stepi in bboxes:
                     gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
                 if gt_segm is not None:
@@ -640,14 +640,11 @@ class Tracking6D:
         previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
         current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
         previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
-        theoretical_flow_path = self.write_folder / \
-                                Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-        texture_flow_path = self.write_folder / \
-                            Path('texture_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-        rendering_1_path = self.write_folder / \
-                           Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-        rendering_2_path = self.write_folder / \
-                           Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
+        theoretical_flow_path = self.write_folder / Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) +
+                                                         '.png')
+        texture_flow_path = self.write_folder / Path('texture_flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+        rendering_1_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
+        rendering_2_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
 
         prev_img_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
             'uint8')
