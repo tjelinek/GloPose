@@ -165,6 +165,8 @@ class Tracking6D:
 
         self.config = TrackerConfig(**config)
         self.config.fmo_steps = 1
+        self.config_copy = copy.deepcopy(self.config)
+
         self.device = device
         self.model_flow = get_flow_model()
 
@@ -242,7 +244,6 @@ class Tracking6D:
             config.loss_iou_weight = 0
             config.loss_dist_weight = 0
             config.loss_qt_weight = 0
-            config.loss_flow_weight = 1.0
             self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
@@ -275,6 +276,8 @@ class Tracking6D:
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
+            self.config.loss_flow_weight = 0
+
             image_raw, segment = self.tracker.next(files[stepi])
 
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
@@ -610,6 +613,9 @@ class Tracking6D:
                                   self.config.max_keyframes + 1)
             else:
                 iters_without_change += 1
+
+            if epoch > 100 and self.config.loss_flow_weight == 0:
+                self.config.loss_flow_weight = self.config_copy.loss_flow_weight
 
             if self.config.loss_rgb_weight == 0:
                 if epoch > 100 or model_loss < 0.1:
