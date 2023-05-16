@@ -23,11 +23,12 @@ def generate_textured_sphere(rendering_destination: Path, segmentation_destinati
     tex_path = Path('./prototypes/tex3.png')
     config = load_config('configs/config_deep.yaml')
 
-    generate_rotating_textured_object(config, prototype_path, rendering_destination, segmentation_destination, tex_path)
+    generate_rotating_textured_object(config, prototype_path, rendering_destination, segmentation_destination, tex_path,
+                                      1.0)
 
 
 def generate_rotating_textured_object(config, prototype_path, rendering_destination: Path,
-                                      segmentation_destination: Path, texture_path: Path):
+                                      segmentation_destination: Path, texture_path: Path, magnification=1.0):
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
@@ -36,7 +37,7 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
-    vertices *= 6.0
+    vertices *= magnification
     faces = mesh.faces
     face_features = mesh.uvs[mesh.face_uvs_idx][None]
     translation = torch.zeros((1, 3))[None]
@@ -94,10 +95,8 @@ def dataset_from_google_research(config, dataset_path: Path):
             segmentation_destination = dataset_path / Path('masks_U2Net') / file
             rendering_destination = dataset_path / Path('original') / file
 
-            generate_rotating_textured_object(config, mesh_path,
-                                              rendering_destination,
-                                              segmentation_destination,
-                                              texture_path)
+            generate_rotating_textured_object(config, mesh_path, rendering_destination, segmentation_destination,
+                                              texture_path, magnification=8.0)
 
 
 
