@@ -22,12 +22,11 @@ from tracking6d import Tracking6D
 # scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
 # unzip ~/scratch/dataset/360photo/360photo.zip -d ~/scratch/dataset/360photo/
 
-def parse_args():
+def parse_args(dataset, sequence):
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
-    parser.add_argument("--dataset", required=False, default="concept")
-    parser.add_argument("--sequence", required=False, default="09")
-    # parser.add_argument("--gt_texture", required=False, default="data/360photo/tex_100_gt.png")
+    parser.add_argument("--dataset", required=False, default=dataset)
+    parser.add_argument("--sequence", required=False, default=sequence)
     parser.add_argument("--gt_texture", required=False, default=None)
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=72)
@@ -38,51 +37,58 @@ def parse_args():
 
 
 def main():
-    args = parse_args()
-    config = load_config(args.config)
-    config["image_downsample"] = args.perc
-    config["tran_init"] = 2.5
-    config["loss_dist_weight"] = 0
-    config["gt_texture"] = args.gt_texture
+    dataset = "GoogleScannedObjects"
+    sequences = ["INTERNATIONAL_PAPER", "Squirrel", "STACKING_BEAR", "Tag_Dishtowel_Green", "Twinlab_Nitric_Fuel",
+                 "Threshold_Ramekin_White_Porcelain"]
 
-    write_folder = os.path.join(tmp_folder, args.folder_name, args.sequence)
-    if os.path.exists(write_folder):
-        shutil.rmtree(write_folder)
-    os.makedirs(write_folder)
-    os.makedirs(os.path.join(write_folder, 'imgs'))
-    shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
-    config["sequence"] = args.sequence
+    for sequence in sequences:
+        args = parse_args(dataset, sequence)
+        config = load_config(args.config)
+        config["image_downsample"] = args.perc
+        config["tran_init"] = 2.5
+        config["loss_dist_weight"] = 0
+        config["gt_texture"] = args.gt_texture
 
-    t0 = time.time()
-    files = np.array(
-        glob.glob(os.path.join(dataset_folder, '360photo', 'original', args.dataset, args.sequence, '*.*')))
-    files.sort()
-    segms = np.array(
-        glob.glob(os.path.join(dataset_folder, '360photo', 'masks_U2Net', args.dataset, args.sequence, '*.*')))
-    segms.sort()
-    print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-    if args.length is None:
-        args.length = len(files)
+        write_folder = os.path.join(tmp_folder, args.folder_name, args.sequence)
+        if os.path.exists(write_folder):
+            shutil.rmtree(write_folder)
+        os.makedirs(write_folder)
+        os.makedirs(os.path.join(write_folder, 'imgs'))
+        shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+        config["sequence"] = args.sequence
 
-    files = files[args.start:args.length:args.skip]
-    segms = segms[args.start:args.length:args.skip]
-    config["input_frames"] = len(files)
-    if config["inc_step"] == 0:
-        config["inc_step"] = len(files)
+        t0 = time.time()
+        files = np.array(
+            glob.glob(os.path.join(dataset_folder, '360photo', 'original', args.dataset, args.sequence, '*.*')))
+        files.sort()
+        segms = np.array(
+            glob.glob(os.path.join(dataset_folder, '360photo', 'masks_U2Net', args.dataset, args.sequence, '*.*')))
+        segms.sort()
+        print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
+        if args.length is None:
+            args.length = len(files)
 
-    inds = [os.path.splitext(os.path.basename(temp))[0] for temp in segms]
-    baseline_dict = dict(zip(inds, segms))
+        files = files[args.start:args.length:args.skip]
+        segms = segms[args.start:args.length:args.skip]
+        config["input_frames"] = len(files)
+        if config["inc_step"] == 0:
+            config["inc_step"] = len(files)
 
-    torch.cuda.empty_cache()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        inds = [os.path.splitext(os.path.basename(temp))[0] for temp in segms]
+        baseline_dict = dict(zip(inds, segms))
 
-    t0 = time.time()
-    sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
+        torch.cuda.empty_cache()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    best_model = sfb.run_tracking(files, baseline_dict)
-    print(
-        '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"], (time.time() - t0) / 1,
-                                                                          best_model["value"]))
+        t0 = time.time()
+        sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
+
+        best_model = sfb.run_tracking(files, baseline_dict)
+        print(
+            '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"],
+                                                                              (time.time() - t0) / 1,
+                                                                              best_model["value"]))
+
 
 if __name__ == "__main__":
     main()
