@@ -9,7 +9,7 @@ if not os.path.exists(dataset_folder):
 
 # TODO: put your paths here:
 if not os.path.exists(dataset_folder):
-	dataset_folder = './data/'
+	dataset_folder = '~/data/'
 	tmp_folder = './tmp/'
 
 g_tbd_folder = dataset_folder+'TbD/'
