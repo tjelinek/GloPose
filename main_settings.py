@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 dataset_folder = '/mnt/lascar/rozumden/dataset/'
 tmp_folder = '/home.stud/rozumden/tmp/'
@@ -9,8 +10,8 @@ if not os.path.exists(dataset_folder):
 
 # TODO: put your paths here:
 if not os.path.exists(dataset_folder):
-	dataset_folder = '~/data/'
-	tmp_folder = './tmp/'
+	dataset_folder = str(Path('~/data/').expanduser())
+	tmp_folder = str(Path('./tmp/').expanduser())
 
 g_tbd_folder = dataset_folder+'TbD/'
 g_tbd3d_folder = dataset_folder+'TbD-3D/'
