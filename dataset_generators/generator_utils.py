@@ -1,7 +1,21 @@
+import math
+import warnings
+import os
+import shutil
 import imageio
+import kaolin
 import numpy as np
+import torch
+import types
+import matplotlib.pyplot as plt
+
+from PIL import Image
+from pathlib import Path
+from kornia.geometry import quaternion_to_rotation_matrix
 
 from models.rendering import RenderingKaolin
+from main_settings import dataset_folder
+from utils import quaternion_from_euler, load_config, deg_to_rad
 
 
 def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination):
@@ -57,3 +71,47 @@ def setup_renderer(config, faces, height, width, device):
     rendering.camera_trans = rendering.camera_trans.to(device)
     rendering.camera_proj = rendering.camera_proj.to(device)
     return rendering
+
+
+def generate_2_DoF_rotations():
+    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
+    rotations_yaw = np.concatenate([np.zeros(rotations_pitch.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
+    rotations_roll = np.zeros(rotations_yaw.shape)
+    return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
+
+
+def generate_rotating_textured_object(config, prototype_path, rendering_destination: Path,
+                                      segmentation_destination: Path, texture_path: Path,
+                                      width, height, magnification=1.0, DEVICE='cuda'):
+    rendering_destination.mkdir(parents=True, exist_ok=True)
+    segmentation_destination.mkdir(parents=True, exist_ok=True)
+
+    tex = imageio.imread(str(texture_path))
+    texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
+    mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
+    vertices = mesh.vertices[None]
+
+    vertices *= magnification
+    faces = mesh.faces
+    face_features = mesh.uvs[mesh.face_uvs_idx][None]
+    translation = torch.zeros((1, 3))[None]
+
+    rendering = setup_renderer(config, faces, width, height, DEVICE)
+
+    rotations = generate_2_DoF_rotations()
+
+    for i, (yaw, pitch, roll) in enumerate(rotations):
+        rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
+                                                    pitch=torch.Tensor([deg_to_rad(pitch)]),
+                                                    yaw=torch.Tensor([deg_to_rad(yaw)]))
+
+        rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
+
+        with torch.no_grad():
+            face_normals, face_vertices_cam, red_index, ren_mask, \
+                ren_mesh_vertices_features, ren_mesh_vertices_coords \
+                = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
+                                                  translation.to(DEVICE), vertices.to(DEVICE))
+
+            ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features, texture_maps, mode='bilinear')
+            generate_and_save_images(i, ren_features, ren_mask, rendering_destination, segmentation_destination)
