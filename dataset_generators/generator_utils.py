@@ -80,9 +80,15 @@ def generate_2_DoF_rotations():
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
 
 
+def generate_1_DoF_rotation():
+    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
+    rotations_yaw = np.zeros(rotations_pitch.shape)
+    rotations_roll = np.zeros(rotations_yaw.shape)
+    return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
+
+
 def generate_rotating_textured_object(config, prototype_path, rendering_destination: Path,
-                                      segmentation_destination: Path, texture_path: Path,
-                                      width, height, magnification=1.0, DEVICE='cuda'):
+                                      segmentation_destination: Path, texture_path: Path, width, height, DEVICE='cuda'):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
 
@@ -90,6 +96,8 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
+
+    magnification = 1 / (vertices.max() - vertices.mean()) * 0.8
 
     vertices *= magnification
     faces = mesh.faces

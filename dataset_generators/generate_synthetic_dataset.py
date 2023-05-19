@@ -6,7 +6,7 @@ import torch
 import kaolin
 from kornia.geometry import quaternion_to_rotation_matrix
 
-from dataset_generators.generator_utils import setup_renderer, generate_and_save_images, generate_2_DoF_rotations, \
+from dataset_generators.generator_utils import setup_renderer, generate_and_save_images, generate_1_DoF_rotation, \
     generate_rotating_textured_object
 from utils import quaternion_from_euler, deg_to_rad, load_config
 from main_settings import dataset_folder
@@ -48,7 +48,7 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
     translation = torch.zeros((1, 3))[None]
     face_features = vertices_features[mesh.faces][None]
 
-    rotations = generate_2_DoF_rotations()
+    rotations = generate_1_DoF_rotation()
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
@@ -74,7 +74,7 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     height = 1000
 
     generate_rotating_textured_object(config, prototype_path, rendering_destination, segmentation_destination, tex_path,
-                                      width, height, magnification=1.0)
+                                      width, height)
 
 
 if __name__ == '__main__':

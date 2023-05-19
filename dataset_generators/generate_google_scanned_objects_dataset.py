@@ -32,7 +32,7 @@ def dataset_from_google_research(config, dataset_path: Path):
             height = 2000
 
             generate_rotating_textured_object(config, mesh_path, rendering_destination, segmentation_destination,
-                                              texture_path, width, height, magnification=6.0)
+                                              texture_path, width, height)
 
 
 if __name__ == '__main__':
