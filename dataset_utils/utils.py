@@ -1,0 +1,59 @@
+import imageio
+import numpy as np
+
+from models.rendering import RenderingKaolin
+
+
+def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination):
+    """
+    Generate and save rendering and segmentation images.
+
+    This function takes the features of a rendered object, and a mask, both of which are 2D images,
+    converts them to numpy arrays, and then saves them as png images in the specified directories.
+
+    Args:
+        image_idx (int): The index of the image, used to generate the file name.
+        ren_features (torch.Tensor): A tensor representing the features of the rendered object.
+        ren_mask (torch.Tensor): A tensor representing the mask of the rendered object.
+        rendering_destination (Path): The destination directory where the rendered image will be saved.
+        segmentation_destination (Path): The destination directory where the mask image will be saved.
+
+    Returns:
+        None
+    """
+    ren_features_np = ren_features.cpu().numpy()[0].astype('uint8')
+    i_str = format(image_idx, '03d')
+    rendering_file_name = rendering_destination / (i_str + '.png')
+    segmentation_file_name = segmentation_destination / (i_str + '.png')
+    ren_mask_np = ren_mask.cpu().numpy().astype('uint8')[0] * 255
+    ren_mask_np_rep = np.tile(ren_mask_np, (3, 1, 1)).transpose((1, 2, 0))
+    imageio.imwrite(segmentation_file_name, ren_mask_np_rep)
+    imageio.imwrite(rendering_file_name, ren_features_np)
+
+
+def setup_renderer(config, faces, height, width, device):
+    """
+    Setup a Kaolin renderer based on given configuration and parameters.
+
+    This function initiates a RenderingKaolin object with provided configuration and parameters.
+    The renderer is used to render 3D objects, and this function also moves several properties
+    of the renderer to the specified device (defined by global constant DEVICE, set to 'cuda').
+
+    Args:
+        config (dict): The configuration dictionary which includes settings for rendering.
+        faces (np.ndarray): A numpy array containing the faces of the 3D object that is to be rendered.
+        height (int): The height of the output image from the renderer.
+        width (int): The width of the output image from the renderer.
+        device (str): PyTorch device that is used for rendering
+
+    Returns:
+        RenderingKaolin: An instance of the RenderingKaolin class with the specified configuration and parameters,
+                         and its properties moved to the DEVICE
+    """
+    rendering = RenderingKaolin(config, faces, width, height)
+    rendering.obj_center = rendering.obj_center.to(device)
+    rendering.faces = rendering.faces.to(device)
+    rendering.camera_rot = rendering.camera_rot.to(device)
+    rendering.camera_trans = rendering.camera_trans.to(device)
+    rendering.camera_proj = rendering.camera_proj.to(device)
+    return rendering
