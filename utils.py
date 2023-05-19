@@ -555,3 +555,7 @@ def calculate_rotation_difference(q1, q2):
     q1_inv = q1 * torch.tensor([1, -1, -1, -1], device=q1.device)
     qd = quaternion_multiply(q2, q1_inv)
     return qd
+
+
+def deg_to_rad(deg):
+    return math.pi * deg / 180.0
