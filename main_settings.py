@@ -24,7 +24,7 @@ g_bg_folder = dataset_folder+'vot2018.zip'
 
 # TODO: download S2DNet weights:
 # wget https://www.dropbox.com/s/hnv51iwu4hn82rj/s2dnet_weights.pth -P /cluster/scratch/denysr/dataset/
-g_ext_folder = dataset_folder+'s2dnet_weights.pth'
+g_ext_folder = os.path.join(dataset_folder, 's2dnet_weights.pth')
 
 g_resolution_x = int(640/2)
 g_resolution_y = int(480/2)

@@ -9,39 +9,35 @@ import shutil
 import numpy as np
 import torch
 
-from pathlib import Path
-
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence
 from utils import load_config
 from types import SimpleNamespace
+from pathlib import Path
 
 sys.path.append('OSTrack/S2DNet')
 
 from tracking6d import Tracking6D
 
 
-# TODO: Copy data:
-# scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
-# unzip ~/scratch/dataset/360photo/360photo.zip -d ~/scratch/dataset/360photo/
-
 def parse_args(sequence):
+    dataset = 'SyntheticObjects'
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
-    parser.add_argument("--dataset", required=False, default='concept')
+    parser.add_argument("--dataset", required=False, default=dataset)
     parser.add_argument("--sequence", required=False, default=sequence)
     parser.add_argument("--gt_texture", required=False, default=None)
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=72)
     parser.add_argument("--skip", required=False, default=1)
     parser.add_argument("--perc", required=False, default=0.15)
-    parser.add_argument("--folder_name", required=False, default='360photo')
+    parser.add_argument("--folder_name", required=False, default=dataset)
     return parser.parse_args()
 
 
 def main():
-    sequences = ["09"]
-
+    sequences = ["8_Colored_Sphere"]
 
     for sequence in sequences:
         args = parse_args(sequence)
@@ -59,20 +55,19 @@ def main():
         shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
         config["sequence"] = args.sequence
 
-        renderings_folder = 'original'
-        segmentations_folder = 'masks_U2Net'
-        dataset_folder_ = Path(dataset_folder) / '360photo'
+        renderings_folder = 'renderings'
+        segmentations_folder = 'segmentations'
 
         t0 = time.time()
+
         files = np.array(
-            glob.glob(os.path.join(dataset_folder_, renderings_folder, args.dataset, args.sequence, '*.*')))
+            glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, renderings_folder, '*.*')))
         files.sort()
         segms = np.array(
-            glob.glob(os.path.join(dataset_folder_, segmentations_folder, args.dataset, args.sequence, '*.*')))
+            glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, segmentations_folder, '*.*')))
+
         segms.sort()
-
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-
         run_tracking_on_sequence(args, config, files, segms, write_folder)
 
 
