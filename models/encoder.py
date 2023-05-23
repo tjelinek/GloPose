@@ -1,3 +1,4 @@
+from collections import namedtuple
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
@@ -54,6 +55,10 @@ def qdifference(q1, q2):  # how to get from q1 to q2
     q1inv = q1conj / q1.norm()
     diff = qmult(q2, q1inv)
     return diff
+
+
+EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
+                                             'lights', 'translation_difference', 'quaternion_difference'])
 
 
 class Encoder(nn.Module):
@@ -147,8 +152,15 @@ class Encoder(nn.Module):
             texture_map = self.texture_map
         else:
             texture_map = nn.Sigmoid()(self.texture_map)
-        return translation[:, :, opt_frames], quaternion[:,
-                                              opt_frames], vertices, texture_map, self.lights, tdiff, qdiff
+
+        result = EncoderResult(translations=translation[:, :, opt_frames],
+                               quaternions=quaternion[:, opt_frames],
+                               vertices=vertices,
+                               texture_maps=texture_map,
+                               lights=self.lights,
+                               translation_difference=tdiff,
+                               quaternion_difference=qdiff)
+        return result
 
     def forward_normalize(self):
         exp = 0
