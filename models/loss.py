@@ -61,7 +61,7 @@ class FMOLoss(nn.Module):
             texture_maps_rep = torch.cat((texture_maps_rep[:, :, -1:], texture_maps_rep, texture_maps_rep[:, :, :1]), 2)
             losses["tv"] = self.config.loss_tv_weight * total_variation(texture_maps_rep, reduction='sum') / (
                         3 * self.config.texture_size ** 2)
-            losses["tv"] = losses["tv"].mean(dim=1)  # TODO this has changed in my implementation
+            losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight:
             flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2))
