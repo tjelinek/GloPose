@@ -409,7 +409,7 @@ class Tracking6D:
             self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                            self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow, self.keyframes)
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
-        elif self.gt_texture is not None:
+        if self.gt_texture is not None:
             tex = self.gt_texture
 
         with torch.no_grad():
@@ -644,7 +644,7 @@ class Tracking6D:
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
         translation_prime, quaternion_prime, vertices_prime, \
             texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = self.encoder(opt_frames_prime)
-        tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map)
+        tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map) if self.gt_texture is None else self.gt_texture
         # Render the image given the estimated shape of it
         rendered_keyframe_images, _ = self.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
                                                               translation_prime, vertices_prime)
