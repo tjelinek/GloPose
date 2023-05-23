@@ -34,19 +34,20 @@ class FMOLoss(nn.Module):
         if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
             losses["lap"] = self.config.loss_laplacian_weight * self.lapl_loss(vertices)
 
-        if self.config.loss_qt_weight > 0:
+        if self.config.loss_q_weight > 0:
             if qdiff[qdiff > 0].shape[0] > 0:
                 losses["qdiff"] = qdiff[qdiff > 0][-1].mean()
             else:
                 losses["qdiff"] = qdiff[-1].mean()
 
+        if self.config.loss_t_weight > 0:
             if tdiff[tdiff > 0].shape[0] > 0:
                 losses["tdiff"] = tdiff[tdiff > 0][-1].mean()
             else:
                 losses["tdiff"] = tdiff[-1].mean()
 
-            losses["tdiff"] = self.config.loss_qt_weight * tdiff[-1]
-            losses["qdiff"] = self.config.loss_qt_weight * qdiff[-1]
+            losses["tdiff"] = self.config.loss_t_weight * tdiff[-1]
+            losses["qdiff"] = self.config.loss_q_weight * qdiff[-1]
 
         if self.config.loss_dist_weight > 0:
             dists = (segments[:, :, 0] * renders[:, :, 0, -1])

@@ -35,7 +35,8 @@ loss_tv_weight: 1.0
 loss_iou_weight: 1.0
 loss_dist_weight: 0.1
 loss_rgb_weight: 1.0
-loss_qt_weight: 1.0
+loss_q_weight: 1.0
+loss_t_weight: 1.0
 weight_by_gradient: False
 
 erode_renderer_mask: 3
