@@ -114,7 +114,6 @@ class RenderingKaolin(nn.Module):
 
         q1 = quaternion[:, -2]
         q2 = quaternion[:, -1]
-        # qd = calculate_rotation_difference(q1, q2)
         qd = qdifference(q1, q2)
         rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
 
