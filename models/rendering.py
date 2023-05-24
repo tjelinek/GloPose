@@ -10,8 +10,7 @@ from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import *
-from utils import quaternion_multiply, calculate_rotation_difference
-from models.encoder import qdifference, qnorm
+from utils import quaternion_multiply, calculate_rotation_difference, qnorm, qdifference
 
 
 def deringing(coeffs, window):
@@ -43,7 +42,7 @@ class RenderingKaolin(nn.Module):
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
-        self.register_buffer('face_indices', torch.tensor(self.faces, dtype=torch.long, device=cfg.DEVICE))
+        self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device=cfg.DEVICE))
 
     @dataclass
     class RenderingResult:
