@@ -149,24 +149,7 @@ class RenderingKaolin(nn.Module):
 
         all_renders = torch.stack(all_renders, 1).contiguous()
         return all_renders, theoretical_flow, texture_flow
-
-    def compute_texture_to_img_map(self, ren_mesh_vertices_features, texture_maps):
-        # TODO this is an experimental inverse mapping computation, remove
-        # Compute the inverse mapping
-        texture_img_map = torch.zeros(texture_maps.shape[-2], texture_maps.shape[-1], 2)
-        for x, y in product(range(texture_maps.shape[-2]), range(texture_maps.shape[-1])):
-            texture_map_coordinates_x = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), x,
-                                                   device=cfg.DEVICE)
-            texture_map_coordinates_y = torch.full((1, *ren_mesh_vertices_features.shape[-3: -1], 1), y,
-                                                   device=cfg.DEVICE)
-            texture_map_coordinates = torch.cat((texture_map_coordinates_x, texture_map_coordinates_y), dim=-1)
-            rendering_difference_map = ren_mesh_vertices_features - texture_map_coordinates
-            rendering_difference_map = rendering_difference_map[..., 0] ** 2 + rendering_difference_map[..., 1] ** 2
-            texture_img_map[x, y] = (rendering_difference_map == torch.max(rendering_difference_map)).nonzero()[0, 1:]
-
-        return texture_img_map
-        # TODO this is an experimental inverse mapping computation, remove END
-
+    
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
