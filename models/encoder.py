@@ -3,59 +3,7 @@ import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
 
-def mesh_normalize(vertices):
-    mesh_max = torch.max(vertices, dim=1, keepdim=True)[0]
-    mesh_min = torch.min(vertices, dim=1, keepdim=True)[0]
-    mesh_middle = (mesh_min + mesh_max) / 2
-    vertices = vertices - mesh_middle
-    bs = vertices.shape[0]
-    mesh_biggest = torch.max(vertices.view(bs, -1), dim=1)[0]
-    vertices = vertices / mesh_biggest.view(bs, 1, 1)  # * 0.45
-    return vertices
-
-
-def comp_tran_diff(vect):
-    vdiff = (vect[1:] - vect[:-1]).abs()
-    vdiff[vdiff < 0.2] = 0
-    return torch.cat((0 * vdiff[:1], vdiff), 0).norm(dim=1)
-
-
-def comp_diff(vect):
-    vdiff = vect[1:] - vect[:-1]
-    v2diff = vdiff - torch.cat((vdiff[:1], vdiff[:-1]), 0)
-    return torch.cat((0 * v2diff[:1], v2diff), 0).norm(dim=1)
-
-
-def comp_2diff(vdiff):
-    v2diff = vdiff - torch.cat((vdiff[:1], vdiff[:-1]), 0)
-    return torch.cat((0 * v2diff[:1], v2diff), 0).abs()
-
-
-def qnorm(q1):
-    return q1 / q1.norm()
-
-
-def qmult(q1, q0):  # q0, then q1, you get q3
-    w0, x0, y0, z0 = q0[0]
-    w1, x1, y1, z1 = q1[0]
-    q3 = torch.cat(((-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0)[None, None],
-                    (x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0)[None, None],
-                    (-x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0)[None, None],
-                    (x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0)[None, None]), 1)
-    return q3
-
-
-def qdist(q1, q2):
-    return 1 - (q1 * q2).sum() ** 2
-
-
-def qdifference(q1, q2):  # how to get from q1 to q2
-    q1conj = -q1
-    q1conj[0, 0] = q1[0, 0]
-    q1inv = q1conj / q1.norm()
-    diff = qmult(q2, q1inv)
-    return diff
-
+from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qdifference
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights', 'translation_difference', 'quaternion_difference'])
@@ -115,7 +63,7 @@ class Encoder(nn.Module):
             if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)
             else:
-                vertices = vertices - vertices.mean(1)[:, None, :]  ## make center of mass in origin
+                vertices = vertices - vertices.mean(1)[:, None, :]  # make center of mass in origin
             if self.config.project_coin:
                 vertices[:, :, 0] = self.x_coor
         else:
