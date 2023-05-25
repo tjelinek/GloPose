@@ -114,8 +114,7 @@ class TrackerConfig:
 
 
 class Tracking6D:
-
-    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result'])
+    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
         self.write_folder = Path(write_folder)
@@ -159,7 +158,6 @@ class Tracking6D:
         self.prev_images = self.images.clone()[None].to(self.device)
         self.images, self.segments = self.images[None].to(self.device), self.segments[None].to(self.device)
 
-        self.flows: torch.Tensor = torch.zeros(self.images.shape, dtype=self.images.dtype)
         self.images_feat = self.feat(self.images).detach()
 
         shape = self.segments.shape
@@ -235,6 +233,8 @@ class Tracking6D:
         prev_translation = self.encoder.translation[0, 0, 0]
         prev_quaternion = self.encoder.quaternion[0, 0]
 
+        observed_flows = None
+
         b0 = None
         for stepi in range(1, self.config.input_frames):
             self.config.loss_flow_weight = 0
@@ -279,9 +279,18 @@ class Tracking6D:
                 flow_segment_mask = segment[:, 0, -1, :, :].to(torch.bool).repeat(1, 2, 1, 1).permute(0, 2, 3, 1)
                 flow_segment_mask = flow_segment_mask[:, b0[0]:b0[1], b0[2]:b0[3], :]
                 observed_flow *= flow_segment_mask
+                if observed_flows is None:
+                    first_flow = torch.zeros(observed_flow[None].shape, device=observed_flow.device)
+                    observed_flows = torch.cat((first_flow, observed_flow[None]), 1)
+                else:
+                    target_shape = observed_flows.shape[2:-1]
+                    observed_flow = torch.nn.functional.interpolate(observed_flow.permute(0, 3, 1, 2), size=target_shape, mode='bilinear',align_corners=False).permute(0, 2, 3, 1)
+                    if observed_flow[None].shape[2:] != observed_flows.shape[2:]:
+                        breakpoint()
+                    observed_flows = torch.cat((observed_flows, observed_flow[None]), 1)
 
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow, self.keyframes,
+                                      self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows, self.keyframes,
                                       self.flow_keyframes, step_i=stepi)
 
             encoder_result = frame_result.encoder_result
@@ -297,7 +306,7 @@ class Tracking6D:
 
             if self.config.write_results:
                 self.write_results(all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
-                                   our_losses, segment, silh_losses, stepi, observed_flow, encoder_result)
+                                   our_losses, segment, silh_losses, stepi, observed_flows, encoder_result)
                 # Visualize flow we get from the video
                 visualize_flow(flow_video_up_np, image, image_new_x255, image_prev_x255, segment, stepi,
                                self.write_folder)
@@ -329,6 +338,7 @@ class Tracking6D:
             self.prev_images = self.prev_images[:, keep_keyframes]
             self.images_feat = self.images_feat[:, keep_keyframes]
             self.segments = self.segments[:, keep_keyframes]
+            observed_flows = observed_flows[:, keep_keyframes]
             if len(self.keyframes) > self.config.max_keyframes:
                 self.keyframes = self.keyframes[-self.config.max_keyframes:]
                 self.images = self.images[:, -self.config.max_keyframes:]
@@ -352,13 +362,13 @@ class Tracking6D:
         return self.best_model
 
     def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
-                      our_losses, segment, silh_losses, stepi, observed_flow, encoder_result):
+                      our_losses, segment, silh_losses, stepi, observed_flows, encoder_result):
 
         detached_result = EncoderResult(*[it.detach() if type(it) is torch.Tensor else it for it in encoder_result])
 
         if self.config.features == 'deep':
             self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flow, self.keyframes)
+                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows, self.keyframes)
             tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
         if self.gt_texture is not None:
             tex = self.gt_texture
@@ -524,7 +534,7 @@ class Tracking6D:
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
-    def apply(self, input_batch, segments, observed_flow, keyframes, flow_frames, step_i=0):
+    def apply(self, input_batch, segments, observed_flows, keyframes, flow_frames, step_i=0):
         if self.config.write_results:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
@@ -558,12 +568,11 @@ class Tracking6D:
                                                                        encoder_result.vertices)
 
             # texture_flow.register_hook(lambda grad: breakpoint())
-
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result.vertices,
                                                            encoder_result.texture_maps,
                                                            encoder_result.translation_difference,
                                                            encoder_result.quaternion_difference,
-                                                           observed_flow, theoretical_flow)
+                                                           observed_flows, theoretical_flow)
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()
@@ -648,7 +657,7 @@ class Tracking6D:
                                                        current_rendered_image_rgb[0], theoretical_flow_up_)
         imageio.imwrite(theoretical_flow_path, flow_illustration)
 
-    def rgb_apply(self, input_batch, segments, observed_flow, opt_frames):
+    def rgb_apply(self, input_batch, segments, observed_flows, opt_frames):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -666,7 +675,7 @@ class Tracking6D:
                                                                        quaternion, translation, vertices)
 
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
-                                                               tdiff, qdiff, observed_flow, theoretical_flow)
+                                                               tdiff, qdiff, observed_flows, theoretical_flow)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
                 break
             if epoch < self.config.iterations - 1:
