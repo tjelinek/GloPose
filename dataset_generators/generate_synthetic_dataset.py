@@ -6,6 +6,7 @@ import torch
 import kaolin
 from kornia.geometry import quaternion_to_rotation_matrix
 
+from models.initial_mesh import sphere_to_cube
 from dataset_generators.generator_utils import setup_renderer, generate_and_save_images, generate_1_DoF_rotation, \
     generate_rotating_textured_object
 from utils import quaternion_from_euler, deg_to_rad, load_config
@@ -66,9 +67,73 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
                                      segmentation_destination)
 
 
+def generate_6_colored_cube(config, rendering_destination, segmentation_destination):
+    prototype_path = Path('./prototypes/sphere.obj')
+    DEVICE = 'cuda'
+    mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
+
+    # vertices = sphere_to_cube(mesh.vertices[None]).squeeze()
+
+    rendering_destination.mkdir(parents=True, exist_ok=True)
+    segmentation_destination.mkdir(parents=True, exist_ok=True)
+
+    colors = [
+        [255, 0, 0],  # red
+        [0, 255, 0],  # green
+        [0, 0, 255],  # blue
+        [255, 255, 0],  # yellow
+        [0, 255, 255],  # cyan
+        [255, 0, 255],  # magenta
+    ]
+
+    vertices_features = torch.zeros(mesh.vertices.shape[0], 3)
+
+    for i, vertex in enumerate(mesh.vertices):
+        if vertex[0] > 0 and vertex[1] > 0 and vertex[2] > 0:  # Quadrant 1 (+x, +y, +z)
+            color = colors[0]
+        elif vertex[0] > 0 and vertex[1] > 0 and vertex[2] < 0:  # Quadrant 2 (+x, +y, -z)
+            color = colors[1]
+        elif vertex[0] > 0 and vertex[1] < 0 and vertex[2] > 0:  # Quadrant 3 (+x, -y, +z)
+            color = colors[2]
+        elif vertex[0] > 0 and vertex[1] < 0 and vertex[2] < 0:  # Quadrant 4 (+x, -y, -z)
+            color = colors[3]
+        elif vertex[0] < 0 and vertex[1] > 0:  # Quadrant 5 (-x, +y, +/-z)
+            color = colors[4]
+        else:
+            color = colors[5]  # Quadrant 6 (-x, -y, +/-z)
+
+        vertices_features[i] = torch.tensor(color)
+
+    width = 1000
+    height = 1000
+    faces = mesh.faces
+
+    rendering = setup_renderer(config, faces, height, width, DEVICE)
+
+    translation = torch.zeros((1, 3))[None]
+    face_features = vertices_features[mesh.faces][None]
+
+    rotations = generate_1_DoF_rotation()
+
+    for i, (yaw, pitch, roll) in enumerate(rotations):
+        rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
+                                                    pitch=torch.Tensor([deg_to_rad(pitch)]),
+                                                    yaw=torch.Tensor([deg_to_rad(yaw)]))
+
+        rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
+
+        with torch.no_grad():
+            _, _, _, ren_mask, ren_features, _ \
+                = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
+                                                  translation.to(DEVICE), mesh.vertices.to(DEVICE))
+
+            generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
+                                     segmentation_destination)
+
+
 def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path):
     prototype_path = Path('./prototypes/sphere.obj')
-    tex_path = Path('./prototypes/tex3.png')
+    tex_path = Path('./prototypes/tex.png')
 
     width = 1000
     height = 1000
@@ -92,3 +157,7 @@ if __name__ == '__main__':
     rendering_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / segmentation_dir
     generate_8_colored_sphere(_config, rendering_path, segmentation_path)
+
+    rendering_path = synthetic_dataset_folder / Path('6_Colored_Cube') / rendering_dir
+    segmentation_path = synthetic_dataset_folder / Path('6_Colored_Cube') / segmentation_dir
+    generate_6_colored_cube(_config, rendering_path, segmentation_path)
