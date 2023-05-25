@@ -44,12 +44,6 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('faces', torch.LongTensor(faces))
         self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device=cfg.DEVICE))
 
-    @dataclass
-    class RenderingResult:
-        all_renders: torch.TensorType
-        theoretical_flow: torch.TensorType
-        texture_flow: torch.TensorType
-
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
@@ -100,6 +94,9 @@ class RenderingKaolin(nn.Module):
             result = ren_features.permute(0, 3, 1, 2)
             if self.config.erode_renderer_mask > 0:
                 ren_mask = erosion(ren_mask[:, None], kernel)[:, 0]
+            else:
+                ren_mask = torch.ones(1, self.height, self.width)
+
             if render_depth:
                 depth_map = face_vertices_z[0, red_index, :].mean(3)[:, None]
                 result_rgba = torch.cat((result, ren_mask[:, None], depth_map), 1)
@@ -110,46 +107,55 @@ class RenderingKaolin(nn.Module):
             renders = torch.stack(renders, 1).contiguous()
             all_renders.append(renders)
 
-        rendered_verts_positions = torch.stack(rendered_verts_positions, dim=0)
-
-        q1 = quaternion[:, -2]
-        q2 = quaternion[:, -1]
-        qd = qdifference(q1, q2)
-        rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
-
-        # rd.register_hook(lambda grad: breakpoint())
-
-        t1 = translation[:, :, -2]
-        t2 = translation[:, :, -1]
-        td = t2 - t1
-
-        rendered_3d_coords_camera_i1 = rendered_verts_positions[-2, ...].flatten(1, 2)
-
-        rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i1.clone()
-        rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd,
-                                                               torch.zeros((1, 3), device=cfg.DEVICE))
-
-        rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
-
-        projected_3d_coords_to_2d_i1_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i1,
-                                                                               self.camera_proj)
-        projected_3d_coords_to_2d_i2_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i2,
-                                                                               self.camera_proj)
-
-        vertices_positions_image2 = projected_3d_coords_to_2d_i2_flat.reshape(*rendered_verts_positions.shape[1:-1], 2)
-        vertices_positions_image2 = vertices_positions_image2.nan_to_num()
-
-        vertices_positions_image1 = projected_3d_coords_to_2d_i1_flat.reshape(*rendered_verts_positions.shape[1:-1], 2)
-        vertices_positions_image1 = vertices_positions_image1.nan_to_num()
-
-        theoretical_flow = vertices_positions_image2 - vertices_positions_image1
-        theoretical_flow = (theoretical_flow * ren_mask.unsqueeze(3))
-
-        texture_flow = ren_mesh_vertices_features_list[-1] - ren_mesh_vertices_features_list[-2]
-
         all_renders = torch.stack(all_renders, 1).contiguous()
-        return all_renders, theoretical_flow, texture_flow
-    
+
+        return all_renders
+
+    def compute_theoretical_flow(self, face_features, prev_quaternions, prev_translations, quaternion, translation,
+                                 unit_vertices):
+        theoretical_flows = []
+        for frame_i in range(1, quaternion.shape[1]):
+            translation_vector = translation[:, :, frame_i]
+            rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frame_i], order=QuaternionCoeffOrder.WXYZ)
+            _, _, _, ren_mask, _, ren_mesh_vertices_coords = self.render_mesh_with_dibr(face_features, rotation_matrix,
+                                                                                        translation_vector,
+                                                                                        unit_vertices)
+
+            q1 = prev_quaternions[:, frame_i]
+            q2 = quaternion[:, frame_i]
+            qd = qdifference(q1, q2)
+            rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
+
+            # rd.register_hook(lambda grad: print(grad))
+
+            t1 = prev_translations[:, :, frame_i]
+            t2 = translation[:, :, frame_i]
+            td = t2 - t1
+
+            rendered_3d_coords_camera_i1 = ren_mesh_vertices_coords.flatten(1, 2)
+
+            rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd,
+                                                                   torch.zeros((1, 3), device=cfg.DEVICE))
+
+            rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
+
+            proj_3d_coords_to_2d_i1_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i1,
+                                                                                   self.camera_proj)
+            proj_3d_coords_to_2d_i2_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i2,
+                                                                                   self.camera_proj)
+
+            vertices_positions_image2 = proj_3d_coords_to_2d_i2_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
+            vertices_positions_image2 = vertices_positions_image2.nan_to_num()
+
+            vertices_positions_image1 = proj_3d_coords_to_2d_i1_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
+            vertices_positions_image1 = vertices_positions_image1.nan_to_num()
+
+            theoretical_flow = vertices_positions_image2 - vertices_positions_image1
+            theoretical_flow = (theoretical_flow * ren_mask.unsqueeze(3))
+            theoretical_flows.append(theoretical_flow)
+        theoretical_flow = torch.stack(theoretical_flows)
+        return theoretical_flow
+
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
