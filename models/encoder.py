@@ -57,7 +57,7 @@ class Encoder(nn.Module):
             self.lights.requires_grad = req_grad
 
     def forward(self, opt_frames):
-        motion_frames = opt_frames
+
         if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
             if self.config.mesh_normalize:
@@ -154,7 +154,7 @@ class Encoder(nn.Module):
             if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)
             else:
-                vertices = vertices - vertices.mean(1)[:, None, :]  ## make center of mass in origin
+                vertices = vertices - vertices.mean(1)[:, None, :]  # make center of mass in origin
         else:
             vertices = self.ivertices
 
