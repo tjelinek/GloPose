@@ -153,7 +153,9 @@ class RenderingKaolin(nn.Module):
             theoretical_flow = vertices_positions_image2 - vertices_positions_image1
             theoretical_flow = (theoretical_flow * ren_mask.unsqueeze(3))
             theoretical_flows.append(theoretical_flow)
-        theoretical_flow = torch.stack(theoretical_flows)
+        theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
+                                         device=theoretical_flows[0].device)] + theoretical_flows
+        theoretical_flow = torch.stack(theoretical_flows, 1)
         return theoretical_flow
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
