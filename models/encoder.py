@@ -87,6 +87,10 @@ class Encoder(nn.Module):
                 dists.append(qdist(diffs[-2], diffs[-1]))
             quaternion_all.append(quaternion0)
             translation_all.append(translation0)
+
+        if max(opt_frames) == 0:
+            quaternion0 = qmult(qnorm(self.quaternion[:, 0]), qnorm(self.offsets[:, 0, 0, 3:]))
+
         quaternion = torch.stack(quaternion_all, 1).contiguous()
         translation = torch.stack(translation_all, 2).contiguous()
         wghts = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
