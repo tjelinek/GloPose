@@ -94,7 +94,6 @@ class Encoder(nn.Module):
         key_dists = []
         for frmi in opt_frames[1:]:
             key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
-        # breakpoint()
         qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         if self.config.features == 'deep':
             texture_map = self.texture_map
