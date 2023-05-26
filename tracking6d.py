@@ -327,15 +327,6 @@ class Tracking6D:
                 keep_keyframes[-1] = True
                 keep_keyframes[-2] = False
                 keep_keyframes[-3] = True
-                # keep_keyframes[-1] = True
-                # keep_keyframes[-2] = True
-                # keep_keyframes[-3] = False or self.keyframes[-3] in {0, 1}
-                # if len(keep_keyframes) > 3:
-                #     keep_keyframes[-4] = False or self.keyframes[-4] in {0, 1}
-
-            # for i in range(1, len(keep_keyframes)):
-            #     if keep_keyframes[i] and self.keyframes[i - 1] + 1 == self.keyframes[i]:
-            #         keep_keyframes[i - 1] = True
 
             self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
             self.flow_keyframes = (np.array(self.flow_keyframes)[keep_keyframes]).tolist()
@@ -346,6 +337,7 @@ class Tracking6D:
             observed_flows = observed_flows[:, keep_keyframes]
             if len(self.keyframes) > self.config.max_keyframes:
                 self.keyframes = self.keyframes[-self.config.max_keyframes:]
+                self.flow_keyframes = self.flow_keyframes[-self.config.max_keyframes:]
                 self.images = self.images[:, -self.config.max_keyframes:]
                 self.prev_images = self.prev_images[:, -self.config.max_keyframes:]
                 self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
