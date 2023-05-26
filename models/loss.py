@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch
 
 from kornia.losses import total_variation
-
+from models.encoder import EncoderResult
 
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
@@ -12,8 +12,14 @@ class FMOLoss(nn.Module):
         if self.config.loss_laplacian_weight > 0:
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
-    def forward(self, renders, segments, input_batch, vertices, texture_maps, tdiff, qdiff, observed_flow,
-                flow_from_tracking):
+    def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
+                flow_from_tracking, prev_encoder_result: EncoderResult):
+
+        vertices = current_encoder_result.vertices
+        texture_maps = current_encoder_result.texture_maps
+        tdiff = current_encoder_result.translation_difference
+        qdiff = current_encoder_result.quaternion_difference
+
         losses = {}
         losses_all = {}
         if self.config.loss_rgb_weight > 0:
@@ -64,8 +70,22 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight:
-            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2))
+            observed_flow = observed_flow[:, -2:-1]
+            flow_from_tracking = flow_from_tracking[:, -2:-1]
+            target_shape = flow_from_tracking.shape[2:-1]
+            observed_flow = torch.nn.functional.interpolate(observed_flow[0].permute(0, 3, 1, 2), size=target_shape,
+                                                            mode='bilinear', align_corners=False).permute(0, 2, 3, 1)[None]
+            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((2, 3)).sum()
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
+
+        if self.config.loss_texture_change_weight > 0:
+            change_in_texture = (prev_encoder_result.texture_maps - texture_maps) ** 2
+            change_in_texture = change_in_texture.squeeze().permute(1, 2, 0)
+            change_in_texture = change_in_texture.sum(dim=-1).flatten()
+            least_changed_90_pct, _ = (-change_in_texture).topk(k=int(change_in_texture.size().numel() * 0.9))
+            least_changed_90_pct = -least_changed_90_pct
+            loss_texture_change = least_changed_90_pct.sum()
+            losses["texture_change"] = loss_texture_change * self.config.loss_texture_change_weight
 
         loss = 0
         for ls in losses:

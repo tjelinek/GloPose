@@ -111,25 +111,25 @@ class RenderingKaolin(nn.Module):
 
         return all_renders
 
-    def compute_theoretical_flow(self, face_features, prev_quaternions, prev_translations, quaternion, translation,
-                                 unit_vertices):
+    def compute_theoretical_flow(self, face_features, encoder_out, encoder_out_last_frame):
         theoretical_flows = []
-        for frame_i in range(1, quaternion.shape[1]):
-            translation_vector = translation[:, :, frame_i]
-            rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frame_i], order=QuaternionCoeffOrder.WXYZ)
+        for frame_i in range(1, encoder_out.quaternions.shape[1]):
+            translation_vector = encoder_out.translations[:, :, frame_i]
+            rotation_matrix = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
+                                                            order=QuaternionCoeffOrder.WXYZ)
             _, _, _, ren_mask, _, ren_mesh_vertices_coords = self.render_mesh_with_dibr(face_features, rotation_matrix,
                                                                                         translation_vector,
-                                                                                        unit_vertices)
+                                                                                        encoder_out.vertices)
 
-            q1 = prev_quaternions[:, frame_i]
-            q2 = quaternion[:, frame_i]
+            q1 = encoder_out_last_frame.quaternions[:, frame_i]
+            q2 = encoder_out.quaternions[:, frame_i]
             qd = qdifference(q1, q2)
             rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
 
             # rd.register_hook(lambda grad: print(grad))
 
-            t1 = prev_translations[:, :, frame_i]
-            t2 = translation[:, :, frame_i]
+            t1 = encoder_out_last_frame.translations[:, :, frame_i]
+            t2 = encoder_out.translations[:, :, frame_i]
             td = t2 - t1
 
             rendered_3d_coords_camera_i1 = ren_mesh_vertices_coords.flatten(1, 2)

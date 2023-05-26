@@ -100,6 +100,7 @@ class TrackerConfig:
     loss_iou_weight: float = None
     loss_dist_weight: float = None
     loss_q_weight: float = None
+    loss_texture_change_weight: float = None
     loss_t_weight: float = None
     loss_rgb_weight: float = None
     loss_flow_weight: float = None
@@ -159,6 +160,8 @@ class Tracking6D:
         self.images, self.segments = self.images[None].to(self.device), self.segments[None].to(self.device)
 
         self.images_feat = self.feat(self.images).detach()
+        self.last_encoder_result = None
+        self.last_encoder_result_rgb = None
 
         shape = self.segments.shape
         prot = self.config.shapes[0]
@@ -228,10 +231,8 @@ class Tracking6D:
         self.config.loss_rgb_weight = 0
 
         prev_image = self.images[:, -1]
-        prev_image_feat = self.images_feat[:, -1]
-        prev_segment = self.segments[:, -1]
-        prev_translation = self.encoder.translation[0, 0, 0]
-        prev_quaternion = self.encoder.quaternion[0, 0]
+        self.last_encoder_result_rgb = self.rgb_encoder(self.keyframes)
+        self.last_encoder_result = self.encoder(self.keyframes)
 
         observed_flows = None
 
@@ -284,9 +285,13 @@ class Tracking6D:
                     observed_flows = torch.cat((first_flow, observed_flow[None]), 1)
                 else:
                     target_shape = observed_flows.shape[2:-1]
-                    observed_flow = torch.nn.functional.interpolate(observed_flow.permute(0, 3, 1, 2), size=target_shape, mode='bilinear',align_corners=False).permute(0, 2, 3, 1)
-                    if observed_flow[None].shape[2:] != observed_flows.shape[2:]:
-                        breakpoint()
+                    observed_flow_perm = observed_flow.permute(0, 3, 1, 2)
+                    observed_flow = torch.nn.functional.interpolate(observed_flow_perm,
+                                                                    size=target_shape, mode='bilinear',
+                                                                    align_corners=False)
+                    observed_flow = observed_flow.permute(0, 2, 3, 1)
+                    # if observed_flow[None].shape[2:] != observed_flows.shape[2:]:
+                    #     breakpoint()
                     observed_flows = torch.cat((observed_flows, observed_flow[None]), 1)
 
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -347,12 +352,6 @@ class Tracking6D:
                 self.segments = self.segments[:, -self.config.max_keyframes:]
 
             prev_image = image[0]
-            prev_image_feat = image_feat[0]
-            prev_segment = segment[0]
-            prev_quaternion = encoder_result.quaternions[:, -1, :]
-            prev_translation = encoder_result.translations[0, :, -1, :]
-
-            # breakpoint()
 
         all_input.release()
         all_segm.release()
@@ -554,25 +553,19 @@ class Tracking6D:
 
         for epoch in range(self.config.iterations):
 
-            encoder_result = self.encoder(flow_frames)
-            encoder_result_flow_frames = self.encoder(keyframes)
+            encoder_result = self.encoder(keyframes)
+            encoder_result_flow_frames = self.encoder(flow_frames)
 
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                      self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
 
-            theoretical_flow = self.rendering.compute_theoretical_flow(self.encoder.face_features,
-                                                                       encoder_result_flow_frames.quaternions,
-                                                                       encoder_result_flow_frames.translations,
-                                                                       encoder_result.quaternions,
-                                                                       encoder_result.translations,
-                                                                       encoder_result.vertices)
+            theoretical_flow = self.rendering.compute_theoretical_flow(self.encoder.face_features, encoder_result,
+                                                                       encoder_result_flow_frames)
 
             # texture_flow.register_hook(lambda grad: breakpoint())
-            losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result.vertices,
-                                                           encoder_result.texture_maps,
-                                                           encoder_result.translation_difference,
-                                                           encoder_result.quaternion_difference,
-                                                           observed_flows, theoretical_flow)
+            losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
+                                                           observed_flows, theoretical_flow,
+                                                           self.last_encoder_result)
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()
@@ -610,12 +603,15 @@ class Tracking6D:
                 jloss = jloss.mean()
                 self.optimizer.zero_grad()
                 jloss.backward()
+                torch.nn.utils.clip_grad_norm(parameters=self.encoder.parameters(), max_norm=1.0, norm_type=2.0)
+                torch.nn.utils.clip_grad_norm(parameters=self.rendering.parameters(), max_norm=1.0, norm_type=2.0)
                 self.optimizer.step()
 
         self.visualize_theoretical_flow(theoretical_flow, keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
+        self.last_encoder_result = encoder_result
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
                                         renders=renders)
@@ -664,22 +660,26 @@ class Tracking6D:
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
         model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
-        for epoch in range(self.config.rgb_iters):
-            translation, quaternion, vertices, texture_maps, lights, tdiff, qdiff = self.rgb_encoder(opt_frames)
-            encoder_result_flow_frames = self.encoder(self.flow_keyframes)
-            renders = self.rendering(translation, quaternion, vertices, self.encoder.face_features,
-                                     texture_maps, lights)
-            theoretical_flow = self.rendering.compute_theoretical_flow(self.encoder.face_features,
-                                                                       encoder_result_flow_frames.quaternions,
-                                                                       encoder_result_flow_frames.translations,
-                                                                       quaternion, translation, vertices)
 
-            losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, vertices, texture_maps,
-                                                               tdiff, qdiff, observed_flows, theoretical_flow)
+        encoder_out = None
+        for epoch in range(self.config.rgb_iters):
+            encoder_out: EncoderResult = self.rgb_encoder(opt_frames)
+            encoder_out_prev_frames = self.rgb_encoder(self.flow_keyframes)
+            renders = self.rendering(encoder_out.translations, encoder_out.quaternions,
+                                     encoder_out.vertices, self.encoder.face_features,
+                                     encoder_out.texture_maps, encoder_out.lights)
+            theoretical_flow = self.rendering.compute_theoretical_flow(self.encoder.face_features, encoder_out,
+                                                                       encoder_out_prev_frames)
+
+            losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_out,
+                                                               observed_flows, theoretical_flow,
+                                                               self.last_encoder_result_rgb)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
                 break
             if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
                 self.rgb_optimizer.zero_grad()
-                jloss.backward()
+                jloss.backward(retain_graph=True)
                 self.rgb_optimizer.step()
+
+        self.last_encoder_result_rgb = encoder_out
