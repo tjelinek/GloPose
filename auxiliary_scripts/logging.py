@@ -83,7 +83,8 @@ class WriteResults:
 
         if tracking6d.config.features == 'deep':
             tracking6d.rgb_apply(tracking6d.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                           tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows, tracking6d.keyframes)
+                                 tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows,
+                                 tracking6d.keyframes)
             tex = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
         if tracking6d.gt_texture is not None:
             tex = tracking6d.gt_texture
@@ -110,25 +111,27 @@ class WriteResults:
                                                     float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                    for i in range(len(euler_angles_last))])
 
-            tracking6d.tracking_log.write("Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
-                                                                       float(
-                                                                           euler_angles_first[i]) * 180 / math.pi) % 360
-                                                                      for i in range(len(euler_angles_last))]))
+            tracking6d.tracking_log.write(
+                "Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
+                                                   float(
+                                                       euler_angles_first[i]) * 180 / math.pi) % 360
+                                                  for i in range(len(euler_angles_last))]))
             tracking6d.tracking_log.write('\n')
             tracking6d.tracking_log.flush()
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
-            feat_renders_crop = tracking6d.get_rendered_image_features(detached_result.lights, detached_result.quaternions,
-                                                                 detached_result.texture_maps,
-                                                                 detached_result.translations,
-                                                                 detached_result.vertices)
+            feat_renders_crop = tracking6d.get_rendered_image_features(detached_result.lights,
+                                                                       detached_result.quaternions,
+                                                                       detached_result.texture_maps,
+                                                                       detached_result.translations,
+                                                                       detached_result.vertices)
 
             renders, renders_crop = tracking6d.get_rendered_image(b0, detached_result.lights,
-                                                            detached_result.quaternions,
-                                                            tex,
-                                                            detached_result.translations,
-                                                            detached_result.vertices)
+                                                                  detached_result.quaternions,
+                                                                  tex,
+                                                                  detached_result.translations,
+                                                                  detached_result.vertices)
 
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
@@ -155,8 +158,9 @@ class WriteResults:
                         os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
             write_video(tracking6d.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
                         os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
-            write_video((tracking6d.images[0, :, :3] * tracking6d.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
+            write_video(
+                (tracking6d.images[0, :, :3] * tracking6d.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
+                os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = tracking6d.images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
                 seg = tracking6d.segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
@@ -191,22 +195,23 @@ class WriteResults:
                 bbox = tracking6d.config.image_downsample * torch.tensor(
                     [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
                 self.baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(segment[0, 0, -1])],
-                                                                          dtype=torch.float64))
+                                                                               dtype=torch.float64))
                 self.our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
-                                                                     dtype=torch.float64))
+                                                                          dtype=torch.float64))
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
             np.savetxt(os.path.join(tracking6d.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
                        delimiter='\n')
             np.savetxt(os.path.join(tracking6d.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
             np.savetxt(os.path.join(tracking6d.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
-            self.all_input.write((tracking6d.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
-                             [2, 1, 0], -1] * 255).astype(np.uint8))
+            self.all_input.write(
+                (tracking6d.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
+                 [2, 1, 0], -1] * 255).astype(np.uint8))
             self.all_segm.write(((tracking6d.images[0, :, :3] * tracking6d.segments[0, :, 1:2]).clamp(min=0,
-                                                                                     max=1).cpu().numpy().transpose(
+                                                                                                      max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
             self.all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
-                                                                                                      0)[:, :,
-                            [2, 1, 0], -1] * 255).astype(np.uint8))
+                                                                                                           0)[:, :,
+                                 [2, 1, 0], -1] * 255).astype(np.uint8))
             if silh_losses[-1] > 0.3:
                 renders[0, -1, 0, 3] = segment[0, 0, -1]
                 renders[0, -1, 0, :3] = tracking6d.images[0, -1, :3] * segment[0, 0, -1]
