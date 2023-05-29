@@ -217,7 +217,7 @@ class Tracking6D:
             bboxes = {i: bboxes[sorted_bb_keys[i]] for i, key in zip(range(len(bboxes)), sorted_bb_keys)}
 
         our_losses = -np.ones((files.shape[0] - 1, 1))
-        write_results = WriteResults(self.write_folder, self.images, files.shape[0] - 1)
+        write_results = WriteResults(self.write_folder, self.images, files.shape[0])
         self.config.loss_rgb_weight = 0
 
         prev_image = self.images[:, -1]
@@ -332,11 +332,6 @@ class Tracking6D:
                 self.segments = self.segments[:, -self.config.max_keyframes:]
 
             prev_image = image[0]
-
-        all_input.release()
-        all_segm.release()
-        all_proj.release()
-        all_proj_filtered.release()
 
         return self.best_model
 

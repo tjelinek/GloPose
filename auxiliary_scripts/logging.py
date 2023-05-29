@@ -76,6 +76,12 @@ class WriteResults:
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
 
+    def __del__(self):
+        self.all_input.release()
+        self.all_segm.release()
+        self.all_proj.release()
+        self.all_proj_filtered.release()
+
     def write_results(self, tracking6d, b0, bboxes, our_losses, segment, silh_losses, stepi, observed_flows,
                       encoder_result):
 
