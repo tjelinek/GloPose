@@ -30,7 +30,7 @@ from utils import segment2bbox, write_video, euler_from_quaternion, compute_tran
     consecutive_quaternions_angular_difference, rad_to_deg, qnorm, qmult
 from flow import get_flow_from_images, visualize_flow_with_images, load_image
 from flow_raft import get_flow_model
-from auxiliary_scripts.logging import visualize_flow
+from auxiliary_scripts.logging import visualize_flow, WriteResults
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 
@@ -216,18 +216,8 @@ class Tracking6D:
             sorted_bb_keys = sorted(list(bboxes.keys()))
             bboxes = {i: bboxes[sorted_bb_keys[i]] for i, key in zip(range(len(bboxes)), sorted_bb_keys)}
 
-        all_input = cv2.VideoWriter(os.path.join(self.write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
-                                    10, (self.images.shape[4], self.images.shape[3]), True)
-        all_segm = cv2.VideoWriter(os.path.join(self.write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                   (self.images.shape[4], self.images.shape[3]), True)
-        all_proj = cv2.VideoWriter(os.path.join(self.write_folder, 'all_proj.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                   (self.images.shape[4], self.images.shape[3]), True)
-        all_proj_filtered = cv2.VideoWriter(os.path.join(self.write_folder, 'all_proj_filtered.avi'),
-                                            cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                            (self.images.shape[4], self.images.shape[3]), True)
-        baseline_iou = -np.ones((files.shape[0] - 1, 1))
-        our_iou = -np.ones((files.shape[0] - 1, 1))
         our_losses = -np.ones((files.shape[0] - 1, 1))
+        write_results = WriteResults(self.write_folder, self.images, files.shape[0] - 1)
         self.config.loss_rgb_weight = 0
 
         prev_image = self.images[:, -1]
@@ -290,8 +280,6 @@ class Tracking6D:
                                                                     size=target_shape, mode='bilinear',
                                                                     align_corners=False)
                     observed_flow = observed_flow.permute(0, 2, 3, 1)
-                    # if observed_flow[None].shape[2:] != observed_flows.shape[2:]:
-                    #     breakpoint()
                     observed_flows = torch.cat((observed_flows, observed_flow[None]), 1)
 
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -310,8 +298,8 @@ class Tracking6D:
                 self.encoder.used_quat[:, stepi] = self.encoder.quaternion[:, stepi].detach()
 
             if self.config.write_results:
-                self.write_results(all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
-                                   our_losses, segment, silh_losses, stepi, observed_flows, encoder_result)
+                write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses,
+                                            stepi, observed_flows, encoder_result)
                 # Visualize flow we get from the video
                 visualize_flow(flow_video_up_np, image, image_new_x255, image_prev_x255, segment, stepi,
                                self.write_folder)
@@ -351,143 +339,6 @@ class Tracking6D:
         all_proj_filtered.release()
 
         return self.best_model
-
-    def write_results(self, all_input, all_proj, all_proj_filtered, all_segm, b0, baseline_iou, bboxes, our_iou,
-                      our_losses, segment, silh_losses, stepi, observed_flows, encoder_result):
-
-        detached_result = EncoderResult(*[it.detach() if type(it) is torch.Tensor else it for it in encoder_result])
-
-        if self.config.features == 'deep':
-            self.rgb_apply(self.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                           self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows, self.keyframes)
-            tex = nn.Sigmoid()(self.rgb_encoder.texture_map)
-        if self.gt_texture is not None:
-            tex = self.gt_texture
-
-        with torch.no_grad():
-            # encoder_result = self.encoder(self.keyframes)
-
-            last_quaternion = detached_result.quaternions[0, -1]
-            prev_quaternion = detached_result.quaternions[0, -2]
-            first_quaternion = detached_result.quaternions[0, 0]
-            euler_angles_last = euler_from_quaternion(last_quaternion[0], last_quaternion[1], last_quaternion[2],
-                                                      last_quaternion[3])
-            euler_angles_first = euler_from_quaternion(first_quaternion[0], first_quaternion[1], first_quaternion[2],
-                                                       first_quaternion[3])
-            euler_angles_prev = euler_from_quaternion(prev_quaternion[0], prev_quaternion[1], prev_quaternion[2],
-                                                      prev_quaternion[3])
-
-            print("Keyframes:", self.keyframes)
-
-            print("Last estimated rotation:", [(float(euler_angles_last[i]) * 180 / math.pi -
-                                                float(euler_angles_first[i]) * 180 / math.pi) % 360
-                                               for i in range(len(euler_angles_last))])
-            print("Previous estimated rotation:", [(float(euler_angles_prev[i]) * 180 / math.pi -
-                                                    float(euler_angles_first[i]) * 180 / math.pi) % 360
-                                                   for i in range(len(euler_angles_last))])
-
-            self.tracking_log.write("Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
-                                                                       float(
-                                                                           euler_angles_first[i]) * 180 / math.pi) % 360
-                                                                      for i in range(len(euler_angles_last))]))
-            self.tracking_log.write('\n')
-            self.tracking_log.flush()
-
-            if self.config.features == 'rgb':
-                tex = detached_result.texture_maps
-            feat_renders_crop = self.get_rendered_image_features(detached_result.lights, detached_result.quaternions,
-                                                                 detached_result.texture_maps,
-                                                                 detached_result.translations,
-                                                                 detached_result.vertices)
-
-            renders, renders_crop = self.get_rendered_image(b0, detached_result.lights,
-                                                            detached_result.quaternions,
-                                                            tex,
-                                                            detached_result.translations,
-                                                            detached_result.vertices)
-
-            write_renders(feat_renders_crop, self.write_folder, self.config.max_keyframes + 1, ids=0)
-            write_renders(renders_crop, self.write_folder, self.config.max_keyframes + 1, ids=1)
-            write_renders(torch.cat(
-                (self.images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
-                self.write_folder, self.config.max_keyframes + 1, ids=2)
-            write_obj_mesh(detached_result.vertices[0].cpu().numpy(), self.best_model["faces"],
-                           self.encoder.face_features[0].cpu().numpy(),
-                           os.path.join(self.write_folder, f'mesh_{stepi}.obj'))
-            save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-            save_image(tex, os.path.join(self.write_folder, f'tex_{stepi}.png'))
-
-            with open(self.write_folder / "model.mtl", "r") as file:
-                lines = file.readlines()
-
-            # Replace the last line
-            lines[-1] = f"map_Kd tex_{stepi}.png\n"
-
-            # Write the result to a new file
-            with open(self.write_folder / f"model_{stepi}.mtl", "w") as file:
-                file.writelines(lines)
-
-            write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
-            write_video(self.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(self.write_folder, 'input.avi'), fps=6)
-            write_video((self.images[0, :, :3] * self.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(self.write_folder, 'segments.avi'), fps=6)
-            for tmpi in range(renders.shape[1]):
-                img = self.images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = self.segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
-                save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
-                seg[seg == 0] = 0.35
-                save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(self.images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
-                           os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
-                save_image(torch.cat((img, seg), 0),
-                           os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
-                save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
-                           os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
-                save_image(renders_crop[0, tmpi, 0, :],
-                           os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
-                save_image(feat_renders_crop[0, tmpi, 0, :],
-                           os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
-            if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
-                gt_segm = None
-                if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
-                    m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
-                    gt_segm = segment[0, 0, -1] * 0
-                    gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
-                        torch.from_numpy(m_)
-                elif stepi in bboxes:
-                    gt_segm = self.tracker.process_segm(bboxes[stepi])[0].to(self.device)
-                if gt_segm is not None:
-                    baseline_iou[stepi - 1] = float((segment[0, 0, -1] * gt_segm > 0).sum()) / float(
-                        ((segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
-                    our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
-                        ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
-            elif bboxes is not None:
-                bbox = self.config.image_downsample * torch.tensor(
-                    [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
-                baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(segment[0, 0, -1])],
-                                                                          dtype=torch.float64))
-                our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
-                                                                     dtype=torch.float64))
-            print('Baseline IoU {}, our IoU {}'.format(baseline_iou[stepi - 1], our_iou[stepi - 1]))
-            np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), baseline_iou, fmt='%.10f',
-                       delimiter='\n')
-            np.savetxt(os.path.join(self.write_folder, 'iou.txt'), our_iou, fmt='%.10f', delimiter='\n')
-            np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
-            all_input.write((self.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
-                             [2, 1, 0], -1] * 255).astype(np.uint8))
-            all_segm.write(((self.images[0, :, :3] * self.segments[0, :, 1:2]).clamp(min=0,
-                                                                                     max=1).cpu().numpy().transpose(
-                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
-            all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
-                                                                                                      0)[:, :,
-                            [2, 1, 0], -1] * 255).astype(np.uint8))
-            if silh_losses[-1] > 0.3:
-                renders[0, -1, 0, 3] = segment[0, 0, -1]
-                renders[0, -1, 0, :3] = self.images[0, -1, :3] * segment[0, 0, -1]
-            all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
-                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
     def get_rendered_image_features(self, lights, quaternion, texture_maps, translation, vertices):
         feat_renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
