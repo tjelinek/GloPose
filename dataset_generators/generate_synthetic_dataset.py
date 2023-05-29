@@ -8,7 +8,7 @@ from kornia.geometry import quaternion_to_rotation_matrix
 
 from models.initial_mesh import sphere_to_cube
 from dataset_generators.generator_utils import setup_renderer, generate_and_save_images, generate_1_DoF_rotation, \
-    generate_rotating_textured_object
+    generate_rotating_textured_object, generate_2_DoF_rotations
 from utils import quaternion_from_euler, deg_to_rad, load_config
 from main_settings import dataset_folder
 
@@ -68,11 +68,9 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
 
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination):
-    prototype_path = Path('./prototypes/sphere.obj')
     DEVICE = 'cuda'
-    mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
-
-    # vertices = sphere_to_cube(mesh.vertices[None]).squeeze()
+    width = 1000
+    height = 1000
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
@@ -86,46 +84,50 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
         [255, 0, 255],  # magenta
     ]
 
-    vertices_features = torch.zeros(mesh.vertices.shape[0], 3)
+    vertices = torch.tensor([
+        [1, 1, 1],  # Quadrant 1 (+x, +y, +z)
+        [1, 1, -1],  # Quadrant 2 (+x, +y, -z)
+        [1, -1, 1],  # Quadrant 3 (+x, -y, +z)
+        [1, -1, -1],  # Quadrant 4 (+x, -y, -z)
+        [-1, 1, 1],  # Quadrant 5 (-x, +y, +/-z)
+        [-1, 1, -1],  # Quadrant 5 (-x, +y, +/-z)
+        [-1, -1, 1],  # Quadrant 6 (-x, -y, +/-z)
+        [-1, -1, -1],  # Quadrant 6 (-x, -y, +/-z)
+    ], dtype=torch.float32)
 
-    for i, vertex in enumerate(mesh.vertices):
-        if vertex[0] > 0 and vertex[1] > 0 and vertex[2] > 0:  # Quadrant 1 (+x, +y, +z)
-            color = colors[0]
-        elif vertex[0] > 0 and vertex[1] > 0 and vertex[2] < 0:  # Quadrant 2 (+x, +y, -z)
-            color = colors[1]
-        elif vertex[0] > 0 and vertex[1] < 0 and vertex[2] > 0:  # Quadrant 3 (+x, -y, +z)
-            color = colors[2]
-        elif vertex[0] > 0 and vertex[1] < 0 and vertex[2] < 0:  # Quadrant 4 (+x, -y, -z)
-            color = colors[3]
-        elif vertex[0] < 0 and vertex[1] > 0:  # Quadrant 5 (-x, +y, +/-z)
-            color = colors[4]
-        else:
-            color = colors[5]  # Quadrant 6 (-x, -y, +/-z)
-
-        vertices_features[i] = torch.tensor(color)
-
-    width = 1000
-    height = 1000
-    faces = mesh.faces
+    faces = torch.tensor([
+        [0, 2, 3], [3, 1, 0],
+        [1, 3, 7], [7, 5, 1],
+        [4, 5, 7], [7, 6, 4],
+        [0, 4, 6], [6, 2, 0],
+        [0, 1, 5], [5, 4, 0],
+        [2, 6, 7], [7, 3, 2]
+    ], dtype=torch.int64)
 
     rendering = setup_renderer(config, faces, height, width, DEVICE)
 
     translation = torch.zeros((1, 3))[None]
-    face_features = vertices_features[mesh.faces][None]
+    face_features = torch.zeros((1, len(faces), 3, 3))
 
-    rotations = generate_1_DoF_rotation()
+    for i, face in enumerate(faces):
+        color = colors[i // 2]
+
+        face_features[0, i, :, :] = torch.tensor(color)
+
+    rotations = generate_2_DoF_rotations()
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
-        rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
-                                                    pitch=torch.Tensor([deg_to_rad(pitch)]),
-                                                    yaw=torch.Tensor([deg_to_rad(yaw)]))
+        rotation_quaternion = quaternion_from_euler(torch.tensor([deg_to_rad(roll)]),
+                                                    torch.tensor([deg_to_rad(pitch)]),
+                                                    torch.tensor([deg_to_rad(yaw)]))
 
         rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
 
         with torch.no_grad():
-            _, _, _, ren_mask, ren_features, _ \
-                = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                  translation.to(DEVICE), mesh.vertices.to(DEVICE))
+            _, _, _, ren_mask, ren_features, _ = rendering.render_mesh_with_dibr(face_features.to(DEVICE),
+                                                                                 rotation_matrix.to(DEVICE),
+                                                                                 translation.to(DEVICE),
+                                                                                 vertices.to(DEVICE), )
 
             generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
                                      segmentation_destination)
