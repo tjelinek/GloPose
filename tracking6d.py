@@ -224,7 +224,7 @@ class Tracking6D:
         self.last_encoder_result_rgb = self.rgb_encoder(self.keyframes)
         self.last_encoder_result = self.encoder(self.keyframes)
 
-        observed_flows = None
+        observed_flows = []
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
@@ -270,17 +270,10 @@ class Tracking6D:
                 flow_segment_mask = segment[:, 0, -1, :, :].to(torch.bool).repeat(1, 2, 1, 1).permute(0, 2, 3, 1)
                 flow_segment_mask = flow_segment_mask[:, b0[0]:b0[1], b0[2]:b0[3], :]
                 observed_flow *= flow_segment_mask
-                if observed_flows is None:
-                    first_flow = torch.zeros(observed_flow[None].shape, device=observed_flow.device)
-                    observed_flows = torch.cat((first_flow, observed_flow[None]), 1)
-                else:
-                    target_shape = observed_flows.shape[2:-1]
-                    observed_flow_perm = observed_flow.permute(0, 3, 1, 2)
-                    observed_flow = torch.nn.functional.interpolate(observed_flow_perm,
-                                                                    size=target_shape, mode='bilinear',
-                                                                    align_corners=False)
-                    observed_flow = observed_flow.permute(0, 2, 3, 1)
-                    observed_flows = torch.cat((observed_flows, observed_flow[None]), 1)
+
+                if len(observed_flows) == 0:
+                    observed_flows = [torch.zeros(observed_flow[None].shape, device=observed_flow.device)]
+                observed_flows.append(observed_flow[None])
 
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows, self.keyframes,
@@ -322,7 +315,8 @@ class Tracking6D:
             self.prev_images = self.prev_images[:, keep_keyframes]
             self.images_feat = self.images_feat[:, keep_keyframes]
             self.segments = self.segments[:, keep_keyframes]
-            observed_flows = observed_flows[:, keep_keyframes]
+
+            observed_flows = [observed_flows[i] for i in range(len(keep_keyframes)) if keep_keyframes[i]]
             if len(self.keyframes) > self.config.max_keyframes:
                 self.keyframes = self.keyframes[-self.config.max_keyframes:]
                 self.flow_keyframes = self.flow_keyframes[-self.config.max_keyframes:]

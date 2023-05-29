@@ -70,12 +70,20 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight:
-            observed_flow = observed_flow[:, -2:-1]
-            flow_from_tracking = flow_from_tracking[:, -2:-1]
             target_shape = flow_from_tracking.shape[2:-1]
-            observed_flow = torch.nn.functional.interpolate(observed_flow[0].permute(0, 3, 1, 2), size=target_shape,
-                                                            mode='bilinear', align_corners=False).permute(0, 2, 3, 1)[None]
-            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((2, 3)).sum()
+            observed_flows = []
+            for observed_flow_it in observed_flow:
+                observed_flow_perm = observed_flow_it[0].permute(0, 3, 1, 2)
+                observed_flow_it = torch.nn.functional.interpolate(observed_flow_perm,
+                                                                size=target_shape, mode='bilinear',
+                                                                align_corners=False)
+                observed_flow_it = observed_flow_it.permute(0, 2, 3, 1)
+                observed_flows.append(observed_flow_it[None])
+            observed_flows = torch.cat(observed_flows, 1)
+
+            observed_flows = observed_flows[:, -2:-1] # Do not take the first, initialization one
+            flow_from_tracking = flow_from_tracking[:, -2:-1]
+            flow_loss = torch.norm(observed_flows - flow_from_tracking, dim=-1).mean((2, 3)).sum()
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         if self.config.loss_texture_change_weight > 0:
