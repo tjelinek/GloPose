@@ -75,6 +75,7 @@ class WriteResults:
                                                  (images.shape[4], images.shape[3]), True)
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
+        self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
 
     def __del__(self):
         self.all_input.release()
@@ -117,13 +118,13 @@ class WriteResults:
                                                     float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                    for i in range(len(euler_angles_last))])
 
-            tracking6d.tracking_log.write(
+            self.tracking_log.write(
                 "Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
                                                    float(
                                                        euler_angles_first[i]) * 180 / math.pi) % 360
                                                   for i in range(len(euler_angles_last))]))
-            tracking6d.tracking_log.write('\n')
-            tracking6d.tracking_log.flush()
+            self.tracking_log.write('\n')
+            self.tracking_log.flush()
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
