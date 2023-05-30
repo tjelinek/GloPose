@@ -30,6 +30,7 @@ def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi, 
         image_prev (torch.Tensor): Previous (first) image tensor.
         segment (torch.Tensor): Segmentation mask tensor.
         stepi (int): Index of the current step in the frame sequence.
+        output_dir (Path): Flow output directory
 
     Returns:
         None. The function saves multiple visualization images to the disk.
