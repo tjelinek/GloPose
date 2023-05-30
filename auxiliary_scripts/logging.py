@@ -130,7 +130,7 @@ class WriteResults:
                                 detached_result.quaternions[0, 0][i]) * 180 / math.pi) % 360
                                                                            for i in range(len(euler_angles_last))])
                     + '\n')
-                
+
             for k in range(detached_result.quaternions.shape[1]):
                 self.tracking_log.write(
                     f"Keyframe {tracking6d.keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
