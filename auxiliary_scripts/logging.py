@@ -119,11 +119,22 @@ class WriteResults:
                                                     float(euler_angles_first[i]) * 180 / math.pi) % 360
                                                    for i in range(len(euler_angles_last))])
 
-            self.tracking_log.write(
-                "Last estimated rotation:" + str([(float(euler_angles_last[i]) * 180 / math.pi -
-                                                   float(
-                                                       euler_angles_first[i]) * 180 / math.pi) % 360
-                                                  for i in range(len(euler_angles_last))]))
+            self.tracking_log.write(f"Step {stepi}:\n")
+
+            self.tracking_log.write(f"Keyframes: {tracking6d.keyframes}\n")
+
+            for k in range(detached_result.quaternions.shape[1]):
+                self.tracking_log.write(
+                    f"Keyframe {tracking6d.keyframes[k]} rotation:" + str([(float(detached_result.quaternions[0, k][i])
+                                                                            * 180 / math.pi - float(
+                                detached_result.quaternions[0, 0][i]) * 180 / math.pi) % 360
+                                                                           for i in range(len(euler_angles_last))])
+                    + '\n')
+                
+            for k in range(detached_result.quaternions.shape[1]):
+                self.tracking_log.write(
+                    f"Keyframe {tracking6d.keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+
             self.tracking_log.write('\n')
             self.tracking_log.flush()
 
