@@ -127,8 +127,6 @@ class Tracking6D:
         self.device = device
         self.model_flow = get_flow_model()
 
-        self.tracking_log = open(Path(self.write_folder) / "tracking_log.txt", "w")
-
         self.gt_texture = None
         if self.config.gt_texture is not None:
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
