@@ -88,7 +88,8 @@ def generate_1_DoF_rotation():
 
 
 def generate_rotating_textured_object(config, prototype_path, rendering_destination: Path,
-                                      segmentation_destination: Path, texture_path: Path, width, height, DEVICE='cuda'):
+                                      segmentation_destination: Path, texture_path: Path, width, height, DEVICE='cuda',
+                                      rotations=None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +107,8 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
 
     rendering = setup_renderer(config, faces, width, height, DEVICE)
 
-    rotations = generate_2_DoF_rotations()
+    if rotations is None:
+        rotations = generate_1_DoF_rotation()
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
