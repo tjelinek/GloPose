@@ -11,8 +11,9 @@ import torch
 
 from pathlib import Path
 
+import runtime_utils
 from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence
+from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
 from types import SimpleNamespace
 
@@ -25,33 +26,30 @@ from tracking6d import Tracking6D
 # scp rozumden@ptak.felk.cvut.cz:/datagrid/personal/rozumden/360photo/360photo.zip ~/scratch/dataset/360photo/
 # unzip ~/scratch/dataset/360photo/360photo.zip -d ~/scratch/dataset/360photo/
 
-def parse_args(sequence):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
-    parser.add_argument("--dataset", required=False, default='concept')
-    parser.add_argument("--sequence", required=False, default=sequence)
-    parser.add_argument("--gt_texture", required=False, default=None)
-    parser.add_argument("--start", required=False, default=0)
-    parser.add_argument("--length", required=False, default=72)
-    parser.add_argument("--skip", required=False, default=1)
-    parser.add_argument("--perc", required=False, default=0.15)
-    parser.add_argument("--folder_name", required=False, default='360photo')
-    return parser.parse_args()
-
 
 def main():
+    dataset = 'concept'
+    folder_name = '360photo'
     sequences = ["09"]
 
 
     for sequence in sequences:
-        args = parse_args(sequence)
+        gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
+        gt_texture_path = None
+        gt_mesh_path = None
+
+        args = parse_args(sequence, dataset, folder_name)
+
+        experiment_name = args.experiment
         config = load_config(args.config)
         config["image_downsample"] = args.perc
         config["tran_init"] = 2.5
         config["loss_dist_weight"] = 0
-        config["gt_texture"] = args.gt_texture
+        config["gt_texture"] = gt_texture_path
+        config["gt_mesh_prototype"] = gt_mesh_path
+        config["use_gt"] = False
 
-        write_folder = os.path.join(tmp_folder, args.folder_name, args.sequence)
+        write_folder = os.path.join(tmp_folder, args.folder_name, experiment_name, args.sequence)
         if os.path.exists(write_folder):
             shutil.rmtree(write_folder)
         os.makedirs(write_folder)

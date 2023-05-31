@@ -2,6 +2,7 @@ import sys
 import os
 import torch
 import time
+import argparse
 from main_settings import dataset_folder
 
 sys.path.append('OSTrack/S2DNet')
@@ -29,3 +30,17 @@ def run_tracking_on_sequence(args, config, files, segms, write_folder):
         '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"],
                                                                           (time.time() - t0) / 1,
                                                                           best_model["value"]))
+
+
+def parse_args(sequence, dataset, folder_name=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
+    parser.add_argument("--dataset", required=False, default=dataset)
+    parser.add_argument("--sequence", required=False, default=sequence)
+    parser.add_argument("--start", required=False, default=0)
+    parser.add_argument("--length", required=False, default=72)
+    parser.add_argument("--skip", required=False, default=1)
+    parser.add_argument("--perc", required=False, default=0.15)
+    parser.add_argument("--folder_name", required=False, default=folder_name)
+    parser.add_argument("--experiment", required=False, default='')  # Experiment name
+    return parser.parse_args()
