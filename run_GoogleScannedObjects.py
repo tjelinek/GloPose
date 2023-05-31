@@ -37,7 +37,8 @@ def parse_args(sequence):
 
 
 def main():
-    sequences = ["Threshold_Ramekin_White_Porcelain"]
+    sequences = ['6_COLORED_CUBE', 'Squirrel', 'STACKING_BEAR', 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
+                 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain']
 
     for sequence in sequences:
         args = parse_args(sequence)
