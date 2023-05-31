@@ -118,10 +118,10 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
         rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
 
         with torch.no_grad():
-            face_normals, face_vertices_cam, red_index, ren_mask, \
-                ren_mesh_vertices_features, ren_mesh_vertices_coords \
-                = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                  translation.to(DEVICE), vertices.to(DEVICE))
+            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
+                                                               translation.to(DEVICE), vertices.to(DEVICE))
 
-            ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features, texture_maps, mode='bilinear')
-            generate_and_save_images(i, ren_features, ren_mask, rendering_destination, segmentation_destination)
+            ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
+                                                              texture_maps, mode='bilinear')
+            generate_and_save_images(i, ren_features, rendering_result.ren_mask,
+                                     rendering_destination, segmentation_destination)

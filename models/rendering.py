@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 from itertools import product
+from collections import namedtuple
 
 import torch.nn as nn
 from kaolin.render.camera import rotate_translate_points
@@ -21,6 +22,12 @@ def deringing(coeffs, window):
     deringed_coeffs[:, 4:4 + 5] += \
         coeffs[:, 4:4 + 5] * math.pow(math.sin(math.pi * 2.0 / window) / (math.pi * 2.0 / window), 4.0)
     return deringed_coeffs
+
+
+MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
+                                                   'ren_mask', 'ren_mesh_vertices_features',
+                                                   'ren_mesh_vertices_coords',
+                                                   'ren_mesh_vertices_image_coords'])
 
 
 class RenderingKaolin(nn.Module):
@@ -59,20 +66,20 @@ class RenderingKaolin(nn.Module):
 
             renders = []
 
-            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords \
-                = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
+            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
+                                                          translation_vector, unit_vertices)
 
-            face_vertices_z = face_vertices_cam[:, :, :, -1]
+            face_vertices_z = rendering_result.face_vertices_cam[:, :, :, -1]
 
             if texture_maps is not None:
-                ren_features = kaolin.render.mesh.texture_mapping(ren_mesh_vertices_features,
+                ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
                                                                   texture_maps,
                                                                   mode='bilinear')
-            rendered_verts_positions.append(ren_mesh_vertices_coords)
-            ren_mesh_vertices_features_list.append(ren_mesh_vertices_features)
+            rendered_verts_positions.append(rendering_result.ren_mesh_vertices_coords)
+            ren_mesh_vertices_features_list.append(rendering_result.ren_mesh_vertices_features)
 
             if lights is not None:
-                im_normals = face_normals[0, red_index, :]
+                im_normals = rendering_result.face_normals[0, rendering_result.red_index, :]
                 lighting = None
                 for li in range(lights.shape[0]):
                     lighting_r = \
@@ -89,16 +96,16 @@ class RenderingKaolin(nn.Module):
                         lighting = lighting_one
                     else:
                         lighting += lighting_one
-                lighting[red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
+                lighting[rendering_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
                 ren_features = ren_features * lighting
             result = ren_features.permute(0, 3, 1, 2)
             if self.config.erode_renderer_mask > 0:
-                ren_mask = erosion(ren_mask[:, None], kernel)[:, 0]
+                ren_mask = erosion(rendering_result.ren_mask[:, None], kernel)[:, 0]
             else:
                 ren_mask = torch.ones(1, self.height, self.width)
 
             if render_depth:
-                depth_map = face_vertices_z[0, red_index, :].mean(3)[:, None]
+                depth_map = face_vertices_z[0, rendering_result.red_index, :].mean(3)[:, None]
                 result_rgba = torch.cat((result, ren_mask[:, None], depth_map), 1)
             else:
                 result_rgba = torch.cat((result, ren_mask[:, None]), 1)
@@ -117,9 +124,9 @@ class RenderingKaolin(nn.Module):
             translation_vector = encoder_out.translations[:, :, frame_i]
             rotation_matrix = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
                                                             order=QuaternionCoeffOrder.WXYZ)
-            _, _, _, ren_mask, _, ren_mesh_vertices_coords = self.render_mesh_with_dibr(face_features, rotation_matrix,
-                                                                                        translation_vector,
-                                                                                        encoder_out.vertices)
+            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
+                                                          translation_vector,
+                                                          encoder_out.vertices)
 
             q1 = encoder_out_last_frame.quaternions[:, frame_i]
             q2 = encoder_out.quaternions[:, frame_i]
@@ -132,7 +139,7 @@ class RenderingKaolin(nn.Module):
             t2 = encoder_out.translations[:, :, frame_i]
             td = t2 - t1
 
-            rendered_3d_coords_camera_i1 = ren_mesh_vertices_coords.flatten(1, 2)
+            rendered_3d_coords_camera_i1 = rendering_result.ren_mesh_vertices_coords.flatten(1, 2)
 
             rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd,
                                                                    torch.zeros((1, 3), device=cfg.DEVICE))
@@ -144,21 +151,24 @@ class RenderingKaolin(nn.Module):
             proj_3d_coords_to_2d_i2_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i2,
                                                                                    self.camera_proj)
 
-            vertices_positions_image2 = proj_3d_coords_to_2d_i2_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
+            vertices_positions_image2 = proj_3d_coords_to_2d_i2_flat.reshape(*rendering_result.
+                                                                             ren_mesh_vertices_coords.shape[:-1], 2)
             vertices_positions_image2 = vertices_positions_image2.nan_to_num()
 
-            vertices_positions_image1 = proj_3d_coords_to_2d_i1_flat.reshape(*ren_mesh_vertices_coords.shape[:-1], 2)
+            vertices_positions_image1 = proj_3d_coords_to_2d_i1_flat.reshape(*rendering_result.
+                                                                             ren_mesh_vertices_coords.shape[:-1], 2)
             vertices_positions_image1 = vertices_positions_image1.nan_to_num()
 
             theoretical_flow = vertices_positions_image2 - vertices_positions_image1
-            theoretical_flow = (theoretical_flow * ren_mask.unsqueeze(3))
+            theoretical_flow = (theoretical_flow * rendering_result.ren_mask.unsqueeze(3))
             theoretical_flows.append(theoretical_flow)
         theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
                                          device=theoretical_flows[0].device)] + theoretical_flows
         theoretical_flow = torch.stack(theoretical_flows, 1)
         return theoretical_flow
 
-    def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices):
+    def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
+            -> MeshRenderResult:
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
 
@@ -176,7 +186,7 @@ class RenderingKaolin(nn.Module):
         # Extract the z-components of the face normals
         face_normals_z = face_normals[:, :, -1]
 
-        features_for_rendering = torch.cat((face_features, face_vertices_cam), dim=-1)
+        features_for_rendering = torch.cat((face_features, face_vertices_cam, face_vertices_image), dim=-1)
 
         # Perform dibr rasterization
         ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
@@ -189,9 +199,16 @@ class RenderingKaolin(nn.Module):
 
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
         ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
-        ren_mesh_vertices_coords = ren_outputs[..., face_features.shape[-1]:]
+        ren_mesh_vertices_coords = ren_outputs[..., face_features.shape[-1]:
+                                                    face_features.shape[-1] + face_vertices_cam.shape[-1]]
+        ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:]
 
-        return face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords
+        if ren_mesh_vertices_coords.requires_grad:
+            ren_mesh_vertices_coords.register_hook(lambda grad: torch.clamp(grad, -1.0, 1.0))
+
+        return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
+                                ren_mesh_vertices_features, ren_mesh_vertices_coords,
+                                ren_mesh_vertices_image_coords)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
@@ -202,10 +219,10 @@ class RenderingKaolin(nn.Module):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
 
-            face_normals, face_vertices_cam, red_index, ren_mask, ren_mesh_vertices_features, ren_mesh_vertices_coords \
-                = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector, unit_vertices)
+            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
+                                                          translation_vector, unit_vertices)
 
-            coord = torch.round((1 - ren_mesh_vertices_features) * self.config.texture_size).to(int)
+            coord = torch.round((1 - rendering_result.ren_mesh_vertices_features) * self.config.texture_size).to(int)
             coord[coord >= self.config.texture_size] = self.config.texture_size - 1
             coord[coord < 0] = 0
             xc = coord[0, :, :, 1].reshape([coord.shape[1] * coord.shape[2]])

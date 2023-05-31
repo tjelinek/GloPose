@@ -59,9 +59,11 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
         rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
 
         with torch.no_grad():
-            _, _, _, ren_mask, ren_features, _ \
-                = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                  translation.to(DEVICE), mesh.vertices.to(DEVICE))
+            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
+                                                               translation.to(DEVICE), mesh.vertices.to(DEVICE))
+
+            ren_mask = rendering_result.ren_mask
+            ren_features = rendering_result.ren_features
 
             generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
                                      segmentation_destination)
@@ -124,10 +126,12 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
         rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
 
         with torch.no_grad():
-            _, _, _, ren_mask, ren_features, _ = rendering.render_mesh_with_dibr(face_features.to(DEVICE),
-                                                                                 rotation_matrix.to(DEVICE),
-                                                                                 translation.to(DEVICE),
-                                                                                 vertices.to(DEVICE), )
+            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE),
+                                                               rotation_matrix.to(DEVICE),
+                                                               translation.to(DEVICE),
+                                                               vertices.to(DEVICE), )
+            ren_mask = rendering_result.ren_mask
+            ren_features = rendering_result.ren_features
 
             generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
                                      segmentation_destination)
