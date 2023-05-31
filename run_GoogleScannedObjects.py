@@ -23,7 +23,7 @@ from tracking6d import Tracking6D
 def main():
     dataset = 'GoogleScannedObjects'
     sequences = ['Squirrel', 'STACKING_BEAR', 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
-                 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain']
+                 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain', 'Tag_Dishtowel_Green']
 
     for sequence in sequences:
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
