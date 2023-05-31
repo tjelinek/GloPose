@@ -133,7 +133,7 @@ class Tracking6D:
         self.model_flow = get_flow_model()
 
         self.gt_texture = None
-        if 'gt_texture' in config and config['gt_texture'] is not None:
+        if 'gt_texture' in config and config['gt_texture'] is not None and config["use_gt"]:
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
 
@@ -172,7 +172,13 @@ class Tracking6D:
 
         shape = self.segments.shape
         prot = self.config.shapes[0]
-        if self.config.init_shape:
+
+        if self.config.use_gt:
+            ivertices = self.gt_mesh_prototype.vertices.numpy()
+            ivertices *= 1 / (ivertices.max() - ivertices.mean()) * 0.8
+            faces = self.gt_mesh_prototype.faces
+            iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
+        elif self.config.init_shape:
             mesh = load_obj(self.config.init_shape)
             ivertices = mesh.vertices.numpy()
             ivertices = ivertices - ivertices.mean(0)
