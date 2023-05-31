@@ -132,6 +132,10 @@ class Tracking6D:
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
 
+        self.gt_vertex_features = None
+        if 'gt_vertex_features' in dir(self.config):
+            self.gt_vertex_features = self.config.gt_vertex_features
+
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
             self.tracker = PrecomputedTracker(self.config.image_downsample,
