@@ -128,13 +128,13 @@ class Tracking6D:
         self.model_flow = get_flow_model()
 
         self.gt_texture = None
-        if 'gt_texture' in dir(self.config):
+        if 'gt_texture' in dir(self.config) and self.config.gt_texture is not None:
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
 
-        self.gt_face_features = None
+        self.gt_mesh_prototype = None
         if 'gt_face_features' in dir(self.config):
-            self.gt_face_features = self.config.gt_vertex_features
+            self.gt_mesh_prototype = self.config.gt_vertex_features
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
