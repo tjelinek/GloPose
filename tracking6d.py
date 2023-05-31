@@ -128,13 +128,13 @@ class Tracking6D:
         self.model_flow = get_flow_model()
 
         self.gt_texture = None
-        if self.config.gt_texture is not None:
+        if 'gt_texture' in dir(self.config):
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
 
-        self.gt_vertex_features = None
-        if 'gt_vertex_features' in dir(self.config):
-            self.gt_vertex_features = self.config.gt_vertex_features
+        self.gt_face_features = None
+        if 'gt_face_features' in dir(self.config):
+            self.gt_face_features = self.config.gt_vertex_features
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
@@ -434,6 +434,7 @@ class Tracking6D:
                         iters_without_change > BREAK_AFTER_ITERS_WITH_NO_CHANGE:
                     break
             if epoch < self.config.iterations - 1:
+                # with torch.autograd.detect_anomaly():
                 jloss = jloss.mean()
                 self.optimizer.zero_grad()
                 jloss.backward()
