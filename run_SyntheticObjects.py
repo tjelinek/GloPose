@@ -40,7 +40,7 @@ def main():
         config["gt_mesh_prototype"] = gt_mesh_path
         config["use_gt"] = False
 
-        write_folder = os.path.join(tmp_folder, args.folder_name, experiment_name, args.sequence)
+        write_folder = os.path.join(tmp_folder, args.dataset, experiment_name, args.sequence)
         if os.path.exists(write_folder):
             shutil.rmtree(write_folder)
         os.makedirs(write_folder)
