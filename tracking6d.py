@@ -11,6 +11,7 @@ import cv2
 import imageio
 import numpy as np
 import torch
+import kaolin
 import torchvision.ops.boxes as bops
 from torch import nn
 from torchvision import transforms
@@ -54,7 +55,6 @@ class TrackerConfig:
     verbose: bool = True
     write_results: bool = True
     write_intermediate: bool = True
-    gt_texture: str = None
 
     # Frame and keyframe settings
     input_frames: int = 0
@@ -113,6 +113,11 @@ class TrackerConfig:
     rotation_divide: int = None
     sequence: str = None
 
+    # Ground truths
+    gt_texture: str = None
+    gt_mesh_prototype: str = None
+    use_gt: bool = False
+
 
 class Tracking6D:
     FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders'])
@@ -128,13 +133,13 @@ class Tracking6D:
         self.model_flow = get_flow_model()
 
         self.gt_texture = None
-        if 'gt_texture' in dir(self.config) and self.config.gt_texture is not None:
+        if 'gt_texture' in config and config['gt_texture'] is not None:
             texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
 
         self.gt_mesh_prototype = None
-        if 'gt_face_features' in dir(self.config):
-            self.gt_mesh_prototype = self.config.gt_vertex_features
+        if 'gt_mesh_prototype' in config and config['gt_mesh_prototype'] is not None:
+            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
