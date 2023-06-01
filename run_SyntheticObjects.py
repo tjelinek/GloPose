@@ -35,10 +35,8 @@ def main():
         config = load_config(args.config)
         config["image_downsample"] = args.perc
         config["tran_init"] = 2.5
-        config["loss_dist_weight"] = 0
         config["gt_texture"] = gt_texture_path
         config["gt_mesh_prototype"] = gt_mesh_path
-        config["use_gt"] = False
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
         if os.path.exists(write_folder):
