@@ -45,7 +45,7 @@ erode_renderer_mask: 3
 rotation_divide: 8
 
 shapes:
-  - sphere_2562
+  - sphere
 predict_vertices: True
 use_gt: False
 
