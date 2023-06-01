@@ -47,7 +47,7 @@ rotation_divide: 8
 shapes:
   - sphere_2562
 predict_vertices: True
-use_gt = False
+use_gt: False
 
 write_results: True
 verbose: True
