@@ -1,37 +1,31 @@
+from collections import namedtuple
+from dataclasses import dataclass
+
 import copy
-import math
+import imageio
+import kaolin
+import numpy as np
 import os
 import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List
-from collections import namedtuple
-
-import cv2
-import imageio
-import numpy as np
 import torch
-import kaolin
-import torchvision.ops.boxes as bops
+from pathlib import Path
 from torch import nn
-from torchvision import transforms
 from torchvision.utils import save_image
+from typing import List
 
-from GMA.core.utils import flow_viz
 from OSTrack.S2DNet.s2dnet import S2DNet
+from auxiliary_scripts.logging import visualize_flow, WriteResults
+from flow import get_flow_from_images, visualize_flow_with_images
+from flow_raft import get_flow_model
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.initial_mesh import generate_face_features
-from models.kaolin_wrapper import load_obj, write_obj_mesh
+from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
-from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, create_mask_from_string
-from utils import segment2bbox, write_video, euler_from_quaternion, compute_trandist, \
-    consecutive_quaternions_angular_difference, rad_to_deg, qnorm, qmult
-from flow import get_flow_from_images, visualize_flow_with_images, load_image
-from flow_raft import get_flow_model
-from auxiliary_scripts.logging import visualize_flow, WriteResults
+from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
+from utils import consecutive_quaternions_angular_difference, qnorm, qmult
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 
