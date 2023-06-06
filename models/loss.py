@@ -5,6 +5,7 @@ import torch
 from kornia.losses import total_variation
 from models.encoder import EncoderResult
 
+
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
         super(FMOLoss, self).__init__()
@@ -58,7 +59,7 @@ class FMOLoss(nn.Module):
         if self.config.loss_dist_weight > 0:
             dists = (segments[:, :, 0] * renders[:, :, 0, -1])
             losses["dist"] = self.config.loss_dist_weight * (
-                        dists.sum((0, 2, 3)) / renders[:, :, 0, -1].sum((0, 2, 3))).mean()
+                    dists.sum((0, 2, 3)) / renders[:, :, 0, -1].sum((0, 2, 3))).mean()
 
         if self.config.loss_tv_weight > 0:
             texture_maps_rep = torch.cat((texture_maps[:, :, -1:], texture_maps, texture_maps[:, :, :1]), 2)
@@ -66,7 +67,7 @@ class FMOLoss(nn.Module):
                 (texture_maps_rep[:, :, :, -1:], texture_maps_rep, texture_maps_rep[:, :, :, :1]), 3)
             texture_maps_rep = torch.cat((texture_maps_rep[:, :, -1:], texture_maps_rep, texture_maps_rep[:, :, :1]), 2)
             losses["tv"] = self.config.loss_tv_weight * total_variation(texture_maps_rep, reduction='sum') / (
-                        3 * self.config.texture_size ** 2)
+                    3 * self.config.texture_size ** 2)
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight:
@@ -75,13 +76,13 @@ class FMOLoss(nn.Module):
             for observed_flow_it in observed_flow:
                 observed_flow_perm = observed_flow_it[0].permute(0, 3, 1, 2)
                 observed_flow_it = torch.nn.functional.interpolate(observed_flow_perm,
-                                                                size=target_shape, mode='bilinear',
-                                                                align_corners=False)
+                                                                   size=target_shape, mode='bilinear',
+                                                                   align_corners=False)
                 observed_flow_it = observed_flow_it.permute(0, 2, 3, 1)
                 observed_flows.append(observed_flow_it[None])
             observed_flows = torch.cat(observed_flows, 1)
 
-            observed_flows = observed_flows[:, -2:-1] # Do not take the first, initialization one
+            observed_flows = observed_flows[:, -2:-1]  # Do not take the first, initialization one
             flow_from_tracking = flow_from_tracking[:, -2:-1]
             flow_loss = torch.norm(observed_flows - flow_from_tracking, dim=-1).mean((2, 3)).sum()
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
