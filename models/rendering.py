@@ -161,7 +161,6 @@ class RenderingKaolin(nn.Module):
             vertices_positions_image1 = vertices_positions_image1.nan_to_num()
 
             theoretical_flow = vertices_positions_image2 - vertices_positions_image1
-            theoretical_flow = (theoretical_flow * rendering_result.ren_mask.unsqueeze(3))
             theoretical_flows.append(theoretical_flow)
         theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
                                          device=theoretical_flows[0].device)] + theoretical_flows
