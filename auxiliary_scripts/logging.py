@@ -85,14 +85,14 @@ class WriteResults:
         self.all_proj_filtered.release()
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, segment, silh_losses, stepi, observed_flows,
-                      encoder_result):
+                      encoder_result, flow_segment_masks):
 
         detached_result = EncoderResult(*[it.detach() if type(it) is torch.Tensor else it for it in encoder_result])
-
         if tracking6d.config.features == 'deep':
             tracking6d.rgb_apply(tracking6d.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                 tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], observed_flows,
-                                 tracking6d.keyframes)
+                                 tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                 observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                 flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], tracking6d.keyframes)
             tex = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
         if tracking6d.gt_texture is not None:
             tex = tracking6d.gt_texture

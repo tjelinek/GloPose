@@ -158,6 +158,7 @@ class Tracking6D:
             self.feat = lambda x: x
         self.images, self.segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
         self.prev_images = self.images.clone()[None].to(self.device)
+        self.prev_segments = self.segments.clone()[None].to(self.device)
         self.images, self.segments = self.images[None].to(self.device), self.segments[None].to(self.device)
 
         self.images_feat = self.feat(self.images).detach()
@@ -228,6 +229,7 @@ class Tracking6D:
         self.config.loss_rgb_weight = 0
 
         prev_image = self.images[:, -1]
+        prev_segment = self.segments[:, -1]
         self.last_encoder_result_rgb = self.rgb_encoder(self.keyframes)
         self.last_encoder_result = self.encoder(self.keyframes)
 
@@ -275,11 +277,13 @@ class Tracking6D:
                 observed_flow = flow_video_up
                 flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
                 observed_flows = torch.cat((observed_flows, observed_flow[None]), dim=1)
+                flow_segment_masks = torch.cat((flow_segment_masks, prev_segment[None]), dim=1)
 
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      flow_segment_masks, self.keyframes, self.flow_keyframes, step_i=stepi)
+                                      flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                      self.keyframes, self.flow_keyframes, step_i=stepi)
 
             encoder_result = frame_result.encoder_result
 
@@ -320,6 +324,7 @@ class Tracking6D:
             self.images_feat = self.images_feat[:, keep_keyframes]
             self.segments = self.segments[:, keep_keyframes]
             observed_flows = observed_flows[:, keep_keyframes]
+            flow_segment_masks = flow_segment_masks[:, keep_keyframes]
 
             if len(self.keyframes) > self.config.max_keyframes:
                 self.keyframes = self.keyframes[-self.config.max_keyframes:]
@@ -329,8 +334,10 @@ class Tracking6D:
                 self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
                 self.segments = self.segments[:, -self.config.max_keyframes:]
                 observed_flows = observed_flows[:, -self.config.max_keyframes:]
+                flow_segment_masks = flow_segment_masks[:, -self.config.max_keyframes:]
 
             prev_image = image[0]
+            prev_segment = segment[0]
 
         return self.best_model
 
@@ -400,7 +407,7 @@ class Tracking6D:
             # texture_flow.register_hook(lambda grad: breakpoint())
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
                                                            observed_flows,
-                                                           # flow_segment_masks,
+                                                           flow_segment_masks,
                                                            theoretical_flow,
                                                            self.last_encoder_result)
 
@@ -507,9 +514,8 @@ class Tracking6D:
                                      encoder_out.vertices, self.encoder.face_features,
                                      encoder_out.texture_maps, encoder_out.lights)
             theoretical_flow = self.rendering.compute_theoretical_flow(encoder_out, encoder_out_prev_frames)
-
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_out,
-                                                               observed_flows, theoretical_flow,
+                                                               observed_flows, flow_segment_masks, theoretical_flow,
                                                                self.last_encoder_result_rgb)
             if self.best_model["value"] < 0.1 and iters_without_change > 10:
                 break

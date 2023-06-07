@@ -14,12 +14,16 @@ class FMOLoss(nn.Module):
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
     def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
+                observed_flow_mask,
                 flow_from_tracking, prev_encoder_result: EncoderResult):
 
         vertices = current_encoder_result.vertices
         texture_maps = current_encoder_result.texture_maps
         tdiff = current_encoder_result.translation_difference
         qdiff = current_encoder_result.quaternion_difference
+
+        segment_masks = observed_flow_mask[:, :, -1:]
+        flow_segment_masks = segment_masks.repeat(1, 1, 2, 1, 1)
 
         losses = {}
         losses_all = {}
@@ -73,6 +77,7 @@ class FMOLoss(nn.Module):
         if self.config.loss_flow_weight > 0:
             observed_flow = flow_segment_masks * observed_flow
             observed_flow = observed_flow[:, -2:-1].permute(0, 1, 3, 4, 2)
+
             flow_from_tracking = flow_from_tracking[:, -2:-1]
             flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2, 3))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
