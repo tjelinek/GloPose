@@ -395,8 +395,7 @@ class Tracking6D:
 
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                      self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
-            theoretical_flow, _ = self.rendering.compute_theoretical_flow(self.encoder.face_features, encoder_result,
-                                                                          encoder_result_flow_frames)
+            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
 
             # texture_flow.register_hook(lambda grad: breakpoint())
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
@@ -507,8 +506,7 @@ class Tracking6D:
             renders = self.rendering(encoder_out.translations, encoder_out.quaternions,
                                      encoder_out.vertices, self.encoder.face_features,
                                      encoder_out.texture_maps, encoder_out.lights)
-            theoretical_flow, _ = self.rendering.compute_theoretical_flow(self.encoder.face_features, encoder_out,
-                                                                          encoder_out_prev_frames)
+            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_out, encoder_out_prev_frames)
 
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_out,
                                                                observed_flows, theoretical_flow,

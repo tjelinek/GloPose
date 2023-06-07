@@ -119,54 +119,66 @@ class RenderingKaolin(nn.Module):
 
         return all_renders
 
-    def compute_theoretical_flow(self, face_features, encoder_out, encoder_out_prev_frames):
+    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames):
         theoretical_flows = []
         rendering_masks = []
         for frame_i in range(1, encoder_out.quaternions.shape[1]):
-            translation_vector_prev = encoder_out_prev_frames.translations[:, :, frame_i]
-            rotation_matrix_prev = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
-                                                                 order=QuaternionCoeffOrder.WXYZ)
-            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix_prev, translation_vector_prev,
-                                                          encoder_out_prev_frames.vertices)
-            rendering_masks.append(rendering_result.ren_mask[None])
+            translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i]
+            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
+                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            q1 = encoder_out_prev_frames.quaternions[:, frame_i]
-            q2 = encoder_out.quaternions[:, frame_i]
-            qd = qdifference(q1, q2)
-            rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+            translation_vector_2 = encoder_out.translations[:, :, frame_i]
+            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
+                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            # rd.register_hook(lambda grad: print(grad))
+            # Rotate and translate the vertices using the given rotation_matrix and translation_vector
+            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_frames.vertices,
+                                                                      rotation_matrix_1, self.obj_center)
+            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_frames.vertices,
+                                                                      rotation_matrix_2, self.obj_center)
 
-            t1 = encoder_out_prev_frames.translations[:, :, frame_i]
-            t2 = encoder_out.translations[:, :, frame_i]
-            td = t2 - t1
+            vertices_1 += translation_vector_1
+            vertices_2 += translation_vector_2
 
-            rendered_3d_coords_camera_i1 = rendering_result.ren_mesh_vertices_coords.flatten(1, 2)
+            face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepare_vertices(vertices_1, self.faces,
+                                                                                          self.camera_rot,
+                                                                                          self.camera_trans,
+                                                                                          self.camera_proj)
+            face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepare_vertices(vertices_2, self.faces,
+                                                                                          self.camera_rot,
+                                                                                          self.camera_trans,
+                                                                                          self.camera_proj)
 
-            rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd, self.camera_trans)
+            # Extract the z-coordinates of the face vertices in camera space
+            face_vertices_z_1 = face_vertices_cam_1[:, :, :, -1]
 
-            rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
+            # Extract the z-components of the face normals
+            face_normals_z_1 = face_normals_1[:, :, -1]
 
-            proj_3d_coords_to_2d_i1_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i1,
-                                                                                   self.camera_proj)
-            proj_3d_coords_to_2d_i2_flat = kaolin.render.camera.perspective_camera(rendered_3d_coords_camera_i2,
-                                                                                   self.camera_proj)
+            face_vertices_3d_motion = face_vertices_cam_2 - face_vertices_cam_1
+            face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1
+            features_for_rendering = face_vertices_image_motion
 
-            vertices_positions_image2 = proj_3d_coords_to_2d_i2_flat.reshape(*rendering_result.
-                                                                             ren_mesh_vertices_coords.shape[:-1], 2)
-            vertices_positions_image2 = vertices_positions_image2.nan_to_num()
+            ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                                     face_vertices_z_1,
+                                                                                     face_vertices_image_1,
+                                                                                     features_for_rendering,
+                                                                                     face_normals_z_1,
+                                                                                     sigmainv=self.config.sigmainv,
+                                                                                     boxlen=0.02, knum=30,
+                                                                                     multiplier=1000)
 
-            vertices_positions_image1 = proj_3d_coords_to_2d_i1_flat.reshape(*rendering_result.
-                                                                             ren_mesh_vertices_coords.shape[:-1], 2)
-            vertices_positions_image1 = vertices_positions_image1.nan_to_num()
-
-            theoretical_flow = vertices_positions_image2 - vertices_positions_image1
+            theoretical_flow = ren_outputs  # torch.Size([1, 134, 134, 2])
             theoretical_flows.append(theoretical_flow)
+
+            rendering_masks.append(ren_mask)
+
         theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
                                          device=theoretical_flows[0].device)] + theoretical_flows
-        theoretical_flow = torch.stack(theoretical_flows, 1)
-        flow_render_mask = torch.stack(rendering_masks, 1)
-        return theoretical_flow, flow_render_mask
+        theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, 134, 134, 2])
+        # flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, 134, 134])
+
+        return theoretical_flow
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
