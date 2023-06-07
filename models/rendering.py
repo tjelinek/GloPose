@@ -119,31 +119,31 @@ class RenderingKaolin(nn.Module):
 
         return all_renders
 
-    def compute_theoretical_flow(self, face_features, encoder_out, encoder_out_last_frame):
+    def compute_theoretical_flow(self, face_features, encoder_out, encoder_out_prev_frames):
         theoretical_flows = []
+        rendering_masks = []
         for frame_i in range(1, encoder_out.quaternions.shape[1]):
-            translation_vector = encoder_out.translations[:, :, frame_i]
-            rotation_matrix = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
-                                                            order=QuaternionCoeffOrder.WXYZ)
-            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
-                                                          translation_vector,
-                                                          encoder_out.vertices)
+            translation_vector_prev = encoder_out_prev_frames.translations[:, :, frame_i]
+            rotation_matrix_prev = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
+                                                                 order=QuaternionCoeffOrder.WXYZ)
+            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix_prev, translation_vector_prev,
+                                                          encoder_out_prev_frames.vertices)
+            rendering_masks.append(rendering_result.ren_mask[None])
 
-            q1 = encoder_out_last_frame.quaternions[:, frame_i]
+            q1 = encoder_out_prev_frames.quaternions[:, frame_i]
             q2 = encoder_out.quaternions[:, frame_i]
             qd = qdifference(q1, q2)
-            rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ)
+            rd = quaternion_to_rotation_matrix(qd, order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
             # rd.register_hook(lambda grad: print(grad))
 
-            t1 = encoder_out_last_frame.translations[:, :, frame_i]
+            t1 = encoder_out_prev_frames.translations[:, :, frame_i]
             t2 = encoder_out.translations[:, :, frame_i]
             td = t2 - t1
 
             rendered_3d_coords_camera_i1 = rendering_result.ren_mesh_vertices_coords.flatten(1, 2)
 
-            rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd,
-                                                                   torch.zeros((1, 3), device=cfg.DEVICE))
+            rendered_3d_coords_camera_i2 = rotate_translate_points(rendered_3d_coords_camera_i1, rd, self.camera_trans)
 
             rendered_3d_coords_camera_i2 = rendered_3d_coords_camera_i2 + td
 
@@ -165,7 +165,8 @@ class RenderingKaolin(nn.Module):
         theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
                                          device=theoretical_flows[0].device)] + theoretical_flows
         theoretical_flow = torch.stack(theoretical_flows, 1)
-        return theoretical_flow
+        flow_render_mask = torch.stack(rendering_masks, 1)
+        return theoretical_flow, flow_render_mask
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
