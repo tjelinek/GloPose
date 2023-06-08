@@ -1,4 +1,3 @@
-import argparse
 import glob
 import os
 
@@ -7,12 +6,10 @@ import time
 import shutil
 
 import numpy as np
-import torch
 
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
-from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.append('OSTrack/S2DNet')
