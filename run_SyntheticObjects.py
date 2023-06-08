@@ -22,7 +22,8 @@ from tracking6d import Tracking6D
 
 def main():
     dataset = 'SyntheticObjects'
-    sequences = ['6_Colored_Cube', "8_Colored_Sphere"]
+    sequences = ['6_Colored_Cube', '6_Colored_Cube_2_directions', '8_Colored_Sphere', '8_Colored_Sphere_2_directions',
+                 'Textured_Sphere', 'Textured_Sphere_2_directions']
 
     for sequence in sequences:
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
