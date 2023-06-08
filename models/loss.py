@@ -14,8 +14,7 @@ class FMOLoss(nn.Module):
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
     def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
-                observed_flow_mask,
-                flow_from_tracking, prev_encoder_result: EncoderResult):
+                observed_flow_mask, flow_from_tracking, prev_encoder_result: EncoderResult):
 
         vertices = current_encoder_result.vertices
         texture_maps = current_encoder_result.texture_maps
@@ -88,7 +87,7 @@ class FMOLoss(nn.Module):
             change_in_texture = change_in_texture.sum(dim=-1).flatten()
             least_changed_90_pct, _ = (-change_in_texture).topk(k=int(change_in_texture.size().numel() * 0.9))
             least_changed_90_pct = -least_changed_90_pct
-            loss_texture_change = least_changed_90_pct.sum()
+            loss_texture_change = least_changed_90_pct.mean()
             losses["texture_change"] = loss_texture_change * self.config.loss_texture_change_weight
 
         loss = 0

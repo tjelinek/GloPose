@@ -279,6 +279,11 @@ class Tracking6D:
                 observed_flows = torch.cat((observed_flows, observed_flow[None]), dim=1)
                 flow_segment_masks = torch.cat((flow_segment_masks, prev_segment[None]), dim=1)
 
+            self.last_encoder_result = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+                                                       self.encoder(self.keyframes)])
+            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+                                                           self.rgb_encoder(self.keyframes)])
+
             frame_result = self.apply(self.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -456,7 +461,6 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        self.last_encoder_result = encoder_result
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
                                         renders=renders)
@@ -524,5 +528,3 @@ class Tracking6D:
                 self.rgb_optimizer.zero_grad()
                 jloss.backward(retain_graph=True)
                 self.rgb_optimizer.step()
-
-        self.last_encoder_result_rgb = encoder_out
