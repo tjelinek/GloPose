@@ -63,7 +63,7 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
                                                                translation.to(DEVICE), mesh.vertices.to(DEVICE))
 
             ren_mask = rendering_result.ren_mask
-            ren_features = rendering_result.ren_features
+            ren_features = rendering_result.ren_mesh_vertices_features
 
             generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
                                      segmentation_destination)
@@ -116,7 +116,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
         face_features[0, i, :, :] = torch.tensor(color)
 
-    rotations = generate_2_DoF_rotations()
+    rotations = generate_1_DoF_rotation()
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(torch.tensor([deg_to_rad(roll)]),
@@ -131,7 +131,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
                                                                translation.to(DEVICE),
                                                                vertices.to(DEVICE), )
             ren_mask = rendering_result.ren_mask
-            ren_features = rendering_result.ren_features
+            ren_features = rendering_result.ren_mesh_vertices_features
 
             generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
                                      segmentation_destination)
