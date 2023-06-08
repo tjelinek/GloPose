@@ -5,14 +5,12 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-from kaolin.render.camera import rotate_translate_points
 from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis
 from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
 from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import prepare_vertices
-from utils import qdifference
 
 
 def deringing(coeffs, window):
