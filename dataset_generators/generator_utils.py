@@ -1,21 +1,12 @@
-import math
-import warnings
-import os
-import shutil
 import imageio
 import kaolin
 import numpy as np
 import torch
-import types
-import matplotlib.pyplot as plt
-
-from PIL import Image
-from pathlib import Path
 from kornia.geometry import quaternion_to_rotation_matrix
+from pathlib import Path
 
 from models.rendering import RenderingKaolin
-from main_settings import dataset_folder
-from utils import quaternion_from_euler, load_config, deg_to_rad
+from utils import quaternion_from_euler, deg_to_rad
 
 
 def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination):
