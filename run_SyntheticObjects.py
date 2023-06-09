@@ -26,11 +26,11 @@ def main():
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
 
         if sequence in ['8_Colored_Sphere', '8_Colored_Sphere_2_directions']:
-            gt_mesh_path = Path('/prototypes/sphere.obj')
+            gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = None
         elif sequence in ['Textured_Sphere', 'Textured_Sphere_2_directions']:
-            gt_mesh_path = Path('/prototypes/sphere.obj')
-            gt_texture_path = Path('materials/textures/texture.png')
+            gt_mesh_path = Path('prototypes/sphere.obj')
+            gt_texture_path = Path('prototypes/tex.png')
         else:
             gt_texture_path = None
             gt_mesh_path = None
