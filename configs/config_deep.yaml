@@ -15,6 +15,7 @@ rot_init: [0,1.57079637051,0]
 init_shape: False
 
 max_keyframes: 8
+all_frames_keyframes: False
 inc_step: 5
 accumulate: False
 keyframes: True
