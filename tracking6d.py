@@ -275,6 +275,9 @@ class Tracking6D:
             with torch.no_grad():
                 flow_video_low, flow_video_up = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
                 observed_flow = flow_video_up
+                observed_flow[:, 0, ...] /= 0.5 * observed_flow.shape[-2]
+                observed_flow[:, 1, ...] /= 0.5 * observed_flow.shape[-1]
+
                 flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
                 observed_flows = torch.cat((observed_flows, observed_flow[None]), dim=1)
                 flow_segment_masks = torch.cat((flow_segment_masks, prev_segment[None]), dim=1)
@@ -492,6 +495,8 @@ class Tracking6D:
             'uint8')
         imageio.imwrite(rendering_1_path, prev_img_np)
         imageio.imwrite(rendering_2_path, new_img_np)
+        theoretical_flow[..., 0] *= 0.5 * theoretical_flow.shape[-3]
+        theoretical_flow[..., 1] *= 0.5 * theoretical_flow.shape[-2]
         flow_render_up_ = theoretical_flow[:, -1].detach().cpu()[0].permute(2, 0, 1)
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
         # Convert the resized tensor back to a NumPy array and remove the batch dimension
