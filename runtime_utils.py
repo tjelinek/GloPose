@@ -3,7 +3,7 @@ import os
 import torch
 import time
 import argparse
-from main_settings import dataset_folder
+from pathlib import Path
 
 sys.path.append('OSTrack/S2DNet')
 
@@ -11,6 +11,11 @@ from tracking6d import Tracking6D
 
 
 def run_tracking_on_sequence(args, config, files, segms, write_folder):
+    print('\n\n\n---------------------------------------------------')
+    write_folder_path = Path(write_folder)
+    print("Running tracking on dataset:", write_folder_path.parent.name)
+    print("Sequence:", write_folder_path.name)
+
     if args.length is None:
         args.length = len(files)
     files = files[args.start:args.length:args.skip]
