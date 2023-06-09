@@ -65,14 +65,14 @@ def setup_renderer(config, faces, height, width, device):
 
 
 def generate_2_DoF_rotations(step=10.0):
-    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
+    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, step)
     rotations_yaw = np.concatenate([np.zeros(rotations_pitch.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
     rotations_roll = np.zeros(rotations_yaw.shape)
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
 
 
 def generate_1_DoF_rotation(step=10.0):
-    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
+    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, step)
     rotations_yaw = np.zeros(rotations_pitch.shape)
     rotations_roll = np.zeros(rotations_yaw.shape)
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
@@ -99,7 +99,7 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     rendering = setup_renderer(config, faces, width, height, DEVICE)
 
     if rotations is None:
-        rotations = generate_1_DoF_rotation()
+        rotations = generate_1_DoF_rotation(2.0)
 
     for i, (pitch, roll, yaw) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
