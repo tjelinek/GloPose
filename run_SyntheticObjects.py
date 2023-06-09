@@ -30,7 +30,7 @@ def main():
             gt_texture_path = None
         elif sequence in ['Textured_Sphere', 'Textured_Sphere_2_directions']:
             gt_mesh_path = Path('/prototypes/sphere.obj')
-            gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
+            gt_texture_path = Path('materials/textures/texture.png')
         else:
             gt_texture_path = None
             gt_mesh_path = None
