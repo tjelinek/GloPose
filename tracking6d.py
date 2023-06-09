@@ -510,7 +510,6 @@ class Tracking6D:
         model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
 
-        encoder_out = None
         for epoch in range(self.config.rgb_iters):
             encoder_out: EncoderResult = self.rgb_encoder(opt_frames)
             encoder_out_prev_frames = self.rgb_encoder(self.flow_keyframes)
