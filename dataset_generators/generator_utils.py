@@ -94,7 +94,6 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     vertices *= magnification
     faces = mesh.faces
     face_features = mesh.uvs[mesh.face_uvs_idx][None]
-    translation = torch.zeros((1, 3))[None]
 
     rendering = setup_renderer(config, faces, width, height, DEVICE)
 
@@ -110,7 +109,7 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
 
         with torch.no_grad():
             rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                               translation.to(DEVICE), vertices.to(DEVICE))
+                                                               rendering.obj_center, vertices.to(DEVICE))
 
             ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
                                                               texture_maps, mode='bilinear')
