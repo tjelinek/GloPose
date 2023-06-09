@@ -49,7 +49,7 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
     translation = torch.zeros((1, 3))[None]
     face_features = vertices_features[mesh.faces][None]
 
-    rotations = generate_1_DoF_rotation()
+    rotations = generate_1_DoF_rotation(step=2.0)
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
@@ -116,7 +116,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
         face_features[0, i, :, :] = torch.tensor(color)
 
-    rotations = generate_1_DoF_rotation()
+    rotations = generate_1_DoF_rotation(step=2.0)
 
     for i, (yaw, pitch, roll) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(torch.tensor([deg_to_rad(roll)]),

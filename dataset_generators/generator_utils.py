@@ -64,14 +64,14 @@ def setup_renderer(config, faces, height, width, device):
     return rendering
 
 
-def generate_2_DoF_rotations():
+def generate_2_DoF_rotations(step=10.0):
     rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
     rotations_yaw = np.concatenate([np.zeros(rotations_pitch.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
     rotations_roll = np.zeros(rotations_yaw.shape)
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
 
 
-def generate_1_DoF_rotation():
+def generate_1_DoF_rotation(step=10.0):
     rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
     rotations_yaw = np.zeros(rotations_pitch.shape)
     rotations_roll = np.zeros(rotations_yaw.shape)
