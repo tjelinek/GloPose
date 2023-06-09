@@ -54,6 +54,7 @@ class TrackerConfig:
     input_frames: int = 0
     max_keyframes: int = 0
     keyframes: int = None
+    all_frames_keyframes: bool = False
     fmo_steps: int = 1
 
     # Shape settings
