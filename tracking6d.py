@@ -495,8 +495,8 @@ class Tracking6D:
             'uint8')
         imageio.imwrite(rendering_1_path, prev_img_np)
         imageio.imwrite(rendering_2_path, new_img_np)
-        theoretical_flow[..., 0] *= 0.5 * theoretical_flow.shape[-3]
-        theoretical_flow[..., 1] *= 0.5 * theoretical_flow.shape[-2]
+        # theoretical_flow[..., 0] *= 0.5 * theoretical_flow.shape[-3]
+        # theoretical_flow[..., 1] *= 0.5 * theoretical_flow.shape[-2]
         flow_render_up_ = theoretical_flow[:, -1].detach().cpu()[0].permute(2, 0, 1)
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
         # Convert the resized tensor back to a NumPy array and remove the batch dimension
