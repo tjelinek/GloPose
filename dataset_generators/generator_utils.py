@@ -73,7 +73,7 @@ def generate_2_DoF_rotations():
 
 def generate_1_DoF_rotation():
     rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, 10.0)
-    rotations_yaw = np.zeros(rotations_pitch.shape) + 270
+    rotations_yaw = np.zeros(rotations_pitch.shape)
     rotations_roll = np.zeros(rotations_yaw.shape)
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
 
@@ -89,7 +89,7 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
 
-    magnification = 1 / (vertices.max() - vertices.mean()) * 0.8
+    magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
 
     vertices *= magnification
     faces = mesh.faces
