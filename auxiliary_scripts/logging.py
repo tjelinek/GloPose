@@ -123,13 +123,15 @@ class WriteResults:
 
             self.tracking_log.write(f"Keyframes: {tracking6d.keyframes}\n")
 
+            rot_axes = ['roll: ', 'pitch: ', 'yaw: ']
+
             for k in range(detached_result.quaternions.shape[1]):
+                rotations = [rot_axes[i] + str((float(detached_result.quaternions[0, k][i]) * 180 / math.pi -
+                                                float(detached_result.quaternions[0, 0][i]) * 180 / math.pi) % 360)
+                             for i in range(len(euler_angles_last))]
+
                 self.tracking_log.write(
-                    f"Keyframe {tracking6d.keyframes[k]} rotation:" + str([(float(detached_result.quaternions[0, k][i])
-                                                                            * 180 / math.pi - float(
-                                detached_result.quaternions[0, 0][i]) * 180 / math.pi) % 360
-                                                                           for i in range(len(euler_angles_last))])
-                    + '\n')
+                    f"Keyframe {tracking6d.keyframes[k]} rotation:" + str(rotations) + '\n')
 
             for k in range(detached_result.quaternions.shape[1]):
                 self.tracking_log.write(
