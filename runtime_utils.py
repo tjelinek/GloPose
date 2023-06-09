@@ -15,6 +15,7 @@ def run_tracking_on_sequence(args, config, files, segms, write_folder):
     write_folder_path = Path(write_folder)
     print("Running tracking on dataset:", write_folder_path.parent.name)
     print("Sequence:", write_folder_path.name)
+    print('---------------------------------------------------\n\n')
 
     if args.length is None:
         args.length = len(files)
