@@ -323,27 +323,29 @@ class Tracking6D:
             small_rotation = angles.shape[0] > 1 and angles[-1] < rot_degree_th and angles[-2] < rot_degree_th
             if small_rotation:  # and small_translation):
                 keep_keyframes[-1] = True
-                keep_keyframes[-2] = False
+                keep_keyframes[-2] = False or self.config.all_frames_keyframes  # Default False
                 keep_keyframes[-3] = True
 
-            self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
-            self.flow_keyframes = (np.array(self.flow_keyframes)[keep_keyframes]).tolist()
-            self.images = self.images[:, keep_keyframes]
-            self.prev_images = self.prev_images[:, keep_keyframes]
-            self.images_feat = self.images_feat[:, keep_keyframes]
-            self.segments = self.segments[:, keep_keyframes]
-            observed_flows = observed_flows[:, keep_keyframes]
-            flow_segment_masks = flow_segment_masks[:, keep_keyframes]
+            if not self.config.all_frames_keyframes:
 
-            if len(self.keyframes) > self.config.max_keyframes:
-                self.keyframes = self.keyframes[-self.config.max_keyframes:]
-                self.flow_keyframes = self.flow_keyframes[-self.config.max_keyframes:]
-                self.images = self.images[:, -self.config.max_keyframes:]
-                self.prev_images = self.prev_images[:, -self.config.max_keyframes:]
-                self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
-                self.segments = self.segments[:, -self.config.max_keyframes:]
-                observed_flows = observed_flows[:, -self.config.max_keyframes:]
-                flow_segment_masks = flow_segment_masks[:, -self.config.max_keyframes:]
+                self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
+                self.flow_keyframes = (np.array(self.flow_keyframes)[keep_keyframes]).tolist()
+                self.images = self.images[:, keep_keyframes]
+                self.prev_images = self.prev_images[:, keep_keyframes]
+                self.images_feat = self.images_feat[:, keep_keyframes]
+                self.segments = self.segments[:, keep_keyframes]
+                observed_flows = observed_flows[:, keep_keyframes]
+                flow_segment_masks = flow_segment_masks[:, keep_keyframes]
+
+                if len(self.keyframes) > self.config.max_keyframes:
+                    self.keyframes = self.keyframes[-self.config.max_keyframes:]
+                    self.flow_keyframes = self.flow_keyframes[-self.config.max_keyframes:]
+                    self.images = self.images[:, -self.config.max_keyframes:]
+                    self.prev_images = self.prev_images[:, -self.config.max_keyframes:]
+                    self.images_feat = self.images_feat[:, -self.config.max_keyframes:]
+                    self.segments = self.segments[:, -self.config.max_keyframes:]
+                    observed_flows = observed_flows[:, -self.config.max_keyframes:]
+                    flow_segment_masks = flow_segment_masks[:, -self.config.max_keyframes:]
 
             prev_image = image[0]
             prev_segment = segment[0]
