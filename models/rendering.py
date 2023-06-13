@@ -120,7 +120,7 @@ class RenderingKaolin(nn.Module):
     def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames):
         theoretical_flows = []
         rendering_masks = []
-        for frame_i in range(1, encoder_out.quaternions.shape[1]):
+        for frame_i in range(0, encoder_out.quaternions.shape[1]):
             translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i]
             rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
@@ -171,8 +171,6 @@ class RenderingKaolin(nn.Module):
 
             rendering_masks.append(ren_mask)
 
-        theoretical_flows = [torch.zeros(theoretical_flows[0].shape,
-                                         device=theoretical_flows[0].device)] + theoretical_flows
         theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, 134, 134, 2])
         # flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, 134, 134])
 
