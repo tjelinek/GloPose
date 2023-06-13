@@ -543,8 +543,6 @@ class Tracking6D:
             losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_out,
                                                                observed_flows, flow_segment_masks, theoretical_flow,
                                                                self.last_encoder_result_rgb)
-            if self.best_model["value"] < 0.1 and iters_without_change > 10:
-                break
             if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
                 self.rgb_optimizer.zero_grad()
