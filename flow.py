@@ -87,7 +87,7 @@ def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path
 
     for (filename1, filename2), (flow_low, flow_up) in get_flow_from_files(files_source_dir, model):
         flow_up = flow_up[0].permute(1, 2, 0).cpu().detach().numpy()
-        flow_low = flow_low[0].permute(1, 2, 0).cpu().detach().numpy()
+        # flow_low = flow_low[0].permute(1, 2, 0).cpu().detach().numpy()
 
         # map flow to rgb image
         flow_up_img = flow_viz.flow_to_image(flow_up)
@@ -114,13 +114,9 @@ def get_flow_from_sequence(images_pairs: Iterable, model):
 
 
 def get_flow_from_images(image1, image2, model):
-    # with torch.no_grad():
-
     padder = InputPadder(image1.shape)
 
     image1, image2 = padder.pad(image1, image2)
-
-    # breakpoint()
 
     flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
 
@@ -159,7 +155,6 @@ def get_flow_from_images_raft(image1, image2, model):
         flow_up = torchvision.transforms.Resize((width, height))(flow_up)
 
         if transposed:
-            width, height = height, width
             flow_low = flow_low.transpose(-1, -2)
             flow_up = flow_up.transpose(-1, -2)
 
