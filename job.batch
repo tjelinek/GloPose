@@ -1,0 +1,60 @@
+#!/bin/bash
+
+#SBATCH --time=18:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G
+#SBATCH --partition=gpu
+#SBATCH --job-name=FlowTracker
+#SBATCH --err=/mnt/personal/jelint19/results/FlowTracker.err
+#SBATCH --out=/mnt/personal/jelint19/results/FlowTracker.out
+
+if [ $# -eq 0 ]; then
+    experiment="Default"
+else
+    experiment=$1
+fi
+
+outputfolder_root="/mnt/personal/jelint19/results/FlowTracker/"
+
+# experiment="config_deep_only_flow_gt"
+
+# Function to check if a folder exists
+folder_exists() {
+  [ -d "$1" ]
+}
+
+# Function to find the lowest non-used number
+find_lowest_nonused_number() {
+  local i=1
+  while folder_exists "${outputfolder_root}${experiment}_${i}"; do
+    ((i++))
+  done
+  echo "$i"
+}
+
+# Check if the folder already exists
+if folder_exists "${outputfolder_root}${experiment}"; then
+  # Find the lowest non-used number and modify experiment name
+  lowest_nonused_number=$(find_lowest_nonused_number)
+  modified_experiment="${experiment}_${lowest_nonused_number}"
+else
+  modified_experiment="$experiment"
+fi
+
+
+outputfolder="${outputfolder_root}${modified_experiment}"
+
+cfg="configs/${experiment}.yaml"
+
+ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.6.7-foss-2021b-CUDA-11.4.1 tensorboard/2.8.0-foss-2021b kornia/0.6.8-foss-2021b-CUDA-11.4.1 kaolin/0.12.0-foss-2021b-CUDA-11.4.1 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.13.0-foss-2021b-CUDA-11.4.1 PyTorch3D/0.7.1-foss-2021b-CUDA-11.4.1
+
+mkdir -p "${outputfolder}"
+
+
+python run_SyntheticObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/SyntheticObjects.log" 2>&1 &
+python run_GoogleScannedObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/GoogleScannedObjects.log" 2>&1 &
+python run_360.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/360.log" 2>&1
+wait
