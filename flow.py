@@ -34,8 +34,6 @@ def get_flow_from_files(files_source_dir: Path, model):
 
         flow_low, flow_up = get_flow_from_images(image1, image2, model)
 
-        # print(flow_up.shape, flow_low.shape)
-
         yield (imfile1, imfile2), (flow_low, flow_up)
 
 
@@ -62,9 +60,7 @@ def visualize_flow_with_images(image1, image2, flow_up):
 
     step = max(width, height) // 20
 
-    r = max(height // 400, 1) # radius of the drawn point
-
-    # breakpoint()
+    r = max(height // 400, 1)  # radius of the drawn point
 
     for y in range(step, height, step):
         for x in range(step, width, step):
@@ -75,7 +71,8 @@ def visualize_flow_with_images(image1, image2, flow_up):
             end_up = (x - shift_up_x, y + shift_up_y)
 
             draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
-            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r), fill='green')
+            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r),
+                          fill='green')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
@@ -94,7 +91,7 @@ def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path
 
         # map flow to rgb image
         flow_up_img = flow_viz.flow_to_image(flow_up)
-        flow_low_img = flow_viz.flow_to_image(flow_low)
+        # flow_low_img = flow_viz.flow_to_image(flow_low)
 
         file1_stem = Path(filename1).stem
         file2_stem = Path(filename2).stem
