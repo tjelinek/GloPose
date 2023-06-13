@@ -74,10 +74,14 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight > 0:
-            observed_flow = flow_segment_masks * observed_flow
-            observed_flow = observed_flow[:, -2:-1].permute(0, 1, 3, 4, 2)
+            observed_flow *= flow_segment_masks
+            observed_flow = observed_flow.permute(0, 1, 3, 4, 2)
 
-            flow_from_tracking = flow_from_tracking[:, -2:-1]
+            observed_flow[..., 0] *= observed_flow.shape[-2] * 0.5
+            observed_flow[..., 1] *= observed_flow.shape[-3] * 0.5
+            flow_from_tracking[..., 0] *= flow_from_tracking.shape[-2] * 0.5
+            flow_from_tracking[..., 1] *= flow_from_tracking.shape[-3] * 0.5
+
             flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2, 3))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
