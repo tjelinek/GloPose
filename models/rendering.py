@@ -118,6 +118,17 @@ class RenderingKaolin(nn.Module):
         return all_renders
 
     def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames):
+        """
+        Computes the theoretical flow between consecutive frames.
+
+        Args:
+            encoder_out (EncoderResult): The encoder result for the current frame.
+            encoder_out_prev_frames (EncoderResult): The encoder results for the previous frames.
+
+        Returns:
+            torch.Tensor: The computed theoretical flow between consecutive frames. The output flow is respective to the
+                          coordinates range [-1, 1].
+        """
         theoretical_flows = []
         rendering_masks = []
         for frame_i in range(0, encoder_out.quaternions.shape[1]):
