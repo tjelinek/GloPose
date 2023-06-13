@@ -5,11 +5,14 @@ import torch
 from kornia.geometry import quaternion_to_rotation_matrix
 from pathlib import Path
 
+from RAFT.core.utils import flow_viz
+from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils import quaternion_from_euler, deg_to_rad
 
 
-def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination):
+def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, rendering_destination,
+                         segmentation_destination, optical_flow_destination):
     """
     Generate and save rendering and segmentation images.
 
@@ -22,6 +25,8 @@ def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destin
         ren_mask (torch.Tensor): A tensor representing the mask of the rendered object.
         rendering_destination (Path): The destination directory where the rendered image will be saved.
         segmentation_destination (Path): The destination directory where the mask image will be saved.
+        optical_flow (Tensor): Saved theoretical optical flow Tensor
+        optical_flow_destination (Path): The destination directory where the optical flow Tensor will be saved.
 
     Returns:
         None
@@ -30,8 +35,11 @@ def generate_and_save_images(image_idx, ren_features, ren_mask, rendering_destin
     i_str = format(image_idx, '03d')
     rendering_file_name = rendering_destination / (i_str + '.png')
     segmentation_file_name = segmentation_destination / (i_str + '.png')
+    optical_flow_file_name = optical_flow_destination / (i_str + '.pt')
     ren_mask_np = ren_mask.cpu().numpy().astype('uint8')[0] * 255
     ren_mask_np_rep = np.tile(ren_mask_np, (3, 1, 1)).transpose((1, 2, 0))
+    # flow_image = flow_viz.flow_to_image(optical_flow)
+    torch.save(optical_flow, optical_flow_file_name)
     imageio.imwrite(segmentation_file_name, ren_mask_np_rep)
     imageio.imwrite(rendering_file_name, ren_features_np)
 
@@ -78,11 +86,12 @@ def generate_1_DoF_rotation(step=10.0):
     return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
 
 
-def generate_rotating_textured_object(config, prototype_path, rendering_destination: Path,
-                                      segmentation_destination: Path, texture_path: Path, width, height, DEVICE='cuda',
-                                      rotations=None):
+def generate_rotating_textured_object(config, prototype_path, texture_path: Path, rendering_destination: Path,
+                                      segmentation_destination: Path, optical_flow_destination, width, height,
+                                      DEVICE='cuda', rotations=None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
+    optical_flow_destination.mkdir(parents=True, exist_ok=True)
 
     tex = imageio.imread(str(texture_path))
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
@@ -100,18 +109,46 @@ def generate_rotating_textured_object(config, prototype_path, rendering_destinat
     if rotations is None:
         rotations = generate_1_DoF_rotation(2.0)
 
-    for i, (pitch, roll, yaw) in enumerate(rotations):
+    render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
+                        rendering_destination, segmentation_destination, DEVICE)
+
+
+def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
+                        rendering_destination, segmentation_destination, DEVICE):
+    prev_encoder_result = None
+    for frame_i, (pitch, roll, yaw) in enumerate(rotations):
         rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
                                                     pitch=torch.Tensor([deg_to_rad(pitch)]),
                                                     yaw=torch.Tensor([deg_to_rad(yaw)]))
+        rotation_quaternion_tensor = torch.Tensor(rotation_quaternion)
 
         rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
+
+        current_encoder_result = EncoderResult(translations=rendering.obj_center[None, None].to(DEVICE),
+                                               quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
+                                               vertices=vertices.to(DEVICE),
+                                               texture_maps=None,
+                                               lights=None,
+                                               translation_difference=None,
+                                               quaternion_difference=None)
+
+        if prev_encoder_result is None:
+            prev_encoder_result = current_encoder_result
 
         with torch.no_grad():
             rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
                                                                rendering.obj_center, vertices.to(DEVICE))
 
-            ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
-                                                              texture_maps, mode='bilinear')
-            generate_and_save_images(i, ren_features, rendering_result.ren_mask,
-                                     rendering_destination, segmentation_destination)
+            optical_flow = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
+
+            if texture_maps is not None:
+                ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
+                                                                  texture_maps, mode='bilinear')
+            else:
+                ren_features = rendering_result.ren_mesh_vertices_features
+
+            save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,
+                                 optical_flow.detach().cpu(), rendering_destination,
+                                 segmentation_destination, optical_flow_destination)
+
+        prev_encoder_result = current_encoder_result

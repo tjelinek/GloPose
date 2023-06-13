@@ -1,27 +1,25 @@
+import kaolin
+import torch
 import types
 import warnings
 from pathlib import Path
 
-import torch
-import kaolin
-from kornia.geometry import quaternion_to_rotation_matrix
-
-from models.initial_mesh import sphere_to_cube
-from dataset_generators.generator_utils import setup_renderer, generate_and_save_images, generate_1_DoF_rotation, \
-    generate_rotating_textured_object, generate_2_DoF_rotations
-from utils import quaternion_from_euler, deg_to_rad, load_config
+from dataset_generators.generator_utils import setup_renderer, generate_1_DoF_rotation, \
+    generate_rotating_textured_object, render_object_poses
 from main_settings import dataset_folder
+from utils import load_config
 
 warnings.filterwarnings("ignore")
 
 
-def generate_8_colored_sphere(config, rendering_destination, segmentation_destination):
+def generate_8_colored_sphere(config, rendering_destination, segmentation_destination, optical_flow_destination):
     prototype_path = Path('./prototypes/sphere.obj')
     DEVICE = 'cuda'
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
+    optical_flow_destination.mkdir(parents=True, exist_ok=True)
 
     colors = [
         [255, 0, 0],  # red
@@ -46,36 +44,23 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
     rendering = setup_renderer(config, faces, height, width, DEVICE)
 
-    translation = torch.zeros((1, 3))[None]
     face_features = vertices_features[mesh.faces][None]
 
     rotations = generate_1_DoF_rotation(step=2.0)
 
-    for i, (yaw, pitch, roll) in enumerate(rotations):
-        rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
-                                                    pitch=torch.Tensor([deg_to_rad(pitch)]),
-                                                    yaw=torch.Tensor([deg_to_rad(yaw)]))
-
-        rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
-
-        with torch.no_grad():
-            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                               translation.to(DEVICE), mesh.vertices.to(DEVICE))
-
-            ren_mask = rendering_result.ren_mask
-            ren_features = rendering_result.ren_mesh_vertices_features
-
-            generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
-                                     segmentation_destination)
+    # Render the object without using texture maps
+    render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
+                        rendering_destination, segmentation_destination, DEVICE)
 
 
-def generate_6_colored_cube(config, rendering_destination, segmentation_destination):
+def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination):
     DEVICE = 'cuda'
     width = 1000
     height = 1000
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
+    optical_flow_destination.mkdir(parents=True, exist_ok=True)
 
     colors = [
         [255, 0, 0],  # red
@@ -118,34 +103,21 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
     rotations = generate_1_DoF_rotation(step=2.0)
 
-    for i, (yaw, pitch, roll) in enumerate(rotations):
-        rotation_quaternion = quaternion_from_euler(torch.tensor([deg_to_rad(roll)]),
-                                                    torch.tensor([deg_to_rad(pitch)]),
-                                                    torch.tensor([deg_to_rad(yaw)]))
-
-        rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
-
-        with torch.no_grad():
-            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE),
-                                                               rotation_matrix.to(DEVICE),
-                                                               translation.to(DEVICE),
-                                                               vertices.to(DEVICE), )
-            ren_mask = rendering_result.ren_mask
-            ren_features = rendering_result.ren_mesh_vertices_features
-
-            generate_and_save_images(i, ren_features, ren_mask, rendering_destination,
-                                     segmentation_destination)
+    # Render the object without using texture maps
+    render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
+                        rendering_destination, segmentation_destination, DEVICE)
 
 
-def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path):
+def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path,
+                             optical_flow_destination):
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
     width = 1000
     height = 1000
 
-    generate_rotating_textured_object(config, prototype_path, rendering_destination, segmentation_destination, tex_path,
-                                      width, height)
+    generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
+                                      optical_flow_destination, width, height)
 
 
 if __name__ == '__main__':
@@ -155,15 +127,19 @@ if __name__ == '__main__':
     synthetic_dataset_folder = dataset_folder / Path('SyntheticObjects')
     rendering_dir = Path('renderings')
     segmentation_dir = Path('segmentations')
+    optical_flow_dir = Path('optical_flow')
 
     rendering_path = synthetic_dataset_folder / Path('Textured_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('Textured_Sphere') / segmentation_dir
-    generate_textured_sphere(_config, rendering_path, segmentation_path)
+    optical_flow_path = synthetic_dataset_folder / Path('Textured_Sphere') / optical_flow_dir
+    generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path)
 
     rendering_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / segmentation_dir
-    generate_8_colored_sphere(_config, rendering_path, segmentation_path)
+    optical_flow_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / optical_flow_dir
+    generate_8_colored_sphere(_config, rendering_path, segmentation_path, optical_flow_path)
 
     rendering_path = synthetic_dataset_folder / Path('6_Colored_Cube') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('6_Colored_Cube') / segmentation_dir
-    generate_6_colored_cube(_config, rendering_path, segmentation_path)
+    optical_flow_path = synthetic_dataset_folder / Path('6_Colored_Cube') / optical_flow_dir
+    generate_6_colored_cube(_config, rendering_path, segmentation_path, optical_flow_path)

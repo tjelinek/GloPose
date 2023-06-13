@@ -27,12 +27,13 @@ def dataset_from_google_research(config, dataset_path: Path):
 
             segmentation_destination = dataset_path / Path('segmentations') / file
             rendering_destination = dataset_path / Path('renderings') / file
+            optical_flow_destination = dataset_path / Path('optical_flow') / file
 
             width = 1506
             height = 2000
 
-            generate_rotating_textured_object(config, mesh_path, rendering_destination, segmentation_destination,
-                                              texture_path, width, height)
+            generate_rotating_textured_object(config, mesh_path, texture_path, rendering_destination,
+                                              segmentation_destination, optical_flow_destination, width, height)
 
 
 if __name__ == '__main__':
