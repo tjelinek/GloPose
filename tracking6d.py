@@ -13,6 +13,7 @@ from torch import nn
 from torchvision.utils import save_image
 from typing import List
 
+from GMA.core.utils import flow_viz
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults
 from flow import get_flow_from_images, visualize_flow_with_images
@@ -463,7 +464,7 @@ class Tracking6D:
                 torch.nn.utils.clip_grad_norm(parameters=self.rendering.parameters(), max_norm=1.0, norm_type=2.0)
                 self.optimizer.step()
 
-        self.visualize_theoretical_flow(theoretical_flow, keyframes, step_i)
+        self.visualize_theoretical_flow(theoretical_flow, observed_flows[:, -1], keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -473,7 +474,7 @@ class Tracking6D:
 
         return frame_result
 
-    def visualize_theoretical_flow(self, theoretical_flow, opt_frames, stepi):
+    def visualize_theoretical_flow(self, theoretical_flow, observed_flow, opt_frames, stepi):
         b0 = get_bbox(self.segments)
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
         translation_prime, quaternion_prime, vertices_prime, \
@@ -489,6 +490,9 @@ class Tracking6D:
         previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
         theoretical_flow_path = self.write_folder / Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) +
                                                          '.png')
+        flow_difference_magnitude_path = self.write_folder / Path('flow_difference_magnitude_' + str(stepi) +
+                                                                  '_' + str(stepi + 1) + '.png')
+        flow_difference_path = self.write_folder / Path('flow_difference_' + str(stepi) + '_' + str(stepi + 1) + '.png')
         rendering_1_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
         rendering_2_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
 
@@ -502,6 +506,16 @@ class Tracking6D:
         # theoretical_flow[..., 1] *= 0.5 * theoretical_flow.shape[-2]
         flow_render_up_ = theoretical_flow[:, -1].detach().cpu()[0].permute(2, 0, 1)
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
+
+        flow_difference = theoretical_flow[:, -1] - observed_flow.permute(0, 2, 3, 1)
+        flow_difference_np = flow_difference.detach().cpu().numpy()
+        flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
+
+        flow_difference_magnitude = flow_difference.norm(dim=-1)[0]
+        flow_difference_magnitude /= flow_difference_magnitude.max()
+        imageio.imwrite(flow_difference_magnitude_path,
+                        (flow_difference_magnitude.detach().cpu() * 255).to(torch.uint8))
+
         # Convert the resized tensor back to a NumPy array and remove the batch dimension
         theoretical_flow_up_ = theoretical_flow_up_.detach().cpu().numpy()  # Remove batch dimension
         # Select the first channel
@@ -509,6 +523,7 @@ class Tracking6D:
         flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
                                                        current_rendered_image_rgb[0], theoretical_flow_up_)
         imageio.imwrite(theoretical_flow_path, flow_illustration)
+        imageio.imwrite(flow_difference_path, flow_difference_image)
 
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks, opt_frames):
         self.best_model["value"] = 100
