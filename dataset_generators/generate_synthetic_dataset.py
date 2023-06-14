@@ -38,15 +38,15 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
         color_code = [vertex[0] > 0, vertex[1] > 0, vertex[2] > 0]
         vertices_features[i] = torch.tensor(colors[color_code[0] + 2 * color_code[1] + 4 * color_code[2]])
 
-    width = 1000
-    height = 1000
+    width = 2000
+    height = 2000
     faces = mesh.faces
 
     rendering = setup_renderer(config, faces, height, width, DEVICE)
 
     face_features = vertices_features[mesh.faces][None]
 
-    rotations = generate_1_DoF_rotation(step=2.0)
+    rotations = generate_1_DoF_rotation(step=10.0)
 
     # Render the object without using texture maps
     render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
@@ -55,8 +55,8 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination):
     DEVICE = 'cuda'
-    width = 1000
-    height = 1000
+    width = 2000
+    height = 2000
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
         face_features[0, i, :, :] = torch.tensor(color)
 
-    rotations = generate_1_DoF_rotation(step=2.0)
+    rotations = generate_1_DoF_rotation(step=10.0)
 
     # Render the object without using texture maps
     render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
@@ -113,8 +113,8 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
-    width = 1000
-    height = 1000
+    width = 2000
+    height = 2000
 
     generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
                                       optical_flow_destination, width, height)
