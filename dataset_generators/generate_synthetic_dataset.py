@@ -46,7 +46,7 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
     face_features = vertices_features[mesh.faces][None]
 
-    rotations = generate_1_DoF_rotation(step=10.0)
+    rotations = generate_1_DoF_rotation(step=2.0)
 
     # Render the object without using texture maps
     render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
@@ -101,7 +101,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
         face_features[0, i, :, :] = torch.tensor(color)
 
-    rotations = generate_1_DoF_rotation(step=10.0)
+    rotations = generate_1_DoF_rotation(step=2.0)
 
     # Render the object without using texture maps
     render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
