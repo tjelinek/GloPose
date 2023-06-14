@@ -10,7 +10,7 @@ if not os.path.exists(dataset_folder):
 
 # TODO: put your paths here:
 if not os.path.exists(dataset_folder):
-	dataset_folder = str(Path('~/data/').expanduser())
+	dataset_folder = str(Path('/mnt/personal/jelint19/data/').expanduser())
 	tmp_folder = str(Path('/mnt/personal/jelint19/results/FlowTracker/').expanduser())
 
 g_tbd_folder = dataset_folder+'TbD/'
