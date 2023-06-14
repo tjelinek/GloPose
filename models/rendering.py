@@ -177,7 +177,8 @@ class RenderingKaolin(nn.Module):
                                                                                      boxlen=0.02, knum=30,
                                                                                      multiplier=1000)
 
-            theoretical_flow = ren_outputs  # torch.Size([1, 134, 134, 2])
+            theoretical_flow = ren_outputs  # torch.Size([1, H, W, 2])
+
             theoretical_flows.append(theoretical_flow)
 
             rendering_masks.append(ren_mask)
