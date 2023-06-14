@@ -55,6 +55,7 @@ def main():
 
         renderings_folder = 'renderings'
         segmentations_folder = 'segmentations'
+        optical_flows_folder = 'optical_flow'
 
         t0 = time.time()
 
@@ -63,10 +64,12 @@ def main():
         files.sort()
         segms = np.array(
             glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, segmentations_folder, '*.*')))
+        optical_flows = np.array(
+            glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, optical_flows_folder, '*.*')))
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(args, config, files, segms, write_folder)
+        run_tracking_on_sequence(args, config, files, segms, write_folder, optical_flows)
 
 
 if __name__ == "__main__":

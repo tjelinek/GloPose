@@ -10,7 +10,7 @@ sys.path.append('OSTrack/S2DNet')
 from tracking6d import Tracking6D
 
 
-def run_tracking_on_sequence(args, config, files, segms, write_folder):
+def run_tracking_on_sequence(args, config, files, segms, write_folder, optical_flows=None):
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
     print("Running tracking on dataset:", write_folder_path.parent.name)
@@ -21,6 +21,8 @@ def run_tracking_on_sequence(args, config, files, segms, write_folder):
         args.length = len(files)
     files = files[args.start:args.length:args.skip]
     segms = segms[args.start:args.length:args.skip]
+    if optical_flows is not None:
+        optical_flows = optical_flows[args.start:args.length:args.skip]
     config["input_frames"] = len(files)
     if config["inc_step"] == 0:
         config["inc_step"] = len(files)
@@ -31,11 +33,10 @@ def run_tracking_on_sequence(args, config, files, segms, write_folder):
     t0 = time.time()
 
     sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
-    best_model = sfb.run_tracking(files, baseline_dict)
-    print(
-        '{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"],
-                                                                          (time.time() - t0) / 1,
-                                                                          best_model["value"]))
+    best_model = sfb.run_tracking(files, baseline_dict, optical_flows)
+    print('{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"],
+                                                                            (time.time() - t0) / 1,
+                                                                            best_model["value"]))
 
 
 def parse_args(sequence, dataset, folder_name=None):

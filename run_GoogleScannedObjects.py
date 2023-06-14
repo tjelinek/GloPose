@@ -61,7 +61,7 @@ def main():
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(args, config, files, segms, write_folder)
+        run_tracking_on_sequence(args, config, files, segms, write_folder, None)
 
 
 if __name__ == "__main__":

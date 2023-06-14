@@ -10,6 +10,7 @@ import time
 import torch
 from pathlib import Path
 from torch import nn
+import torchvision.transforms as transforms
 from torchvision.utils import save_image
 from typing import List
 
@@ -220,7 +221,7 @@ class Tracking6D:
         self.keyframes = [0]
         self.flow_keyframes = [0]
 
-    def run_tracking(self, files, bboxes):
+    def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
         if type(bboxes) is dict:
             sorted_bb_keys = sorted(list(bboxes.keys()))
@@ -237,6 +238,8 @@ class Tracking6D:
 
         observed_flows = self.segments * 0
         flow_segment_masks = self.segments * 0
+
+        resize_transform = transforms.Resize(self.images.shape[-2:])
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
@@ -275,10 +278,19 @@ class Tracking6D:
                                                           qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
 
             with torch.no_grad():
-                flow_video_low, flow_video_up = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
-                observed_flow = flow_video_up
-                observed_flow[:, 0, ...] /= 0.5 * observed_flow.shape[-2]
-                observed_flow[:, 1, ...] /= 0.5 * observed_flow.shape[-1]
+                if gt_flows is None:
+                    _, flow_video_up = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
+                    observed_flow = flow_video_up
+                    observed_flow[:, 0, ...] /= 0.5 * observed_flow.shape[-2]
+                    observed_flow[:, 1, ...] /= 0.5 * observed_flow.shape[-1]
+                else:  # We have ground truth flow annotations
+                    # The annotations are assumed to be already in the [-1, 1] coordinate range
+                    flow_video_up = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
+                    flow_video_up = flow_video_up.permute(0, 3, 1, 2)
+                    flow_video_up = resize_transform(flow_video_up)
+                    observed_flow = flow_video_up.clone()
+                    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * (0.5 * flow_video_up.shape[-1])
+                    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * (0.5 * flow_video_up.shape[-2])
 
                 flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
                 observed_flows = torch.cat((observed_flows, observed_flow[None]), dim=1)
