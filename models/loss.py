@@ -41,6 +41,8 @@ class FMOLoss(nn.Module):
                 temp_loss = self.config.loss_iou_weight * fmo_loss(renders[:, frmi], segments[:, frmi, None])
                 losses_all["silh"].append(temp_loss.tolist()[0])
                 losses["silh"] = losses["silh"] + temp_loss / denom
+        else:  # The code crushes if no silhouette loss is provided
+            losses["silh"] = torch.Tensor([0.0])
         if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
             losses["lap"] = self.config.loss_laplacian_weight * self.lapl_loss(vertices)
 
