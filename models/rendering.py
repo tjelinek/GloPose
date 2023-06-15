@@ -165,7 +165,7 @@ class RenderingKaolin(nn.Module):
             face_normals_z_1 = face_normals_1[:, :, -1]
 
             face_vertices_3d_motion = face_vertices_cam_2 - face_vertices_cam_1
-            face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1
+            face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
             features_for_rendering = face_vertices_image_motion
 
             ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
@@ -178,13 +178,17 @@ class RenderingKaolin(nn.Module):
                                                                                      multiplier=1000)
 
             theoretical_flow = ren_outputs  # torch.Size([1, H, W, 2])
+            theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
+            theoretical_flow_new[:, :, :, 0] = theoretical_flow[:, :, :, 0]
+            theoretical_flow_new[:, :, :, 1] = -theoretical_flow[:, :, :, 1]  # Correction for transform into image
+            theoretical_flow = theoretical_flow_new
 
             theoretical_flows.append(theoretical_flow)
 
             rendering_masks.append(ren_mask)
 
-        theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, 134, 134, 2])
-        # flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, 134, 134])
+        theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
+        # flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, H, W])
 
         return theoretical_flow
 
@@ -224,8 +228,8 @@ class RenderingKaolin(nn.Module):
                                                     face_features.shape[-1] + face_vertices_cam.shape[-1]]
         ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:]
 
-        if ren_mesh_vertices_coords.requires_grad:
-            ren_mesh_vertices_coords.register_hook(lambda grad: torch.clamp(grad, -1.0, 1.0))
+        # if ren_mesh_vertices_coords.requires_grad:
+        #     ren_mesh_vertices_coords.register_hook(lambda grad: torch.clamp(grad, -1.0, 1.0))
 
         return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
                                 ren_mesh_vertices_features, ren_mesh_vertices_coords,
