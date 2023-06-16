@@ -243,7 +243,6 @@ class Tracking6D:
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
-            self.config.loss_flow_weight = 0
 
             image_raw, segment = self.tracker.next(files[stepi])
 
@@ -452,9 +451,6 @@ class Tracking6D:
             else:
                 iters_without_change += 1
 
-            if epoch > 1 and self.config.loss_flow_weight == 0:
-                self.config.loss_flow_weight = self.config_copy.loss_flow_weight
-
             if self.config.loss_rgb_weight == 0:
                 if epoch > 100 or model_loss < 0.1:
                     self.config.loss_rgb_weight = 1.0
@@ -470,7 +466,8 @@ class Tracking6D:
                 jloss.backward()
                 self.optimizer.step()
 
-        self.visualize_theoretical_flow(theoretical_flow, observed_flows[:, -1], keyframes, step_i)
+        self.visualize_theoretical_flow(theoretical_flow.clone().detach(),
+                                        observed_flows[:, -1].clone().detach(), keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -531,6 +528,7 @@ class Tracking6D:
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
 
         flow_difference = theoretical_flow[:, -1] - observed_flow_new
+        # breakpoint()
         flow_difference_np = flow_difference.detach().cpu().numpy()
         flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
 
