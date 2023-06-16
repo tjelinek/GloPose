@@ -141,13 +141,13 @@ class RenderingKaolin(nn.Module):
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
             # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_frames.vertices,
+            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out.vertices,
                                                                       rotation_matrix_1, self.obj_center)
-            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_frames.vertices,
+            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out.vertices,
                                                                       rotation_matrix_2, self.obj_center)
 
-            vertices_1 += translation_vector_1
-            vertices_2 += translation_vector_2
+            vertices_1 = vertices_1 + translation_vector_1
+            vertices_2 = vertices_2 + translation_vector_2
 
             face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepare_vertices(vertices_1, self.faces,
                                                                                           self.camera_rot,
