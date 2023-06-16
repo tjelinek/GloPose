@@ -74,15 +74,18 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight > 0:
-            observed_flow = observed_flow * flow_segment_masks
-            observed_flow = observed_flow.permute(0, 1, 3, 4, 2)
+            observed_flow_clone = observed_flow.clone()
+            observed_flow_clone = observed_flow_clone * flow_segment_masks
+            observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
-            observed_flow[..., 0] *= observed_flow.shape[-2]  # * 0.5 - this was a bad correction parameter
-            observed_flow[..., 1] *= observed_flow.shape[-3]  # * 0.5 - this was a bad correction parameter
-            flow_from_tracking[..., 0] *= flow_from_tracking.shape[-2] * 0.5
-            flow_from_tracking[..., 1] *= flow_from_tracking.shape[-3] * 0.5
+            observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
+            observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
 
-            flow_loss = torch.norm(observed_flow - flow_from_tracking, dim=-1).mean((1, 2, 3))
+            flow_from_tracking_clone = flow_from_tracking.clone()
+            flow_from_tracking_clone[..., 0] *= flow_from_tracking_clone.shape[-2] * 0.5
+            flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3] * 0.5
+
+            flow_loss = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1).mean((1, 2, 3))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         if self.config.loss_texture_change_weight > 0:
