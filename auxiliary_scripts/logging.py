@@ -38,7 +38,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     flow_video_up = observed_flow
     flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * (0.5 * flow_video_up.shape[-1])
     flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * (0.5 * flow_video_up.shape[-2])
-    flow_video_up = flow_video_up.permute(1, 2, 0).cpu().numpy()
+    flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().numpy()
 
     flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
     image_small_dims = image.shape[-2], image.shape[-1]
