@@ -19,12 +19,12 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images
 
 
-def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi, output_dir):
+def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, output_dir):
     """
     Visualize optical flow between two images and save the results as image files.
 
     Args:
-        flow_video_up (torch.Tensor): Upsampled optical flow tensor.
+        observed_flow (torch.Tensor): Optical flow w.r.t. the image coordinate system [-1, 1]. Tensor must be detached.
         image (torch.Tensor): Original image tensor.
         image_new (torch.Tensor): New (second) image tensor.
         image_prev (torch.Tensor): Previous (first) image tensor.
@@ -35,6 +35,11 @@ def visualize_flow(flow_video_up, image, image_new, image_prev, segment, stepi, 
     Returns:
         None. The function saves multiple visualization images to the disk.
     """
+    flow_video_up = observed_flow
+    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * (0.5 * flow_video_up.shape[-1])
+    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * (0.5 * flow_video_up.shape[-2])
+    flow_video_up = flow_video_up.permute(1, 2, 0).cpu().numpy()
+
     flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
     image_small_dims = image.shape[-2], image.shape[-1]
     flow_image_small = transforms.Resize(image_small_dims)(flow_image)

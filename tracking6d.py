@@ -279,20 +279,15 @@ class Tracking6D:
 
             with torch.no_grad():
                 if gt_flows is None:
-                    _, flow_video_up = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
-                    observed_flow = flow_video_up
-                    observed_flow[:, 0, ...] /= 0.5 * observed_flow.shape[-2]
-                    observed_flow[:, 1, ...] /= 0.5 * observed_flow.shape[-1]
+                    _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
+                    observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / (0.5 * observed_flow.shape[-2])
+                    observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / (0.5 * observed_flow.shape[-1])
                 else:  # We have ground truth flow annotations
                     # The annotations are assumed to be already in the [-1, 1] coordinate range
-                    flow_video_up = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
-                    flow_video_up = flow_video_up.permute(0, 3, 1, 2)
-                    flow_video_up = resize_transform(flow_video_up)
-                    observed_flow = flow_video_up.clone()
-                    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * (0.5 * flow_video_up.shape[-1])
-                    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * (0.5 * flow_video_up.shape[-2])
+                    observed_flow = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
+                    observed_flow = observed_flow.permute(0, 3, 1, 2)
+                    observed_flow = resize_transform(observed_flow)
 
-                flow_video_up_np = flow_video_up[0].detach().cpu().permute(1, 2, 0).numpy()
                 observed_flows = torch.cat((observed_flows, observed_flow[None]), dim=1)
                 flow_segment_masks = torch.cat((flow_segment_masks, prev_segment[None]), dim=1)
 
@@ -321,8 +316,9 @@ class Tracking6D:
             if self.config.write_results:
                 write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses, stepi, observed_flows,
                                             encoder_result, flow_segment_masks)
+
                 # Visualize flow we get from the video
-                visualize_flow(flow_video_up_np, image, image_new_x255, image_prev_x255, segment, stepi,
+                visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment, stepi,
                                self.write_folder)
 
             keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
@@ -487,6 +483,24 @@ class Tracking6D:
         return frame_result
 
     def visualize_theoretical_flow(self, theoretical_flow, observed_flow, opt_frames, stepi):
+        """
+        Visualizes the theoretical flow and related images for a given step.
+
+        Args:
+            theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
+                                             image coordinates.
+            observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
+                                          coordinates.
+            opt_frames (list): List of optical flow frames.
+            stepi (int): Step index.
+
+        Returns:
+            None
+        """
+        observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
+        observed_flow_new[..., 0] *= observed_flow.shape[-1] * 2.0
+        observed_flow_new[..., 1] *= observed_flow.shape[-2] * 2.0
+        breakpoint()
         b0 = get_bbox(self.segments)
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
         translation_prime, quaternion_prime, vertices_prime, \
@@ -519,7 +533,7 @@ class Tracking6D:
         flow_render_up_ = theoretical_flow[:, -1].detach().cpu()[0].permute(2, 0, 1)
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
 
-        flow_difference = theoretical_flow[:, -1] - observed_flow.permute(0, 2, 3, 1)
+        flow_difference = theoretical_flow[:, -1] - observed_flow_new
         flow_difference_np = flow_difference.detach().cpu().numpy()
         flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
 
