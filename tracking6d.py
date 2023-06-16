@@ -471,9 +471,9 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        frame_result = self.FrameResult(theoretical_flow=theoretical_flow.detach().clone(),
+        frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
-                                        renders=renders.detach().clone())
+                                        renders=renders)
 
         return frame_result
 
@@ -522,13 +522,13 @@ class Tracking6D:
             'uint8')
         imageio.imwrite(rendering_1_path, prev_img_np)
         imageio.imwrite(rendering_2_path, new_img_np)
-        # theoretical_flow[..., 0] *= 0.5 * theoretical_flow.shape[-3]
-        # theoretical_flow[..., 1] *= 0.5 * theoretical_flow.shape[-2]
-        flow_render_up_ = theoretical_flow[:, -1].detach().cpu()[0].permute(2, 0, 1)
+        theoretical_flow_new = theoretical_flow.clone().detach()
+        theoretical_flow_new[..., 0] *= 0.5 * theoretical_flow_new.shape[-3]
+        theoretical_flow_new[..., 1] *= 0.5 * theoretical_flow_new.shape[-2]
+        flow_render_up_ = theoretical_flow_new[:, -1].cpu()[0].permute(2, 0, 1)
         theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
 
-        flow_difference = theoretical_flow[:, -1] - observed_flow_new
-        # breakpoint()
+        flow_difference = theoretical_flow_new[:, -1] - observed_flow_new
         flow_difference_np = flow_difference.detach().cpu().numpy()
         flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
 
