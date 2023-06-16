@@ -468,8 +468,6 @@ class Tracking6D:
                 jloss = jloss.mean()
                 self.optimizer.zero_grad()
                 jloss.backward()
-                torch.nn.utils.clip_grad_norm(parameters=self.encoder.parameters(), max_norm=1.0, norm_type=2.0)
-                torch.nn.utils.clip_grad_norm(parameters=self.rendering.parameters(), max_norm=1.0, norm_type=2.0)
                 self.optimizer.step()
 
         self.visualize_theoretical_flow(theoretical_flow, observed_flows[:, -1], keyframes, step_i)
@@ -500,7 +498,6 @@ class Tracking6D:
         observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
         observed_flow_new[..., 0] *= observed_flow.shape[-1] * 2.0
         observed_flow_new[..., 1] *= observed_flow.shape[-2] * 2.0
-        breakpoint()
         b0 = get_bbox(self.segments)
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
         translation_prime, quaternion_prime, vertices_prime, \
