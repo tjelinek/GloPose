@@ -471,9 +471,9 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
+        frame_result = self.FrameResult(theoretical_flow=theoretical_flow.detach().clone(),
                                         encoder_result=encoder_result,
-                                        renders=renders)
+                                        renders=renders.detach().clone())
 
         return frame_result
 
