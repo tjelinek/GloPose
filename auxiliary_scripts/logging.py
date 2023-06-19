@@ -92,7 +92,8 @@ class WriteResults:
     def write_results(self, tracking6d, b0, bboxes, our_losses, segment, silh_losses, stepi, observed_flows,
                       encoder_result, flow_segment_masks):
 
-        detached_result = EncoderResult(*[it.detach() if type(it) is torch.Tensor else it for it in encoder_result])
+        detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
+                                          for it in encoder_result])
         if tracking6d.config.features == 'deep':
             tracking6d.rgb_apply(tracking6d.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                  tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
