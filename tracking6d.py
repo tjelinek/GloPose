@@ -9,15 +9,13 @@ import os
 import time
 import torch
 from pathlib import Path
-from torch import nn
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 from typing import List
 
-from GMA.core.utils import flow_viz
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.logging import visualize_flow, WriteResults
-from flow import get_flow_from_images, visualize_flow_with_images
+from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow
+from flow import get_flow_from_images
 from flow_raft import get_flow_model
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
@@ -466,8 +464,8 @@ class Tracking6D:
                 jloss.backward()
                 self.optimizer.step()
 
-        self.visualize_theoretical_flow(theoretical_flow.clone().detach(),
-                                        observed_flows[:, -1].clone().detach(), keyframes, step_i)
+        visualize_theoretical_flow(self, theoretical_flow.clone().detach(), observed_flows[:, -1].clone().detach(),
+                                   keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -476,75 +474,6 @@ class Tracking6D:
                                         renders=renders)
 
         return frame_result
-
-    def visualize_theoretical_flow(self, theoretical_flow, observed_flow, opt_frames, stepi):
-        """
-        Visualizes the theoretical flow and related images for a given step.
-
-        Args:
-            theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
-                                             image coordinates.
-            observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
-                                          coordinates.
-            opt_frames (list): List of optical flow frames.
-            stepi (int): Step index.
-
-        Returns:
-            None
-        """
-        observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
-        observed_flow_new[..., 0] *= observed_flow.shape[-1] * 2.0
-        observed_flow_new[..., 1] *= observed_flow.shape[-2] * 2.0
-        b0 = get_bbox(self.segments)
-        opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
-        translation_prime, quaternion_prime, vertices_prime, \
-            texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = self.encoder(opt_frames_prime)
-        tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map) if self.gt_texture is None else self.gt_texture
-        # Render the image given the estimated shape of it
-        rendered_keyframe_images, _ = self.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
-                                                              translation_prime, vertices_prime)
-        # The rendered images return renders of all keyframes, the previous and the current image
-        current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
-        previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
-        current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
-        previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
-        theoretical_flow_path = self.write_folder / Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) +
-                                                         '.png')
-        flow_difference_magnitude_path = self.write_folder / Path('flow_difference_magnitude_' + str(stepi) +
-                                                                  '_' + str(stepi + 1) + '.png')
-        flow_difference_path = self.write_folder / Path('flow_difference_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-        rendering_1_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-        rendering_2_path = self.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
-
-        prev_img_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-            'uint8')
-        new_img_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-            'uint8')
-        imageio.imwrite(rendering_1_path, prev_img_np)
-        imageio.imwrite(rendering_2_path, new_img_np)
-        theoretical_flow_new = theoretical_flow.clone().detach()
-        theoretical_flow_new[..., 0] *= 0.5 * theoretical_flow_new.shape[-3]
-        theoretical_flow_new[..., 1] *= 0.5 * theoretical_flow_new.shape[-2]
-        flow_render_up_ = theoretical_flow_new[:, -1].cpu()[0].permute(2, 0, 1)
-        theoretical_flow_up_ = self.write_image_into_bbox(b0, flow_render_up_)
-
-        flow_difference = theoretical_flow_new[:, -1] - observed_flow_new
-        flow_difference_np = flow_difference.detach().cpu().numpy()
-        flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
-
-        flow_difference_magnitude = flow_difference.norm(dim=-1)[0]
-        flow_difference_magnitude /= flow_difference_magnitude.max()
-        imageio.imwrite(flow_difference_magnitude_path,
-                        (flow_difference_magnitude.detach().cpu() * 255).to(torch.uint8))
-
-        # Convert the resized tensor back to a NumPy array and remove the batch dimension
-        theoretical_flow_up_ = theoretical_flow_up_.detach().cpu().numpy()  # Remove batch dimension
-        # Select the first channel
-        theoretical_flow_up_ = theoretical_flow_up_.transpose(1, 2, 0)
-        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
-                                                       current_rendered_image_rgb[0], theoretical_flow_up_)
-        imageio.imwrite(theoretical_flow_path, flow_illustration)
-        imageio.imwrite(flow_difference_path, flow_difference_image)
 
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks, opt_frames):
         self.best_model["value"] = 100
