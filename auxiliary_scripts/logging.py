@@ -9,9 +9,10 @@ from torch import nn
 from pathlib import Path
 from torchvision import transforms
 from torchvision.utils import save_image
+from pytorch3d.transforms import quaternion_to_axis_angle
 
 from segmentations import create_mask_from_string, get_bbox
-from utils import euler_from_quaternion, write_video, segment2bbox
+from utils import write_video, segment2bbox
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from GMA.core.utils import flow_viz
@@ -104,35 +105,33 @@ class WriteResults:
             tex = tracking6d.gt_texture
 
         with torch.no_grad():
-            euler_angles_rads = [euler_from_quaternion(detached_result.quaternions[0, i, 0],
-                                                       detached_result.quaternions[0, i, 1],
-                                                       detached_result.quaternions[0, i, 2],
-                                                       detached_result.quaternions[0, i, 3])
-                                 for i in range(detached_result.quaternions.shape[1])]
 
-            euler_angles_deg = [(rot_x * (180.0 / math.pi),
-                                 rot_y * (180.0 / math.pi),
-                                 rot_z * (180.0 / math.pi)) for (rot_x, rot_y, rot_z) in euler_angles_rads]
+            quaternions = encoder_result.quaternions[0]  # Assuming shape is (1, N, 4)
+
+            # Convert quaternions to Euler angles
+            angles_rad = quaternion_to_axis_angle(quaternions)
+
+            # Convert radians to degrees
+            angles_deg = angles_rad * 180.0 / math.pi
 
             print("Keyframes:", tracking6d.keyframes)
 
-            print("Last estimated rotation:", [(float(euler_angles_deg[-1][i]) - float(euler_angles_deg[0][i]))
+            print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
                                                for i in range(3)])
-            print("Previous estimated rotation:", [(float(euler_angles_deg[-2][i]) - float(euler_angles_deg[0][i]))
+            print("Previous estimated rotation:", [(float(angles_deg[-2][i]) - float(angles_deg[0][i]))
                                                    for i in range(3)])
 
             self.tracking_log.write(f"Step {stepi}:\n")
 
             self.tracking_log.write(f"Keyframes: {tracking6d.keyframes}\n")
 
-            rot_axes = ['roll: ', 'pitch: ', 'yaw: ']
+            rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
 
-            for k in range(detached_result.quaternions.shape[1]):
-                rotations = [rot_axes[i] + str((float(euler_angles_deg[k][i])) - float(euler_angles_deg[0][i]))
+            for k in range(angles_rad.shape[0]):
+                rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
                              for i in range(3)]
 
-                self.tracking_log.write(
-                    f"Keyframe {tracking6d.keyframes[k]} rotation:" + str(rotations) + '\n')
+                self.tracking_log.write(f"Keyframe {tracking6d.keyframes[k]} rotation: " + str(rotations) + '\n')
 
             for k in range(detached_result.quaternions.shape[1]):
                 self.tracking_log.write(
