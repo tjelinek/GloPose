@@ -379,3 +379,12 @@ def consecutive_quaternions_angular_difference(quaternion):
         diff = qnorm(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
         angs.append(float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi)
     return np.array(angs)
+
+
+def consecutive_quaternions_angular_difference2(quaternion):
+    angs = []
+    for qi in range(quaternion.shape[1] - 1):
+        ang = float(torch.acos(torch.dot(quaternion[:, qi], quaternion[:, qi + 1]) /
+                               (quaternion[:, qi].norm() * quaternion[:, qi].norm()))) * 180.0 / np.pi
+        angs.append(ang)
+    return np.array(angs)
