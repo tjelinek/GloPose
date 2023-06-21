@@ -144,6 +144,11 @@ class KeyframeBuffer:
         merged_buffer = KeyframeBuffer()
         merged_buffer.keyframes = all_keyframes
 
+        if buffer1.keyframes is None:
+            return copy.deepcopy(buffer2)
+        elif buffer2.keyframes is None:
+            return copy.deepcopy(buffer1)
+
         for attr_name, attr_type in merged_buffer.__annotations__.items():
             merged_attr = None
             if attr_type is list:
@@ -325,6 +330,7 @@ class Tracking6D:
                                                segments=segments,
                                                observed_flows=observed_flows,
                                                flow_segment_masks=flow_segment_masks)
+        self.recently_flushed_keyframes = KeyframeBuffer()
 
     def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
