@@ -1,15 +1,15 @@
-import math
-from typing import Tuple
-
 import cv2
+import math
 import numpy as np
 import torch
 import yaml
+from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
 from scipy import signal
+from scipy.ndimage import center_of_mass
 from skimage.draw import line_aa
 from skimage.measure import label, regionprops
 from torch import Tensor
-from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
+from typing import Tuple
 
 from main_settings import *
 
@@ -239,7 +239,7 @@ def write_trajectory(Img, traj):
 
 
 def renderTraj(pars, H):
-    ## Input: pars is either 2x2 (line) or 2x3 (parabola)
+    # Input: pars is either 2x2 (line) or 2x3 (parabola)
     if pars.shape[1] == 2:
         pars = np.concatenate((pars, np.zeros((2, 1))), 1)
         ns = 2
@@ -564,6 +564,7 @@ def deg_to_rad(deg):
 def rad_to_deg(rad):
     return 180 * rad / math.pi
 
+
 def compute_trandist(renders):
     masks = renders[0, :, :, -1].cpu().numpy()
     centers = []
@@ -633,4 +634,3 @@ def consecutive_quaternions_angular_difference(quaternion):
         diff = qnorm(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
         angs.append(float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi)
     return np.array(angs)
-
