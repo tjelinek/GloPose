@@ -91,9 +91,8 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
         [2, 6, 7], [7, 3, 2]
     ], dtype=torch.int64)
 
-    rendering = setup_renderer(config, faces, height, width, DEVICE)
+    rendering = setup_renderer(config, faces.numpy(), height, width, DEVICE)
 
-    translation = torch.zeros((1, 3))[None]
     face_features = torch.zeros((1, len(faces), 3, 3))
 
     for i, face in enumerate(faces):
