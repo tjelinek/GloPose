@@ -91,15 +91,16 @@ class WriteResults:
         self.all_proj_filtered.release()
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, segment, silh_losses, stepi, observed_flows,
-                      encoder_result, flow_segment_masks):
+                      encoder_result, flow_segment_masks, segments, images, images_feat,
+                      keyframes):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
         if tracking6d.config.features == 'deep':
-            tracking6d.rgb_apply(tracking6d.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                 tracking6d.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+            tracking6d.rgb_apply(images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                 segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                  observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                 flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], tracking6d.keyframes)
+                                 flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], keyframes)
             tex = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
         if tracking6d.gt_texture is not None:
             tex = tracking6d.gt_texture
@@ -114,7 +115,7 @@ class WriteResults:
             # Convert radians to degrees
             angles_deg = angles_rad * 180.0 / math.pi
 
-            print("Keyframes:", tracking6d.keyframes)
+            print("Keyframes:", keyframes)
 
             print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
                                                for i in range(3)])
@@ -123,7 +124,7 @@ class WriteResults:
 
             self.tracking_log.write(f"Step {stepi}:\n")
 
-            self.tracking_log.write(f"Keyframes: {tracking6d.keyframes}\n")
+            self.tracking_log.write(f"Keyframes: {keyframes}\n")
 
             rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
 
@@ -131,11 +132,11 @@ class WriteResults:
                 rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
                              for i in range(3)]
 
-                self.tracking_log.write(f"Keyframe {tracking6d.keyframes[k]} rotation: " + str(rotations) + '\n')
+                self.tracking_log.write(f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
 
             for k in range(detached_result.quaternions.shape[1]):
                 self.tracking_log.write(
-                    f"Keyframe {tracking6d.keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+                    f"Keyframe {keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
 
             self.tracking_log.write('\n')
             self.tracking_log.flush()
@@ -157,7 +158,7 @@ class WriteResults:
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
             write_renders(torch.cat(
-                (tracking6d.images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
+                (images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
                 tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
             write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
                            tracking6d.encoder.face_features[0].cpu().numpy(),
@@ -177,18 +178,18 @@ class WriteResults:
 
             write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
                         os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
-            write_video(tracking6d.images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
+            write_video(images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
                         os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
             write_video(
-                (tracking6d.images[0, :, :3] * tracking6d.segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
+                (images[0, :, :3] * segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
                 os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
-                img = tracking6d.images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = tracking6d.segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
+                seg = segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
                 save_image(seg, os.path.join(tracking6d.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(tracking6d.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(tracking6d.images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
+                save_image(images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
                            os.path.join(tracking6d.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
                 save_image(torch.cat((img, seg), 0),
                            os.path.join(tracking6d.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
@@ -225,17 +226,17 @@ class WriteResults:
             np.savetxt(os.path.join(tracking6d.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
             np.savetxt(os.path.join(tracking6d.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
             self.all_input.write(
-                (tracking6d.images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
+                (images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
                  [2, 1, 0], -1] * 255).astype(np.uint8))
-            self.all_segm.write(((tracking6d.images[0, :, :3] * tracking6d.segments[0, :, 1:2]).clamp(min=0,
-                                                                                                      max=1).cpu().numpy().transpose(
+            self.all_segm.write(((images[0, :, :3] * segments[0, :, 1:2]).clamp(min=0,
+                                                                                max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
             self.all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
                                                                                                            0)[:, :,
                                  [2, 1, 0], -1] * 255).astype(np.uint8))
             if silh_losses[-1] > 0.3:
                 renders[0, -1, 0, 3] = segment[0, 0, -1]
-                renders[0, -1, 0, :3] = tracking6d.images[0, -1, :3] * segment[0, 0, -1]
+                renders[0, -1, 0, :3] = images[0, -1, :3] * segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
@@ -258,7 +259,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
     observed_flow_new[..., 0] *= observed_flow.shape[-1] * 2.0
     observed_flow_new[..., 1] *= observed_flow.shape[-2] * 2.0
-    b0 = get_bbox(tracking6d.segments)
+    b0 = get_bbox(tracking6d.active_keyframes.segments)
     opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
     translation_prime, quaternion_prime, vertices_prime, \
         texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = tracking6d.encoder(opt_frames_prime)
