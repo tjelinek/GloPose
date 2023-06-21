@@ -326,7 +326,7 @@ class Tracking6D:
             angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
 
             rot_degree_th = 45
-            small_rotation = angles.shape[0] > 1 and angles[-1] < rot_degree_th and angles[-2] < rot_degree_th
+            small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
             if small_rotation:  # and small_translation):
                 keep_keyframes[-1] = True
                 keep_keyframes[-2] = False or self.config.all_frames_keyframes  # Default False
