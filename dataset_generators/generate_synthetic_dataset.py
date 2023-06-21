@@ -12,7 +12,8 @@ from utils import load_config
 warnings.filterwarnings("ignore")
 
 
-def generate_8_colored_sphere(config, rendering_destination, segmentation_destination, optical_flow_destination):
+def generate_8_colored_sphere(config, rendering_destination, segmentation_destination, optical_flow_destination,
+                              rotations):
     prototype_path = Path('./prototypes/sphere.obj')
     DEVICE = 'cuda'
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
@@ -46,14 +47,13 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
     face_features = vertices_features[mesh.faces][None]
 
-    rotations = generate_1_DoF_rotation(step=2.0)
-
     # Render the object without using texture maps
     render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
                         rendering_destination, segmentation_destination, DEVICE)
 
 
-def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination):
+def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination,
+                            rotations):
     DEVICE = 'cuda'
     width = 2000
     height = 2000
@@ -100,15 +100,13 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
         face_features[0, i, :, :] = torch.tensor(color)
 
-    rotations = generate_1_DoF_rotation(step=2.0)
-
     # Render the object without using texture maps
     render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
                         rendering_destination, segmentation_destination, DEVICE)
 
 
 def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path,
-                             optical_flow_destination):
+                             optical_flow_destination, rotations):
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
@@ -116,7 +114,7 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     height = 2000
 
     generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
-                                      optical_flow_destination, width, height)
+                                      optical_flow_destination, width, height, rotations=rotations)
 
 
 if __name__ == '__main__':
@@ -131,14 +129,17 @@ if __name__ == '__main__':
     rendering_path = synthetic_dataset_folder / Path('Textured_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('Textured_Sphere') / segmentation_dir
     optical_flow_path = synthetic_dataset_folder / Path('Textured_Sphere') / optical_flow_dir
-    generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path)
+    rots = generate_1_DoF_rotation(2.0)
+    generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path, rots)
 
     rendering_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / segmentation_dir
     optical_flow_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / optical_flow_dir
-    generate_8_colored_sphere(_config, rendering_path, segmentation_path, optical_flow_path)
+    rots = generate_1_DoF_rotation(step=2.0)
+    generate_8_colored_sphere(_config, rendering_path, segmentation_path, optical_flow_path, rots)
 
     rendering_path = synthetic_dataset_folder / Path('6_Colored_Cube') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('6_Colored_Cube') / segmentation_dir
     optical_flow_path = synthetic_dataset_folder / Path('6_Colored_Cube') / optical_flow_dir
-    generate_6_colored_cube(_config, rendering_path, segmentation_path, optical_flow_path)
+    rots = generate_1_DoF_rotation(step=2.0)
+    generate_6_colored_cube(_config, rendering_path, segmentation_path, optical_flow_path, rots)
