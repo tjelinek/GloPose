@@ -15,7 +15,23 @@ class FMOLoss(nn.Module):
 
     def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
                 observed_flow_mask, flow_from_tracking, prev_encoder_result: EncoderResult):
+        """
+        Forward pass of the model.
 
+        Args:
+            renders (torch.Tensor): Rendered images.
+            segments (torch.Tensor): Segment masks.
+            input_batch (torch.Tensor): Input batch of images.
+            current_encoder_result (EncoderResult): Encoder result for the current frame.
+            observed_flow (torch.Tensor): Observed flow between frames.
+            observed_flow_mask (torch.Tensor): Flow masks.
+            flow_from_tracking (torch.Tensor): Flow obtained from the tracking results.
+            prev_encoder_result (EncoderResult): Encoder result for the previous frame.
+
+        Returns:
+            tuple: A tuple containing losses_all, losses, and total loss.
+
+        """
         vertices = current_encoder_result.vertices
         texture_maps = current_encoder_result.texture_maps
         tdiff = current_encoder_result.translation_difference
