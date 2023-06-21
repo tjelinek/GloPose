@@ -126,42 +126,53 @@ class KeyframeBuffer:
     flow_segment_masks: torch.Tensor = None
 
     @staticmethod
-    def concatenate(buffer1, buffer2):
-        concatenated_buffer = KeyframeBuffer(
-            keyframes=buffer1.keyframes + buffer2.keyframes,
-            flow_keyframes=buffer1.flow_keyframes + buffer2.flow_keyframes,
-            images=torch.cat((buffer1.images, buffer2.images), dim=1),
-            prev_images=torch.cat((buffer1.prev_images, buffer2.prev_images), dim=1),
-            images_feat=torch.cat((buffer1.images_feat, buffer2.images_feat), dim=1),
-            segments=torch.cat((buffer1.segments, buffer2.segments), dim=1),
-            observed_flows=torch.cat((buffer1.observed_flows, buffer2.observed_flows), dim=1),
-            flow_segment_masks=torch.cat((buffer1.flow_segment_masks, buffer2.flow_segment_masks), dim=1)
-        )
+    def merge(buffer1, buffer2):
+        """
+        Concatenates and merges two KeyframeBuffer instances while sorting the keyframes. Assumes buffer1.keyframes
+        and buffer2.keyframes are disjoint.
 
-        return concatenated_buffer
+        Args:
+            buffer1 (KeyframeBuffer): The first KeyframeBuffer instance.
+            buffer2 (KeyframeBuffer): The second KeyframeBuffer instance.
+
+        Returns:
+            KeyframeBuffer: A new KeyframeBuffer instance containing the merged attributes.
+
+        """
+        all_keyframes = sorted(set(buffer1.keyframes + buffer2.keyframes))
+
+        merged_buffer = KeyframeBuffer()
+        merged_buffer.keyframes = all_keyframes
+
+        for attr_name, attr_type in merged_buffer.__annotations__.items():
+            merged_attr = None
+            if attr_type is list:
+                merged_attr = [getattr(buffer1, attr_name)[buffer1.keyframes.index(k)] if k in buffer1.keyframes else
+                               getattr(buffer2, attr_name)[buffer2.keyframes.index(k)]
+                               for k in all_keyframes]
+            elif attr_type is torch.Tensor:
+                attr1 = getattr(buffer1, attr_name)
+                attr2 = getattr(buffer2, attr_name)
+                merged_attr = torch.cat(
+                    [attr1[:, buffer1.keyframes.index(k)].unsqueeze(1) if k in buffer1.keyframes else
+                     attr2[:, buffer2.keyframes.index(k)].unsqueeze(1)
+                     for k in all_keyframes], dim=1)
+            setattr(merged_buffer, attr_name, merged_attr)
+
+        return merged_buffer
 
     def update_keyframes(self, keep_keyframes, max_keyframes):
         not_keep_keyframes = ~ keep_keyframes
 
-        deleted_keyframes = (np.array(self.keyframes)[not_keep_keyframes]).tolist()
-        deleted_flow_keyframes = (np.array(self.flow_keyframes)[not_keep_keyframes]).tolist()
-        deleted_images = self.images[:, not_keep_keyframes]
-        deleted_prev_images = self.prev_images[:, not_keep_keyframes]
-        deleted_images_feat = self.images_feat[:, not_keep_keyframes]
-        deleted_segments = self.segments[:, not_keep_keyframes]
-        deleted_observed_flows = self.observed_flows[:, not_keep_keyframes]
-        deleted_flow_segment_masks = self.flow_segment_masks[:, not_keep_keyframes]
-
-        deleted_buffer = KeyframeBuffer(
-            keyframes=deleted_keyframes,
-            flow_keyframes=deleted_flow_keyframes,
-            images=deleted_images,
-            prev_images=deleted_prev_images,
-            images_feat=deleted_images_feat,
-            segments=deleted_segments,
-            observed_flows=deleted_observed_flows,
-            flow_segment_masks=deleted_flow_segment_masks
-        )
+        # Get the deleted keyframes
+        deleted_buffer = KeyframeBuffer()
+        for attr_name, attr_type in deleted_buffer.__annotations__.items():
+            if attr_type is list:
+                modifier_attr = (np.array(getattr(self, attr_name))[not_keep_keyframes]).tolist()
+                setattr(deleted_buffer, attr_name, modifier_attr)
+            elif attr_type is torch.Tensor:
+                modifier_attr = getattr(self, attr_name)[:, not_keep_keyframes]
+                setattr(deleted_buffer, attr_name, modifier_attr)
 
         self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
         self.flow_keyframes = (np.array(self.flow_keyframes)[keep_keyframes]).tolist()
@@ -182,27 +193,19 @@ class KeyframeBuffer:
             self.observed_flows = self.observed_flows[:, -max_keyframes:]
             self.flow_segment_masks = self.flow_segment_masks[:, -max_keyframes:]
 
-            deleted_keyframes = self.keyframes[:-max_keyframes]
-            deleted_flow_keyframes = self.flow_keyframes[:-max_keyframes]
-            deleted_images = self.images[:, :-max_keyframes]
-            deleted_prev_images = self.prev_images[:, :-max_keyframes]
-            deleted_images_feat = self.images_feat[:, :-max_keyframes]
-            deleted_segments = self.segments[:, :-max_keyframes]
-            deleted_observed_flows = self.observed_flows[:, :-max_keyframes]
-            deleted_flow_segment_masks = self.flow_segment_masks[:, :-max_keyframes]
+            # Get buffer of keyframes that have been deleted
+            overflow_buffer = KeyframeBuffer()
+            for attr_name, attr_type in overflow_buffer.__annotations__.items():
+                if attr_type is list:
+                    modified_attr = getattr(self, attr_name)
+                    modified_attr = modified_attr[:-max_keyframes]
+                    setattr(overflow_buffer, attr_name, modified_attr)
+                elif attr_type is torch.Tensor:
+                    modified_attr = getattr(self, attr_name)
+                    modified_attr = modified_attr[:, :-max_keyframes]
+                    setattr(overflow_buffer, attr_name, modified_attr)
 
-            overflow_buffer = KeyframeBuffer(
-                keyframes=deleted_keyframes,
-                flow_keyframes=deleted_flow_keyframes,
-                images=deleted_images,
-                prev_images=deleted_prev_images,
-                images_feat=deleted_images_feat,
-                segments=deleted_segments,
-                observed_flows=deleted_observed_flows,
-                flow_segment_masks=deleted_flow_segment_masks
-            )
-
-            deleted_buffer = KeyframeBuffer.concatenate(deleted_buffer, overflow_buffer)
+            deleted_buffer = KeyframeBuffer.merge(deleted_buffer, overflow_buffer)
 
         return deleted_buffer
 
