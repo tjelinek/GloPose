@@ -25,7 +25,7 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
-from utils import consecutive_quaternions_angular_difference, qnorm, qmult
+from utils import consecutive_quaternions_angular_difference, qnorm, qmult, consecutive_quaternions_angular_difference2
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 
@@ -323,7 +323,8 @@ class Tracking6D:
 
             # normTdist = compute_trandist(renders)
 
-            angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
+            # angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
+            angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
 
             rot_degree_th = 45
             small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
