@@ -115,7 +115,8 @@ class WriteResults:
             angles_deg = angles_rad * 180.0 / math.pi
 
             print("Keyframes:", tracking6d.active_keyframes.keyframes)
-            print("Keyframes + stochastically added keyframes: ", tracking6d.all_keyframes.keyframes)
+            print("Stochastically added keyframes: ",
+                  tracking6d.all_keyframes.keyframes - tracking6d.active_keyframes.keyframes)
 
             print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
                                                for i in range(3)])
@@ -124,7 +125,9 @@ class WriteResults:
 
             self.tracking_log.write(f"Step {stepi}:\n")
 
-            self.tracking_log.write(f"Keyframes: {keyframes}\n")
+            self.tracking_log.write(f"Keyframes: {tracking6d.all_keyframes.keyframes}\n")
+            self.tracking_log.write(f"Stochastically added keyframes: "
+                                    f"{tracking6d.all_keyframes.keyframes - tracking6d.active_keyframes.keyframes}\n")
 
             rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
 
