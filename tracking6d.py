@@ -25,7 +25,7 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
-from utils import qnorm, qmult, consecutive_quaternions_angular_difference2
+from utils import qnorm, qmult, consecutive_quaternions_angular_difference2, consecutive_quaternions_angular_difference
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 
@@ -56,6 +56,7 @@ class TrackerConfig:
     keyframes: int = None
     all_frames_keyframes: bool = False
     fmo_steps: int = 1
+    stochastically_add_keyframes: bool = False
 
     # Shape settings
     shapes: List = list
@@ -136,18 +137,22 @@ class KeyframeBuffer:
             buffer2 (KeyframeBuffer): The second KeyframeBuffer instance.
 
         Returns:
-            KeyframeBuffer: A new KeyframeBuffer instance containing the merged attributes.
+            Tuple[KeyframeBuffer, List[int], List[int]]: A tuple containing the merged KeyframeBuffer instance,
+            indices of buffer1 keyframes in the merged buffer, and indices of buffer2 keyframes in the merged buffer.
 
         """
+        if buffer1.keyframes is None:
+            return copy.deepcopy(buffer2), [], list(range(len(buffer2.keyframes)))
+        elif buffer2.keyframes is None:
+            return copy.deepcopy(buffer1), list(range(len(buffer1.keyframes))), []
+
         all_keyframes = sorted(set(buffer1.keyframes + buffer2.keyframes))
 
         merged_buffer = KeyframeBuffer()
         merged_buffer.keyframes = all_keyframes
 
-        if buffer1.keyframes is None:
-            return copy.deepcopy(buffer2)
-        elif buffer2.keyframes is None:
-            return copy.deepcopy(buffer1)
+        indices_buffer1 = []
+        indices_buffer2 = []
 
         for attr_name, attr_type in merged_buffer.__annotations__.items():
             merged_attr = None
@@ -164,7 +169,11 @@ class KeyframeBuffer:
                      for k in all_keyframes], dim=1)
             setattr(merged_buffer, attr_name, merged_attr)
 
-        return merged_buffer
+        # Track indices of keyframes in the merged buffer
+        indices_buffer1.extend([buffer1.keyframes.index(k) for k in all_keyframes if k in buffer1.keyframes])
+        indices_buffer2.extend([buffer2.keyframes.index(k) for k in all_keyframes if k in buffer2.keyframes])
+
+        return merged_buffer, indices_buffer1, indices_buffer2
 
     def update_keyframes(self, keep_keyframes, max_keyframes):
         not_keep_keyframes = ~ keep_keyframes
@@ -213,6 +222,17 @@ class KeyframeBuffer:
             deleted_buffer = KeyframeBuffer.merge(deleted_buffer, overflow_buffer)
 
         return deleted_buffer
+
+    def stochastic_update(self, max_keyframes):
+        N = len(self.keyframes)
+        if len(self.keyframes) > max_keyframes:
+            keep_keyframes = np.full(N, False)  # Create an array of length N initialized with False
+            indices = np.random.choice(N, max_keyframes, replace=False)  # Randomly select keep_keyframes indices
+            keep_keyframes[indices] = True  # Set the selected indices to True
+
+            return self.update_keyframes(keep_keyframes, max_keyframes)
+        else:
+            return KeyframeBuffer()  # No items removed, return an empty buffer
 
 
 class Tracking6D:
@@ -331,6 +351,7 @@ class Tracking6D:
                                                observed_flows=observed_flows,
                                                flow_segment_masks=flow_segment_masks)
         self.recently_flushed_keyframes = KeyframeBuffer()
+        self.all_keyframes = self.active_keyframes
 
     def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
@@ -344,10 +365,10 @@ class Tracking6D:
 
         prev_image = self.active_keyframes.images[:, -1]
         prev_segment = self.active_keyframes.segments[:, -1]
-        self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
-        self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
+        self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
+        self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
 
-        resize_transform = transforms.Resize(self.active_keyframes.images.shape[-2:])
+        resize_transform = transforms.Resize(self.all_keyframes.images.shape[-2:])
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
@@ -374,7 +395,7 @@ class Tracking6D:
             image_prev_x255 = (self.active_keyframes.images[:, -2, :, :, :]).float() * 255
 
             start = time.time()
-            b0 = get_bbox(self.active_keyframes.segments)
+            b0 = get_bbox(self.all_keyframes.segments)
 
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
@@ -399,16 +420,23 @@ class Tracking6D:
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
                                                                       prev_segment[None]), dim=1)
 
-            self.last_encoder_result = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
-                                                       self.encoder(self.active_keyframes.keyframes)])
-            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
-                                                           self.rgb_encoder(self.active_keyframes.keyframes)])
+            if self.config.stochastically_add_keyframes:
+                self.all_keyframes, active_buffer_indices, _ = KeyframeBuffer.merge(self.active_keyframes,
+                                                                                    self.recently_flushed_keyframes)
+            else:
+                self.all_keyframes = self.active_keyframes
+                active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
 
-            frame_result = self.apply(self.active_keyframes.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.active_keyframes.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.active_keyframes.observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.active_keyframes.flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.active_keyframes.keyframes, self.active_keyframes.flow_keyframes,
+            self.last_encoder_result = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+                                                       self.encoder(self.all_keyframes.keyframes)])
+            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+                                                           self.rgb_encoder(self.all_keyframes.keyframes)])
+
+            frame_result = self.apply(self.all_keyframes.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                      self.all_keyframes.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                      self.all_keyframes.observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                      self.all_keyframes.flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                      self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes,
                                       step_i=stepi)
 
             encoder_result = frame_result.encoder_result
@@ -424,24 +452,27 @@ class Tracking6D:
 
             if self.config.write_results:
                 write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses, stepi,
-                                            self.active_keyframes.observed_flows, encoder_result,
-                                            self.active_keyframes.flow_segment_masks,
-                                            self.active_keyframes.segments,
-                                            self.active_keyframes.images,
-                                            self.active_keyframes.images_feat,
-                                            self.active_keyframes.keyframes)
+                                            self.all_keyframes.observed_flows, encoder_result,
+                                            self.all_keyframes.flow_segment_masks,
+                                            self.all_keyframes.segments,
+                                            self.all_keyframes.images,
+                                            self.all_keyframes.images_feat,
+                                            self.all_keyframes.keyframes)
 
                 # Visualize flow we get from the video
                 visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment, stepi,
                                self.write_folder)
 
             keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
-            keep_keyframes[np.argmin(silh_losses)] = True  # keep the best (in case all are bad)
+            keep_keyframes = keep_keyframes[active_buffer_indices]
+            min_index = np.argmin(silh_losses[active_buffer_indices])
+            keep_keyframes[min_index] = True  # keep the best (in case all are bad)
 
             # normTdist = compute_trandist(renders)
 
-            # angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
-            angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
+            angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
+            # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
+            print("Angles:", angles)
 
             rot_degree_th = 45
             small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
@@ -452,6 +483,9 @@ class Tracking6D:
 
             if not self.config.all_frames_keyframes:
                 deleted_keyframes = self.active_keyframes.update_keyframes(keep_keyframes, self.config.max_keyframes)
+                self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
+                                                                             deleted_keyframes)
+                self.recently_flushed_keyframes.stochastic_update(4)
 
             prev_image = image[0]
             prev_segment = segment[0]
@@ -490,7 +524,7 @@ class Tracking6D:
         :param renders_crop: Image of shape ..., C, H, W
         :return:
         """
-        renders = torch.zeros(renders_crop.shape[:-2] + self.active_keyframes.images_feat.shape[-2:]).to(self.device)
+        renders = torch.zeros(renders_crop.shape[:-2] + self.all_keyframes.images_feat.shape[-2:]).to(self.device)
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
@@ -574,7 +608,7 @@ class Tracking6D:
 
         return frame_result
 
-    def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks, opt_frames):
+    def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -583,8 +617,8 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
-            encoder_out: EncoderResult = self.rgb_encoder(opt_frames)
-            encoder_out_prev_frames = self.rgb_encoder(self.active_keyframes.flow_keyframes)
+            encoder_out: EncoderResult = self.rgb_encoder(self.all_keyframes.keyframes)
+            encoder_out_prev_frames = self.rgb_encoder(self.all_keyframes.flow_keyframes)
             renders = self.rendering(encoder_out.translations, encoder_out.quaternions,
                                      encoder_out.vertices, self.encoder.face_features,
                                      encoder_out.texture_maps, encoder_out.lights)

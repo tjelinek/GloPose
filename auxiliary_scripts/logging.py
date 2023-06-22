@@ -97,10 +97,9 @@ class WriteResults:
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
         if tracking6d.config.features == 'deep':
-            tracking6d.rgb_apply(images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                 segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+            tracking6d.rgb_apply(images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                  observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                 flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]], keyframes)
+                                 flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]])
             tex = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
         if tracking6d.gt_texture is not None:
             tex = tracking6d.gt_texture
@@ -115,7 +114,8 @@ class WriteResults:
             # Convert radians to degrees
             angles_deg = angles_rad * 180.0 / math.pi
 
-            print("Keyframes:", keyframes)
+            print("Keyframes:", tracking6d.active_keyframes.keyframes)
+            print("Keyframes + stochastically added keyframes: ", tracking6d.all_keyframes.keyframes)
 
             print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
                                                for i in range(3)])
