@@ -19,7 +19,7 @@ fi
 
 outputfolder_root="/mnt/personal/jelint19/results/FlowTracker/"
 
-# experiment="config_deep_only_flow_gt"
+experiment="config_deep"
 
 # Function to check if a folder exists
 folder_exists() {
