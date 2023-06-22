@@ -521,7 +521,6 @@ class Tracking6D:
                                      self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
             theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
 
-            # texture_flow.register_hook(lambda grad: breakpoint())
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
                                                            observed_flows,
                                                            flow_segment_masks,
