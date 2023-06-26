@@ -256,8 +256,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         None
     """
     observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
-    observed_flow_new[..., 0] *= observed_flow.shape[-1] * 2.0
-    observed_flow_new[..., 1] *= observed_flow.shape[-2] * 2.0
+    observed_flow_new[..., 0] *= observed_flow.shape[-1]
+    observed_flow_new[..., 1] *= observed_flow.shape[-2]
     b0 = get_bbox(tracking6d.active_keyframes.segments)
     opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
     translation_prime, quaternion_prime, vertices_prime, \
@@ -294,6 +294,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     theoretical_flow_up_ = tracking6d.write_image_into_bbox(b0, flow_render_up_)
 
     flow_difference = theoretical_flow_new[:, -1] - observed_flow_new
+    # breakpoint()
     flow_difference_np = flow_difference.detach().cpu().numpy()
     flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
 
