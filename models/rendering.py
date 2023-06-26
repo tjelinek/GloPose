@@ -294,7 +294,7 @@ def generate_all_views(best_model, static_translation, rotation_matrix, renderin
     return all_renders.detach().cpu().numpy()[0, 0].transpose(2, 3, 1, 0)
 
 
-def generate_novel_views(best_model, config):
+def prepare_views(best_model, config):
     width = best_model["renders"].shape[-1]
     height = best_model["renders"].shape[-2]
     config.erode_renderer_mask = 7
@@ -303,11 +303,15 @@ def generate_novel_views(best_model, config):
     static_translation = best_model["translation"].clone()
     static_translation[:, :, :, 1] = static_translation[:, :, :, 1] + 0.5 * static_translation[:, :, :, 0]
     static_translation[:, :, :, 0] = 0
-
     quaternion = best_model["quaternion"][:, :1].clone()
     rotation_matrix = angle_axis_to_rotation_matrix(quaternion_to_angle_axis(quaternion[:, 0, 1]))
     rotation_matrix_step = angle_axis_to_rotation_matrix(
         quaternion_to_angle_axis(quaternion[:, 0, 0]) / config.fmo_steps / 2)
+    return rendering, rotation_matrix, rotation_matrix_step, static_translation
+
+
+def generate_novel_views(best_model, config):
+    rendering, rotation_matrix, rotation_matrix_step, static_translation = prepare_views(best_model, config)
     for ki in range(int(config.fmo_steps / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
 
     vertical = generate_all_views(best_model, static_translation, rotation_matrix, rendering, [math.pi / 2 / 9, 0, 0],
@@ -321,19 +325,7 @@ def generate_novel_views(best_model, config):
 
 
 def generate_video_views(best_model, config):
-    width = best_model["renders"].shape[-1]
-    height = best_model["renders"].shape[-2]
-    config.erode_renderer_mask = 7
-    config.fmo_steps = best_model["renders"].shape[-4]
-    rendering = RenderingKaolin(config, best_model["faces"], width, height).to(best_model["translation"].device)
-    static_translation = best_model["translation"].clone()
-    static_translation[:, :, :, 1] = static_translation[:, :, :, 1] + 0.5 * static_translation[:, :, :, 0]
-    static_translation[:, :, :, 0] = 0
-
-    quaternion = best_model["quaternion"][:, :1].clone()
-    rotation_matrix = angle_axis_to_rotation_matrix(quaternion_to_angle_axis(quaternion[:, 0, 1]))
-    rotation_matrix_step = angle_axis_to_rotation_matrix(
-        quaternion_to_angle_axis(quaternion[:, 0, 0]) / config.fmo_steps / 2)
+    rendering, rotation_matrix, rotation_matrix_step, static_translation = prepare_views(best_model, config)
     for ki in range(int(config.fmo_steps / 2)): rotation_matrix = torch.matmul(rotation_matrix, rotation_matrix_step)
 
     views = generate_all_views(best_model, static_translation, rotation_matrix, rendering, [math.pi / 2 / 9 / 10, 0, 0],
