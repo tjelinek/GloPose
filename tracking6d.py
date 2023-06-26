@@ -586,9 +586,9 @@ class Tracking6D:
             else:
                 iters_without_change += 1
 
-            if self.config.loss_rgb_weight == 0 and self.config_copy.loss_rgb_weight != 0:
+            if self.config.loss_rgb_weight == 0 and self.config_copy.loss_rgb_weight:
                 if epoch > 100 or model_loss < 0.1:
-                    self.config.loss_rgb_weight = 1.0
+                    self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
                     self.best_model["value"] = 100
             else:
                 if epoch > ALLOW_BREAK_AFTER and self.best_model["value"] < self.config.stop_value and \
