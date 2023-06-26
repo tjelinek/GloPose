@@ -245,6 +245,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     Visualizes the theoretical flow and related images for a given step.
 
     Args:
+        tracking6d (Tracking6D): The Tracking6D instance.
         theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
                                          image coordinates.
         observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
@@ -255,53 +256,72 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     Returns:
         None
     """
-    observed_flow_new = observed_flow.clone().permute(0, 2, 3, 1)
-    observed_flow_new[..., 0] *= observed_flow.shape[-1]
-    observed_flow_new[..., 1] *= observed_flow.shape[-2]
-    b0 = get_bbox(tracking6d.active_keyframes.segments)
-    opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
-    translation_prime, quaternion_prime, vertices_prime, \
-        texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = tracking6d.encoder(opt_frames_prime)
-    tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map) if tracking6d.gt_texture is None \
-        else tracking6d.gt_texture
-    # Render the image given the estimated shape of it
-    rendered_keyframe_images, _ = tracking6d.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
-                                                                translation_prime, vertices_prime)
-    # The rendered images return renders of all keyframes, the previous and the current image
-    current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
-    previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
-    current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
-    previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
-    theoretical_flow_path = tracking6d.write_folder / Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) +
-                                                           '.png')
-    flow_difference_path = tracking6d.write_folder / Path(
-        'flow_difference_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-    rendering_1_path = tracking6d.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-    rendering_2_path = tracking6d.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
+    with torch.no_grad():
+        # Get bounding box
+        b0 = get_bbox(tracking6d.active_keyframes.segments)
 
-    prev_img_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-        'uint8')
-    new_img_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0).astype(
-        'uint8')
-    imageio.imwrite(rendering_1_path, prev_img_np)
-    imageio.imwrite(rendering_2_path, new_img_np)
-    theoretical_flow_new = theoretical_flow.clone().detach()
-    theoretical_flow_new[..., 0] *= theoretical_flow_new.shape[-2]
-    theoretical_flow_new[..., 1] *= theoretical_flow_new.shape[-3]
-    flow_render_up_ = theoretical_flow_new[:, -1].cpu()[0].permute(2, 0, 1)
-    theoretical_flow_up_ = tracking6d.write_image_into_bbox(b0, flow_render_up_)
+        # Get optical flow frames
+        opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
 
-    observed_flow_new_ = tracking6d.write_image_into_bbox(b0, observed_flow_new[0].permute(2, 0, 1)).permute(1, 2, 0)
-    observed_flow_new_np = observed_flow_new_.cpu().numpy()
+        # Compute estimated shape
+        translation_prime, quaternion_prime, vertices_prime, \
+            texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = tracking6d.encoder(opt_frames_prime)
 
-    # Convert the resized tensor back to a NumPy array and remove the batch dimension
-    theoretical_flow_up_ = theoretical_flow_up_.detach().cpu().numpy()  # Remove batch dimension
-    # Select the first channel
-    theoretical_flow_up_ = theoretical_flow_up_.transpose(1, 2, 0)
-    flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
-                                                   current_rendered_image_rgb[0], theoretical_flow_up_)
-    flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
-                                                             current_rendered_image_rgb[0], observed_flow_new_np,
-                                                             theoretical_flow_up_)
-    imageio.imwrite(theoretical_flow_path, flow_illustration)
-    imageio.imwrite(flow_difference_path, flow_difference_illustration)
+        # Get texture map
+        tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map) if tracking6d.gt_texture is None \
+            else tracking6d.gt_texture
+
+        # Render keyframe images
+        rendered_keyframe_images, _ = tracking6d.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
+                                                                    translation_prime, vertices_prime)
+
+        # Extract current and previous rendered images
+        current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
+        previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
+        current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
+        previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
+
+        # Prepare file paths
+        theoretical_flow_path = tracking6d.write_folder / Path(f"theoretical_flow_{stepi}_{stepi + 1}.png")
+        flow_difference_path = tracking6d.write_folder / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
+        rendering_1_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
+        rendering_2_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_2.png")
+
+        # Convert tensors to NumPy arrays
+        previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
+        current_rendered_image_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        current_rendered_image_np = current_rendered_image_np.astype('uint8')
+
+        # Save rendered images
+        imageio.imwrite(rendering_1_path, previous_rendered_image_np)
+        imageio.imwrite(rendering_2_path, current_rendered_image_np)
+
+        # Clone theoretical flow and adjust coordinates
+        adjusted_theoretical_flow = theoretical_flow.clone().detach()
+        adjusted_theoretical_flow[..., 0] *= adjusted_theoretical_flow.shape[-2]
+        adjusted_theoretical_flow[..., 1] *= adjusted_theoretical_flow.shape[-3]
+
+        # Prepare observed flow
+        adjusted_observed_flow = observed_flow.clone().permute(0, 2, 3, 1)
+        adjusted_observed_flow[..., 0] *= observed_flow.shape[-1]
+        adjusted_observed_flow[..., 1] *= observed_flow.shape[-2]
+
+        # Obtain flow and image illustrations
+        flow_up = adjusted_theoretical_flow[:, -1].cpu()[0].permute(2, 0, 1)
+        theoretical_flow_up = tracking6d.write_image_into_bbox(b0, flow_up)
+        observed_flow_up = tracking6d.write_image_into_bbox(b0, adjusted_observed_flow[0].permute(2, 0, 1))
+        observed_flow_np = observed_flow_up.permute(1, 2, 0).cpu().numpy()
+        theoretical_flow_np = theoretical_flow_up.detach().cpu().numpy()
+        theoretical_flow_np = theoretical_flow_np.transpose(1, 2, 0)
+
+        # Visualize flow and flow difference
+        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0], current_rendered_image_rgb[0],
+                                                       theoretical_flow_np)
+        flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
+                                                                 current_rendered_image_rgb[0],
+                                                                 observed_flow_np, theoretical_flow_np)
+
+        # Save flow illustrations
+        imageio.imwrite(theoretical_flow_path, flow_illustration)
+        imageio.imwrite(flow_difference_path, flow_difference_illustration)
