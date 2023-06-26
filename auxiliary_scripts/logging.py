@@ -288,8 +288,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     imageio.imwrite(rendering_1_path, prev_img_np)
     imageio.imwrite(rendering_2_path, new_img_np)
     theoretical_flow_new = theoretical_flow.clone().detach()
-    theoretical_flow_new[..., 0] *= 0.5 * theoretical_flow_new.shape[-3]
-    theoretical_flow_new[..., 1] *= 0.5 * theoretical_flow_new.shape[-2]
+    theoretical_flow_new[..., 0] *= 0.5 * theoretical_flow_new.shape[-2]
+    theoretical_flow_new[..., 1] *= 0.5 * theoretical_flow_new.shape[-3]
     flow_render_up_ = theoretical_flow_new[:, -1].cpu()[0].permute(2, 0, 1)
     theoretical_flow_up_ = tracking6d.write_image_into_bbox(b0, flow_render_up_)
 
