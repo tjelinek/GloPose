@@ -450,14 +450,20 @@ class Tracking6D:
                 self.encoder.used_tran[:, :, stepi] = self.encoder.translation[:, :, stepi].detach()
                 self.encoder.used_quat[:, stepi] = self.encoder.quaternion[:, stepi].detach()
 
+            tex = None
+            if self.config.features == 'deep':
+                self.rgb_apply(self.all_keyframes.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                               self.all_keyframes.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                               self.all_keyframes.observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
+                               self.all_keyframes.flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]])
+                tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
+
             if self.config.write_results:
                 write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses, stepi,
                                             self.all_keyframes.observed_flows, encoder_result,
-                                            self.all_keyframes.flow_segment_masks,
-                                            self.all_keyframes.segments,
-                                            self.all_keyframes.images,
-                                            self.all_keyframes.images_feat,
-                                            self.all_keyframes.keyframes)
+                                            self.all_keyframes.flow_segment_masks, self.all_keyframes.segments,
+                                            self.all_keyframes.images, self.all_keyframes.images_feat,
+                                            self.all_keyframes.keyframes, tex)
 
                 # Visualize flow we get from the video
                 visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment, stepi,
