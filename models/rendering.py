@@ -179,8 +179,8 @@ class RenderingKaolin(nn.Module):
 
             theoretical_flow = ren_outputs  # torch.Size([1, H, W, 2])
             theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
-            theoretical_flow_new[..., 0] = theoretical_flow[..., 0]
-            theoretical_flow_new[..., 1] = -theoretical_flow[..., 1]  # Correction for transform into image
+            theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
+            theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
             theoretical_flow = theoretical_flow_new
 
             theoretical_flows.append(theoretical_flow)

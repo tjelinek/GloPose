@@ -98,12 +98,14 @@ class FMOLoss(nn.Module):
             observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
 
             flow_from_tracking_clone = flow_from_tracking.clone()
-            flow_from_tracking_clone[..., 0] *= flow_from_tracking_clone.shape[-2] * 0.5
-            flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3] * 0.5
+            flow_from_tracking_clone[..., 0] *= flow_from_tracking_clone.shape[-2]
+            flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3]
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             flow_loss = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1).sum((1, 2, 3)) / object_area
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
+            # if observed_flow_clone.shape[1] > 25:
+            #     breakpoint()
 
         if self.config.loss_texture_change_weight > 0:
             change_in_texture = (prev_encoder_result.texture_maps - texture_maps) ** 2
