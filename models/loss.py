@@ -47,7 +47,7 @@ class FMOLoss(nn.Module):
                                          3).mean(2)
             segments_our = (renders[:, :, 0, -1:] > 0).to(renders.dtype)
             track_segm_loss, t_all = fmo_model_loss(input_batch, modelled_renders, segments_our, self.config)
-            losses["model"] = self.config.loss_rgb_weight * (track_segm_loss)
+            losses["model"] = self.config.loss_rgb_weight * track_segm_loss
             losses_all["track_segm_loss"] = t_all
         if True or self.config.loss_iou_weight > 0:
             losses["silh"] = 0
@@ -65,15 +65,14 @@ class FMOLoss(nn.Module):
                 losses["qdiff"] = qdiff[qdiff > 0][-1].mean()
             else:
                 losses["qdiff"] = qdiff[-1].mean()
+            losses["qdiff"] = self.config.loss_q_weight * qdiff[-1]
 
         if self.config.loss_t_weight > 0:
             if tdiff[tdiff > 0].shape[0] > 0:
                 losses["tdiff"] = tdiff[tdiff > 0][-1].mean()
             else:
                 losses["tdiff"] = tdiff[-1].mean()
-
             losses["tdiff"] = self.config.loss_t_weight * tdiff[-1]
-            losses["qdiff"] = self.config.loss_q_weight * qdiff[-1]
 
         if self.config.loss_dist_weight > 0:
             dists = (segments[:, :, 0] * renders[:, :, 0, -1])
