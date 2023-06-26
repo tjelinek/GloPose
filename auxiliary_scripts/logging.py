@@ -17,7 +17,7 @@ from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from GMA.core.utils import flow_viz
 from models.encoder import EncoderResult
-from flow import visualize_flow_with_images
+from flow import visualize_flow_with_images, compare_flows_with_images
 
 
 def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, output_dir):
@@ -274,8 +274,6 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
     theoretical_flow_path = tracking6d.write_folder / Path('theoretical_flow_' + str(stepi) + '_' + str(stepi + 1) +
                                                            '.png')
-    flow_difference_magnitude_path = tracking6d.write_folder / Path('flow_difference_magnitude_' + str(stepi) +
-                                                                    '_' + str(stepi + 1) + '.png')
     flow_difference_path = tracking6d.write_folder / Path(
         'flow_difference_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     rendering_1_path = tracking6d.write_folder / Path('rendering_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
@@ -293,15 +291,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     flow_render_up_ = theoretical_flow_new[:, -1].cpu()[0].permute(2, 0, 1)
     theoretical_flow_up_ = tracking6d.write_image_into_bbox(b0, flow_render_up_)
 
-    flow_difference = theoretical_flow_new[:, -1] - observed_flow_new
-    # breakpoint()
-    flow_difference_np = flow_difference.detach().cpu().numpy()
-    flow_difference_image = flow_viz.flow_to_image(flow_difference_np[0])
-
-    flow_difference_magnitude = flow_difference.norm(dim=-1)[0]
-    flow_difference_magnitude /= flow_difference_magnitude.max()
-    imageio.imwrite(flow_difference_magnitude_path,
-                    (flow_difference_magnitude.detach().cpu() * 255).to(torch.uint8))
+    observed_flow_new_ = tracking6d.write_image_into_bbox(b0, observed_flow_new[0].permute(2, 0, 1)).permute(1, 2, 0)
+    observed_flow_new_np = observed_flow_new_.cpu().numpy()
 
     # Convert the resized tensor back to a NumPy array and remove the batch dimension
     theoretical_flow_up_ = theoretical_flow_up_.detach().cpu().numpy()  # Remove batch dimension
@@ -309,5 +300,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
     theoretical_flow_up_ = theoretical_flow_up_.transpose(1, 2, 0)
     flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0],
                                                    current_rendered_image_rgb[0], theoretical_flow_up_)
+    flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
+                                                             current_rendered_image_rgb[0], observed_flow_new_np,
+                                                             theoretical_flow_up_)
     imageio.imwrite(theoretical_flow_path, flow_illustration)
-    imageio.imwrite(flow_difference_path, flow_difference_image)
+    imageio.imwrite(flow_difference_path, flow_difference_illustration)
