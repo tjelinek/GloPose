@@ -228,8 +228,6 @@ class RenderingKaolin(nn.Module):
                                                     face_features.shape[-1] + face_vertices_cam.shape[-1]]
         ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:]
 
-        # if ren_mesh_vertices_coords.requires_grad:
-        #     ren_mesh_vertices_coords.register_hook(lambda grad: torch.clamp(grad, -1.0, 1.0))
 
         return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
                                 ren_mesh_vertices_features, ren_mesh_vertices_coords,
