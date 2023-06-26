@@ -39,10 +39,36 @@ def get_flow_from_files(files_source_dir: Path, model):
 
 def visualize_flow_with_images(image1, image2, flow_up):
     """
+    Visualizes flow_up along with image1 and image2.
 
     :param image1: uint8 image with 0-255 as color
     :param image2: uint8 image with 0-255 as color
     :param flow_up: np.ndarray [H, W, 2] fine flow
+    :return: PIL Image
+    """
+    return visualize_flow(image1, image2, flow_up, None)
+
+
+def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
+    """
+    Visualizes flow_up and flow_up_prime along with image1 and image2.
+
+    :param image1: uint8 image with 0-255 as color
+    :param image2: uint8 image with 0-255 as color
+    :param flow_up: np.ndarray [H, W, 2] flow
+    :param flow_up_prime: np.ndarray [H, W, 2] flow
+    :return: PIL Image
+    """
+    return visualize_flow(image1, image2, flow_up, flow_up_prime)
+
+
+def visualize_flow(image1, image2, flow_up, flow_up_prime):
+    """
+
+    :param image1: uint8 image with 0-255 as color
+    :param image2: uint8 image with 0-255 as color
+    :param flow_up: np.ndarray [H, W, 2] flow
+    :param flow_up_prime: np.ndarray [H, W, 2] flow
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
@@ -54,6 +80,10 @@ def visualize_flow_with_images(image1, image2, flow_up):
     image1 = transform(image1)
     image2 = transform(image2)
     flow_pil = transform(flow_up_image)
+
+    if flow_up_prime is not None:
+        flow_up_prime_image = flow_viz.flow_to_image(flow_up)
+        flow_prime_pil = transform(flow_up_prime_image)
 
     draw1 = ImageDraw.Draw(image1)
     draw2 = ImageDraw.Draw(image2)
@@ -68,11 +98,18 @@ def visualize_flow_with_images(image1, image2, flow_up):
 
             shift_up_x = flow_up[y, x, 0]
             shift_up_y = flow_up[y, x, 1]
-            end_up = (x - shift_up_x, y + shift_up_y)
+
+            # end_up = (x - shift_up_x, y + shift_up_y)
+            # end_prime_up = (x - shift_up_prime_x, y + shift_up_prime_y)
 
             draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
             draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r),
                           fill='green')
+            if flow_up_prime is not None:
+                shift_up_prime_x = flow_up_prime[y, x, 0]
+                shift_up_prime_y = flow_up_prime[y, x, 1]
+                draw2.ellipse((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
+                               y + shift_up_prime_y + r), fill='purple')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
