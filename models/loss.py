@@ -89,7 +89,7 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight > 0:
-            observed_flow_clone = observed_flow.clone()
+            observed_flow_clone = observed_flow.clone()  # Size (1, N, H, W, 2)
             observed_flow_clone = observed_flow_clone * flow_segment_masks
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
             object_area = flow_segment_masks.nonzero().size(0) / 2.0
@@ -97,7 +97,7 @@ class FMOLoss(nn.Module):
             observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
             observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
 
-            flow_from_tracking_clone = flow_from_tracking.clone()
+            flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
             flow_from_tracking_clone[..., 0] *= flow_from_tracking_clone.shape[-2]
             flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3]
 
