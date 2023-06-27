@@ -13,34 +13,52 @@ class Encoder(nn.Module):
     def __init__(self, config, ivertices, faces, face_features, width, height, n_feat):
         super(Encoder, self).__init__()
         self.config = config
+
+        # Translation initialization
         translation_init = torch.zeros(1, 1, config.input_frames, 3)
         translation_init[:, :, 0, 2] = self.config.tran_init
         self.translation = nn.Parameter(translation_init)
-        qinit = torch.zeros(1, config.input_frames, 4)  # *0.005
+
+        # Quaternion initialization
+        qinit = torch.zeros(1, config.input_frames, 4)
         qinit[:, :, 0] = 1.0
         init_angle = torch.Tensor(self.config.rot_init)
         init_quat = angle_axis_to_quaternion(init_angle, order=QuaternionCoeffOrder.WXYZ)
         self.register_buffer('init_quat', init_quat)
         qinit[:, 0, :] = init_quat.clone()
         self.quaternion = nn.Parameter(qinit)
+
+        # Offsets initialization
         offsets = torch.zeros(1, 1, config.input_frames, 7)
         offsets[:, :, :, 3] = 1.0
         self.register_buffer('offsets', offsets)
+
+        # Used translation and quaternion
         self.register_buffer('used_tran', translation_init.clone())
         self.register_buffer('used_quat', qinit.clone())
+
+        # Lights initialization
         if self.config.use_lights:
             lights = torch.zeros(1, 3, 9)
             lights[:, :, 0] = 0.5
             self.lights = nn.Parameter(lights)
         else:
             self.lights = None
+
+        # Vertices initialization
         if self.config.predict_vertices:
             self.vertices = nn.Parameter(torch.zeros(1, ivertices.shape[0], 3))
+
+        # Face features and texture map
         self.register_buffer('face_features', torch.from_numpy(face_features).unsqueeze(0).type(self.translation.dtype))
         self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.texture_size, self.config.texture_size))
+
+        # Normalize and register ivertices
         ivertices = torch.from_numpy(ivertices).unsqueeze(0).type(self.translation.dtype)
         ivertices = mesh_normalize(ivertices)
         self.register_buffer('ivertices', ivertices)
+
+        # Aspect ratio
         self.aspect_ratio = height / width
 
     def set_grad_mesh(self, req_grad):
