@@ -463,6 +463,10 @@ class Tracking6D:
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
+                visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
+                                           self.all_keyframes.observed_flows[:, -1, :, b0[0]:b0[1], b0[2]:b0[3]],
+                                           self.all_keyframes.keyframes, stepi)
+
                 write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses, stepi,
                                             encoder_result, self.all_keyframes.segments, self.all_keyframes.images,
                                             self.all_keyframes.images_feat, self.all_keyframes.keyframes, tex)
@@ -603,9 +607,6 @@ class Tracking6D:
                 self.optimizer.zero_grad()
                 jloss.backward()
                 self.optimizer.step()
-
-        visualize_theoretical_flow(self, theoretical_flow.clone().detach(), observed_flows[:, -1].clone().detach(),
-                                   keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
