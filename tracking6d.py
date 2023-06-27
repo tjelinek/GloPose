@@ -332,6 +332,8 @@ class Tracking6D:
             config.loss_dist_weight = 0
             config.loss_q_weight = 0
             config.loss_t_weight = 0
+            config.loss_flow_weight = 0
+            config.loss_texture_change_weight = 0
             self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
