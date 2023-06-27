@@ -615,14 +615,17 @@ class Tracking6D:
 
         return frame_result
 
-    def frames_and_flow_frames_inference(self, keyframes, flow_frames):
+    def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
         joined_frames = sorted(set(keyframes + flow_frames))
         joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
 
         frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
         flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
 
-        joined_encoder_result: EncoderResult = self.encoder(joined_frames)
+        if rgb_encoder:
+            joined_encoder_result: EncoderResult = self.rgb_encoder(joined_frames)
+        else:
+            joined_encoder_result: EncoderResult = self.encoder(joined_frames)
 
         # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
         # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
@@ -661,7 +664,8 @@ class Tracking6D:
 
         for epoch in range(self.config.rgb_iters):
             encoder_result, encoder_result_flow_frames = \
-                self.frames_and_flow_frames_inference(self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes)
+                self.frames_and_flow_frames_inference(self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes,
+                                                      rgb_encoder=True)
 
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions,
                                      encoder_result.vertices, self.encoder.face_features,
