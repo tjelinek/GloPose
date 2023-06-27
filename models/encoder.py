@@ -42,12 +42,6 @@ class Encoder(nn.Module):
         ivertices = mesh_normalize(ivertices)
         self.register_buffer('ivertices', ivertices)
         self.aspect_ratio = height / width
-        if self.config.project_coin:
-            thr = 0.025
-            x_coor = ivertices[:, :, 0]
-            x_coor[x_coor > thr] = thr
-            x_coor[x_coor < -thr] = -thr
-            self.register_buffer('x_coor', x_coor)
 
     def set_grad_mesh(self, req_grad):
         self.texture_map.requires_grad = req_grad
@@ -64,8 +58,6 @@ class Encoder(nn.Module):
                 vertices = mesh_normalize(vertices)
             else:
                 vertices = vertices - vertices.mean(1)[:, None, :]  # make center of mass in origin
-            if self.config.project_coin:
-                vertices[:, :, 0] = self.x_coor
         else:
             vertices = self.ivertices
         if 0 in opt_frames:
