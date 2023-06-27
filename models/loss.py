@@ -92,7 +92,9 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow.clone()  # Size (1, N, H, W, 2)
             observed_flow_clone = observed_flow_clone * flow_segment_masks
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
-            object_area = flow_segment_masks.nonzero().size(0) / 2.0
+            flow_segment_masks_binary = flow_segment_masks[0, :, 1] > 0
+            object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
+            object_areas_fraction = object_areas / torch.numel(flow_segment_masks_binary[1:])
 
             observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
             observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
@@ -102,7 +104,9 @@ class FMOLoss(nn.Module):
             flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3]
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
-            flow_loss = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1).sum((1, 2, 3)) / object_area
+            flow_magnitude = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1)
+            per_image_mean_flow = flow_magnitude.mean(dim=(2, 3)) * object_areas_fraction
+            flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
             # if observed_flow_clone.shape[1] > 25:
             #     breakpoint()
