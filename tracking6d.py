@@ -427,10 +427,10 @@ class Tracking6D:
                 self.all_keyframes = self.active_keyframes
                 active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
 
-            self.last_encoder_result = EncoderResult(*[tensor.detach().clone()
+            self.last_encoder_result = EncoderResult(*[tensor.clone()
                                                        if tensor is not None else None for tensor in
                                                        self.encoder(self.all_keyframes.keyframes)])
-            self.last_encoder_result_rgb = EncoderResult(*[tensor.detach().clone()
+            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone()
                                                            if tensor is not None else None for tensor in
                                                            self.rgb_encoder(self.all_keyframes.keyframes)])
 
@@ -614,8 +614,39 @@ class Tracking6D:
         return frame_result
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames):
-        encoder_result = self.encoder(keyframes)
-        encoder_result_flow_frames = self.encoder(flow_frames)
+        joined_frames = sorted(set(keyframes + flow_frames))
+        joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
+
+        frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
+        flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
+
+        joined_encoder_result: EncoderResult = self.encoder(joined_frames)
+
+        # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
+        # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
+        # TODO cont'd: be deprecated as they are sufficiently regularized by the optical flow
+        encoder_result = EncoderResult(translations=joined_encoder_result.translations[:, :, frames_join_idx],
+                                       quaternions=joined_encoder_result.quaternions[:, frames_join_idx],
+                                       vertices=joined_encoder_result.vertices,
+                                       texture_maps=joined_encoder_result.texture_maps,
+                                       lights=joined_encoder_result.lights,
+                                       translation_difference=joined_encoder_result.translation_difference[
+                                           frames_join_idx],
+                                       quaternion_difference=joined_encoder_result.quaternion_difference[
+                                           frames_join_idx])
+
+        encoder_result_flow_frames = EncoderResult(translations=joined_encoder_result.translations[
+                                                                :, :, flow_frames_join_idx],
+                                                   quaternions=joined_encoder_result.quaternions[
+                                                               :, flow_frames_join_idx],
+                                                   vertices=joined_encoder_result.vertices,
+                                                   texture_maps=joined_encoder_result.texture_maps,
+                                                   lights=joined_encoder_result.lights,
+                                                   translation_difference=joined_encoder_result.translation_difference[
+                                                       flow_frames_join_idx],
+                                                   quaternion_difference=joined_encoder_result.quaternion_difference[
+                                                       flow_frames_join_idx])
+
         return encoder_result, encoder_result_flow_frames
 
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks):
