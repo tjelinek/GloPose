@@ -89,7 +89,7 @@ class Encoder(nn.Module):
         for frmi in range(1, opt_frames[-1] + 1):
             quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.offsets[:, 0, frmi, 3:]))
             translation0 = self.translation[:, :, frmi] + self.offsets[:, :, frmi, :3]
-            if not frmi in opt_frames:
+            if frmi not in opt_frames:
                 quaternion0 = quaternion0.detach()
                 translation0 = translation0.detach()
             diffs.append(qnorm(qdifference(quaternion_all[-1], quaternion0)))
