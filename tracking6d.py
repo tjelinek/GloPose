@@ -427,9 +427,11 @@ class Tracking6D:
                 self.all_keyframes = self.active_keyframes
                 active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
 
-            self.last_encoder_result = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+            self.last_encoder_result = EncoderResult(*[tensor.detach().clone()
+                                                       if tensor is not None else None for tensor in
                                                        self.encoder(self.all_keyframes.keyframes)])
-            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone() if tensor is not None else None for tensor in
+            self.last_encoder_result_rgb = EncoderResult(*[tensor.detach().clone()
+                                                           if tensor is not None else None for tensor in
                                                            self.rgb_encoder(self.all_keyframes.keyframes)])
 
             frame_result = self.apply(self.all_keyframes.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -552,8 +554,7 @@ class Tracking6D:
 
         for epoch in range(self.config.iterations):
 
-            encoder_result = self.encoder(keyframes)
-            encoder_result_flow_frames = self.encoder(flow_frames)
+            encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames)
 
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                      self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
@@ -612,6 +613,11 @@ class Tracking6D:
 
         return frame_result
 
+    def frames_and_flow_frames_inference(self, keyframes, flow_frames):
+        encoder_result = self.encoder(keyframes)
+        encoder_result_flow_frames = self.encoder(flow_frames)
+        return encoder_result, encoder_result_flow_frames
+
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
@@ -621,13 +627,14 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
-            encoder_out: EncoderResult = self.rgb_encoder(self.all_keyframes.keyframes)
-            encoder_out_prev_frames = self.rgb_encoder(self.all_keyframes.flow_keyframes)
-            renders = self.rendering(encoder_out.translations, encoder_out.quaternions,
-                                     encoder_out.vertices, self.encoder.face_features,
-                                     encoder_out.texture_maps, encoder_out.lights)
-            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_out, encoder_out_prev_frames)
-            losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_out,
+            encoder_result, encoder_result_flow_frames = \
+                self.frames_and_flow_frames_inference(self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes)
+
+            renders = self.rendering(encoder_result.translations, encoder_result.quaternions,
+                                     encoder_result.vertices, self.encoder.face_features,
+                                     encoder_result.texture_maps, encoder_result.lights)
+            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+            losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_result,
                                                                observed_flows, flow_segment_masks, theoretical_flow,
                                                                self.last_encoder_result_rgb)
             if epoch < self.config.iterations - 1:
