@@ -91,7 +91,7 @@ class WriteResults:
         self.all_proj_filtered.release()
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, segment, silh_losses, stepi, encoder_result, segments,
-                      images, images_feat, keyframes, tex):
+                      images, images_feat, tex):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
