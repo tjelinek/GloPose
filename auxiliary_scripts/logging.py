@@ -41,10 +41,10 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * (0.5 * flow_video_up.shape[-2])
     flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().numpy()
 
-    flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
-    image_small_dims = image.shape[-2], image.shape[-1]
-    flow_image_small = transforms.Resize(image_small_dims)(flow_image)
-    segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
+    # flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
+    # image_small_dims = image.shape[-2], image.shape[-1]
+    # flow_image_small = transforms.Resize(image_small_dims)(flow_image)
+    # segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
     # flow_image_segmented = flow_image_small.mul(segmentation_mask)
     image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
