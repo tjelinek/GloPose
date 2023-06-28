@@ -628,8 +628,8 @@ class Tracking6D:
         else:
             joined_encoder_result: EncoderResult = self.encoder(joined_frames)
 
-        keyframe_translations = joined_encoder_result.translations[:, :, keyframes]
-        keyframe_quaternions = joined_encoder_result.quaternions[:, keyframes]
+        keyframe_translations = joined_encoder_result.translations[:, :, joined_frames]
+        keyframe_quaternions = joined_encoder_result.quaternions[:, joined_frames]
 
         # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
         # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
