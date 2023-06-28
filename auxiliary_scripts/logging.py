@@ -100,7 +100,8 @@ class WriteResults:
 
         with torch.no_grad():
 
-            self.write_rotations(tracking6d, detached_result, keyframes, stepi)
+            self.write_rotations(detached_result, tracking6d.all_keyframes.keyframes,
+                                 tracking6d.active_keyframes.keyframes, stepi)
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
@@ -201,22 +202,22 @@ class WriteResults:
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
-    def write_rotations(self, tracking6d, detached_result, keyframes, stepi):
+    def write_rotations(self, detached_result, all_keyframes, active_keyframes, stepi):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
         angles_deg = angles_rad * 180.0 / math.pi
-        stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
-                                              set(tracking6d.active_keyframes.keyframes))
-        print("Keyframes:", tracking6d.active_keyframes.keyframes)
+        stochastically_added_keyframes = list(set(all_keyframes) -
+                                              set(active_keyframes))
+        print("Keyframes:", active_keyframes)
         print("Stochastically added keyframes: ", stochastically_added_keyframes)
         print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
                                            for i in range(3)])
         print("Previous estimated rotation:", [(float(angles_deg[-2][i]) - float(angles_deg[0][i]))
                                                for i in range(3)])
         self.tracking_log.write(f"Step {stepi}:\n")
-        self.tracking_log.write(f"Keyframes: {tracking6d.all_keyframes.keyframes}\n")
+        self.tracking_log.write(f"Keyframes: {all_keyframes}\n")
         self.tracking_log.write(f"Stochastically added keyframes: "
                                 f"{stochastically_added_keyframes}\n")
         rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
@@ -224,10 +225,10 @@ class WriteResults:
             rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
                          for i in range(3)]
 
-            self.tracking_log.write(f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
+            self.tracking_log.write(f"Keyframe {active_keyframes[k]} rotation: " + str(rotations) + '\n')
         for k in range(detached_result.quaternions.shape[1]):
             self.tracking_log.write(
-                f"Keyframe {keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+                f"Keyframe {active_keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
         self.tracking_log.write('\n')
         self.tracking_log.flush()
 
