@@ -15,8 +15,10 @@ from typing import List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow
-from flow import get_flow_from_images
-from flow_raft import get_flow_model
+from flow import get_flow_from_images, get_flow_from_images_mft
+from flow_raft import get_flow_model_raft
+from flow_mft import get_flow_model_mft
+from flow_gma import get_flow_model_gma
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -113,6 +115,9 @@ class TrackerConfig:
     gt_texture: str = None
     gt_mesh_prototype: str = None
     use_gt: bool = False
+
+    # Optical flow
+    flow_model: str = 'RAFT'  # Also 'GMA' and 'RFT'
 
 
 @dataclass
@@ -247,7 +252,13 @@ class Tracking6D:
         self.config_copy = copy.deepcopy(self.config)
 
         self.device = device
-        self.model_flow = get_flow_model()
+
+        if self.config.flow_model == 'RAFT':
+            self.model_flow = get_flow_model_raft()
+        elif self.config.flow_model == 'GMA':
+            self.model_flow = get_flow_model_gma()
+        elif self.config.flow_model == 'MFT':
+            self.model_flow = get_flow_model_mft()
 
         self.gt_texture = None
         if 'gt_texture' in config and config['gt_texture'] is not None and config["use_gt"]:
@@ -410,7 +421,13 @@ class Tracking6D:
 
             with torch.no_grad():
                 if gt_flows is None:
-                    _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
+                    if self.config.flow_model != 'MFT':
+                        _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
+                    else:
+                        observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_prev_x255,
+                                                                                         image_new_x255,
+                                                                                         self.model_flow)
+
                     observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / (0.5 * observed_flow.shape[-2])
                     observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / (0.5 * observed_flow.shape[-1])
                 else:  # We have ground truth flow annotations

@@ -15,7 +15,7 @@ from cfg import *
 from RAFT.core.raft import RAFT
 
 
-def get_flow_model():
+def get_flow_model_raft():
     args = Namespace(model='tmp/raft_models/models/raft-things.pth', model_name='RAFT', path=None, mixed_precision=True,
                      alternate_corr=False, small=False)
     model = torch.nn.DataParallel(RAFT(args))
@@ -30,7 +30,7 @@ def get_flow_model():
     return model
 
 
-model = get_flow_model()
+model = get_flow_model_raft()
 
 if __name__ == "__main__":
     path_to_dataset = Path("data/360photo/original/concept/09")

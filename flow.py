@@ -163,6 +163,20 @@ def get_flow_from_images(image1, image2, model):
     return flow_low, flow_up
 
 
+def get_flow_from_images_mft(image1, image2, model):
+    padder = InputPadder(image1.shape)
+
+    image1, image2 = padder.pad(image1, image2)
+
+    all_predictions = model(image1, image2, iters=12, test_mode=True)
+
+    flow = torch.squeeze(padder.unpad(all_predictions['flow']), dim=0)
+    occlusion = torch.squeeze(padder.unpad(all_predictions['occlusion'].softmax(dim=1)[:, 1:2, :, :]), dim=0)
+    uncertainty = torch.squeeze(padder.unpad(all_predictions['uncertainty']), dim=0)
+
+    return flow, occlusion, uncertainty
+
+
 def get_flow_from_images_raft(image1, image2, model):
     with torch.no_grad():
         padder = InputPadder(image1.shape)

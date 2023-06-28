@@ -13,7 +13,7 @@ from cfg import *
 from GMA.core.network import RAFTGMA
 
 
-def get_flow_model():
+def get_flow_model_gma():
     args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1, position_only=False,
                      position_and_content=False, mixed_precision=True)
 
@@ -30,7 +30,7 @@ def get_flow_model():
     return model
 
 
-model = get_flow_model()
+model = get_flow_model_gma()
 
 if __name__ == "__main__":
     path_to_dataset = Path("data/360photo/original/concept/09")
