@@ -108,8 +108,6 @@ class FMOLoss(nn.Module):
             per_image_mean_flow = flow_magnitude.mean(dim=(2, 3)) * object_areas_fraction
             flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
-            # if observed_flow_clone.shape[1] > 25:
-            #     breakpoint()
 
         if self.config.loss_texture_change_weight > 0:
             change_in_texture = (prev_encoder_result.texture_maps - texture_maps) ** 2
