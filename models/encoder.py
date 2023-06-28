@@ -114,8 +114,8 @@ class Encoder(nn.Module):
         else:
             texture_map = nn.Sigmoid()(self.texture_map)
 
-        result = EncoderResult(translations=translation[:, :, opt_frames],
-                               quaternions=quaternion[:, opt_frames],
+        result = EncoderResult(translations=translation,
+                               quaternions=quaternion,
                                vertices=vertices,
                                texture_maps=texture_map,
                                lights=self.lights,

@@ -628,11 +628,14 @@ class Tracking6D:
         else:
             joined_encoder_result: EncoderResult = self.encoder(joined_frames)
 
+        keyframe_translations = joined_encoder_result.translations[:, :, keyframes]
+        keyframe_quaternions = joined_encoder_result.quaternions[:, keyframes]
+
         # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
         # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
         # TODO cont'd: be deprecated as they are sufficiently regularized by the optical flow
-        encoder_result = EncoderResult(translations=joined_encoder_result.translations[:, :, frames_join_idx],
-                                       quaternions=joined_encoder_result.quaternions[:, frames_join_idx],
+        encoder_result = EncoderResult(translations=keyframe_translations[:, :, frames_join_idx],
+                                       quaternions=keyframe_quaternions[:, frames_join_idx],
                                        vertices=joined_encoder_result.vertices,
                                        texture_maps=joined_encoder_result.texture_maps,
                                        lights=joined_encoder_result.lights,
@@ -641,10 +644,8 @@ class Tracking6D:
                                        quaternion_difference=joined_encoder_result.quaternion_difference[
                                            frames_join_idx])
 
-        encoder_result_flow_frames = EncoderResult(translations=joined_encoder_result.translations[
-                                                                :, :, flow_frames_join_idx],
-                                                   quaternions=joined_encoder_result.quaternions[
-                                                               :, flow_frames_join_idx],
+        encoder_result_flow_frames = EncoderResult(translations=keyframe_translations[:, :, flow_frames_join_idx],
+                                                   quaternions=keyframe_quaternions[:, flow_frames_join_idx],
                                                    vertices=joined_encoder_result.vertices,
                                                    texture_maps=joined_encoder_result.texture_maps,
                                                    lights=joined_encoder_result.lights,
