@@ -45,24 +45,24 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     image_small_dims = image.shape[-2], image.shape[-1]
     flow_image_small = transforms.Resize(image_small_dims)(flow_image)
     segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
-    flow_image_segmented = flow_image_small.mul(segmentation_mask)
+    # flow_image_segmented = flow_image_small.mul(segmentation_mask)
     image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
 
     flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up)
     transform = transforms.ToPILImage()
-    image_pure_flow_segmented = transform(flow_image_segmented)
+    # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
     image_old_pil = transform(image_prev[0] / 255.0)
 
     # Define output file paths
     prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
     new_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
-    flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+    # flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_image_path = output_dir / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
 
     # Save the images to disk
-    imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
+    # imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
     imageio.imwrite(new_image_path, image_new_pil)
     imageio.imwrite(prev_image_path, image_old_pil)
     imageio.imwrite(flow_image_path, flow_illustration)
@@ -288,7 +288,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         rendering_2_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_2.png")
 
         # Convert tensors to NumPy arrays
-        previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        # previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
         # previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
         current_rendered_image_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
         current_rendered_image_np = current_rendered_image_np.astype('uint8')
