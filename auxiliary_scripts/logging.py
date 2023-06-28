@@ -53,10 +53,10 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     transform = transforms.ToPILImage()
     # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
-    image_old_pil = transform(image_prev[0] / 255.0)
+    # image_old_pil = transform(image_prev[0] / 255.0)
 
     # Define output file paths
-    prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
+    # prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
     new_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
     # flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_image_path = output_dir / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
@@ -64,7 +64,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     # Save the images to disk
     # imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
     imageio.imwrite(new_image_path, image_new_pil)
-    imageio.imwrite(prev_image_path, image_old_pil)
+    # imageio.imwrite(prev_image_path, image_old_pil)
     imageio.imwrite(flow_image_path, flow_illustration)
 
 
