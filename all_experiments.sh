@@ -3,7 +3,6 @@
 # List of parameters (without the .yaml extension)
 params=(
   "config_deep_no_flow_gt"
-  "config_deep_no_flow_no_laplacian"
   "config_deep_no_flow_stochastically_add_keyframes"
   "config_deep_no_flow_tex_change_reg"
   "config_deep_no_flow"
