@@ -256,7 +256,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
 
         # Compute estimated shape
-        enc_result_prime = tracking6d.frames_and_flow_frames_inference(opt_frames_prime, opt_frames_prime)
+        enc_result_prime, _ = tracking6d.frames_and_flow_frames_inference(opt_frames_prime, opt_frames_prime)
 
         # Get texture map
         tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map) if tracking6d.gt_texture is None \
