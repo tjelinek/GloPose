@@ -239,6 +239,7 @@ class Tracking6D:
     FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.write_results: WriteResults = None
         self.write_folder = Path(write_folder)
 
         self.config = TrackerConfig(**config)
@@ -362,7 +363,7 @@ class Tracking6D:
             bboxes = {i: bboxes[sorted_bb_keys[i]] for i, key in zip(range(len(bboxes)), sorted_bb_keys)}
 
         our_losses = -np.ones((files.shape[0] - 1, 1))
-        write_results = WriteResults(self.write_folder, self.active_keyframes.images, files.shape[0])
+        self.write_results = WriteResults(self.write_folder, self.active_keyframes.images, files.shape[0])
         self.config.loss_rgb_weight = 0
 
         prev_image = self.active_keyframes.images[:, -1]
@@ -464,18 +465,21 @@ class Tracking6D:
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
-                visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
-                                           self.all_keyframes.observed_flows[:, -1, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                           self.all_keyframes.keyframes, stepi)
+                with torch.no_grad():
+                    #
+                    # visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
+                    #                            self.all_keyframes.observed_flows[
+                    #                            :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
+                    #                            self.all_keyframes.keyframes, stepi)
 
                     self.write_results.write_results(self, b0, bboxes, our_losses, segment, silh_losses, stepi,
                                                      encoder_result, self.all_keyframes.segments,
                                                      self.all_keyframes.images,
                                                      self.all_keyframes.images_feat, tex)
 
-                # Visualize flow we get from the video
-                visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment, stepi,
-                               self.write_folder)
+                    # Visualize flow we get from the video
+                    visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
+                                   stepi, self.write_folder)
 
             keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
             keep_keyframes = keep_keyframes[active_buffer_indices]
@@ -609,6 +613,9 @@ class Tracking6D:
                 self.optimizer.zero_grad()
                 jloss.backward()
                 self.optimizer.step()
+
+        visualize_theoretical_flow(self, theoretical_flow.clone().detach(), observed_flows[:, -1].clone().detach(),
+                                   keyframes, step_i)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 

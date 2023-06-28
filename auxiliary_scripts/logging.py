@@ -15,7 +15,6 @@ from segmentations import create_mask_from_string, get_bbox
 from utils import write_video, segment2bbox
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
-from GMA.core.utils import flow_viz
 from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
@@ -100,8 +99,19 @@ class WriteResults:
 
         with torch.no_grad():
 
-            self.write_rotations(detached_result, tracking6d.all_keyframes.keyframes,
-                                 tracking6d.active_keyframes.keyframes, stepi)
+            stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
+                                                  set(tracking6d.active_keyframes.keyframes))
+            print("Keyframes:", tracking6d.active_keyframes.keyframes)
+            print("Stochastically added keyframes: ", stochastically_added_keyframes)
+
+            self.tracking_log.write(f"Step {stepi}:\n")
+            self.tracking_log.write(f"Keyframes: {tracking6d.all_keyframes.keyframes}\n")
+            self.tracking_log.write(f"Stochastically added keyframes: "
+                                    f"{stochastically_added_keyframes}\n")
+
+            self.write_keyframe_rotations(tracking6d, detached_result)
+
+            self.write_all_encoder_rotations(tracking6d)
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
@@ -202,35 +212,35 @@ class WriteResults:
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
-    def write_rotations(self, detached_result, all_keyframes, active_keyframes, stepi):
+    def write_keyframe_rotations(self, tracking6d, detached_result):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
         angles_deg = angles_rad * 180.0 / math.pi
-        stochastically_added_keyframes = list(set(all_keyframes) -
-                                              set(active_keyframes))
-        print("Keyframes:", active_keyframes)
-        print("Stochastically added keyframes: ", stochastically_added_keyframes)
-        print("Last estimated rotation:", [(float(angles_deg[-1][i]) - float(angles_deg[0][i]))
-                                           for i in range(3)])
-        print("Previous estimated rotation:", [(float(angles_deg[-2][i]) - float(angles_deg[0][i]))
-                                               for i in range(3)])
-        self.tracking_log.write(f"Step {stepi}:\n")
-        self.tracking_log.write(f"Keyframes: {all_keyframes}\n")
-        self.tracking_log.write(f"Stochastically added keyframes: "
-                                f"{stochastically_added_keyframes}\n")
         rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
         for k in range(angles_rad.shape[0]):
             rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
                          for i in range(3)]
 
-            self.tracking_log.write(f"Keyframe {active_keyframes[k]} rotation: " + str(rotations) + '\n')
+            self.tracking_log.write(
+                f"Keyframe {tracking6d.active_keyframes.keyframes[k]} rotation: " + str(rotations) + '\n')
         for k in range(detached_result.quaternions.shape[1]):
             self.tracking_log.write(
-                f"Keyframe {active_keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+                f"Keyframe {tracking6d.active_keyframes.keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
         self.tracking_log.write('\n')
         self.tracking_log.flush()
+
+    def write_all_encoder_rotations(self, tracking6d):
+        self.tracking_log.write("============================================\n")
+        tracking6d.write_results.tracking_log.write("Writing all the states of the encoder\n")
+        self.tracking_log.write("============================================\n")
+        keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
+        encoder_result_prime = tracking6d.encoder(keyframes_prime)
+        self.write_keyframe_rotations(tracking6d, encoder_result_prime)
+        self.tracking_log.write("============================================\n")
+        self.tracking_log.write("END of Writing all the states of the encoder\n")
+        self.tracking_log.write("============================================\n")
 
 
 def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_frames, stepi):
