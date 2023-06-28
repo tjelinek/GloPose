@@ -256,16 +256,17 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
 
         # Compute estimated shape
-        translation_prime, quaternion_prime, vertices_prime, \
-            texture_maps_prime, lights_prime, tdiff_prime, qdiff_prime = tracking6d.encoder(opt_frames_prime)
+        enc_result_prime = tracking6d.frames_and_flow_frames_inference(opt_frames_prime, opt_frames_prime)
 
         # Get texture map
         tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map) if tracking6d.gt_texture is None \
             else tracking6d.gt_texture
 
         # Render keyframe images
-        rendered_keyframe_images, _ = tracking6d.get_rendered_image(b0, lights_prime, quaternion_prime, tex_rgb,
-                                                                    translation_prime, vertices_prime)
+        rendered_keyframe_images, _ = tracking6d.get_rendered_image(b0, enc_result_prime.lights,
+                                                                    enc_result_prime.quaternions, tex_rgb,
+                                                                    enc_result_prime.translations,
+                                                                    enc_result_prime.vertices)
 
         # Extract current and previous rendered images
         current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
