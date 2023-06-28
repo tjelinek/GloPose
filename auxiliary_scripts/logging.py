@@ -100,7 +100,7 @@ class WriteResults:
 
         with torch.no_grad():
 
-            quaternions = encoder_result.quaternions[0]  # Assuming shape is (1, N, 4)
+            quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
 
             # Convert quaternions to Euler angles
             angles_rad = quaternion_to_axis_angle(quaternions)
