@@ -240,7 +240,7 @@ class WriteResults:
         self.write_keyframe_rotations(tracking6d, encoder_result_prime)
         self.tracking_log.write("============================================\n")
         self.tracking_log.write("END of Writing all the states of the encoder\n")
-        self.tracking_log.write("============================================\n")
+        self.tracking_log.write("============================================\n\n\n")
 
 
 def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_frames, stepi):
