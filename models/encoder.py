@@ -29,9 +29,11 @@ class Encoder(nn.Module):
         self.quaternion = nn.Parameter(qinit)
 
         # Offsets initialization
-        offsets = torch.zeros(1, 1, config.input_frames, 7)
-        offsets[:, :, :, 3] = 1.0
-        self.register_buffer('offsets', offsets)
+        quaternion_offsets = torch.zeros(1, config.input_frames, 4)
+        quaternion_offsets[:, :, 0] = 1.0
+        translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
+        self.register_buffer('quaternion_offsets', quaternion_offsets)
+        self.register_buffer('translation_offsets', translation_offsets)
 
         # Used translation and quaternion
         self.register_buffer('used_tran', translation_init.clone())
@@ -87,8 +89,9 @@ class Encoder(nn.Module):
         diffs = []
         dists = [qdist(quaternion_all[-1], quaternion_all[-1]), qdist(quaternion_all[-1], quaternion_all[-1])]
         for frmi in range(1, opt_frames[-1] + 1):
-            quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.offsets[:, 0, frmi, 3:]))
-            translation0 = self.translation[:, :, frmi] + self.offsets[:, :, frmi, :3]
+            quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.quaternion_offsets[:, frmi]))
+            translation0 = self.translation[:, :, frmi] + self.translation_offsets[:, :, frmi]
+            # breakpoint()
             if frmi not in opt_frames:
                 quaternion0 = quaternion0.detach()
                 translation0 = translation0.detach()
@@ -99,7 +102,7 @@ class Encoder(nn.Module):
             translation_all.append(translation0)
 
         if max(opt_frames) == 0:
-            quaternion0 = qmult(qnorm(self.quaternion[:, 0]), qnorm(self.offsets[:, 0, 0, 3:]))
+            quaternion0 = qmult(qnorm(self.quaternion[:, 0]), qnorm(self.quaternion_offsets[:, 0]))
 
         quaternion = torch.stack(quaternion_all, 1).contiguous()
         translation = torch.stack(translation_all, 2).contiguous()

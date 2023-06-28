@@ -401,10 +401,11 @@ class Tracking6D:
 
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
-            self.encoder.offsets[:, :, stepi, :3] = (
-                    self.encoder.used_tran[:, :, stepi - 1] + self.encoder.offsets[:, :, stepi - 1, :3])
-            self.encoder.offsets[:, 0, stepi, 3:] = qmult(qnorm(self.encoder.used_quat[:, stepi - 1]),
-                                                          qnorm(self.encoder.offsets[:, 0, stepi - 1, 3:]))
+            self.encoder.translation_offsets[:, :, stepi] = self.encoder.used_tran[:, :, stepi - 1] + \
+                                                            self.encoder.translation_offsets[:, :, stepi - 1]
+
+            self.encoder.quaternion_offsets[:, stepi] = qmult(qnorm(self.encoder.used_quat[:, stepi - 1]),
+                                                              qnorm(self.encoder.quaternion_offsets[:, stepi - 1]))
 
             with torch.no_grad():
                 if gt_flows is None:
