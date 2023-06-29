@@ -4,3 +4,5 @@ output/*
 saved_models/*
 *._*
 /GMA/
+/RAFT-occl-uncertainty/
+/RAFT/
