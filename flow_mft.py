@@ -13,7 +13,8 @@ from RAFT.core.raft import RAFT
 
 
 def get_flow_model_mft():
-    args = Namespace(model='RAFT-occl-uncertainty/RAFT/models/raft-things.pth', model_name='RAFT', path=None,
+    args = Namespace(model='/home/jelint19/datagrid/mnt/home.stud/neoramic/repos/raft_new_debug/RAFT/checkpoints/'
+                           '50000_raft-things-sintel-occlusion-uncertainty.pth', model_name='RAFT', path=None,
                      mixed_precision=True, alternate_corr=False, small=False)
     model = torch.nn.DataParallel(RAFT(args))
     model.load_state_dict(torch.load(args.model))
