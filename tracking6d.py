@@ -117,7 +117,8 @@ class TrackerConfig:
     use_gt: bool = False
 
     # Optical flow
-    flow_model: str = 'RAFT'  # Also 'GMA' and 'RFT'
+    flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
+    segmentation_mask_erosion_iters: int = 50
 
 
 @dataclass
@@ -407,6 +408,10 @@ class Tracking6D:
 
             image_new_x255 = (self.active_keyframes.images[:, -1, :, :, :]).float() * 255
             image_prev_x255 = (self.active_keyframes.images[:, -2, :, :, :]).float() * 255
+            if self.active_keyframes.images.shape[1] > 2:
+                image_preprev_x255 = (self.active_keyframes.images[:, -2, :, :, :]).float() * 255
+            else:
+                image_preprev_x255 = None
 
             start = time.time()
             b0 = get_bbox(self.all_keyframes.segments)
@@ -427,6 +432,12 @@ class Tracking6D:
                         observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_prev_x255,
                                                                                          image_new_x255,
                                                                                          self.model_flow)
+                        # TODO finish this part of the occlusion computation
+                        if image_preprev_x255 is not None:
+                            _, occlusion_preprev, _ = get_flow_from_images_mft(image_preprev_x255, image_new_x255,
+                                                                               self.model_flow)
+                        else:
+                            occlusion_fraction = 0.0
 
                     observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / (0.5 * observed_flow.shape[-2])
                     observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / (0.5 * observed_flow.shape[-1])
