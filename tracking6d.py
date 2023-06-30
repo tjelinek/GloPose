@@ -225,7 +225,7 @@ class KeyframeBuffer:
                     modified_attr = modified_attr[:, :-max_keyframes]
                     setattr(overflow_buffer, attr_name, modified_attr)
 
-            deleted_buffer = KeyframeBuffer.merge(deleted_buffer, overflow_buffer)
+            deleted_buffer, _, _ = KeyframeBuffer.merge(deleted_buffer, overflow_buffer)
 
         return deleted_buffer
 
