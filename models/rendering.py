@@ -35,8 +35,8 @@ class RenderingKaolin(nn.Module):
         self.config = config
         self.height = height
         self.width = width
-        camera_proj = kaolin.render.camera.generate_perspective_projection(1.57 / 2,
-                                                                           self.width / self.height)  # 45 degrees
+        camera_proj = kaolin.render.camera.generate_perspective_projection(1.57 / 2,  # field of view 45 degrees
+                                                                           self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
         self.register_buffer('camera_trans', torch.Tensor([0, 0, self.config.camera_distance])[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
