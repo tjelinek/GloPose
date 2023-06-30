@@ -109,7 +109,7 @@ class WriteResults:
             self.tracking_log.write(f"Stochastically added keyframes: "
                                     f"{stochastically_added_keyframes}\n")
 
-            self.write_keyframe_rotations(tracking6d, detached_result)
+            self.write_keyframe_rotations(detached_result, tracking6d.active_keyframes.keyframes)
 
             self.write_all_encoder_rotations(tracking6d)
 
@@ -212,7 +212,7 @@ class WriteResults:
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
-    def write_keyframe_rotations(self, tracking6d, detached_result):
+    def write_keyframe_rotations(self, detached_result, keyframes):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
@@ -222,12 +222,11 @@ class WriteResults:
         for k in range(angles_rad.shape[0]):
             rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
                          for i in range(3)]
-
             self.tracking_log.write(
-                f"Keyframe {tracking6d.active_keyframes.keyframes[k]} rotation: " + str(rotations) + '\n')
+                f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
         for k in range(detached_result.quaternions.shape[1]):
             self.tracking_log.write(
-                f"Keyframe {tracking6d.active_keyframes.keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+                f"Keyframe {keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
         self.tracking_log.write('\n')
         self.tracking_log.flush()
 
@@ -237,7 +236,7 @@ class WriteResults:
         self.tracking_log.write("============================================\n")
         keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
         encoder_result_prime = tracking6d.encoder(keyframes_prime)
-        self.write_keyframe_rotations(tracking6d, encoder_result_prime)
+        self.write_keyframe_rotations(encoder_result_prime, keyframes_prime)
         self.tracking_log.write("============================================\n")
         self.tracking_log.write("END of Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n\n\n")
