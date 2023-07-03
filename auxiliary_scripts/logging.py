@@ -89,8 +89,8 @@ class WriteResults:
         self.all_proj.release()
         self.all_proj_filtered.release()
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, gt_segm, silh_losses, stepi, encoder_result,
-                      rendering_mask, images, images_feat, tex):
+    def write_results(self, tracking6d, b0, bboxes, our_losses, ground_truth_segment, silh_losses, stepi,
+                      encoder_result, rendering_masks, images, images_feat, tex):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -153,11 +153,11 @@ class WriteResults:
             write_video(images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
                         os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
             write_video(
-                (images[0, :, :3] * rendering_mask[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
+                (images[0, :, :3] * rendering_masks[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
                 os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = rendering_mask[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                seg = rendering_masks[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
                 save_image(seg, os.path.join(tracking6d.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(tracking6d.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
@@ -175,21 +175,22 @@ class WriteResults:
                 gt_segm = None
                 if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
                     m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
-                    gt_segm = gt_segm[0, 0, -1] * 0
+                    gt_segm = ground_truth_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
                 elif stepi in bboxes:
                     gt_segm = tracking6d.tracker.process_segm(bboxes[stepi])[0].to(tracking6d.device)
                 if gt_segm is not None:
-                    self.baseline_iou[stepi - 1] = float((gt_segm[0, 0, -1] * gt_segm > 0).sum()) / float(
-                        ((gt_segm[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
+                    self.baseline_iou[stepi - 1] = float((ground_truth_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
+                        ((ground_truth_segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
                     self.our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
                         ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
             elif bboxes is not None:
                 bbox = tracking6d.config.image_downsample * torch.tensor(
                     [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
-                self.baseline_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(gt_segm[0, 0, -1])],
-                                                                               dtype=torch.float64))
+                self.baseline_iou[stepi - 1] = bops.box_iou(bbox,
+                                                            torch.tensor([segment2bbox(ground_truth_segment[0, 0, -1])],
+                                                                         dtype=torch.float64))
                 self.our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
                                                                           dtype=torch.float64))
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
@@ -200,15 +201,15 @@ class WriteResults:
             self.all_input.write(
                 (images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
                  [2, 1, 0], -1] * 255).astype(np.uint8))
-            self.all_segm.write(((images[0, :, :3] * rendering_mask[0, :, 1:2]).clamp(min=0,
-                                                                                      max=1).cpu().numpy().transpose(
+            self.all_segm.write(((images[0, :, :3] * rendering_masks[0, :, 1:2]).clamp(min=0,
+                                                                                       max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
             self.all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
                                                                                                            0)[:, :,
                                  [2, 1, 0], -1] * 255).astype(np.uint8))
             if silh_losses[-1] > 0.3:
-                renders[0, -1, 0, 3] = gt_segm[0, 0, -1]
-                renders[0, -1, 0, :3] = images[0, -1, :3] * gt_segm[0, 0, -1]
+                renders[0, -1, 0, 3] = ground_truth_segment[0, 0, -1]
+                renders[0, -1, 0, :3] = images[0, -1, :3] * ground_truth_segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
