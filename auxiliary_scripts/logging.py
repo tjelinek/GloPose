@@ -223,7 +223,8 @@ class WriteResults:
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
-    def render_silhouette_overlap(self, last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):
+    @staticmethod
+    def render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):
         last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0
         last_segment_mask_binary = last_segment_mask[0] > 0
         silh_overlap_image = torch.zeros(1, *last_segment.shape[-2:], 3)
