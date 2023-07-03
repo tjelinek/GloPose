@@ -4,5 +4,6 @@ output/*
 saved_models/*
 *._*
 /GMA/
-/RAFT-occl-uncertainty/
+/RAFTocclUncertainty/
 /RAFT/
+/behave-dataset/
