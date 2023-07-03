@@ -127,7 +127,12 @@ class WriteResults:
                                                                   detached_result.translations,
                                                                   detached_result.vertices)
 
+            rendered_silhouette = renders[:, :, 0, -1:]
+            last_rendered_silhouette = rendered_silhouette[0, -1]
             last_segment = ground_truth_segments[:, -1]
+            last_segment_mask = last_segment[:, 1]
+
+            self.render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d)
 
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
@@ -215,6 +220,26 @@ class WriteResults:
                 renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+
+    def render_silhouette_overlap(self, last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):
+        last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0
+        last_segment_mask_binary = last_segment_mask[0] > 0
+        silh_overlap_image = torch.zeros(1, *last_segment.shape[-2:], 3)
+        R = torch.tensor([255.0, 0, 0])
+        G = torch.tensor([0, 255.0, 0])
+        B = torch.tensor([0, 0, 255.0])
+        # Set green where there is silhouette1 and silhouette2
+        indicesG = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary > 0))
+        silh_overlap_image[0, indicesG[:, 0], indicesG[:, 1]] = G
+        # Set red where there is silhouette1 and not silhouette2
+        indicesR = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary <= 0))
+        silh_overlap_image[0, indicesR[:, 0], indicesR[:, 1]] = R
+        # Set blue where there is not silhouette1 and silhouette2
+        indicesB = torch.nonzero((last_segment_mask_binary <= 0) & (last_rendered_silhouette_binary > 0))
+        silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = B
+        silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
+        silhouette_overlap_path = tracking6d.write_folder / Path(f"silhouette_overlap_{stepi}.png")
+        imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
     def write_keyframe_rotations(self, detached_result, keyframes):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
