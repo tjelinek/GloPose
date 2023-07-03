@@ -131,7 +131,7 @@ class WriteResults:
             last_rendered_silhouette = rendered_silhouette[0, -1]
             last_segment = ground_truth_segments[:, -1:]
             last_segment_reshaped = last_segment[:, 0]
-            last_segment_mask = last_segment_reshaped[:, 0, 1]
+            last_segment_mask = last_segment_reshaped[:, 1]
 
             self.render_silhouette_overlap(last_rendered_silhouette, last_segment_reshaped, last_segment_mask,
                                            stepi, tracking6d)
@@ -240,6 +240,7 @@ class WriteResults:
         # Set blue where there is not silhouette1 and silhouette2
         indicesB = torch.nonzero((last_segment_mask_binary <= 0) & (last_rendered_silhouette_binary > 0))
         silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = B
+
         silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
         silhouette_overlap_path = tracking6d.write_folder / Path(f"silhouette_overlap_{stepi}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
