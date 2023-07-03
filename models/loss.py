@@ -4,6 +4,7 @@ import torch
 
 from kornia.losses import total_variation
 from models.encoder import EncoderResult
+from utils import erode_segment_mask
 
 
 class FMOLoss(nn.Module):
@@ -87,13 +88,24 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         if self.config.loss_flow_weight > 0:
-            segment_masks = observed_flow_mask[0, :, -1:]
+            segment_masks = observed_flow_mask[0, :, -1:]  # Shape (N, 1, H, W)
 
-            flow_segment_masks = segment_masks.repeat(1, 2, 1, 1)
+            # Perform erosion of the segmentation mask
+            if self.config.segmentation_mask_erosion_iters:
+                erosion_iterations = self.config.segmentation_mask_erosion_iters
+                segment_masks = erode_segment_mask(erosion_iterations, segment_masks)
+
+            flow_segment_masks = segment_masks.repeat(1, 2, 1, 1)  # Shape (N, 2, H, W)
+            flow_segment_masks_binary_2_channels = flow_segment_masks > 0
             flow_segment_masks_binary = flow_segment_masks[:, 1] > 0
 
-            observed_flow_clone = observed_flow.clone()  # Size (1, N, H, W, 2)
-            observed_flow_clone = observed_flow_clone * flow_segment_masks
+            if self.config.segmentation_mask_erosion_iters:
+                flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
+                flow_from_tracking_tmp = flow_from_tracking_tmp * flow_segment_masks_binary_2_channels
+                flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
+
+            observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
+            observed_flow_clone = observed_flow_clone * flow_segment_masks_binary_2_channels[None]
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))

@@ -17,6 +17,21 @@ def segment2bbox(segment):
     return bbox
 
 
+def erode_segment_mask(erosion_iterations, segment_masks):
+    """
+
+    :param erosion_iterations: int - iterations of erosion by 3x3 kernel
+    :param segment_masks: Tensor of shape (N, 1, H, W)
+    :return: Eroded segment mask of the same shape
+    """
+    eroded_segment_mask = -segment_masks.clone()
+    for _ in range(erosion_iterations):
+        eroded_segment_mask = torch.nn.functional.max_pool2d(eroded_segment_mask, kernel_size=3,
+                                                             padding=(1, 1))
+    segment_masks *= -1
+    return segment_masks
+
+
 def write_video(array4d, path, fps=6):
     array4d[array4d < 0] = 0
     array4d[array4d > 1] = 1
