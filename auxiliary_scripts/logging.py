@@ -89,8 +89,8 @@ class WriteResults:
         self.all_proj.release()
         self.all_proj_filtered.release()
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi,
-                      encoder_result, ground_truth_segments, images, images_feat, tex):
+    def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
+                      ground_truth_segments, images, images_feat, tex):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -129,10 +129,12 @@ class WriteResults:
 
             rendered_silhouette = renders[:, :, 0, -1:]
             last_rendered_silhouette = rendered_silhouette[0, -1]
-            last_segment = ground_truth_segments[:, -1]
-            last_segment_mask = last_segment[:, 1]
+            last_segment = ground_truth_segments[:, -1:]
+            last_segment_reshaped = last_segment[:, 0]
+            last_segment_mask = last_segment_reshaped[:, 0, 1]
 
-            self.render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d)
+            self.render_silhouette_overlap(last_rendered_silhouette, last_segment_reshaped, last_segment_mask,
+                                           stepi, tracking6d)
 
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
