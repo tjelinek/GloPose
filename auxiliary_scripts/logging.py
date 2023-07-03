@@ -127,6 +127,8 @@ class WriteResults:
                                                                   detached_result.translations,
                                                                   detached_result.vertices)
 
+            last_segment = ground_truth_segments[:, -1]
+
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
             write_renders(torch.cat(
@@ -172,27 +174,25 @@ class WriteResults:
                 save_image(feat_renders_crop[0, tmpi, 0, :],
                            os.path.join(tracking6d.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
-            ground_truth_segment = ground_truth_segments[:, -1]
-
             if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
                 gt_segm = None
                 if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
                     m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
-                    gt_segm = ground_truth_segment[0, 0, -1] * 0
+                    gt_segm = last_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
                 elif stepi in bboxes:
                     gt_segm = tracking6d.tracker.process_segm(bboxes[stepi])[0].to(tracking6d.device)
                 if gt_segm is not None:
-                    self.baseline_iou[stepi - 1] = float((ground_truth_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
-                        ((ground_truth_segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
+                    self.baseline_iou[stepi - 1] = float((last_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
+                        ((last_segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
                     self.our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
                         ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
             elif bboxes is not None:
                 bbox = tracking6d.config.image_downsample * torch.tensor(
                     [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
                 self.baseline_iou[stepi - 1] = bops.box_iou(bbox,
-                                                            torch.tensor([segment2bbox(ground_truth_segment[0, 0, -1])],
+                                                            torch.tensor([segment2bbox(last_segment[0, 0, -1])],
                                                                          dtype=torch.float64))
                 self.our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
                                                                           dtype=torch.float64))
@@ -211,8 +211,8 @@ class WriteResults:
                                                                                                            0)[:, :,
                                  [2, 1, 0], -1] * 255).astype(np.uint8))
             if silh_losses[-1] > 0.3:
-                renders[0, -1, 0, 3] = ground_truth_segment[0, 0, -1]
-                renders[0, -1, 0, :3] = images[0, -1, :3] * ground_truth_segment[0, 0, -1]
+                renders[0, -1, 0, 3] = last_segment[0, 0, -1]
+                renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
