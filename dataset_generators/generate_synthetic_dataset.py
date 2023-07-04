@@ -129,7 +129,7 @@ if __name__ == '__main__':
     rendering_path = synthetic_dataset_folder / Path('Textured_Sphere') / rendering_dir
     segmentation_path = synthetic_dataset_folder / Path('Textured_Sphere') / segmentation_dir
     optical_flow_path = synthetic_dataset_folder / Path('Textured_Sphere') / optical_flow_dir
-    rots = generate_1_DoF_rotation(2.0)
+    rots = generate_1_DoF_rotation(step=2.0)
     generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path, rots)
 
     rendering_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / rendering_dir
