@@ -126,20 +126,17 @@ if __name__ == '__main__':
     segmentation_dir = Path('segmentations')
     optical_flow_dir = Path('optical_flow')
 
-    rendering_path = synthetic_dataset_folder / Path('Textured_Sphere') / rendering_dir
-    segmentation_path = synthetic_dataset_folder / Path('Textured_Sphere') / segmentation_dir
-    optical_flow_path = synthetic_dataset_folder / Path('Textured_Sphere') / optical_flow_dir
-    rots = generate_1_DoF_rotation(step=2.0)
-    generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path, rots)
+    objects = [
+        ('Textured_Sphere_2', generate_textured_sphere),
+        ('8_Colored_Sphere_2', generate_8_colored_sphere),
+        ('6_Colored_Cube_2', generate_6_colored_cube)
+    ]
 
-    rendering_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / rendering_dir
-    segmentation_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / segmentation_dir
-    optical_flow_path = synthetic_dataset_folder / Path('8_Colored_Sphere') / optical_flow_dir
     rots = generate_1_DoF_rotation(step=2.0)
-    generate_8_colored_sphere(_config, rendering_path, segmentation_path, optical_flow_path, rots)
 
-    rendering_path = synthetic_dataset_folder / Path('6_Colored_Cube') / rendering_dir
-    segmentation_path = synthetic_dataset_folder / Path('6_Colored_Cube') / segmentation_dir
-    optical_flow_path = synthetic_dataset_folder / Path('6_Colored_Cube') / optical_flow_dir
-    rots = generate_1_DoF_rotation(step=2.0)
-    generate_6_colored_cube(_config, rendering_path, segmentation_path, optical_flow_path, rots)
+    for obj_name, generate_obj_func in objects:
+        rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
+        segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
+        optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
+
+        generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, rots)
