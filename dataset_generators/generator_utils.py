@@ -118,11 +118,7 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
 def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
                         rendering_destination, segmentation_destination, DEVICE):
     prev_encoder_result = None
-    for frame_i, (pitch, roll, yaw) in enumerate(rotations):
-        rotation_quaternion = quaternion_from_euler(roll=torch.Tensor([deg_to_rad(roll)]),
-                                                    pitch=torch.Tensor([deg_to_rad(pitch)]),
-                                                    yaw=torch.Tensor([deg_to_rad(yaw)]))
-        rotation_quaternion_tensor = torch.Tensor(rotation_quaternion)
+    prev_ren_features = None
 
     for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
         axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
