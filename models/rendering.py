@@ -127,7 +127,7 @@ class RenderingKaolin(nn.Module):
 
         Returns:
             torch.Tensor: The computed theoretical flow between consecutive frames. The output flow is respective to the
-                          coordinates range [-1, 1].
+                          coordinates range [0, 1].
         """
         theoretical_flows = []
         rendering_masks = []
