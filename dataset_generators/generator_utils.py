@@ -4,11 +4,12 @@ import numpy as np
 import torch
 from kornia.geometry import quaternion_to_rotation_matrix
 from pathlib import Path
+from pytorch3d.transforms.rotation_conversions import axis_angle_to_quaternion
 
-from RAFT.core.utils import flow_viz
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
-from utils import quaternion_from_euler, deg_to_rad
+from utils import deg_to_rad
+from flow import visualize_flow_with_images
 
 
 def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, rendering_destination,
@@ -73,17 +74,18 @@ def setup_renderer(config, faces, height, width, device):
 
 
 def generate_2_DoF_rotations(step=10.0):
-    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, step)
-    rotations_yaw = np.concatenate([np.zeros(rotations_pitch.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
-    rotations_roll = np.zeros(rotations_yaw.shape)
-    return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
+    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_y = np.concatenate([np.zeros(rotations_x.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
+    rotations_z = np.zeros(rotations_y.shape)
+    return list(zip(rotations_x, rotations_y, rotations_z))
 
 
 def generate_1_DoF_rotation(step=10.0):
-    rotations_pitch = np.arange(0.0, 1 * 360.0 + 0.001, step)
-    rotations_yaw = np.zeros(rotations_pitch.shape)
-    rotations_roll = np.zeros(rotations_yaw.shape)
-    return list(zip(rotations_pitch, rotations_roll, rotations_yaw))
+    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_x = np.zeros(rotations_z.shape)
+    rotations_y = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
 
 
 def generate_rotating_textured_object(config, prototype_path, texture_path: Path, rendering_destination: Path,
@@ -122,7 +124,10 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
                                                     yaw=torch.Tensor([deg_to_rad(yaw)]))
         rotation_quaternion_tensor = torch.Tensor(rotation_quaternion)
 
-        rotation_matrix = quaternion_to_rotation_matrix(torch.Tensor(rotation_quaternion))[None]
+    for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
+        axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
+        rotation_quaternion_tensor = axis_angle_to_quaternion(axis_angle_tensor)  # Shape (4)
+        rotation_matrix = quaternion_to_rotation_matrix(rotation_quaternion_tensor)[None]
 
         current_encoder_result = EncoderResult(translations=rendering.obj_center[None, None].to(DEVICE),
                                                quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
@@ -147,8 +152,26 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             else:
                 ren_features = rendering_result.ren_mesh_vertices_features
 
+            if prev_ren_features is not None:
+                prev_ren_features_ = prev_ren_features[0].to(torch.uint8).permute(2, 0, 1)  # Shape [C, H, W]
+                ren_features_ = ren_features[0].to(torch.uint8).permute(2, 0, 1)  # Shape [C, H, W]
+                optical_flow_ = optical_flow[0, 0].clone()
+                optical_flow_[..., 0] = optical_flow_[..., 0] * optical_flow_.shape[-2]
+                optical_flow_[..., 1] = optical_flow_[..., 1] * optical_flow_.shape[-3]
+                optical_flow_ = optical_flow_.detach().cpu().numpy()
+                flow_illustration = visualize_flow_with_images(prev_ren_features_, ren_features_, optical_flow_)
+
+                optical_flow_illustration_destination = \
+                    optical_flow_destination.with_name(optical_flow_destination.stem +
+                                                       "_illustration" + optical_flow_destination.suffix)
+                optical_flow_illustration_destination.mkdir(exist_ok=True, parents=True)
+                file_name = optical_flow_illustration_destination / f"flow_{frame_i}.png"
+                imageio.imwrite(file_name, flow_illustration)
+
             save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,
                                  optical_flow.detach().cpu(), rendering_destination,
                                  segmentation_destination, optical_flow_destination)
+
+            prev_ren_features = ren_features
 
         prev_encoder_result = current_encoder_result
