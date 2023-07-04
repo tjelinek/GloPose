@@ -118,7 +118,7 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
 
 
 if __name__ == '__main__':
-    _config = load_config('./configs/config_deep.yaml')
+    _config = load_config('./configs/config_generator.yaml')
     _config = types.SimpleNamespace(**_config)
 
     synthetic_dataset_folder = dataset_folder / Path('SyntheticObjects')
