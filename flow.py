@@ -41,8 +41,8 @@ def visualize_flow_with_images(image1, image2, flow_up):
     """
     Visualizes flow_up along with image1 and image2.
 
-    :param image1: uint8 image with 0-255 as color
-    :param image2: uint8 image with 0-255 as color
+    :param image1: uint8 image with 0-255 as color in [C, H, W] format
+    :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] fine flow
     :return: PIL Image
     """
@@ -53,8 +53,8 @@ def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
     """
     Visualizes flow_up and flow_up_prime along with image1 and image2.
 
-    :param image1: uint8 image with 0-255 as color
-    :param image2: uint8 image with 0-255 as color
+    :param image1: uint8 image with 0-255 as color in [C, H, W] format
+    :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
     :return: PIL Image
@@ -65,8 +65,8 @@ def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
 def visualize_flow(image1, image2, flow_up, flow_up_prime):
     """
 
-    :param image1: uint8 image with 0-255 as color
-    :param image2: uint8 image with 0-255 as color
+    :param image1: uint8 image with 0-255 as color in [C, H, W] format
+    :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
     :return:
