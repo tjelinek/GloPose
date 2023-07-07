@@ -161,14 +161,14 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
     prev_encoder_result = None
     prev_ren_features = None
 
+    translations = torch.zeros(1, 1, 1, 3).to(DEVICE)
     for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
         axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
         rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
                                                               order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
         rotation_matrix = quaternion_to_rotation_matrix(rotation_quaternion_tensor,
                                                         order=QuaternionCoeffOrder.WXYZ)[None]
-
-        current_encoder_result = EncoderResult(translations=rendering.obj_center[None, None].to(DEVICE),
+        current_encoder_result = EncoderResult(translations=translations,
                                                quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
                                                vertices=vertices.to(DEVICE),
                                                texture_maps=None,
