@@ -150,7 +150,7 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
     rendering = setup_renderer(config, faces, width, height, DEVICE)
 
     if rotations is None:
-        rotations = generate_rotations_x(2.0)
+        rotations = generate_rotations_y(2.0)
 
     render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
                         rendering_destination, segmentation_destination, DEVICE)
