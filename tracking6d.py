@@ -669,6 +669,11 @@ class Tracking6D:
         keyframe_translations = joined_encoder_result.translations[:, :, joined_frames]
         keyframe_quaternions = joined_encoder_result.quaternions[:, joined_frames]
 
+        keyframes_translation_difference = joined_encoder_result.translation_difference[frames_join_idx]
+        keyframes_quaternion_difference = joined_encoder_result.quaternion_difference[frames_join_idx]
+        flow_frames_translation_difference = joined_encoder_result.translation_difference[flow_frames_join_idx]
+        flow_frames_quaternion_difference = joined_encoder_result.quaternion_difference[flow_frames_join_idx]
+
         # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
         # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
         # TODO cont'd: be deprecated as they are sufficiently regularized by the optical flow
