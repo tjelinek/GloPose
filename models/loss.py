@@ -109,7 +109,7 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
-            object_areas_fraction = object_areas / torch.numel(flow_segment_masks_binary[1:])
+            object_areas_fraction = object_areas / torch.numel(flow_segment_masks_binary)
 
             observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
             observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
