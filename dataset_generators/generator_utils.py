@@ -73,17 +73,58 @@ def setup_renderer(config, faces, height, width, device):
     return rendering
 
 
-def generate_2_DoF_rotations(step=10.0):
-    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
-    rotations_y = np.concatenate([np.zeros(rotations_x.shape[0] // 2), np.arange(0.0, 0.5 * 360.0 + 0.001, 10.0)])
-    rotations_z = np.zeros(rotations_y.shape)
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_1_DoF_rotation(step=10.0):
+def generate_rotations_x(step=10.0):
     rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
     rotations_y = np.zeros(rotations_x.shape)
     rotations_z = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_y(step=10.0):
+    rotations_y = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_x = np.zeros(rotations_y.shape)
+    rotations_z = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_z(step=10.0):
+    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_x = np.zeros(rotations_z.shape)
+    rotations_y = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_xy(step=10.0):
+    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_y = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_z = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_xz(step=10.0):
+    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_y = np.zeros(rotations_x.shape)
+    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_yz(step=10.0):
+    rotations_y = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_x = np.zeros(rotations_y.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
+def generate_rotations_xyz(step=10.0):
+    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_y = np.arange(0.0, 1 * 360.0 + 0.001, step)
+    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
 
     return list(zip(rotations_x, rotations_y, rotations_z))
 
@@ -109,7 +150,7 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
     rendering = setup_renderer(config, faces, width, height, DEVICE)
 
     if rotations is None:
-        rotations = generate_1_DoF_rotation(2.0)
+        rotations = generate_rotations_x(2.0)
 
     render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
                         rendering_destination, segmentation_destination, DEVICE)
