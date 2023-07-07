@@ -152,19 +152,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
             if prev_ren_features is not None:
                 prev_ren_features_ = prev_ren_features[0].to(torch.uint8).permute(2, 0, 1)  # Shape [C, H, W]
-                ren_features_ = ren_features[0].to(torch.uint8).permute(2, 0, 1)  # Shape [C, H, W]
-                optical_flow_ = optical_flow[0, 0].clone()
-                optical_flow_[..., 0] = optical_flow_[..., 0] * optical_flow_.shape[-2]
-                optical_flow_[..., 1] = optical_flow_[..., 1] * optical_flow_.shape[-3]
-                optical_flow_ = optical_flow_.detach().cpu().numpy()
-                flow_illustration = visualize_flow_with_images(prev_ren_features_, ren_features_, optical_flow_)
-
-                optical_flow_illustration_destination = \
-                    optical_flow_destination.with_name(optical_flow_destination.stem +
-                                                       "_illustration" + optical_flow_destination.suffix)
-                optical_flow_illustration_destination.mkdir(exist_ok=True, parents=True)
-                file_name = optical_flow_illustration_destination / f"flow_{frame_i}.png"
-                imageio.imwrite(file_name, flow_illustration)
+                # generate_optical_flow_illustration(ren_features, prev_ren_features_, optical_flow, frame_i,
+                #                                    optical_flow_destination)
 
             save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,
                                  optical_flow.detach().cpu(), rendering_destination,
@@ -173,3 +162,18 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             prev_ren_features = ren_features
 
         prev_encoder_result = current_encoder_result
+
+
+def generate_optical_flow_illustration(ren_features, prev_ren_features_, optical_flow, frame_i, save_destination):
+    ren_features_ = ren_features[0].to(torch.uint8).permute(2, 0, 1)  # Shape [C, H, W]
+    optical_flow_ = optical_flow[0, 0].clone()
+    optical_flow_[..., 0] = optical_flow_[..., 0] * optical_flow_.shape[-2]
+    optical_flow_[..., 1] = optical_flow_[..., 1] * optical_flow_.shape[-3]
+    optical_flow_ = optical_flow_.detach().cpu().numpy()
+    flow_illustration = visualize_flow_with_images(prev_ren_features_, ren_features_, optical_flow_)
+    optical_flow_illustration_destination = \
+        save_destination.with_name(save_destination.stem +
+                                   "_illustration" + save_destination.suffix)
+    optical_flow_illustration_destination.mkdir(exist_ok=True, parents=True)
+    file_name = optical_flow_illustration_destination / f"flow_{frame_i}.png"
+    imageio.imwrite(file_name, flow_illustration)
