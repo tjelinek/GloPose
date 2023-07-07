@@ -3,8 +3,8 @@ import kaolin
 import numpy as np
 import torch
 from kornia.geometry import quaternion_to_rotation_matrix
+from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
-from pytorch3d.transforms.rotation_conversions import axis_angle_to_quaternion
 
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
@@ -122,8 +122,10 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
     for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
         axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
-        rotation_quaternion_tensor = axis_angle_to_quaternion(axis_angle_tensor)  # Shape (4)
-        rotation_matrix = quaternion_to_rotation_matrix(rotation_quaternion_tensor)[None]
+        rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
+                                                              order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
+        rotation_matrix = quaternion_to_rotation_matrix(rotation_quaternion_tensor,
+                                                        order=QuaternionCoeffOrder.WXYZ)[None]
 
         current_encoder_result = EncoderResult(translations=rendering.obj_center[None, None].to(DEVICE),
                                                quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
