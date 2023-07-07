@@ -81,9 +81,9 @@ def generate_2_DoF_rotations(step=10.0):
 
 
 def generate_1_DoF_rotation(step=10.0):
-    rotations_z = np.arange(0.0, 1 * 360.0 + 0.001, step)
-    rotations_x = np.zeros(rotations_z.shape)
+    rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
     rotations_y = np.zeros(rotations_x.shape)
+    rotations_z = np.zeros(rotations_x.shape)
 
     return list(zip(rotations_x, rotations_y, rotations_z))
 
