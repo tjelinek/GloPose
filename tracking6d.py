@@ -682,20 +682,16 @@ class Tracking6D:
                                        vertices=joined_encoder_result.vertices,
                                        texture_maps=joined_encoder_result.texture_maps,
                                        lights=joined_encoder_result.lights,
-                                       translation_difference=joined_encoder_result.translation_difference[
-                                           frames_join_idx],
-                                       quaternion_difference=joined_encoder_result.quaternion_difference[
-                                           frames_join_idx])
+                                       translation_difference=keyframes_translation_difference,
+                                       quaternion_difference=keyframes_quaternion_difference)
 
         encoder_result_flow_frames = EncoderResult(translations=keyframe_translations[:, :, flow_frames_join_idx],
                                                    quaternions=keyframe_quaternions[:, flow_frames_join_idx],
                                                    vertices=joined_encoder_result.vertices,
                                                    texture_maps=joined_encoder_result.texture_maps,
                                                    lights=joined_encoder_result.lights,
-                                                   translation_difference=joined_encoder_result.translation_difference[
-                                                       flow_frames_join_idx],
-                                                   quaternion_difference=joined_encoder_result.quaternion_difference[
-                                                       flow_frames_join_idx])
+                                                   translation_difference=flow_frames_translation_difference,
+                                                   quaternion_difference=flow_frames_quaternion_difference)
 
         return encoder_result, encoder_result_flow_frames
 
