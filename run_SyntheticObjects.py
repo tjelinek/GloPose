@@ -19,17 +19,15 @@ from tracking6d import Tracking6D
 
 def main():
     dataset = 'SyntheticObjects'
-    sequences = ['Textured_Sphere', '8_Colored_Sphere', '6_Colored_Cube',
-                 # '6_Colored_Cube_2_directions', 'Textured_Sphere_2_directions', '8_Colored_Sphere_2_directions'
-                 ]
+    sequences = ['Textured_Sphere_10', '8_Colored_Sphere_10', '6_Colored_Cube_10']
 
     for sequence in sequences:
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
 
-        if sequence in ['8_Colored_Sphere', '8_Colored_Sphere_2_directions']:
+        if sequence in ['8_Colored_Sphere_2', '8_Colored_Sphere_10']:
             gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = None
-        elif sequence in ['Textured_Sphere', 'Textured_Sphere_2_directions']:
+        elif sequence in ['Textured_Sphere_2', 'Textured_Sphere_10']:
             gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = Path('prototypes/tex.png')
         else:
