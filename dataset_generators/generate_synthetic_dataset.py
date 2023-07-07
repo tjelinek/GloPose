@@ -4,8 +4,8 @@ import types
 import warnings
 from pathlib import Path
 
-from dataset_generators.generator_utils import setup_renderer, generate_rotations_x, \
-    generate_rotating_textured_object, render_object_poses
+from dataset_generators.generator_utils import setup_renderer, \
+    generate_rotating_textured_object, render_object_poses, generate_rotations_y
 from main_settings import dataset_folder
 from utils import load_config
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         ('6_Colored_Cube_2', generate_6_colored_cube)
     ]
 
-    rots = generate_rotations_x(step=2.0)
+    rots = generate_rotations_y(step=2.0)
 
     for obj_name, generate_obj_func in objects:
         rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
