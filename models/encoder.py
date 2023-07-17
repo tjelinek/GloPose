@@ -1,4 +1,5 @@
 from collections import namedtuple
+
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
@@ -86,8 +87,9 @@ class Encoder(nn.Module):
         else:
             quaternion_all = [qnorm(self.quaternion[:, 0]).detach()]
             translation_all = [self.translation[:, :, 0].detach()]
-        diffs = []
+        diffs = []  # Distance between the current and the previous quaternion
         dists = [qdist(quaternion_all[-1], quaternion_all[-1]), qdist(quaternion_all[-1], quaternion_all[-1])]
+        # Distance between the rotation differences
         for frmi in range(1, opt_frames[-1] + 1):
             quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.quaternion_offsets[:, frmi]))
             translation0 = self.translation[:, :, frmi] + self.translation_offsets[:, :, frmi]
@@ -125,6 +127,16 @@ class Encoder(nn.Module):
                                translation_difference=tdiff,
                                quaternion_difference=qdiff)
         return result
+
+    def compute_tdiff_qdiff(self, opt_frames, quaternion0, quaternion, translation):
+        wghts = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
+        # Temporal distance between consecutive items in opt_frames, i.e. weight grows linearly with distance
+        tdiff = wghts * comp_tran_diff(translation[0, 0, opt_frames])
+        key_dists = []
+        for frmi in opt_frames[1:]:
+            key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
+        qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
+        return tdiff, qdiff
 
     def forward_normalize(self):
         exp = 0
