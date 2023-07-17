@@ -666,32 +666,44 @@ class Tracking6D:
         else:
             joined_encoder_result: EncoderResult = self.encoder(joined_frames)
 
-        keyframe_translations = joined_encoder_result.translations[:, :, joined_frames]
-        keyframe_quaternions = joined_encoder_result.quaternions[:, joined_frames]
+        optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
+        optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
 
-        keyframes_translation_difference = joined_encoder_result.translation_difference[frames_join_idx]
-        keyframes_quaternion_difference = joined_encoder_result.quaternion_difference[frames_join_idx]
-        flow_frames_translation_difference = joined_encoder_result.translation_difference[flow_frames_join_idx]
-        flow_frames_quaternion_difference = joined_encoder_result.quaternion_difference[flow_frames_join_idx]
+        keyframes_translations = optimized_translations[:, :, frames_join_idx]
+        keyframes_quaternions = optimized_quaternions[:, frames_join_idx]
+        flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
+        flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
+
+        if rgb_encoder:
+            encoder = self.rgb_encoder
+        else:
+            encoder = self.encoder
+
+        keyframes_tdiff, keyframes_qdiff = encoder.compute_tdiff_qdiff(keyframes, optimized_quaternions[:, -1],
+                                                                       joined_encoder_result.quaternions,
+                                                                       joined_encoder_result.translations)
+        flow_frames_tdiff, flow_frames_qdiff = encoder.compute_tdiff_qdiff(flow_frames, optimized_quaternions[:, -1],
+                                                                           joined_encoder_result.quaternions,
+                                                                           joined_encoder_result.translations)
 
         # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
         # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
         # TODO cont'd: be deprecated as they are sufficiently regularized by the optical flow
-        encoder_result = EncoderResult(translations=keyframe_translations[:, :, frames_join_idx],
-                                       quaternions=keyframe_quaternions[:, frames_join_idx],
+        encoder_result = EncoderResult(translations=keyframes_translations,
+                                       quaternions=keyframes_quaternions,
                                        vertices=joined_encoder_result.vertices,
                                        texture_maps=joined_encoder_result.texture_maps,
                                        lights=joined_encoder_result.lights,
-                                       translation_difference=keyframes_translation_difference,
-                                       quaternion_difference=keyframes_quaternion_difference)
+                                       translation_difference=keyframes_tdiff,
+                                       quaternion_difference=keyframes_qdiff)
 
-        encoder_result_flow_frames = EncoderResult(translations=keyframe_translations[:, :, flow_frames_join_idx],
-                                                   quaternions=keyframe_quaternions[:, flow_frames_join_idx],
+        encoder_result_flow_frames = EncoderResult(translations=flow_frames_translations,
+                                                   quaternions=flow_frames_quaternions,
                                                    vertices=joined_encoder_result.vertices,
                                                    texture_maps=joined_encoder_result.texture_maps,
                                                    lights=joined_encoder_result.lights,
-                                                   translation_difference=flow_frames_translation_difference,
-                                                   quaternion_difference=flow_frames_quaternion_difference)
+                                                   translation_difference=flow_frames_tdiff,
+                                                   quaternion_difference=flow_frames_qdiff)
 
         return encoder_result, encoder_result_flow_frames
 

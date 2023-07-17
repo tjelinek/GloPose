@@ -119,6 +119,9 @@ class Encoder(nn.Module):
         else:
             texture_map = nn.Sigmoid()(self.texture_map)
 
+        # Computes differences of consecutive translations and rotations
+        tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion_all[-1], quaternion, translation)
+
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
                                vertices=vertices,
