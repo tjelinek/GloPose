@@ -253,7 +253,7 @@ class WriteResults:
         angles_deg = angles_rad * 180.0 / math.pi
         rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
         for k in range(angles_rad.shape[0]):
-            rotations = [rot_axes[i] + str((float(angles_deg[k, i])) - float(angles_deg[0, i]))
+            rotations = [rot_axes[i] + str((float(angles_deg[k, i])))
                          for i in range(3)]
             self.tracking_log.write(
                 f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
