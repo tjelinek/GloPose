@@ -141,6 +141,12 @@ class Encoder(nn.Module):
         qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         return tdiff, qdiff
 
+    def compute_next_offset(self, stepi):
+        self.translation_offsets[:, :, stepi] = self.used_tran[:, :, stepi - 1] + \
+                                                self.translation_offsets[:, :, stepi - 1]
+        self.quaternion_offsets[:, stepi] = qmult(qnorm(self.used_quat[:, stepi - 1]),
+                                                  qnorm(self.quaternion_offsets[:, stepi - 1]))
+
     def forward_normalize(self):
         exp = 0
         if self.config.connect_frames:
