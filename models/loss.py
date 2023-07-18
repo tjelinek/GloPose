@@ -38,7 +38,6 @@ class FMOLoss(nn.Module):
         tdiff = current_encoder_result.translation_difference
         qdiff = current_encoder_result.quaternion_difference
 
-
         losses = {}
         losses_all = {}
         if self.config.loss_rgb_weight > 0:
