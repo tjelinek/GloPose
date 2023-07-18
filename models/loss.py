@@ -119,7 +119,7 @@ class FMOLoss(nn.Module):
             flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3]
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
-            flow_magnitude = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1)
+            flow_magnitude = torch.norm(observed_flow_clone - flow_from_tracking_clone, dim=-1, p=2)
             per_image_mean_flow = flow_magnitude.mean(dim=(2, 3)) * object_areas_fraction
             flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
