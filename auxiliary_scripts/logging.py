@@ -5,6 +5,7 @@ import torch
 import cv2
 import imageio
 import numpy as np
+from matplotlib import pyplot as plt
 from torch import nn
 from pathlib import Path
 from torchvision import transforms
@@ -98,6 +99,8 @@ class WriteResults:
             tex = tracking6d.gt_texture
 
         with torch.no_grad():
+
+            self.visualize_rotations_per_epoch(tracking6d, stepi)
 
             stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
                                                   set(tracking6d.active_keyframes.keyframes))
@@ -222,6 +225,19 @@ class WriteResults:
                 renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+
+    @staticmethod
+    def visualize_rotations_per_epoch(tracking6d, stepi):
+        fig, ax = plt.subplots()
+        tensors = tracking6d.encoder.rotation_by_gd_iter
+        for i in range(3):
+            values = [tensor[i].item() for tensor in tensors]
+            ax.plot(range(len(tensors)), values, label=f'Tensor element {i}')
+        ax.set_xlabel('Index')
+        ax.set_ylabel('Value')
+        ax.legend()
+        fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
+        plt.savefig(fig_path)
 
     @staticmethod
     def render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):

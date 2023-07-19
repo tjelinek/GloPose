@@ -1,8 +1,9 @@
 from collections import namedtuple
-
+import math
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
+from pytorch3d.transforms.rotation_conversions import quaternion_to_axis_angle
 
 from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qdifference
 
@@ -39,6 +40,11 @@ class Encoder(nn.Module):
         # Used translation and quaternion
         self.register_buffer('used_tran', translation_init.clone())
         self.register_buffer('used_quat', qinit.clone())
+
+        # For logging purposes, store the values of development of estimated rotations and translations thorough the
+        # gradient descent iterations
+        self.rotation_by_gd_iter = []
+        self.translation_by_gd_iter = []
 
         # Lights initialization
         if self.config.use_lights:
@@ -124,6 +130,8 @@ class Encoder(nn.Module):
         # Computes differences of consecutive translations and rotations
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion_all[-1], quaternion, translation)
 
+        self.log_rotation_and_translation(opt_frames)
+
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
                                vertices=vertices,
@@ -148,6 +156,21 @@ class Encoder(nn.Module):
                                                 self.translation_offsets[:, :, stepi - 1]
         self.quaternion_offsets[:, stepi] = qmult(qnorm(self.used_quat[:, stepi - 1]),
                                                   qnorm(self.quaternion_offsets[:, stepi - 1]))
+
+    def update_base_offsets(self, stepi):
+        self.used_tran[:, :, stepi] = self.translation[:, :, stepi].detach()
+        self.used_quat[:, stepi] = self.quaternion[:, stepi].detach()
+
+    def log_rotation_and_translation(self, opt_frames):
+        angles_rad = quaternion_to_axis_angle(self.quaternion[0])
+        angles_deg = angles_rad * 180.0 / math.pi
+        last_optimized = max(opt_frames)
+        self.rotation_by_gd_iter.append(angles_deg[last_optimized].detach())
+        self.translation_by_gd_iter.append(self.translation[0, 0, last_optimized].detach())
+
+    def clear_logs(self):
+        self.rotation_by_gd_iter = []
+        self.translation_by_gd_iter = []
 
     def forward_normalize(self):
         exp = 0

@@ -478,9 +478,9 @@ class Tracking6D:
             our_losses[stepi - 1] = silh_losses[-1]
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", stepi, "out of",
                   self.config.input_frames)
-            if silh_losses[-1] < 0.8:
-                self.encoder.used_tran[:, :, stepi] = self.encoder.translation[:, :, stepi].detach()
-                self.encoder.used_quat[:, stepi] = self.encoder.quaternion[:, stepi].detach()
+
+            self.encoder.update_base_offsets(stepi)
+            self.encoder.clear_logs()
 
             tex = None
             if self.config.features == 'deep':
