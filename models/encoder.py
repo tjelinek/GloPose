@@ -71,7 +71,9 @@ class Encoder(nn.Module):
         if self.config.use_lights:
             self.lights.requires_grad = req_grad
 
-    def forward(self, opt_frames):
+    def forward(self, opt_frames, not_optimized_frames=None):
+        if not_optimized_frames is None:
+            not_optimized_frames = set()
 
         if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
@@ -94,7 +96,7 @@ class Encoder(nn.Module):
             quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.quaternion_offsets[:, frmi]))
             translation0 = self.translation[:, :, frmi] + self.translation_offsets[:, :, frmi]
             # breakpoint()
-            if frmi not in opt_frames:
+            if frmi not in opt_frames or frmi in not_optimized_frames:
                 quaternion0 = quaternion0.detach()
                 translation0 = translation0.detach()
             diffs.append(qnorm(qdifference(quaternion_all[-1], quaternion0)))

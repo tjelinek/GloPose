@@ -653,6 +653,8 @@ class Tracking6D:
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
         joined_frames = sorted(set(keyframes + flow_frames))
+        not_optimized_frames = set(flow_frames) - set(keyframes)
+
         joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
 
         frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
@@ -663,7 +665,7 @@ class Tracking6D:
         else:  # Deep features encoder
             encoder = self.encoder
 
-        joined_encoder_result: EncoderResult = encoder(joined_frames)
+        joined_encoder_result: EncoderResult = encoder(joined_frames, not_optimized_frames)
 
         optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
         optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
