@@ -659,9 +659,11 @@ class Tracking6D:
         flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
 
         if rgb_encoder:
-            joined_encoder_result: EncoderResult = self.rgb_encoder(joined_frames)
-        else:
-            joined_encoder_result: EncoderResult = self.encoder(joined_frames)
+            encoder = self.rgb_encoder
+        else:  # Deep features encoder
+            encoder = self.encoder
+
+        joined_encoder_result: EncoderResult = encoder(joined_frames)
 
         optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
         optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
@@ -671,11 +673,6 @@ class Tracking6D:
         flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
         flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
 
-        if rgb_encoder:
-            encoder = self.rgb_encoder
-        else:
-            encoder = self.encoder
-
         keyframes_tdiff, keyframes_qdiff = encoder.compute_tdiff_qdiff(keyframes, optimized_quaternions[:, -1],
                                                                        joined_encoder_result.quaternions,
                                                                        joined_encoder_result.translations)
@@ -683,9 +680,6 @@ class Tracking6D:
                                                                            joined_encoder_result.quaternions,
                                                                            joined_encoder_result.translations)
 
-        # TODO: the translation difference is currently wrong as it should compose that of frames and flow frames
-        # TODO cont'd: whereby those can be in one frame. For the future, translation and rotation difference should
-        # TODO cont'd: be deprecated as they are sufficiently regularized by the optical flow
         encoder_result = EncoderResult(translations=keyframes_translations,
                                        quaternions=keyframes_quaternions,
                                        vertices=joined_encoder_result.vertices,
