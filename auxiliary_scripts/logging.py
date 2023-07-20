@@ -91,7 +91,7 @@ class WriteResults:
         self.all_proj_filtered.release()
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
-                      ground_truth_segments, images, images_feat, tex):
+                      ground_truth_segments, images, images_feat, tex, frame_losses):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -100,7 +100,7 @@ class WriteResults:
 
         with torch.no_grad():
 
-            self.visualize_rotations_per_epoch(tracking6d, stepi)
+            self.visualize_rotations_per_epoch(tracking6d, frame_losses, stepi)
 
             stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
                                                   set(tracking6d.active_keyframes.keyframes))
@@ -227,7 +227,7 @@ class WriteResults:
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
     @staticmethod
-    def visualize_rotations_per_epoch(tracking6d, stepi):
+    def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
         fig, ax = plt.subplots()
         tensors = tracking6d.encoder.rotation_by_gd_iter
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
@@ -237,6 +237,11 @@ class WriteResults:
         ax.set_xlabel('Gradient descend iteration')
         ax.set_ylabel('Rotation [degrees]')
         ax.legend()
+
+        ax2 = ax.twinx()
+        loss_values = [loss_item.item() for loss_item in frame_losses]
+        ax2.plot(range(len(frame_losses)), loss_values, color='red', label='Loss')
+
         fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
 

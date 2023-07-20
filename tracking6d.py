@@ -575,6 +575,8 @@ class Tracking6D:
         return renders
 
     def apply(self, input_batch, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
+
+        frame_losses = []
         if self.config.write_results:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
@@ -612,6 +614,7 @@ class Tracking6D:
                                                            flow_segment_masks,
                                                            theoretical_flow,
                                                            self.last_encoder_result)
+            frame_losses.append(float(jloss))
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()
@@ -658,7 +661,8 @@ class Tracking6D:
 
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
-                                        renders=renders)
+                                        renders=renders,
+                                        frame_losses=frame_losses)
 
         return frame_result
 
