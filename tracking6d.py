@@ -150,7 +150,9 @@ class KeyframeBuffer:
             indices of buffer1 keyframes in the merged buffer, and indices of buffer2 keyframes in the merged buffer.
 
         """
-        if buffer1.keyframes is None or len(buffer1.keyframes) == 0:
+        if buffer1.keyframes is None and buffer2.keyframes is None:
+            return KeyframeBuffer, [], []
+        elif buffer1.keyframes is None or len(buffer1.keyframes) == 0:
             return copy.deepcopy(buffer2), [], list(range(len(buffer2.keyframes)))
         elif buffer2.keyframes is None or len(buffer2.keyframes) == 0:
             return copy.deepcopy(buffer1), list(range(len(buffer1.keyframes))), []
