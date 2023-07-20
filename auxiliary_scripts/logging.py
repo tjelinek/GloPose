@@ -230,11 +230,12 @@ class WriteResults:
     def visualize_rotations_per_epoch(tracking6d, stepi):
         fig, ax = plt.subplots()
         tensors = tracking6d.encoder.rotation_by_gd_iter
+        axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
         for i in range(3):
             values = [tensor[i].item() for tensor in tensors]
-            ax.plot(range(len(tensors)), values, label=f'Tensor element {i}')
-        ax.set_xlabel('Index')
-        ax.set_ylabel('Value')
+            ax.plot(range(len(tensors)), values, label=axis_labels[i])
+        ax.set_xlabel('Gradient descend iteration')
+        ax.set_ylabel('Rotation [degrees]')
         ax.legend()
         fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
