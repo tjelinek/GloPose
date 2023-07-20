@@ -151,11 +151,13 @@ class KeyframeBuffer:
 
         """
         if buffer1.keyframes is None and buffer2.keyframes is None:
-            return KeyframeBuffer, [], []
-        elif buffer1.keyframes is None or len(buffer1.keyframes) == 0:
-            return copy.deepcopy(buffer2), [], list(range(len(buffer2.keyframes)))
-        elif buffer2.keyframes is None or len(buffer2.keyframes) == 0:
-            return copy.deepcopy(buffer1), list(range(len(buffer1.keyframes))), []
+            return KeyframeBuffer(), [], []
+        elif buffer1.keyframes is None or (buffer1.keyframes is not None and len(buffer1.keyframes) == 0):
+            return copy.deepcopy(buffer2), [], [k for k in
+                                                range(len(buffer2.keyframes))] if buffer2.keyframes is not None else []
+        elif buffer2.keyframes is None or (buffer2.keyframes is not None and len(buffer2.keyframes) == 0):
+            return copy.deepcopy(buffer1), [k for k in
+                                            range(len(buffer1.keyframes))] if buffer1.keyframes is not None else [], []
 
         all_keyframes = sorted(set(buffer1.keyframes + buffer2.keyframes))
 
