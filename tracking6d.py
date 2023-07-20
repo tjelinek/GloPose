@@ -412,10 +412,10 @@ class Tracking6D:
             self.active_keyframes.flow_keyframes += [stepi - 1]
             self.active_keyframes.prev_images = torch.cat((self.active_keyframes.prev_images, prev_image[None]), dim=1)
 
+            image_prev_x255 = (self.active_keyframes.prev_images[:, -1, :, :, :]).float() * 255
             image_new_x255 = (self.active_keyframes.images[:, -1, :, :, :]).float() * 255
-            image_prev_x255 = (self.active_keyframes.images[:, -2, :, :, :]).float() * 255
             if self.active_keyframes.images.shape[1] > 2:
-                image_preprev_x255 = (self.active_keyframes.images[:, -2, :, :, :]).float() * 255
+                image_preprev_x255 = (self.active_keyframes.images[:, -1, :, :, :]).float() * 255
             else:
                 image_preprev_x255 = None
 
