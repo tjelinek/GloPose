@@ -446,9 +446,10 @@ class Tracking6D:
                                                                       prev_segment[None]), dim=1)
 
             # We have added some keyframes. If it is more than the limit, delete them
-            deleted_keyframes = self.active_keyframes.trim_keyframes(self.config.max_keyframes)
-            self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
-                                                                         deleted_keyframes)
+            if not self.config.all_frames_keyframes:
+                deleted_keyframes = self.active_keyframes.trim_keyframes(self.config.max_keyframes)
+                self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
+                                                                             deleted_keyframes)
 
             if self.config.stochastically_add_keyframes:
                 self.all_keyframes, active_buffer_indices, _ = KeyframeBuffer.merge(self.active_keyframes,
