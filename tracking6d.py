@@ -10,6 +10,7 @@ import time
 import torch
 from pathlib import Path
 import torchvision.transforms as transforms
+from torch.optim import lr_scheduler
 from torchvision.utils import save_image
 from typing import List
 
@@ -37,6 +38,8 @@ TRAINING_PRINT_STATUS_FREQUENCY = 1
 
 SILHOUETTE_LOSS_THRESHOLD = 0.3
 
+LR_SCHEDULER_PATIENCE = 5
+USE_LR_SCHEDULER = False
 
 @dataclass
 class TrackerConfig:
@@ -388,6 +391,8 @@ class Tracking6D:
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
+            if stepi > 5:
+                exit()
 
             image_raw, segment = self.tracker.next(files[stepi])
 
@@ -480,7 +485,6 @@ class Tracking6D:
                   self.config.input_frames)
 
             self.encoder.update_base_offsets(stepi)
-            self.encoder.clear_logs()
 
             tex = None
             if self.config.features == 'deep':
@@ -584,6 +588,13 @@ class Tracking6D:
                 save_image(torch.cat((segments[0, :, [0, 0, 0]], 0 * input_batch[0, :, :1] + 1), 1),
                            os.path.join(self.write_folder, 'weights.png'))
 
+        # Restore the learning rate on its prior values
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.config.learning_rate
+
+        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9999,
+                                                   patience=LR_SCHEDULER_PATIENCE, verbose=True)
+
         self.best_model["value"] = 100
         self.best_model["losses"] = None
         iters_without_change = 0
@@ -641,6 +652,8 @@ class Tracking6D:
                 self.optimizer.zero_grad()
                 jloss.backward()
                 self.optimizer.step()
+                if USE_LR_SCHEDULER:
+                    scheduler.step(jloss)
 
         visualize_theoretical_flow(self, theoretical_flow.clone().detach(), observed_flows[:, -1].clone().detach(),
                                    keyframes, step_i)
