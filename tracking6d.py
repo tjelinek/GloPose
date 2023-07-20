@@ -498,10 +498,9 @@ class Tracking6D:
                     #                            :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
                     #                            self.all_keyframes.keyframes, stepi)
 
-                    self.write_results.write_results(self, b0, bboxes, our_losses, silh_losses, stepi,
-                                                     encoder_result, self.all_keyframes.segments,
-                                                     self.all_keyframes.images,
-                                                     self.all_keyframes.images_feat, tex)
+                    self.write_results.write_results(self, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
+                                                     self.all_keyframes.segments, self.all_keyframes.images,
+                                                     self.all_keyframes.images_feat, tex, frame_result.frame_losses)
 
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,

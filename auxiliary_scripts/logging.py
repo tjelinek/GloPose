@@ -228,19 +228,27 @@ class WriteResults:
 
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
-        fig, ax = plt.subplots()
+        fig, ax1 = plt.subplots()
         tensors = tracking6d.encoder.rotation_by_gd_iter
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
         for i in range(3):
             values = [tensor[i].item() for tensor in tensors]
-            ax.plot(range(len(tensors)), values, label=axis_labels[i])
-        ax.set_xlabel('Gradient descend iteration')
-        ax.set_ylabel('Rotation [degrees]')
-        ax.legend()
+            ax1.plot(range(len(tensors)), values, label=axis_labels[i])
+        ax1.set_xlabel('Gradient descend iteration')
+        ax1.set_ylabel('Rotation [degrees]')
 
-        ax2 = ax.twinx()
-        loss_values = [loss_item.item() for loss_item in frame_losses]
-        ax2.plot(range(len(frame_losses)), loss_values, color='red', label='Loss')
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('Loss')
+        ax2.plot(range(len(frame_losses)), frame_losses, color='red', label='Loss')
+
+        # Create a joint legend
+        handles, labels = [], []
+        for ax in [ax1, ax2]:
+            h, l = ax.get_legend_handles_labels()
+            handles.extend(h)
+            labels.extend(l)
+
+        fig.legend(handles, labels, loc='upper right')
 
         fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
