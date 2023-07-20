@@ -507,6 +507,8 @@ class Tracking6D:
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
                                    stepi, self.write_folder)
 
+            self.encoder.clear_logs()
+
             keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
             keep_keyframes = keep_keyframes[active_buffer_indices]
             min_index = np.argmin(silh_losses[active_buffer_indices])
