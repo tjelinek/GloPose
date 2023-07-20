@@ -184,7 +184,17 @@ class KeyframeBuffer:
 
         return merged_buffer, indices_buffer1, indices_buffer2
 
-    def update_keyframes(self, keep_keyframes, max_keyframes):
+    def trim_keyframes(self, max_keyframes):
+        if len(self.keyframes) > max_keyframes:
+            # Keep only those last ones
+            keep_keyframes = np.zeros(len(self.keyframes), dtype=bool)
+            keep_keyframes[-max_keyframes:] = True
+
+            return self.keep_selected_keyframes(keep_keyframes)
+        else:
+            return KeyframeBuffer()
+
+    def keep_selected_keyframes(self, keep_keyframes):
         not_keep_keyframes = ~ keep_keyframes
 
         # Get the deleted keyframes
@@ -206,30 +216,6 @@ class KeyframeBuffer:
         self.observed_flows = self.observed_flows[:, keep_keyframes]
         self.flow_segment_masks = self.flow_segment_masks[:, keep_keyframes]
 
-        if len(self.keyframes) > max_keyframes:
-            self.keyframes = self.keyframes[-max_keyframes:]
-            self.flow_keyframes = self.flow_keyframes[-max_keyframes:]
-            self.images = self.images[:, -max_keyframes:]
-            self.prev_images = self.prev_images[:, -max_keyframes:]
-            self.images_feat = self.images_feat[:, -max_keyframes:]
-            self.segments = self.segments[:, -max_keyframes:]
-            self.observed_flows = self.observed_flows[:, -max_keyframes:]
-            self.flow_segment_masks = self.flow_segment_masks[:, -max_keyframes:]
-
-            # Get buffer of keyframes that have been deleted
-            overflow_buffer = KeyframeBuffer()
-            for attr_name, attr_type in overflow_buffer.__annotations__.items():
-                if attr_type is list:
-                    modified_attr = getattr(self, attr_name)
-                    modified_attr = modified_attr[:-max_keyframes]
-                    setattr(overflow_buffer, attr_name, modified_attr)
-                elif attr_type is torch.Tensor:
-                    modified_attr = getattr(self, attr_name)
-                    modified_attr = modified_attr[:, :-max_keyframes]
-                    setattr(overflow_buffer, attr_name, modified_attr)
-
-            deleted_buffer, _, _ = KeyframeBuffer.merge(deleted_buffer, overflow_buffer)
-
         return deleted_buffer
 
     def stochastic_update(self, max_keyframes):
@@ -239,7 +225,7 @@ class KeyframeBuffer:
             indices = np.random.choice(N, max_keyframes, replace=False)  # Randomly select keep_keyframes indices
             keep_keyframes[indices] = True  # Set the selected indices to True
 
-            return self.update_keyframes(keep_keyframes, max_keyframes)
+            return self.keep_selected_keyframes(keep_keyframes)
         else:
             return KeyframeBuffer()  # No items removed, return an empty buffer
 
@@ -455,6 +441,11 @@ class Tracking6D:
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
                                                                       prev_segment[None]), dim=1)
 
+            # We have added some keyframes. If it is more than the limit, delete them
+            deleted_keyframes = self.active_keyframes.trim_keyframes(self.config.max_keyframes)
+            self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
+                                                                         deleted_keyframes)
+
             if self.config.stochastically_add_keyframes:
                 self.all_keyframes, active_buffer_indices, _ = KeyframeBuffer.merge(self.active_keyframes,
                                                                                     self.recently_flushed_keyframes)
@@ -532,7 +523,7 @@ class Tracking6D:
                 keep_keyframes[-3] = True
 
             if not self.config.all_frames_keyframes:
-                deleted_keyframes = self.active_keyframes.update_keyframes(keep_keyframes, self.config.max_keyframes)
+                deleted_keyframes = self.active_keyframes.keep_selected_keyframes(keep_keyframes)
                 self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
                                                                              deleted_keyframes)
                 self.recently_flushed_keyframes.stochastic_update(4)
