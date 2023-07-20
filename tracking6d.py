@@ -191,11 +191,11 @@ class KeyframeBuffer:
         deleted_buffer = KeyframeBuffer()
         for attr_name, attr_type in deleted_buffer.__annotations__.items():
             if attr_type is list:
-                modifier_attr = (np.array(getattr(self, attr_name))[not_keep_keyframes]).tolist()
-                setattr(deleted_buffer, attr_name, modifier_attr)
+                modified_attr = (np.array(getattr(self, attr_name))[not_keep_keyframes]).tolist()
+                setattr(deleted_buffer, attr_name, modified_attr)
             elif attr_type is torch.Tensor:
-                modifier_attr = getattr(self, attr_name)[:, not_keep_keyframes]
-                setattr(deleted_buffer, attr_name, modifier_attr)
+                modified_attr = getattr(self, attr_name)[:, not_keep_keyframes]
+                setattr(deleted_buffer, attr_name, modified_attr)
 
         self.keyframes = (np.array(self.keyframes)[keep_keyframes]).tolist()
         self.flow_keyframes = (np.array(self.flow_keyframes)[keep_keyframes]).tolist()
