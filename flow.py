@@ -108,8 +108,10 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
             if flow_up_prime is not None:
                 shift_up_prime_x = flow_up_prime[y, x, 0]
                 shift_up_prime_y = flow_up_prime[y, x, 1]
-                draw2.ellipse((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
-                               y + shift_up_prime_y + r), fill='purple')
+                draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
+                            y + shift_up_prime_y + r), fill='purple')
+                draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y + r, x + shift_up_prime_x + r,
+                            y + shift_up_prime_y - r), fill='purple')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
