@@ -11,6 +11,7 @@ import torch
 from pathlib import Path
 import torchvision.transforms as transforms
 from torch.optim import lr_scheduler
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchvision.utils import save_image
 from typing import List
 
@@ -39,7 +40,7 @@ TRAINING_PRINT_STATUS_FREQUENCY = 1
 SILHOUETTE_LOSS_THRESHOLD = 0.3
 
 LR_SCHEDULER_PATIENCE = 5
-USE_LR_SCHEDULER = False
+USE_LR_SCHEDULER = True
 
 @dataclass
 class TrackerConfig:
@@ -589,8 +590,9 @@ class Tracking6D:
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9999,
-                                                   patience=LR_SCHEDULER_PATIENCE, verbose=True)
+        # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9,
+        #                                            patience=LR_SCHEDULER_PATIENCE, verbose=True)
+        scheduler = CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0.0)
 
         self.best_model["value"] = 100
         self.best_model["losses"] = None
