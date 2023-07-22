@@ -19,7 +19,6 @@ class Encoder(nn.Module):
         # Translation initialization
         translation_init = torch.zeros(1, 1, config.input_frames, 3)
         translation_init[:, :, 0, 2] = self.config.tran_init
-        self.translation = nn.Parameter(translation_init)
 
         # Quaternion initialization
         qinit = torch.zeros(1, config.input_frames, 4)
@@ -28,18 +27,22 @@ class Encoder(nn.Module):
         init_quat = angle_axis_to_quaternion(init_angle, order=QuaternionCoeffOrder.WXYZ)
         self.register_buffer('init_quat', init_quat)
         qinit[:, 0, :] = init_quat.clone()
-        self.quaternion = nn.Parameter(qinit)
 
-        # Offsets initialization
+        # Used translation and quaternion
+        self.register_buffer('initial_translation', translation_init.clone())
+        self.register_buffer('initial_quaternion', qinit.clone())
+
+        # The offsets store the
         quaternion_offsets = torch.zeros(1, config.input_frames, 4)
         quaternion_offsets[:, :, 0] = 1.0
         translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
         self.register_buffer('quaternion_offsets', quaternion_offsets)
         self.register_buffer('translation_offsets', translation_offsets)
 
-        # Used translation and quaternion
-        self.register_buffer('used_tran', translation_init.clone())
-        self.register_buffer('used_quat', qinit.clone())
+        self.translation = nn.Parameter(torch.zeros(translation_offsets.shape))
+        quat = torch.zeros(1, config.input_frames, 4)
+        quat[:, :, 0] = 1.0
+        self.quaternion = nn.Parameter(quat)
 
         # For logging purposes, store the values of development of estimated rotations and translations thorough the
         # gradient descent iterations
@@ -89,30 +92,26 @@ class Encoder(nn.Module):
                 vertices = vertices - vertices.mean(1)[:, None, :]  # make center of mass in origin
         else:
             vertices = self.ivertices
+
         if 0 in opt_frames:
-            quaternion_all = [qnorm(self.quaternion[:, 0])]
-            translation_all = [self.translation[:, :, 0]]
+            quaternion_all = [self.get_total_rotation_at_frame(0)]
+            translation_all = [self.get_total_translation_at_frame(0)]
         else:
-            quaternion_all = [qnorm(self.quaternion[:, 0]).detach()]
-            translation_all = [self.translation[:, :, 0].detach()]
-        diffs = []  # Distance between the current and the previous quaternion
-        dists = [qdist(quaternion_all[-1], quaternion_all[-1]), qdist(quaternion_all[-1], quaternion_all[-1])]
+            quaternion_all = [self.get_total_rotation_at_frame(0).detach()]
+            translation_all = [self.get_total_translation_at_frame(0).detach()]
+
         # Distance between the rotation differences
         for frmi in range(1, opt_frames[-1] + 1):
-            quaternion0 = qmult(qnorm(self.quaternion[:, frmi]), qnorm(self.quaternion_offsets[:, frmi]))
-            translation0 = self.translation[:, :, frmi] + self.translation_offsets[:, :, frmi]
-            # breakpoint()
+            quaternion_at_frame = self.get_total_rotation_at_frame(frmi)
+            translation_at_frame = self.get_total_translation_at_frame(frmi)
             if frmi not in opt_frames or frmi in not_optimized_frames:
-                quaternion0 = quaternion0.detach()
-                translation0 = translation0.detach()
-            diffs.append(qnorm(qdifference(quaternion_all[-1], quaternion0)))
-            if len(diffs) > 1:
-                dists.append(qdist(diffs[-2], diffs[-1]))
-            quaternion_all.append(quaternion0)
-            translation_all.append(translation0)
+                quaternion_at_frame = quaternion_at_frame.detach()
+                translation_at_frame = translation_at_frame.detach()
+            quaternion_all.append(quaternion_at_frame)
+            translation_all.append(translation_at_frame)
 
         if max(opt_frames) == 0:
-            quaternion0 = qmult(qnorm(self.quaternion[:, 0]), qnorm(self.quaternion_offsets[:, 0]))
+            quaternion_at_frame = qmult(qnorm(self.quaternion[:, 0]), qnorm(self.quaternion_offsets[:, 0]))
 
         quaternion = torch.stack(quaternion_all, 1).contiguous()
         translation = torch.stack(translation_all, 2).contiguous()
