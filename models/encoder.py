@@ -147,15 +147,24 @@ class Encoder(nn.Module):
         qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         return tdiff, qdiff
 
-    def compute_next_offset(self, stepi):
-        self.translation_offsets[:, :, stepi] = self.used_tran[:, :, stepi - 1] + \
-                                                self.translation_offsets[:, :, stepi - 1]
-        self.quaternion_offsets[:, stepi] = qmult(qnorm(self.used_quat[:, stepi - 1]),
-                                                  qnorm(self.quaternion_offsets[:, stepi - 1]))
+    def get_total_rotation_at_frame(self, stepi):
+        # The formula is initial_quaternion * quaternion_offsets * quaternion
+        return qmult(qnorm(qmult(qnorm(self.initial_quaternion[:, stepi]), qnorm(self.quaternion_offsets[:, stepi]))),
+                     qnorm(self.quaternion[:, stepi]))
 
-    def update_base_offsets(self, stepi):
-        self.used_tran[:, :, stepi] = self.translation[:, :, stepi].detach()
-        self.used_quat[:, stepi] = self.quaternion[:, stepi].detach()
+    def get_total_translation_at_frame(self, stepi):
+        # The formula is initial_translation * translation_offsets * translation
+        return self.initial_translation[:, :, stepi] + self.translation_offsets[:, :, stepi] + \
+            self.translation[:, :, stepi]
+
+    def compute_next_offset(self, stepi):
+        self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
+        self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
+
+        self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
+                                                self.translation[:, :, stepi - 1].detach()
+        self.quaternion_offsets[:, stepi] = qmult(qnorm(self.quaternion_offsets[:, stepi - 1]),
+                                                  qnorm(self.quaternion[:, stepi - 1]).detach())
 
     def log_rotation_and_translation(self, opt_frames, quaternion):
         angles_rad = quaternion_to_axis_angle(quaternion[0])
