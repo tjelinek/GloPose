@@ -161,8 +161,8 @@ class Encoder(nn.Module):
         self.used_tran[:, :, stepi] = self.translation[:, :, stepi].detach()
         self.used_quat[:, stepi] = self.quaternion[:, stepi].detach()
 
-    def log_rotation_and_translation(self, opt_frames):
-        angles_rad = quaternion_to_axis_angle(self.quaternion[0])
+    def log_rotation_and_translation(self, opt_frames, quaternion):
+        angles_rad = quaternion_to_axis_angle(quaternion[0])
         angles_deg = angles_rad * 180.0 / math.pi
         last_optimized = max(opt_frames)
         self.rotation_by_gd_iter.append(angles_deg[last_optimized].detach())
@@ -170,6 +170,8 @@ class Encoder(nn.Module):
 
     def clear_logs(self):
         self.rotation_by_gd_iter = []
+        self.initial_rotation_by_gd_iter = []
+        self.rotation_offsets_by_gd_iter = []
         self.translation_by_gd_iter = []
 
     def forward_normalize(self):
