@@ -348,7 +348,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
 
         # Prepare file paths
-        theoretical_flow_path = tracking6d.write_folder / Path(f"theoretical_flow_{stepi}_{stepi + 1}.png")
+        theoretical_flow_path = tracking6d.write_folder / Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
         flow_difference_path = tracking6d.write_folder / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
         # rendering_1_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
         rendering_2_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_2.png")
