@@ -122,7 +122,7 @@ class TrackerConfig:
 
     # Optical flow
     flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
-    segmentation_mask_erosion_iters: int = 50
+    segmentation_mask_erosion_iters: int = 0
 
 
 @dataclass
