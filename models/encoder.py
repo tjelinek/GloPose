@@ -93,12 +93,8 @@ class Encoder(nn.Module):
         else:
             vertices = self.ivertices
 
-        if 0 in opt_frames:
-            quaternion_all = [self.get_total_rotation_at_frame(0)]
-            translation_all = [self.get_total_translation_at_frame(0)]
-        else:
-            quaternion_all = [self.get_total_rotation_at_frame(0).detach()]
-            translation_all = [self.get_total_translation_at_frame(0).detach()]
+        quaternion_all = [self.get_total_rotation_at_frame(0).detach()]
+        translation_all = [self.get_total_translation_at_frame(0).detach()]
 
         # Distance between the rotation differences
         for frmi in range(1, opt_frames[-1] + 1):
