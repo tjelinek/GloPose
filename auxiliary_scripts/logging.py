@@ -37,8 +37,8 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
         None. The function saves multiple visualization images to the disk.
     """
     flow_video_up = observed_flow.detach().clone()
-    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * flow_video_up.shape[-1]
-    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * flow_video_up.shape[-2]
+    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * flow_video_up.shape[-1] * 0.5
+    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * flow_video_up.shape[-2] * 0.5
     flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().numpy()
 
     # flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
