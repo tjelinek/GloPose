@@ -13,7 +13,7 @@ from torchvision.utils import save_image
 from pytorch3d.transforms import quaternion_to_axis_angle
 
 from segmentations import create_mask_from_string, get_bbox
-from utils import write_video, segment2bbox
+from utils import write_video, segment2bbox, qnorm
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -277,6 +277,8 @@ class WriteResults:
 
     def write_keyframe_rotations(self, detached_result, keyframes):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
+        for k in range(quaternions.shape[0]):
+            quaternions[k] = qnorm(quaternions[k])
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
