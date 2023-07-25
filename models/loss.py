@@ -6,6 +6,9 @@ from kornia.losses import total_variation
 from models.encoder import EncoderResult
 from utils import erode_segment_mask
 
+FLOW_SGD = True
+SGD_N_SAMPLES = 100
+
 
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
@@ -96,7 +99,7 @@ class FMOLoss(nn.Module):
 
             flow_segment_masks = segment_masks.repeat(1, 2, 1, 1)  # Shape (N, 2, H, W)
             flow_segment_masks_binary_2_channels = flow_segment_masks > 0
-            flow_segment_masks_binary = flow_segment_masks[:, 1] > 0
+            flow_segment_masks_binary: torch.Tensor = flow_segment_masks[:, 1] > 0
 
             if self.config.segmentation_mask_erosion_iters:
                 flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
@@ -107,8 +110,10 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow_clone * flow_segment_masks_binary_2_channels[None]
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
+            if FLOW_SGD:
+                flow_segment_masks_binary = random_points_from_binary_mask(flow_segment_masks_binary, SGD_N_SAMPLES)
+
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
-            object_areas_fraction = object_areas / torch.numel(flow_segment_masks_binary)
 
             observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
             observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
@@ -119,12 +124,14 @@ class FMOLoss(nn.Module):
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
+            end_point_error[0, :, :, :, 0] = end_point_error[0, :, :, :, 0] * flow_segment_masks_binary
+            end_point_error[0, :, :, :, 1] = end_point_error[0, :, :, :, 1] * flow_segment_masks_binary
             end_point_error_magnitude = torch.norm(end_point_error, dim=-1, p=2)
             end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
             per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
                                               end_point_error_sqrt)
 
-            per_image_mean_flow = per_pixel_flow_loss.mean(dim=(2, 3)) * object_areas_fraction
+            per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / (object_areas + 1)
             flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
@@ -141,6 +148,29 @@ class FMOLoss(nn.Module):
         for ls in losses:
             loss += losses[ls]
         return losses_all, losses, loss
+
+
+def random_points_from_binary_mask(binary_mask, N):
+    batch_size, height, width = binary_mask.shape
+    binary_mask_new = binary_mask.clone() * False
+
+    # Get the indices of True values in the binary mask for each slice along the first dimension
+    indices_list = [torch.nonzero(binary_mask[i], as_tuple=False) for i in range(batch_size)]
+
+    for i, indices in enumerate(indices_list):
+        # Get the number of true points in the current slice
+        num_true_points = indices.shape[0]
+
+        selected_indices_i = indices[torch.randperm(num_true_points)[:N]]
+
+        # Create a mask for the selected indices
+        mask_i = torch.zeros_like(binary_mask[i])
+        mask_i[selected_indices_i[:, 0], selected_indices_i[:, 1]] = True
+
+        # Assign mask_i to the corresponding slice in binary_mask_new
+        binary_mask_new[i] = mask_i
+
+    return binary_mask_new
 
 
 def fmo_loss(Yp, Y):
