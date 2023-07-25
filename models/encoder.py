@@ -1,11 +1,12 @@
 from collections import namedtuple
+
 import math
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
 from pytorch3d.transforms.rotation_conversions import quaternion_to_axis_angle
 
-from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qdifference
+from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights', 'translation_difference', 'quaternion_difference'])
