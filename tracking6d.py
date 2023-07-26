@@ -236,7 +236,7 @@ class KeyframeBuffer:
 
 
 class Tracking6D:
-    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders'])
+    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders', 'frame_losses'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
         self.write_results: WriteResults = None
@@ -669,6 +669,7 @@ class Tracking6D:
     def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
         joined_frames = sorted(set(keyframes + flow_frames))
         not_optimized_frames = set(flow_frames) - set(keyframes)
+        optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
 
         joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
 
