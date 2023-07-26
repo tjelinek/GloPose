@@ -3,8 +3,7 @@ from collections import namedtuple
 import math
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
-from pytorch3d.transforms.rotation_conversions import quaternion_to_axis_angle
+from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder, quaternion_to_angle_axis
 
 from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist
 
@@ -164,7 +163,7 @@ class Encoder(nn.Module):
                                                   qnorm(self.quaternion[:, stepi - 1]).detach())
 
     def log_rotation_and_translation(self, opt_frames, quaternion):
-        angles_rad = quaternion_to_axis_angle(quaternion[0])
+        angles_rad = quaternion_to_angle_axis(quaternion[0], order=QuaternionCoeffOrder.WXYZ)
         angles_deg = angles_rad * 180.0 / math.pi
         last_optimized = max(opt_frames)
         self.rotation_by_gd_iter.append(angles_deg[last_optimized].detach())
