@@ -145,8 +145,12 @@ class Encoder(nn.Module):
 
     def get_total_rotation_at_frame(self, stepi):
         # The formula is initial_quaternion * quaternion_offsets * quaternion
-        return qmult(qnorm(qmult(qnorm(self.initial_quaternion[:, stepi]), qnorm(self.quaternion_offsets[:, stepi]))),
-                     qnorm(self.quaternion[:, stepi]))
+
+        offset_initial_quaternion = qmult(qnorm(self.initial_quaternion[:, stepi]),
+                                          qnorm(self.quaternion_offsets[:, stepi]))
+        total_rotation_quaternion = qnorm(qmult(offset_initial_quaternion, qnorm(self.quaternion[:, stepi])))
+
+        return total_rotation_quaternion
 
     def get_total_translation_at_frame(self, stepi):
         # The formula is initial_translation * translation_offsets * translation
