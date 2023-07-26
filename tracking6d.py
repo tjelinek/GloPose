@@ -411,7 +411,6 @@ class Tracking6D:
 
             start = time.time()
             b0 = get_bbox(self.all_keyframes.segments)
-
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
@@ -652,7 +651,7 @@ class Tracking6D:
                 jloss.backward()
                 self.optimizer.step()
                 if USE_LR_SCHEDULER:
-                    scheduler.step(jloss)
+                    scheduler.step()
 
         # self.encoder.load_state_dict(self.best_model["encoder"])
 
