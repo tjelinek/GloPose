@@ -10,7 +10,7 @@ from torch import nn
 from pathlib import Path
 from torchvision import transforms
 from torchvision.utils import save_image
-from pytorch3d.transforms import quaternion_to_axis_angle
+from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder
 
 from segmentations import create_mask_from_string, get_bbox
 from utils import write_video, segment2bbox, qnorm
@@ -281,7 +281,7 @@ class WriteResults:
         for k in range(quaternions.shape[0]):
             quaternions[k] = qnorm(quaternions[k])
         # Convert quaternions to Euler angles
-        angles_rad = quaternion_to_axis_angle(quaternions)
+        angles_rad = quaternion_to_angle_axis(quaternions, order=QuaternionCoeffOrder.WXYZ)
         # Convert radians to degrees
         angles_deg = angles_rad * 180.0 / math.pi
         rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
