@@ -489,11 +489,10 @@ class Tracking6D:
 
             if self.config.write_results:
                 with torch.no_grad():
-                    #
-                    # visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
-                    #                            self.all_keyframes.observed_flows[
-                    #                            :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
-                    #                            self.all_keyframes.keyframes, stepi)
+                    visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
+                                               self.all_keyframes.observed_flows[
+                                               :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
+                                               self.all_keyframes.keyframes, stepi)
 
                     self.write_results.write_results(self, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
                                                      self.all_keyframes.segments, self.all_keyframes.images,
@@ -654,10 +653,7 @@ class Tracking6D:
                 if USE_LR_SCHEDULER:
                     scheduler.step(jloss)
 
-        visualize_theoretical_flow(self, theoretical_flow.clone().detach(), observed_flows[:, -1].clone().detach(),
-                                   keyframes, step_i)
-
-        self.encoder.load_state_dict(self.best_model["encoder"])
+        # self.encoder.load_state_dict(self.best_model["encoder"])
 
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
@@ -670,6 +666,7 @@ class Tracking6D:
         joined_frames = sorted(set(keyframes + flow_frames))
         not_optimized_frames = set(flow_frames) - set(keyframes)
         optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
+        # TODO pass this directly to the encoder as opt_frames instead of using not_optimized_frames
 
         joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
 
@@ -718,11 +715,11 @@ class Tracking6D:
 
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks):
         self.best_model["value"] = 100
-        model_state = self.rgb_encoder.state_dict()
-        pretrained_dict = self.best_model["encoder"]
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
-        model_state.update(pretrained_dict)
-        self.rgb_encoder.load_state_dict(model_state)
+        # model_state = self.rgb_encoder.state_dict()
+        # pretrained_dict = self.best_model["encoder"]
+        # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
+        # model_state.update(pretrained_dict)
+        # self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
             encoder_result, encoder_result_flow_frames = \
