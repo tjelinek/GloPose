@@ -252,6 +252,7 @@ class WriteResults:
 
         fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
+        plt.close()
 
     @staticmethod
     def render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):
