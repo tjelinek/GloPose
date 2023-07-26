@@ -382,8 +382,6 @@ class Tracking6D:
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
-            if stepi > 5:
-                exit()
 
             image_raw, segment = self.tracker.next(files[stepi])
 
@@ -414,9 +412,6 @@ class Tracking6D:
             b0 = get_bbox(self.all_keyframes.segments)
 
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
-
-            # Updates offset of the next rotation
-            self.encoder.compute_next_offset(stepi)
 
             with torch.no_grad():
                 if gt_flows is None:
@@ -483,7 +478,6 @@ class Tracking6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", stepi, "out of",
                   self.config.input_frames)
 
-            self.encoder.update_base_offsets(stepi)
 
             tex = None
             if self.config.features == 'deep':
@@ -577,6 +571,9 @@ class Tracking6D:
         return renders
 
     def apply(self, input_batch, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
+
+        # Updates offset of the next rotation
+        self.encoder.compute_next_offset(step_i)
 
         frame_losses = []
         if self.config.write_results:
