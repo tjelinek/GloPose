@@ -434,8 +434,8 @@ class Tracking6D:
                         else:
                             occlusion_fraction = 0.0
 
-                    observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / (0.5 * observed_flow.shape[-2])
-                    observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / (0.5 * observed_flow.shape[-1])
+                    observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / observed_flow.shape[-2]
+                    observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / observed_flow.shape[-1]
                 else:  # We have ground truth flow annotations
                     # The annotations are assumed to be in the [0, 1] coordinate range
                     observed_flow = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
