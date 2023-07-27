@@ -608,6 +608,11 @@ class Tracking6D:
                                      self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
             theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
 
+            # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+            # actual image
+            theoretical_flow[..., 0] = theoretical_flow[..., 0] * (self.rendering.width / self.shape[-1])
+            theoretical_flow[..., 1] = theoretical_flow[..., 1] * (self.rendering.height / self.shape[-2])
+
             losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
                                                            observed_flows,
                                                            flow_segment_masks,
