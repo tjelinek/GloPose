@@ -5,8 +5,8 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis
-from kornia.geometry.conversions import quaternion_to_rotation_matrix, QuaternionCoeffOrder
+from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis, \
+    quaternion_to_rotation_matrix, QuaternionCoeffOrder
 from kornia.morphology import erosion
 
 import cfg
