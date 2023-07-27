@@ -308,7 +308,7 @@ class WriteResults:
         self.tracking_log.write("============================================\n\n\n")
 
 
-def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_frames, stepi):
+def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, observed_flow, opt_frames, stepi):
     """
     Visualizes the theoretical flow and related images for a given step.
 
@@ -316,6 +316,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         tracking6d (Tracking6D): The Tracking6D instance.
         theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
                                          image coordinates.
+        bounding_box (torch.Tensor: Bounding box of the observed object
         observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
                                       coordinates.
         opt_frames (list): List of optical flow frames.
@@ -325,9 +326,6 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
         None
     """
     with torch.no_grad():
-        # Get bounding box
-        b0 = get_bbox(tracking6d.active_keyframes.segments)
-
         # Get optical flow frames
         opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
 
@@ -339,7 +337,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
             else tracking6d.gt_texture
 
         # Render keyframe images
-        rendered_keyframe_images, _ = tracking6d.get_rendered_image(b0, enc_result_prime.lights,
+        rendered_keyframe_images, _ = tracking6d.get_rendered_image(bounding_box, enc_result_prime.lights,
                                                                     enc_result_prime.quaternions, tex_rgb,
                                                                     enc_result_prime.translations,
                                                                     enc_result_prime.vertices)
@@ -378,8 +376,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, observed_flow, opt_
 
         # Obtain flow and image illustrations
         flow_up = adjusted_theoretical_flow[:, -1].cpu()[0].permute(2, 0, 1)
-        theoretical_flow_up = tracking6d.write_image_into_bbox(b0, flow_up)
-        observed_flow_up = tracking6d.write_image_into_bbox(b0, adjusted_observed_flow[0].permute(2, 0, 1))
+        theoretical_flow_up = tracking6d.write_image_into_bbox(bounding_box, flow_up)
+        observed_flow_up = tracking6d.write_image_into_bbox(bounding_box, adjusted_observed_flow[0].permute(2, 0, 1))
         observed_flow_np = observed_flow_up.permute(1, 2, 0).cpu().numpy()
         theoretical_flow_np = theoretical_flow_up.detach().cpu().numpy()
         theoretical_flow_np = theoretical_flow_np.transpose(1, 2, 0)
