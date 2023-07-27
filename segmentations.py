@@ -425,28 +425,27 @@ def create_mask_from_string(mask_encoding):
 
 
 def get_bbox(segments):
-    return [0, segments.shape[-1], 0, segments.shape[-2]]
-    # all_segments = segments[0, :, 1].sum(0) > 0
-    # nzeros = torch.nonzero(all_segments, as_tuple=True)
-    # pix_offset = 20
-    # x0 = max(0, nzeros[0].min().item() - pix_offset)
-    # x1 = min(all_segments.shape[0] - 1, nzeros[0].max().item() + pix_offset)
-    # y0 = max(0, nzeros[1].min().item() - pix_offset)
-    # y1 = min(all_segments.shape[1] - 1, nzeros[1].max().item() + pix_offset)
-    # if x1 - x0 > y1 - y0:
-    #     addall = (x1 - x0) - (y1 - y0)
-    #     add0 = int(addall / 2)
-    #     add1 = addall - add0
-    #     y0 = max(0, y0 - add0)
-    #     y1 = min(all_segments.shape[1] - 1, y1 + add1)
-    # else:
-    #     addall = (y1 - y0) - (x1 - x0)
-    #     add0 = int(addall / 2)
-    #     add1 = addall - add0
-    #     x0 = max(0, x0 - add0)
-    #     x1 = min(all_segments.shape[0] - 1, x1 + add1)
-    # bounds = [x0, x1, y0, y1]
-    # return bounds
+    all_segments = segments[0, :, 1].sum(0) > 0
+    nzeros = torch.nonzero(all_segments, as_tuple=True)
+    pix_offset = 20
+    x0 = max(0, nzeros[0].min().item() - pix_offset)
+    x1 = min(all_segments.shape[0] - 1, nzeros[0].max().item() + pix_offset)
+    y0 = max(0, nzeros[1].min().item() - pix_offset)
+    y1 = min(all_segments.shape[1] - 1, nzeros[1].max().item() + pix_offset)
+    if x1 - x0 > y1 - y0:
+        addall = (x1 - x0) - (y1 - y0)
+        add0 = int(addall / 2)
+        add1 = addall - add0
+        y0 = max(0, y0 - add0)
+        y1 = min(all_segments.shape[1] - 1, y1 + add1)
+    else:
+        addall = (y1 - y0) - (x1 - x0)
+        add0 = int(addall / 2)
+        add1 = addall - add0
+        x0 = max(0, x0 - add0)
+        x1 = min(all_segments.shape[0] - 1, x1 + add1)
+    bounds = [x0, x1, y0, y1]
+    return bounds
 
 # def segment_grabcut(files):
 #     perc = 0.2
