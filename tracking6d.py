@@ -55,6 +55,7 @@ class TrackerConfig:
     verbose: bool = True
     write_results: bool = True
     write_intermediate: bool = True
+    render_just_bounding_box: bool = False
 
     # Frame and keyframe settings
     input_frames: int = 0
@@ -297,6 +298,7 @@ class Tracking6D:
         self.last_encoder_result_rgb = None
 
         shape = segments.shape
+        self.shape = shape
         prot = self.config.shapes[0]
 
         if self.config.use_gt:
@@ -410,7 +412,10 @@ class Tracking6D:
                 image_preprev_x255 = None
 
             start = time.time()
-            b0 = get_bbox(self.all_keyframes.segments)
+            if self.config.render_just_bounding_box:
+                b0 = get_bbox(self.all_keyframes.segments)
+            else:
+                b0 = [0, self.shape[-1], 0, self.shape[-2]]
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
@@ -489,7 +494,7 @@ class Tracking6D:
 
             if self.config.write_results:
                 with torch.no_grad():
-                    visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(),
+                    visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(), b0,
                                                self.all_keyframes.observed_flows[
                                                :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
                                                self.all_keyframes.keyframes, stepi)
