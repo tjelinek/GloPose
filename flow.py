@@ -103,8 +103,10 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
             # end_prime_up = (x - shift_up_prime_x, y + shift_up_prime_y)
 
             draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
-            draw2.ellipse((x + shift_up_x - r, y + shift_up_y - r, x + shift_up_x + r, y + shift_up_y + r),
-                          fill='green')
+            draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
+                       fill='green')
+            draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
+                       fill='green')
             if flow_up_prime is not None:
                 shift_up_prime_x = flow_up_prime[y, x, 0]
                 shift_up_prime_y = flow_up_prime[y, x, 1]
