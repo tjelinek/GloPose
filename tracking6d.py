@@ -11,7 +11,6 @@ import torch
 from pathlib import Path
 import torchvision.transforms as transforms
 from torch.optim import lr_scheduler
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchvision.utils import save_image
 from typing import List
 
@@ -593,9 +592,9 @@ class Tracking6D:
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-        # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9,
-        #                                            patience=LR_SCHEDULER_PATIENCE, verbose=True)
-        scheduler = CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0.0)
+        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9,
+                                                   patience=LR_SCHEDULER_PATIENCE, verbose=True)
+        # scheduler = lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0.0)
 
         self.best_model["value"] = 100
         self.best_model["losses"] = None
@@ -661,7 +660,7 @@ class Tracking6D:
                 jloss.backward()
                 self.optimizer.step()
                 if USE_LR_SCHEDULER:
-                    scheduler.step()
+                    scheduler.step(jloss)
 
         # self.encoder.load_state_dict(self.best_model["encoder"])
 
