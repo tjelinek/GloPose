@@ -120,9 +120,11 @@ class TrackerConfig:
     gt_mesh_prototype: str = None
     use_gt: bool = False
 
-    # Optical flow
+    # Optical flow loss
     flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
-    segmentation_mask_erosion_iters: int = 0
+    segmentation_mask_erosion_iters: int = 10
+    flow_sgd: bool = False
+    flow_sgd_n_samples: int = 100
 
 
 @dataclass

@@ -6,9 +6,6 @@ from kornia.losses import total_variation
 from models.encoder import EncoderResult
 from utils import erode_segment_mask
 
-FLOW_SGD = True
-SGD_N_SAMPLES = 100
-
 
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
@@ -110,8 +107,9 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow_clone * flow_segment_masks_binary_2_channels[None]
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
-            if FLOW_SGD:
-                flow_segment_masks_binary = random_points_from_binary_mask(flow_segment_masks_binary, SGD_N_SAMPLES)
+            if self.config.flow_sgd:
+                flow_segment_masks_binary = random_points_from_binary_mask(flow_segment_masks_binary,
+                                                                           self.config.flow_sgd_n_samples)
 
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
 
