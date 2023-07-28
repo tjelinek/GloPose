@@ -636,7 +636,7 @@ class Tracking6D:
                     print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
                 print("; joint {:.3f}".format(jloss.item()))
 
-            if model_loss < self.best_model["value"]:
+            if abs(model_loss - self.best_model["value"]) > 1e-3:
                 iters_without_change = 0
                 self.best_model["value"] = model_loss
                 self.best_model["losses"] = losses_all
@@ -664,7 +664,7 @@ class Tracking6D:
                 if USE_LR_SCHEDULER:
                     scheduler.step(jloss)
 
-        # self.encoder.load_state_dict(self.best_model["encoder"])
+        self.encoder.load_state_dict(self.best_model["encoder"])
 
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
@@ -726,11 +726,11 @@ class Tracking6D:
 
     def rgb_apply(self, input_batch, segments, observed_flows, flow_segment_masks):
         self.best_model["value"] = 100
-        # model_state = self.rgb_encoder.state_dict()
-        # pretrained_dict = self.best_model["encoder"]
-        # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
-        # model_state.update(pretrained_dict)
-        # self.rgb_encoder.load_state_dict(model_state)
+        model_state = self.rgb_encoder.state_dict()
+        pretrained_dict = self.best_model["encoder"]
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
+        model_state.update(pretrained_dict)
+        self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
             encoder_result, encoder_result_flow_frames = \
