@@ -146,7 +146,7 @@ class WriteResults:
                 tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
             write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
                            tracking6d.encoder.face_features[0].cpu().numpy(),
-                           os.path.join(tracking6d.write_folder, f'mesh_{stepi}.obj'))
+                           os.path.join(tracking6d.write_folder, f'mesh_{stepi}.obj'), "model" + str(stepi) + ".mtl")
             save_image(detached_result.texture_maps[:, :3], os.path.join(tracking6d.write_folder, 'tex_deep.png'))
             save_image(tex, os.path.join(tracking6d.write_folder, f'tex_{stepi}.png'))
 

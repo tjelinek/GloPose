@@ -88,14 +88,12 @@ def subdivide_mesh(vertices, faces, config, divide_scale=1, subfilter='loop'):
     return subdivided_vertices, subdivided_faces, subdivided_face_features
 
 
-def write_obj_mesh(vertices, faces, face_features, name):
-    match = re.search(r'_\d+', Path(name).name)
-    index = ""
-    if match:
-        index = match.group()
+def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
+    if materials_model_name is None:
+        materials_model_name = "model.mtl"
 
     file = open(name, "w")
-    file.write("mtllib model" + index + ".mtl\n")
+    file.write("mtllib " + materials_model_name + "\n")
     file.write("o FMO\n")
     for ver in vertices:
         file.write("v {:.6f} {:.6f} {:.6f} \n".format(ver[0], ver[1], ver[2]))
