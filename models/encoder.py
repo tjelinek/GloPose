@@ -108,12 +108,7 @@ class Encoder(nn.Module):
 
         quaternion = torch.stack(quaternion_all, 1).contiguous()
         translation = torch.stack(translation_all, 2).contiguous()
-        wghts = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
-        tdiff = wghts * comp_tran_diff(translation[0, 0, opt_frames])
-        key_dists = []
-        for frmi in opt_frames[1:]:
-            key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
-        qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
+
         if self.config.features == 'deep':
             texture_map = self.texture_map
         else:
