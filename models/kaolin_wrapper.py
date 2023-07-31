@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import kaolin
 import meshio
 import meshzoo
@@ -87,7 +89,7 @@ def subdivide_mesh(vertices, faces, config, divide_scale=1, subfilter='loop'):
 
 
 def write_obj_mesh(vertices, faces, face_features, name):
-    match = re.search(r'_\d+', name)
+    match = re.search(r'_\d+', Path(name).name)
     index = ""
     if match:
         index = match.group()
