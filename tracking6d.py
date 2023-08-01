@@ -31,15 +31,14 @@ from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, ge
 from utils import qnorm, qmult, consecutive_quaternions_angular_difference2, consecutive_quaternions_angular_difference
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
-
-ALLOW_BREAK_AFTER = 50
-
-TRAINING_PRINT_STATUS_FREQUENCY = 1
-
+ALLOW_BREAK_AFTER = 70
+TRAINING_PRINT_STATUS_FREQUENCY = 20
 SILHOUETTE_LOSS_THRESHOLD = 0.3
+OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER = 50
 
 LR_SCHEDULER_PATIENCE = 5
 USE_LR_SCHEDULER = True
+
 
 @dataclass
 class TrackerConfig:
@@ -122,7 +121,7 @@ class TrackerConfig:
 
     # Optical flow loss
     flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
-    segmentation_mask_erosion_iters: int = 10
+    segmentation_mask_erosion_iters: int = 0
     flow_sgd: bool = False
     flow_sgd_n_samples: int = 100
 
@@ -325,8 +324,13 @@ class Tracking6D:
         self.rendering = RenderingKaolin(self.config, self.faces, shape[-1], shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
                                images_feat.shape[2]).to(self.device)
-        all_parameters = list(self.encoder.parameters())
-        self.optimizer = torch.optim.Adam(all_parameters, lr=self.config.learning_rate)
+        all_parameters = set(list(self.encoder.parameters()))
+        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
+        non_positional_params = all_parameters - positional_params
+
+        self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
+        self.optimizer_positional_parameters = torch.optim.Adam(positional_params, lr=self.config.learning_rate)
+
         self.encoder.train()
         self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
         if self.config.features == 'deep':
@@ -484,7 +488,6 @@ class Tracking6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", stepi, "out of",
                   self.config.input_frames)
 
-
             tex = None
             if self.config.features == 'deep':
                 self.rgb_apply(self.all_keyframes.images[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -591,12 +594,20 @@ class Tracking6D:
                            os.path.join(self.write_folder, 'weights.png'))
 
         # Restore the learning rate on its prior values
-        for param_group in self.optimizer.param_groups:
+        for param_group in self.optimizer_non_positional_parameters.param_groups:
+            param_group['lr'] = self.config.learning_rate
+        for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.9,
-                                                   patience=LR_SCHEDULER_PATIENCE, verbose=True)
-        # scheduler = lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0.0)
+        scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters, mode='min',
+                                                                     factor=0.9, patience=LR_SCHEDULER_PATIENCE,
+                                                                     verbose=False)
+
+        def lambda_schedule(epoch):
+            return 1 / (1 + np.exp(-0.5 * (epoch - OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER)))
+
+        scheduler_non_positional_params = lr_scheduler.LambdaLR(self.optimizer_non_positional_parameters,
+                                                                lambda_schedule)
 
         self.best_model["value"] = 100
         self.best_model["losses"] = None
@@ -605,6 +616,8 @@ class Tracking6D:
         encoder_result = None
         theoretical_flow = None
         renders = None
+
+        model_losses_exponential_decay = None
 
         for epoch in range(self.config.iterations):
 
@@ -636,6 +649,10 @@ class Tracking6D:
                     print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
                 print("; joint {:.3f}".format(jloss.item()))
 
+            if model_losses_exponential_decay is None:
+                model_losses_exponential_decay = model_loss
+            else:
+                model_losses_exponential_decay = 0.8 * model_losses_exponential_decay + 0.2 * model_loss
             if abs(model_loss - self.best_model["value"]) > 1e-3:
                 iters_without_change = 0
                 self.best_model["value"] = model_loss
@@ -652,17 +669,23 @@ class Tracking6D:
                     self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
                     self.best_model["value"] = 100
             else:
-                if epoch > ALLOW_BREAK_AFTER and self.best_model["value"] < self.config.stop_value and \
+                if epoch > ALLOW_BREAK_AFTER and abs(model_losses_exponential_decay - model_loss) <= 1e-3 and \
                         iters_without_change > BREAK_AFTER_ITERS_WITH_NO_CHANGE:
                     break
             if epoch < self.config.iterations - 1:
                 # with torch.autograd.detect_anomaly():
                 jloss = jloss.mean()
-                self.optimizer.zero_grad()
+                self.optimizer_non_positional_parameters.zero_grad()
+                self.optimizer_positional_parameters.zero_grad()
+
                 jloss.backward()
-                self.optimizer.step()
+
+                self.optimizer_non_positional_parameters.step()
+                self.optimizer_positional_parameters.step()
+
                 if USE_LR_SCHEDULER:
-                    scheduler.step(jloss)
+                    scheduler_positional_params.step(jloss)
+                    scheduler_non_positional_params.step()
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
