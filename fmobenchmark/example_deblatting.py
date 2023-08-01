@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys
 
+import runtime_utils
 from benchmark.benchmark_loader import *
 from benchmark.loaders_helpers import *
 
@@ -17,7 +18,7 @@ def parse_args():
 	parser.add_argument("--verbose", default=False)
 	parser.add_argument("--visualization_path", default='/cluster/home/denysr/tmp', required=False)
 	parser.add_argument("--save_visualization", default=False, required=False)
-	return parser.parse_args()
+	return runtime_utils.parse_args()
 
 def deblur_tbdo(I,B,bbox,nsplits,radius,debl_dim,gt_traj):
 	bbox_debl = extend_bbox_uniform(bbox.copy(),0.5*radius,I.shape)

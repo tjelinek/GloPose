@@ -1,6 +1,7 @@
 import os
 import torch
 
+import runtime_utils
 from benchmark.benchmark_loader import *
 from benchmark.loaders_helpers import *
 import argparse
@@ -22,7 +23,7 @@ def parse_args():
 	parser.add_argument("--verbose", default=False)
 	parser.add_argument("--visualization_path", default='/cluster/home/denysr/tmp', required=False)
 	parser.add_argument("--save_visualization", default=False, required=False)
-	return parser.parse_args()
+	return runtime_utils.parse_args()
 
 def main():
 	args = parse_args()
