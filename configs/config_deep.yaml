@@ -11,7 +11,7 @@ mot_opt_all: False
 features: deep
 stop_value: 0.05
 tran_init: 0.0
-rot_init: [0,1.57079637051,0]
+rot_init: [ 0,0,0 ]
 init_shape: False
 
 max_keyframes: 8
@@ -41,7 +41,7 @@ loss_rgb_weight: 1.0
 loss_q_weight: 1.0
 loss_t_weight: 1.0
 weight_by_gradient: False
-loss_flow_weight: 0.05
+loss_flow_weight: 10.0
 
 erode_renderer_mask: 3
 rotation_divide: 8
