@@ -2,13 +2,14 @@ import imageio
 import kaolin
 import numpy as np
 import torch
+import csv
 from kornia.geometry import quaternion_to_rotation_matrix
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
-from utils import deg_to_rad
+from utils import deg_to_rad, qnorm, qmult
 from flow import visualize_flow_with_images
 
 
@@ -130,11 +131,13 @@ def generate_rotations_xyz(step=10.0):
 
 
 def generate_rotating_textured_object(config, prototype_path, texture_path: Path, rendering_destination: Path,
-                                      segmentation_destination: Path, optical_flow_destination, width, height,
-                                      DEVICE='cuda', rotations=None):
+                                      segmentation_destination: Path, optical_flow_destination, gt_tracking_log_file,
+                                      width, height, DEVICE='cuda', rotations=None, initial_rotation_axis_angle=None,
+                                      initial_translation=None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
+    gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
     tex = imageio.imread(str(texture_path))
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
@@ -153,20 +156,38 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
         rotations = generate_rotations_y(2.0)
 
     render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, DEVICE)
+                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE,
+                        initial_rotation_axis_angle, initial_translation)
 
 
 def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, DEVICE):
+                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE,
+                        initial_rotation_axis_angle, initial_translation):
+    # The initial rotations are expected to be in radians
+
+    if initial_rotation_axis_angle is None:
+        initial_rotation_axis_angle = torch.Tensor([0, 0, 0]).to(DEVICE)
+    if initial_translation is None:
+        initial_translation = torch.Tensor([0, 0, 0]).to(DEVICE)
+
+    initial_rotation_quaternion = angle_axis_to_quaternion(initial_rotation_axis_angle, order=QuaternionCoeffOrder.WXYZ)
+
     prev_encoder_result = None
     prev_ren_features = None
 
     translations = torch.zeros(1, 1, 1, 3).to(DEVICE)
+    translations[..., :] += initial_translation
+
+    log_rows = []
+
     for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
         axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
         rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
                                                               order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
-        rotation_matrix = quaternion_to_rotation_matrix(rotation_quaternion_tensor,
+        composed_rotation_quaternion_tensor = qmult(qnorm(initial_rotation_quaternion[None]),
+                                                    qnorm(rotation_quaternion_tensor[None]))[0]
+
+        rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
                                                         order=QuaternionCoeffOrder.WXYZ)[None]
         current_encoder_result = EncoderResult(translations=translations,
                                                quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
@@ -180,6 +201,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             prev_encoder_result = current_encoder_result
 
         with torch.no_grad():
+            log_rows.append([frame_i, rotation_x, rotation_y, rotation_z, 0, 0, 0])
+
             rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
                                                                rendering.obj_center, vertices.to(DEVICE))
 
@@ -204,6 +227,12 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             prev_ren_features = ren_features
 
         prev_encoder_result = current_encoder_result
+
+    with open(gt_tracking_log_file, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["frame", "rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"])
+        for row in log_rows:
+            writer.writerow(row)
 
 
 def generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i, save_destination):

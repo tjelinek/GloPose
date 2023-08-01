@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 
 
 def generate_8_colored_sphere(config, rendering_destination, segmentation_destination, optical_flow_destination,
-                              rotations):
+                              gt_tracking_log_file, rotations):
     prototype_path = Path('./prototypes/sphere.obj')
     DEVICE = 'cuda'
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
@@ -49,11 +49,11 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 
     # Render the object without using texture maps
     render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, DEVICE)
+                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE, None, None)
 
 
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination,
-                            rotations):
+                            gt_tracking_log_file, rotations):
     DEVICE = 'cuda'
     width = 2000
     height = 2000
@@ -102,11 +102,11 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
 
     # Render the object without using texture maps
     render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, DEVICE)
+                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE, None, None)
 
 
 def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path,
-                             optical_flow_destination, rotations):
+                             optical_flow_destination, gt_tracking_log_file, rotations):
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
@@ -114,7 +114,8 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     height = 2000
 
     generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
-                                      optical_flow_destination, width, height, rotations=rotations)
+                                      optical_flow_destination, gt_tracking_log_file, width, height,
+                                      rotations=rotations)
 
 
 if __name__ == '__main__':
@@ -125,6 +126,7 @@ if __name__ == '__main__':
     rendering_dir = Path('renderings')
     segmentation_dir = Path('segmentations')
     optical_flow_dir = Path('optical_flow')
+    gt_tracking_log_dir = Path('gt_tracking_log')
 
     objects = [
         ('Textured_Sphere_2', generate_textured_sphere),
@@ -138,5 +140,6 @@ if __name__ == '__main__':
         rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
         segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
         optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
+        gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path('gt_tracking_log.csv')
 
-        generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, rots)
+        generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file, rots)
