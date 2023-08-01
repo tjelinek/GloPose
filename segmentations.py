@@ -10,6 +10,7 @@ from kornia.filters import gaussian_blur2d, spatial_gradient
 from scipy import ndimage
 from scipy.ndimage import uniform_filter
 from torchvision import transforms
+import torch.nn.functional as F
 
 from utils import imread
 
@@ -35,6 +36,18 @@ def compute_segments_dist(segment, width, height):
     distt = transforms.ToTensor()(dist).unsqueeze(0)
     segments = torch.cat((distt, segm), 1)
     return segments
+
+
+def pad_image(image):
+    W, H = image.shape[-2:]
+    max_size = max(H, W)
+    pad_h = max_size - H
+    pad_w = max_size - W
+    padding = [(pad_h + 1) // 2, pad_h // 2, pad_w // 2, (pad_w + 1) // 2]  # (top, bottom, left, right)
+
+    image = F.pad(image, padding, mode='constant', value=0)
+
+    return image
 
 
 class PrecomputedTracker:
@@ -94,12 +107,20 @@ class PrecomputedTracker:
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
+
+        segments = pad_image(segments)
+        image = pad_image(image)
+
         return image, segments, self.perc
 
     def next(self, file):
         ind = os.path.splitext(os.path.basename(file))[0]
         I = imread(file) * 255
         image, segments = self.process(I, ind)
+
+        segments = pad_image(segments)
+        image = pad_image(image)
+
         return image, segments
 
     def next_high_resolution(self, file):

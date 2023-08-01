@@ -12,7 +12,7 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder
 
-from segmentations import create_mask_from_string, get_bbox
+from segmentations import create_mask_from_string, get_bbox, pad_image
 from utils import write_video, segment2bbox, qnorm
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
@@ -193,6 +193,7 @@ class WriteResults:
                         torch.from_numpy(m_)
                 elif stepi in bboxes:
                     gt_segm = tracking6d.tracker.process_segm(bboxes[stepi])[0].to(tracking6d.device)
+                    gt_segm = pad_image(gt_segm)
                 if gt_segm is not None:
                     self.baseline_iou[stepi - 1] = float((last_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
                         ((last_segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
