@@ -8,8 +8,8 @@ import numpy as np
 import os
 import time
 import torch
-from pathlib import Path
 import torchvision.transforms as transforms
+from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
 from typing import List
@@ -17,9 +17,9 @@ from typing import List
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow
 from flow import get_flow_from_images, get_flow_from_images_mft
-from flow_raft import get_flow_model_raft
-from flow_mft import get_flow_model_mft
 from flow_gma import get_flow_model_gma
+from flow_mft import get_flow_model_mft
+from flow_raft import get_flow_model_raft
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -28,7 +28,7 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
-from utils import qnorm, qmult, consecutive_quaternions_angular_difference2, consecutive_quaternions_angular_difference
+from utils import consecutive_quaternions_angular_difference
 
 BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
 ALLOW_BREAK_AFTER = 70
