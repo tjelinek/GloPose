@@ -421,3 +421,41 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
         # Save flow illustrations
         imageio.imwrite(theoretical_flow_path, flow_illustration)
         imageio.imwrite(flow_difference_path, flow_difference_illustration)
+
+
+def load_gt_annotations_file(file_path):
+    # Initialize empty lists to store the data
+    frames = []
+    rotations_degrees = []
+    translations = []
+
+    # Load the CSV file
+    with open(file_path, 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            # Append frame number
+            frames.append(int(row['frame']))
+
+            # Append rotations in degrees
+            rotations_degrees.append([
+                float(row['rot_x']),
+                float(row['rot_y']),
+                float(row['rot_z'])
+            ])
+
+            # Append translations
+            translations.append([
+                float(row['trans_x']),
+                float(row['trans_y']),
+                float(row['trans_z'])
+            ])
+
+    # Convert rotations from degrees to radians
+    rotations_radians = [[math.radians(rot[0]), math.radians(rot[1]), math.radians(rot[2])] for rot in
+                         rotations_degrees]
+
+    # Create tensors
+    rotations_tensor = torch.tensor(rotations_radians).unsqueeze(0)
+    translations_tensor = torch.tensor(translations).unsqueeze(0).unsqueeze(1)
+
+    return frames, rotations_tensor, translations_tensor
