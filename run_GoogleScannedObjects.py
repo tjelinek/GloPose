@@ -1,43 +1,40 @@
-import argparse
 import glob
 import os
-
 import sys
 import time
 import shutil
 
 import numpy as np
-import torch
 
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
-from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.append('OSTrack/S2DNet')
 
-from tracking6d import Tracking6D
-
 
 def main():
     dataset = 'GoogleScannedObjects'
-    sequences = ['Squirrel', 'STACKING_BEAR', 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
+    sequences = ['INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count', 'Squirrel', 'STACKING_BEAR',
                  'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain', 'Tag_Dishtowel_Green']
 
     for sequence in sequences:
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
         gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
         gt_mesh_path = gt_model_path / Path('meshes/model.obj')
+        gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path('gt_tracking_log') / Path(sequence) / \
+                           Path('gt_tracking_log.csv')
 
         args = parse_args(sequence, dataset)
 
         experiment_name = args.experiment
         config = load_config(args.config)
         config["image_downsample"] = args.perc
-        config["tran_init"] = 2.5
+        config["tran_init"] = 0
         config["gt_texture"] = gt_texture_path
         config["gt_mesh_prototype"] = gt_mesh_path
+        config["gt_tracking_log"] = gt_tracking_path
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
 
