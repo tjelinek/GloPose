@@ -507,6 +507,18 @@ class Tracking6D:
                                                      self.all_keyframes.segments, self.all_keyframes.images,
                                                      self.all_keyframes.images_feat, tex, frame_result.frame_losses)
 
+                    self.write_results.evaluate_metrics(stepi=stepi,
+                                                        predicted_vertices=encoder_result.vertices,
+                                                        predicted_rotation=encoder_result.quaternions,
+                                                        predicted_translation=encoder_result.quaternions,
+                                                        predicted_mask=None,
+                                                        gt_vertices=self.gt_mesh_prototype.vertices[None].to(
+                                                            self.device),
+                                                        gt_rotation=None,
+                                                        gt_translation=None,
+                                                        gt_object_mask=None
+                                                        )
+
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
                                    stepi, self.write_folder)

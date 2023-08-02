@@ -4,6 +4,7 @@ import math
 import torch
 import cv2
 import imageio
+import csv
 import numpy as np
 from matplotlib import pyplot as plt
 from torch import nn
@@ -11,6 +12,7 @@ from pathlib import Path
 from torchvision import transforms
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder
+from pytorch3d.loss.chamfer import chamfer_distance
 
 from segmentations import create_mask_from_string, get_bbox, pad_image
 from utils import write_video, segment2bbox, qnorm
@@ -83,12 +85,19 @@ class WriteResults:
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
+        self.metrics_log = open(Path(write_folder) / "metrics_log.txt", "w")
+        self.metrics_writer = csv.writer(self.metrics_log)
+
+        self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance"])
 
     def __del__(self):
         self.all_input.release()
         self.all_segm.release()
         self.all_proj.release()
         self.all_proj_filtered.release()
+
+        self.tracking_log.close()
+        self.metrics_log.close()
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
                       ground_truth_segments, images, images_feat, tex, frame_losses):
@@ -226,6 +235,25 @@ class WriteResults:
                 renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
+
+    def evaluate_metrics(self, stepi, predicted_vertices, predicted_rotation, predicted_translation, predicted_mask,
+                         gt_vertices=None, gt_rotation=None, gt_translation=None, gt_object_mask=None):
+
+        with torch.no_grad():
+            chamfer_dist = "NA"
+            iou_3d = "NA"
+            iou_2d = "NA"
+
+            if gt_vertices is not None:
+                chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices))
+
+            if gt_rotation is not None and gt_translation is not None:
+                pass
+
+            if gt_object_mask is not None:
+                pass
+
+            self.metrics_writer.writerow([stepi, iou_2d, iou_3d, chamfer_dist])
 
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
