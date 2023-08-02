@@ -15,7 +15,7 @@ from torchvision.utils import save_image
 from typing import List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow
+from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
 from flow import get_flow_from_images, get_flow_from_images_mft
 from flow_gma import get_flow_model_gma
 from flow_mft import get_flow_model_mft
@@ -117,6 +117,7 @@ class TrackerConfig:
     # Ground truths
     gt_texture: str = None
     gt_mesh_prototype: str = None
+    gt_tracking_log: str = None
     use_gt: bool = False
 
     # Optical flow loss
@@ -264,6 +265,13 @@ class Tracking6D:
         self.gt_mesh_prototype = None
         if 'gt_mesh_prototype' in config and config['gt_mesh_prototype'] is not None:
             self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
+
+        self.gt_rotations = None
+        self.gt_translations = None
+        if self.config.gt_tracking_log is not None:
+            _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_tracking_log)
+            self.gt_rotations = gt_rotations
+            self.gt_translations = gt_translations
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
@@ -511,12 +519,12 @@ class Tracking6D:
                                                         predicted_vertices=encoder_result.vertices,
                                                         predicted_rotation=encoder_result.quaternions,
                                                         predicted_translation=encoder_result.quaternions,
-                                                        predicted_mask=None,
+                                                        predicted_mask=frame_result.renders[:, :, 0, -1, ...],
                                                         gt_vertices=self.gt_mesh_prototype.vertices[None].to(
                                                             self.device),
-                                                        gt_rotation=None,
-                                                        gt_translation=None,
-                                                        gt_object_mask=None
+                                                        gt_rotation=self.gt_rotations,
+                                                        gt_translation=self.gt_translations,
+                                                        gt_object_mask=self.active_keyframes.segments[:, :, 1, ...]
                                                         )
 
                     # Visualize flow we get from the video
