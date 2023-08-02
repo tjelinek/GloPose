@@ -245,7 +245,7 @@ class WriteResults:
             iou_2d = "NA"
 
             if gt_vertices is not None:
-                chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices))
+                chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
 
             if gt_rotation is not None and gt_translation is not None:
                 pass
