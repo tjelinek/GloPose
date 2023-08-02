@@ -303,15 +303,15 @@ class Tracking6D:
 
         if self.config.use_gt:
             ivertices = self.gt_mesh_prototype.vertices.numpy()
-            # magnification = 1 / (ivertices.max() - ivertices.mean()) * 1.0
-            # ivertices *= magnification
+            magnification = 1 / (ivertices.max() - ivertices.mean()) * 1.0
+            ivertices *= magnification
             faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
         elif self.config.init_shape:
             mesh = load_obj(self.config.init_shape)
             ivertices = mesh.vertices.numpy()
-            # ivertices = ivertices - ivertices.mean(0)
-            # ivertices = ivertices / ivertices.max()
+            ivertices = ivertices - ivertices.mean(0)
+            ivertices = ivertices / ivertices.max()
             faces = mesh.faces.numpy().copy()
             iface_features = generate_face_features(ivertices, faces)
         else:
