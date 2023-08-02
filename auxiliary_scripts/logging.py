@@ -9,6 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from torch import nn
 from pathlib import Path
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder
@@ -89,6 +90,10 @@ class WriteResults:
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance"])
+
+        tensorboard_log_dir = Path(write_folder) / Path("tensorboard_logs")
+        tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
+        self.tensorboard_writer = SummaryWriter(str(tensorboard_log_dir))
 
     def __del__(self):
         self.all_input.release()
