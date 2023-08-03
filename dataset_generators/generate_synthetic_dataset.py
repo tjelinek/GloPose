@@ -21,6 +21,7 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
+    gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
     colors = [
         [255, 0, 0],  # red
@@ -61,6 +62,7 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
+    gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
     colors = [
         [255, 0, 0],  # red
