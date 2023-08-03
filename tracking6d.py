@@ -515,14 +515,16 @@ class Tracking6D:
                                                      self.all_keyframes.segments, self.all_keyframes.images,
                                                      self.all_keyframes.images_feat, tex, frame_result.frame_losses)
 
+                    gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
+                        if self.gt_mesh_prototype is not None else None
                     self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
                                                         keyframes=self.active_keyframes.keyframes,
                                                         predicted_vertices=encoder_result.vertices,
                                                         predicted_quaternion=encoder_result.quaternions,
                                                         predicted_translation=encoder_result.translations,
                                                         predicted_mask=frame_result.renders[:, :, 0, -1, ...],
-                                                        gt_vertices=self.gt_mesh_prototype.vertices[None].to(
-                                                            self.device), gt_rotation=self.gt_rotations,
+                                                        gt_vertices=gt_mesh_vertices,
+                                                        gt_rotation=self.gt_rotations,
                                                         gt_translation=self.gt_translations,
                                                         gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
