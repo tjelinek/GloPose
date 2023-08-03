@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 from dataset_generators.generator_utils import setup_renderer, \
-    generate_rotating_textured_object, render_object_poses, generate_rotations_y
+    generate_rotating_textured_object, render_object_poses, generate_rotations_y, generate_rotations_xy
 from main_settings import dataset_folder
 from utils import load_config
 
@@ -39,8 +39,8 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
         color_code = [vertex[0] > 0, vertex[1] > 0, vertex[2] > 0]
         vertices_features[i] = torch.tensor(colors[color_code[0] + 2 * color_code[1] + 4 * color_code[2]])
 
-    width = 2000
-    height = 2000
+    width = 1000
+    height = 1000
     faces = mesh.faces
 
     rendering = setup_renderer(config, faces, height, width, DEVICE)
@@ -55,8 +55,8 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination,
                             gt_tracking_log_file, rotations):
     DEVICE = 'cuda'
-    width = 2000
-    height = 2000
+    width = 1000
+    height = 1000
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
@@ -110,8 +110,8 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
-    width = 2000
-    height = 2000
+    width = 1000
+    height = 1000
 
     generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
                                       optical_flow_destination, gt_tracking_log_file, width, height,
@@ -128,18 +128,33 @@ if __name__ == '__main__':
     optical_flow_dir = Path('optical_flow')
     gt_tracking_log_dir = Path('gt_tracking_log')
 
-    objects = [
-        ('Textured_Sphere_2', generate_textured_sphere),
-        ('8_Colored_Sphere_2', generate_8_colored_sphere),
-        ('6_Colored_Cube_2', generate_6_colored_cube)
-    ]
+    rot_mags = {2, 5, 10}
 
-    rots = generate_rotations_y(step=2.0)
+    for rot_mag in rot_mags:
 
-    for obj_name, generate_obj_func in objects:
-        rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
-        segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
-        optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
-        gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path('gt_tracking_log.csv')
+        rot_gens = [
+            (generate_rotations_y, 'y'),
+            # (generate_rotations_x, 'x'),
+            (generate_rotations_xy, 'xy'),
+            # (generate_rotations_xyz, 'xyz')
+        ]
 
-        generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file, rots)
+        for rots_gen, suffix in rot_gens:
+
+            objects = [
+                (f'Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere),
+                (f'8_Colored_Sphere_{rot_mag}_{suffix}', generate_8_colored_sphere),
+                (f'6_Colored_Cube_{rot_mag}_{suffix}', generate_6_colored_cube)
+            ]
+
+            rots = rots_gen(step=float(rot_mag))
+
+            for obj_name, generate_obj_func in objects:
+                rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
+                segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
+                optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
+                gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path(
+                    'gt_tracking_log.csv')
+
+                generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file,
+                                  rots)
