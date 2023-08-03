@@ -15,6 +15,7 @@ from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder, angle_axis_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
+from models.loss import fmo_loss
 from segmentations import create_mask_from_string, get_bbox, pad_image
 from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference
 from helpers.torch_helpers import write_renders
@@ -89,7 +90,7 @@ class WriteResults:
         self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
         self.metrics_writer = csv.writer(self.metrics_log)
 
-        self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
+        self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
                                       "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"])
 
         tensorboard_log_dir = Path(write_folder) / Path("tensorboard_logs")
@@ -251,7 +252,8 @@ class WriteResults:
 
             chamfer_dist = "NA"
             iou_3d = "NA"
-            iou_2d = "NA"
+            miou_2d = "NA"
+            last_iou_2d = "NA"
             mTransAll = "NA"
             mTransKF = "NA"
             transLast = "NA"
@@ -311,11 +313,19 @@ class WriteResults:
                 transLast = float(translation_l2_diff_last.mean())
 
             if gt_object_mask is not None:
-                pass
 
-            # ["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
+                ious = torch.zeros(gt_object_mask.shape[1])
+                for frame_i in range(gt_object_mask.shape[1]):
+                    frame_iou = 1 - fmo_loss(gt_object_mask[None, None, :, frame_i],
+                                             predicted_mask[None, None, :, frame_i])
+                    ious[frame_i] = frame_iou
+
+                last_iou_2d = float(frame_iou)
+                miou_2d = float(torch.max(ious))
+
+            # ["Frame", "mIoU", "lastIoU" "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
             #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
-            row_results = [stepi, iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
+            row_results = [stepi, miou_2d, last_iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
                            mAngDiffAll, mAngDiffKF, angDiffLast]
 
             row_results_rounded = [round(res, 3) if type(res) is float else res for res in row_results]
