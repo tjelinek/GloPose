@@ -270,8 +270,8 @@ class Tracking6D:
         self.gt_translations = None
         if self.config.gt_tracking_log is not None:
             _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_tracking_log)
-            self.gt_rotations = gt_rotations
-            self.gt_translations = gt_translations
+            self.gt_rotations = gt_rotations.to(self.device)
+            self.gt_translations = gt_translations.to(self.device)
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
@@ -515,17 +515,16 @@ class Tracking6D:
                                                      self.all_keyframes.segments, self.all_keyframes.images,
                                                      self.all_keyframes.images_feat, tex, frame_result.frame_losses)
 
-                    self.write_results.evaluate_metrics(stepi=stepi,
+                    self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
+                                                        keyframes=self.active_keyframes.keyframes,
                                                         predicted_vertices=encoder_result.vertices,
-                                                        predicted_rotation=encoder_result.quaternions,
-                                                        predicted_translation=encoder_result.quaternions,
+                                                        predicted_quaternion=encoder_result.quaternions,
+                                                        predicted_translation=encoder_result.translations,
                                                         predicted_mask=frame_result.renders[:, :, 0, -1, ...],
                                                         gt_vertices=self.gt_mesh_prototype.vertices[None].to(
-                                                            self.device),
-                                                        gt_rotation=self.gt_rotations,
+                                                            self.device), gt_rotation=self.gt_rotations,
                                                         gt_translation=self.gt_translations,
-                                                        gt_object_mask=self.active_keyframes.segments[:, :, 1, ...]
-                                                        )
+                                                        gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,

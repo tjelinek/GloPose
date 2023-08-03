@@ -12,11 +12,11 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
-from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder
+from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder, angle_axis_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from segmentations import create_mask_from_string, get_bbox, pad_image
-from utils import write_video, segment2bbox, qnorm
+from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -89,7 +89,8 @@ class WriteResults:
         self.metrics_log = open(Path(write_folder) / "metrics_log.txt", "w")
         self.metrics_writer = csv.writer(self.metrics_log)
 
-        self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance"])
+        self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
+                                      "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffAll"])
 
         tensorboard_log_dir = Path(write_folder) / Path("tensorboard_logs")
         tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
@@ -241,24 +242,81 @@ class WriteResults:
             self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
                 2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
-    def evaluate_metrics(self, stepi, predicted_vertices, predicted_rotation, predicted_translation, predicted_mask,
-                         gt_vertices=None, gt_rotation=None, gt_translation=None, gt_object_mask=None):
+    def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
+                         predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
+                         gt_object_mask=None):
 
         with torch.no_grad():
+            encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d)
+
             chamfer_dist = "NA"
             iou_3d = "NA"
             iou_2d = "NA"
+            mTransAll = "NA"
+            mTransKF = "NA"
+            transLast = "NA"
+            mAngDiffAll = "NA"
+            mAngDiffKF = "NA"
+            angDiffLast = "NA"
 
             if gt_vertices is not None:
                 chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
 
-            if gt_rotation is not None and gt_translation is not None:
-                pass
+            if gt_rotation is not None:
+                gt_quaternion = angle_axis_to_quaternion(gt_rotation, order=QuaternionCoeffOrder.WXYZ)
+
+                pred_quaternion_all_frames = encoder_result_all_frames.quaternions
+                gt_quaternion_all_frames = gt_quaternion[:, :stepi + 1]
+
+                pred_quaternion_keyframes = predicted_quaternion
+                gt_quaternion_keyframes = gt_quaternion[:, keyframes]
+
+                pred_quaternion_last = predicted_quaternion[None, :, -1]
+                gt_quaternion_last = gt_quaternion[None, :, stepi]
+
+                ang_diff_all_frames = quaternion_angular_difference(pred_quaternion_all_frames,
+                                                                    gt_quaternion_all_frames)
+                mAngDiffAll = ang_diff_all_frames.mean()
+
+                ang_diff_keyframes = quaternion_angular_difference(pred_quaternion_keyframes,
+                                                                   gt_quaternion_keyframes)
+                mAngDiffKF = ang_diff_keyframes.mean()
+
+                ang_diff_last_frame = quaternion_angular_difference(pred_quaternion_last,
+                                                                    gt_quaternion_last)
+                angDiffLast = ang_diff_last_frame.mean()
+
+            if gt_translation is not None:
+                pred_translation_all_frames = encoder_result_all_frames.translations
+                gt_translation_all_frames = gt_translation[:, :, :stepi + 1]
+
+                pred_translation_keyframes = predicted_translation
+                gt_translation_keyframes = gt_translation[:, :, keyframes]
+
+                pred_translation_last = predicted_translation[None, :, :, -1]
+                gt_translation_last = gt_translation[None, :, :, stepi]
+
+                # Compute L2 norm for all frames
+                translation_l2_diff_all_frames = torch.norm(pred_translation_all_frames - gt_translation_all_frames,
+                                                            dim=-1)
+                mTransAll = translation_l2_diff_all_frames.mean()
+
+                # Compute L2 norm for keyframes
+                translation_l2_diff_keyframes = torch.norm(pred_translation_keyframes - gt_translation_keyframes,
+                                                           dim=-1)
+                mTransKF = translation_l2_diff_keyframes.mean()
+
+                # Compute L2 norm for the last frame
+                translation_l2_diff_last = torch.norm(pred_translation_last - gt_translation_last, dim=-1)
+                transLast = translation_l2_diff_last.mean()
 
             if gt_object_mask is not None:
                 pass
 
-            self.metrics_writer.writerow([stepi, iou_2d, iou_3d, chamfer_dist])
+            # ["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
+            #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffAll"]
+            self.metrics_writer.writerow([stepi, iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
+                                          mAngDiffAll, mAngDiffKF, angDiffLast])
 
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
@@ -334,12 +392,16 @@ class WriteResults:
         self.tracking_log.write("============================================\n")
         tracking6d.write_results.tracking_log.write("Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n")
-        keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
-        encoder_result_prime = tracking6d.encoder(keyframes_prime)
+        encoder_result_prime, keyframes_prime = self.encoder_result_all_frames(tracking6d)
         self.write_keyframe_rotations(encoder_result_prime, keyframes_prime)
         self.tracking_log.write("============================================\n")
         self.tracking_log.write("END of Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n\n\n")
+
+    def encoder_result_all_frames(self, tracking6d):
+        keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
+        encoder_result_prime = tracking6d.encoder(keyframes_prime)
+        return encoder_result_prime, keyframes_prime
 
 
 def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, observed_flow, opt_frames, stepi):

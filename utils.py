@@ -394,6 +394,16 @@ def qdifference(q1, q2):  # how to get from q1 to q2
     return diff
 
 
+def quaternion_angular_difference(quaternions1, quaternions2):
+    angles = torch.zeros(quaternions1.shape[1])
+
+    for i in range(angles.shape[0]):
+        diff = qnorm(qdifference(quaternions1[:, i], quaternions2[:, i]))
+        ang = float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi
+        angles[i] = ang
+    return angles
+
+
 def consecutive_quaternions_angular_difference(quaternion):
     angs = []
     for qi in range(quaternion.shape[1] - 1):
