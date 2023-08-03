@@ -90,7 +90,7 @@ class WriteResults:
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
-                                      "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffAll"])
+                                      "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"])
 
         tensorboard_log_dir = Path(write_folder) / Path("tensorboard_logs")
         tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
@@ -314,7 +314,7 @@ class WriteResults:
                 pass
 
             # ["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
-            #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffAll"]
+            #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
             row_results = [stepi, iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
                            mAngDiffAll, mAngDiffKF, angDiffLast]
 
