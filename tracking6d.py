@@ -662,7 +662,7 @@ class Tracking6D:
                                                            self.last_encoder_result)
             frame_losses.append(float(jloss))
 
-            self.write_into_tensorboard_logs(jloss, losses, step_i)
+            self.write_into_tensorboard_logs(jloss, losses, epoch)
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()

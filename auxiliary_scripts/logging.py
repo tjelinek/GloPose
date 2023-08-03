@@ -111,10 +111,10 @@ class WriteResults:
     def set_tensorboard_log_for_frame(self, frame_i):
         self.tensorboard_log = SummaryWriter(str(self.tensorboard_log_dir / f'Frame_{frame_i}'))
 
-    def write_into_tensorboard_log(self, frame_i: int, values_dict: Dict):
+    def write_into_tensorboard_log(self, sgd_iter: int, values_dict: Dict):
 
         for field_name, value in values_dict.items():
-            self.tensorboard_log.add_scalar(field_name, value, frame_i)
+            self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
                       ground_truth_segments, images, images_feat, tex, frame_losses):
