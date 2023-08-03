@@ -1,3 +1,5 @@
+from typing import Dict
+
 import os
 import math
 
@@ -93,9 +95,9 @@ class WriteResults:
         self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
                                       "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"])
 
-        tensorboard_log_dir = Path(write_folder) / Path("tensorboard_logs")
-        tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
-        self.tensorboard_writer = SummaryWriter(str(tensorboard_log_dir))
+        self.tensorboard_log_dir = Path(write_folder) / Path("logs")
+        self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
+        self.tensorboard_log = None
 
     def __del__(self):
         self.all_input.release()
@@ -105,6 +107,14 @@ class WriteResults:
 
         self.tracking_log.close()
         self.metrics_log.close()
+
+    def set_tensorboard_log_for_frame(self, frame_i):
+        self.tensorboard_log = SummaryWriter(str(self.tensorboard_log_dir / f'Frame_{frame_i}'))
+
+    def write_into_tensorboard_log(self, frame_i: int, values_dict: Dict):
+
+        for field_name, value in values_dict.items():
+            self.tensorboard_log.add_scalar(field_name, value, frame_i)
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
                       ground_truth_segments, images, images_feat, tex, frame_losses):

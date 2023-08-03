@@ -604,6 +604,8 @@ class Tracking6D:
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
 
+        self.write_results.set_tensorboard_log_for_frame(step_i)
+
         frame_losses = []
         if self.config.write_results:
             save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
@@ -659,6 +661,8 @@ class Tracking6D:
                                                            theoretical_flow,
                                                            self.last_encoder_result)
             frame_losses.append(float(jloss))
+
+            self.write_into_tensorboard_logs(jloss, losses, step_i)
 
             if "model" in losses:
                 model_loss = losses["model"].mean().item()
@@ -716,6 +720,27 @@ class Tracking6D:
                                         frame_losses=frame_losses)
 
         return frame_result
+
+    def write_into_tensorboard_logs(self, jloss, losses, step_i):
+        dict_tensorboard_values1 = {
+            k + '_loss': float(v) for k, v in losses.items()
+        }
+        dict_tensorboard_values2 = {
+            "jloss": float(jloss),
+            'loss_laplacian_weight': self.config.loss_laplacian_weight,
+            'loss_tv_weight': self.config.loss_tv_weight,
+            'loss_iou_weight': self.config.loss_iou_weight,
+            'loss_dist_weight': self.config.loss_dist_weight,
+            'loss_q_weight': self.config.loss_q_weight,
+            'loss_texture_change_weight': self.config.loss_texture_change_weight,
+            'loss_t_weight': self.config.loss_t_weight,
+            'loss_rgb_weight': self.config.loss_rgb_weight,
+            'loss_flow_weight': self.config.loss_flow_weight,
+            'non_positional_params_lr': self.optimizer_non_positional_parameters.param_groups[0]['lr'],
+            'positional_params_lr': self.optimizer_positional_parameters.param_groups[0]['lr']
+        }
+        dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
+        self.write_results.write_into_tensorboard_log(step_i, dict_tensorboard_values)
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
         joined_frames = sorted(set(keyframes + flow_frames))
