@@ -86,7 +86,7 @@ class WriteResults:
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
-        self.metrics_log = open(Path(write_folder) / "metrics_log.txt", "w")
+        self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
@@ -276,15 +276,15 @@ class WriteResults:
 
                 ang_diff_all_frames = quaternion_angular_difference(pred_quaternion_all_frames,
                                                                     gt_quaternion_all_frames)
-                mAngDiffAll = ang_diff_all_frames.mean()
+                mAngDiffAll = float(ang_diff_all_frames.mean())
 
                 ang_diff_keyframes = quaternion_angular_difference(pred_quaternion_keyframes,
                                                                    gt_quaternion_keyframes)
-                mAngDiffKF = ang_diff_keyframes.mean()
+                mAngDiffKF = float(ang_diff_keyframes.mean())
 
                 ang_diff_last_frame = quaternion_angular_difference(pred_quaternion_last,
                                                                     gt_quaternion_last)
-                angDiffLast = ang_diff_last_frame.mean()
+                angDiffLast = float(ang_diff_last_frame.mean())
 
             if gt_translation is not None:
                 pred_translation_all_frames = encoder_result_all_frames.translations
@@ -299,24 +299,29 @@ class WriteResults:
                 # Compute L2 norm for all frames
                 translation_l2_diff_all_frames = torch.norm(pred_translation_all_frames - gt_translation_all_frames,
                                                             dim=-1)
-                mTransAll = translation_l2_diff_all_frames.mean()
+                mTransAll = float(translation_l2_diff_all_frames.mean())
 
                 # Compute L2 norm for keyframes
                 translation_l2_diff_keyframes = torch.norm(pred_translation_keyframes - gt_translation_keyframes,
                                                            dim=-1)
-                mTransKF = translation_l2_diff_keyframes.mean()
+                mTransKF = float(translation_l2_diff_keyframes.mean())
 
                 # Compute L2 norm for the last frame
                 translation_l2_diff_last = torch.norm(pred_translation_last - gt_translation_last, dim=-1)
-                transLast = translation_l2_diff_last.mean()
+                transLast = float(translation_l2_diff_last.mean())
 
             if gt_object_mask is not None:
                 pass
 
             # ["Frame", "mIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
             #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffAll"]
-            self.metrics_writer.writerow([stepi, iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
-                                          mAngDiffAll, mAngDiffKF, angDiffLast])
+            row_results = [stepi, iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
+                           mAngDiffAll, mAngDiffKF, angDiffLast]
+
+            row_results_rounded = [round(res, 3) if type(res) is float else res for res in row_results]
+
+            self.metrics_writer.writerow(row_results_rounded)
+            self.metrics_log.flush()
 
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
