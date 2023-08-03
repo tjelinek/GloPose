@@ -1,47 +1,46 @@
 import glob
+import numpy as np
 import os
-
+import shutil
 import sys
 import time
-import shutil
-
-import numpy as np
+from pathlib import Path
 
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
-from pathlib import Path
 
 sys.path.append('OSTrack/S2DNet')
-
-from tracking6d import Tracking6D
 
 
 def main():
     dataset = 'SyntheticObjects'
-    sequences = ['Textured_Sphere_10', '8_Colored_Sphere_10', '6_Colored_Cube_10']
+    sequences = ['Textured_Sphere_5_y', '8_Colored_Sphere_2_y', '6_Colored_Cube_2_y']
 
     for sequence in sequences:
-        gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
 
-        if sequence in ['8_Colored_Sphere_2', '8_Colored_Sphere_10']:
+        if '8_Colored_Sphere' in sequence:
             gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = None
-        elif sequence in ['Textured_Sphere_2', 'Textured_Sphere_10']:
+        elif 'Textured_Sphere' in sequence:
             gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = Path('prototypes/tex.png')
         else:
             gt_texture_path = None
             gt_mesh_path = None
 
+        gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path(sequence) / Path('gt_tracking_log') / \
+                           Path('gt_tracking_log.csv')
+
         args = parse_args(sequence, dataset)
 
         experiment_name = args.experiment
         config = load_config(args.config)
         config["image_downsample"] = args.perc
-        config["tran_init"] = 2.5
+        config["tran_init"] = 0
         config["gt_texture"] = gt_texture_path
         config["gt_mesh_prototype"] = gt_mesh_path
+        config["gt_tracking_log"] = gt_tracking_path
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
         if os.path.exists(write_folder):
@@ -64,6 +63,7 @@ def main():
             glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, segmentations_folder, '*.*')))
         optical_flows = np.array(
             glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, optical_flows_folder, '*.*')))
+        optical_flows = None
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
