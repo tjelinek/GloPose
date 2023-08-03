@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --time=18:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G
+#SBATCH --partition=gpu
+#SBATCH --job-name=GenerateDataset
+#SBATCH --err=/mnt/personal/jelint19/GenerateDataset.err
+#SBATCH --out=/mnt/personal/jelint19/GenerateDataset.out
+
+python -m dataset_generatos.generate_synthetic_dataset
+
+wait
