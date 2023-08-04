@@ -4,8 +4,9 @@ import math
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder, quaternion_to_angle_axis
+from pytorch3d.transforms import quaternion_multiply
 
-from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist
+from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qnorm_vectorized
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights', 'translation_difference', 'quaternion_difference'])
@@ -93,21 +94,18 @@ class Encoder(nn.Module):
         else:
             vertices = self.ivertices
 
-        quaternion_all = [self.get_total_rotation_at_frame(0).detach()]
-        translation_all = [self.get_total_translation_at_frame(0).detach()]
+        translation = self.get_total_translation_at_frame_vectorized()
+        quaternion = self.get_total_rotation_at_frame_vectorized()
+        translation[:, :, 0] = translation[:, :, 0].detach()
+        quaternion[:, 0] = quaternion[:, 0].detach()
 
-        # Distance between the rotation differences
-        for frmi in range(1, opt_frames[-1] + 1):
-            quaternion_at_frame = self.get_total_rotation_at_frame(frmi)
-            translation_at_frame = self.get_total_translation_at_frame(frmi)
-            if frmi not in opt_frames or frmi in not_optimized_frames:
-                quaternion_at_frame = quaternion_at_frame.detach()
-                translation_at_frame = translation_at_frame.detach()
-            quaternion_all.append(quaternion_at_frame)
-            translation_all.append(translation_at_frame)
+        noopt = list(set(range(translation.shape[2])) - set(opt_frames))
 
-        quaternion = torch.stack(quaternion_all, 1).contiguous()
-        translation = torch.stack(translation_all, 2).contiguous()
+        translation[:, :, noopt] = translation[:, :, noopt].detach()
+        quaternion[:, noopt] = quaternion[:, noopt].detach()
+
+        quaternion = quaternion[:, :opt_frames[-1] + 1]
+        translation = translation[:, :, :opt_frames[-1] + 1]
 
         if self.config.features == 'deep':
             texture_map = self.texture_map
@@ -115,7 +113,7 @@ class Encoder(nn.Module):
             texture_map = nn.Sigmoid()(self.texture_map)
 
         # Computes differences of consecutive translations and rotations
-        tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion_all[-1], quaternion, translation)
+        tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
         self.log_rotation_and_translation(opt_frames, quaternion)
 
@@ -147,10 +145,22 @@ class Encoder(nn.Module):
 
         return total_rotation_quaternion
 
+    def get_total_rotation_at_frame_vectorized(self):
+        offset_initial_quaternion = quaternion_multiply(qnorm_vectorized(self.initial_quaternion),
+                                                        qnorm_vectorized(self.quaternion_offsets))
+        total_rotation_quaternion = qnorm_vectorized(quaternion_multiply(offset_initial_quaternion,
+                                                                         qnorm_vectorized(self.quaternion)))
+
+        return total_rotation_quaternion
+
     def get_total_translation_at_frame(self, stepi):
         # The formula is initial_translation * translation_offsets * translation
         return self.initial_translation[:, :, stepi] + self.translation_offsets[:, :, stepi] + \
             self.translation[:, :, stepi]
+
+    def get_total_translation_at_frame_vectorized(self):
+        # The formula is initial_translation * translation_offsets * translation
+        return self.initial_translation + self.translation_offsets + self.translation
 
     def compute_next_offset(self, stepi):
         self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]

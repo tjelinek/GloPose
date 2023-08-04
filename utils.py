@@ -372,6 +372,10 @@ def qnorm(q1):
     return q1 / q1.norm()
 
 
+def qnorm_vectorized(quaternions):
+    return quaternions / quaternions.norm(dim=-1).unsqueeze(-1)
+
+
 def qmult(q1, q0):  # q0, then q1, you get q3
     w0, x0, y0, z0 = q0[0]
     w1, x1, y1, z1 = q1[0]
