@@ -35,11 +35,13 @@ def dataset_from_google_research(config, dataset_path: Path):
             height = 2000
 
             initial_rotation_axis_angle = deg_to_rad(torch.Tensor([-90, 0, 0]).to('cuda'))
+            initial_translation = torch.Tensor([0, 0, 0]).to('cuda')
 
             generate_rotating_textured_object(config, mesh_path, texture_path, rendering_destination,
                                               segmentation_destination, optical_flow_destination, gt_tracking_log_file,
                                               width, height, initial_rotation_axis_angle=initial_rotation_axis_angle,
-                                              rotations=generate_rotations_z(5.0))
+                                              rotations=generate_rotations_z(5.0),
+                                              initial_translation=initial_translation)
 
 
 if __name__ == '__main__':
