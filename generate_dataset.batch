@@ -11,6 +11,6 @@
 #SBATCH --err=/mnt/personal/jelint19/GenerateDataset.err
 #SBATCH --out=/mnt/personal/jelint19/GenerateDataset.out
 
-python -m dataset_generators.generate_synthetic_dataset
-
+python -m dataset_generators.generate_synthetic_dataset  2>&1 &
+python -m dataset_generators.generate_google_scanned_objects_dataset 2>&1
 wait
