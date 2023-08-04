@@ -740,7 +740,7 @@ class Tracking6D:
             'positional_params_lr': self.optimizer_positional_parameters.param_groups[0]['lr']
         }
         dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
-        self.write_results.write_into_tensorboard_log(step_i, dict_tensorboard_values)
+        self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
         joined_frames = sorted(set(keyframes + flow_frames))
