@@ -63,9 +63,9 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
 
     # Define output file paths
     # prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-    new_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
+    new_image_path = output_dir / Path('gt_imgs') / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
     # flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-    flow_image_path = output_dir / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+    flow_image_path = output_dir / Path('flows') / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
 
     # Save the images to disk
     # imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
@@ -367,7 +367,8 @@ class WriteResults:
 
         fig.legend(handles, labels, loc='upper right')
 
-        fig_path = Path(tracking6d.write_folder) / ('rotations_by_epoch_frame_' + str(stepi) + '.png')
+        fig_path = Path(tracking6d.write_folder) / Path('rotations_by_epoch') / \
+                   ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
         plt.close()
 
@@ -390,7 +391,8 @@ class WriteResults:
         silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = B
 
         silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
-        silhouette_overlap_path = tracking6d.write_folder / Path(f"silhouette_overlap_{stepi}.png")
+        silhouette_overlap_path = tracking6d.write_folder / Path('silhouette_overlap') / \
+                                  Path(f"silhouette_overlap_{stepi}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
     def write_keyframe_rotations(self, detached_result, keyframes):
@@ -401,9 +403,9 @@ class WriteResults:
         angles_rad = quaternion_to_angle_axis(quaternions, order=QuaternionCoeffOrder.WXYZ)
         # Convert radians to degrees
         angles_deg = angles_rad * 180.0 / math.pi
-        rot_axes = ['X-axis rotation: ', 'Y-axis rotation: ', 'Z-axis rotation: ']
+        rot_axes = ['X-axis: ', 'Y-axis: ', 'Z-axis: ']
         for k in range(angles_rad.shape[0]):
-            rotations = [rot_axes[i] + str((float(angles_deg[k, i])))
+            rotations = [rot_axes[i] + str(round(float(angles_deg[k, i]), 3))
                          for i in range(3)]
             self.tracking_log.write(
                 f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
@@ -470,10 +472,13 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
         previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
 
         # Prepare file paths
-        theoretical_flow_path = tracking6d.write_folder / Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
-        flow_difference_path = tracking6d.write_folder / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
+        theoretical_flow_path = tracking6d.write_folder / Path('flows') / \
+                                Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
+        flow_difference_path = tracking6d.write_folder / Path('flows') / \
+                               Path(f"flow_difference_{stepi}_{stepi + 1}.png")
         # rendering_1_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
-        rendering_2_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_2.png")
+        rendering_2_path = tracking6d.write_folder / Path('renderings') / \
+                           Path(f"rendering_{stepi}_{stepi + 1}_2.png")
 
         # Convert tensors to NumPy arrays
         # previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
