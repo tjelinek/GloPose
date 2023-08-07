@@ -31,8 +31,8 @@ def dataset_from_google_research(config, dataset_path: Path):
             optical_flow_destination = dataset_path / Path('optical_flow') / file
             gt_tracking_log_file = dataset_path / Path('gt_tracking_log') / file / Path('gt_tracking_log.csv')
 
-            width = 1506
-            height = 2000
+            width = 1000
+            height = 1000
 
             initial_rotation_axis_angle = deg_to_rad(torch.Tensor([-90, 0, 0]).to('cuda'))
             initial_translation = torch.Tensor([0, 0, 0]).to('cuda')
