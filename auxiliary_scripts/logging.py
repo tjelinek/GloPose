@@ -60,6 +60,8 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
     # image_old_pil = transform(image_prev[0] / 255.0)
+    (output_dir / Path('flows')).mkdir(exist_ok=True, parents=True)
+    (output_dir / Path('gt_imgs')).mkdir(exist_ok=True, parents=True)
 
     # Define output file paths
     # prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
@@ -367,6 +369,7 @@ class WriteResults:
 
         fig.legend(handles, labels, loc='upper right')
 
+        (Path(tracking6d.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
         fig_path = Path(tracking6d.write_folder) / Path('rotations_by_epoch') / \
                    ('rotations_by_epoch_frame_' + str(stepi) + '.png')
         plt.savefig(fig_path)
@@ -391,6 +394,7 @@ class WriteResults:
         silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = B
 
         silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
+        (tracking6d.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
         silhouette_overlap_path = tracking6d.write_folder / Path('silhouette_overlap') / \
                                   Path(f"silhouette_overlap_{stepi}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
@@ -472,6 +476,9 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
         previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
 
         # Prepare file paths
+        (tracking6d.write_folder / Path('flows')).mkdir(exist_ok=True, parents=True)
+        (tracking6d.write_folder / Path('renderings')).mkdir(exist_ok=True, parents=True)
+
         theoretical_flow_path = tracking6d.write_folder / Path('flows') / \
                                 Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
         flow_difference_path = tracking6d.write_folder / Path('flows') / \
