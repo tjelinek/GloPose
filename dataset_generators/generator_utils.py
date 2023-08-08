@@ -240,12 +240,12 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
                 ren_features = rendering_result.ren_mesh_vertices_features
 
             if prev_ren_features is not None:
-                generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i,
+                generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow.clone(), frame_i,
                                                    optical_flow_destination)
                 pass
 
             save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,
-                                 optical_flow.detach().cpu(), rendering_destination,
+                                 optical_flow.detach().clone().cpu(), rendering_destination,
                                  segmentation_destination, optical_flow_destination)
 
             del prev_ren_features
