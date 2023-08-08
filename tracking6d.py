@@ -721,7 +721,7 @@ class Tracking6D:
 
         return frame_result
 
-    def write_into_tensorboard_logs(self, jloss, losses, step_i):
+    def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
         dict_tensorboard_values1 = {
             k + '_loss': float(v) for k, v in losses.items()
         }
@@ -758,7 +758,7 @@ class Tracking6D:
         else:  # Deep features encoder
             encoder = self.encoder
 
-        joined_encoder_result: EncoderResult = encoder(joined_frames, not_optimized_frames)
+        joined_encoder_result: EncoderResult = encoder(optimized_frames)
 
         optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
         optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
