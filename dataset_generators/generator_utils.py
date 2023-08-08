@@ -144,6 +144,7 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
 
+    vertices = vertices - vertices[0].mean(0)
     magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
 
     vertices *= magnification
