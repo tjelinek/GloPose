@@ -191,7 +191,7 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
         rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
                                                         order=QuaternionCoeffOrder.WXYZ)[None]
         current_encoder_result = EncoderResult(translations=translations,
-                                               quaternions=rotation_quaternion_tensor[None, None].to(DEVICE),
+                                               quaternions=composed_rotation_quaternion_tensor[None, None].to(DEVICE),
                                                vertices=vertices.to(DEVICE),
                                                texture_maps=None,
                                                lights=None,
