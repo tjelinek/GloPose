@@ -64,7 +64,8 @@ if __name__ == '__main__':
     }
 
     for gen_cfg_name, gen_cfg in configurations.items():
-        dataset_folder = dataset_folder / Path(gen_cfg_name)
+        generated_data_folder = dataset_folder / Path(gen_cfg_name)
 
-        dataset_from_google_research(config, dataset_folder, gen_cfg.rotations, gen_cfg.initial_rotation_axis_angle,
+        dataset_from_google_research(config, generated_data_folder, gen_cfg.rotations,
+                                     gen_cfg.initial_rotation_axis_angle,
                                      gen_cfg.initial_translation)
