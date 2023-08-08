@@ -165,7 +165,7 @@ if __name__ == '__main__':
                                   rots)
 
     # Generate translations
-    obj_name = 'translating_sphere'
+    obj_name = 'Translating_Textured_Sphere'
 
     rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
     segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
