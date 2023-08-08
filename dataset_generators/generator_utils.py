@@ -74,6 +74,14 @@ def setup_renderer(config, faces, height, width, device):
     return rendering
 
 
+def generate_zero_rotations(steps=72):
+    rotations_x = np.zeros(steps)
+    rotations_y = np.zeros(rotations_x.shape)
+    rotations_z = np.zeros(rotations_x.shape)
+
+    return list(zip(rotations_x, rotations_y, rotations_z))
+
+
 def generate_rotations_x(step=10.0):
     rotations_x = np.arange(0.0, 1 * 360.0 + 0.001, step)
     rotations_y = np.zeros(rotations_x.shape)
@@ -130,10 +138,23 @@ def generate_rotations_xyz(step=10.0):
     return list(zip(rotations_x, rotations_y, rotations_z))
 
 
-def generate_rotating_textured_object(config, prototype_path, texture_path: Path, rendering_destination: Path,
-                                      segmentation_destination: Path, optical_flow_destination, gt_tracking_log_file,
-                                      width, height, DEVICE='cuda', rotations=None, initial_rotation_axis_angle=None,
-                                      initial_translation=None):
+def generate_sinusoidal_translations(steps=72):
+    step = (steps - 1) / 360.0
+    x = np.linspace(0, (steps - 1) * step, steps)
+    translations_x = np.sin(x) * 0.5
+    translations_y = np.zeros(translations_x.shape)
+    translations_z = np.zeros(translations_x.shape)
+
+    result_tuples = list(zip(translations_x, translations_y, translations_z))
+    result = [torch.Tensor(t) for t in result_tuples]
+    return result
+
+
+def generate_rotating_and_translating_textured_object(config, prototype_path, texture_path: Path,
+                                                      rendering_destination: Path, segmentation_destination: Path,
+                                                      optical_flow_destination, gt_tracking_log_file, width, height,
+                                                      DEVICE='cuda', rotations=None, translations=None,
+                                                      initial_rotation_axis_angle=None, initial_translation=None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
@@ -156,14 +177,14 @@ def generate_rotating_textured_object(config, prototype_path, texture_path: Path
     if rotations is None:
         rotations = generate_rotations_y(5.0)
 
-    render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE,
-                        initial_rotation_axis_angle, initial_translation)
+    render_object_poses(rendering, vertices, face_features, texture_maps, rotations, translations,
+                        optical_flow_destination, rendering_destination, segmentation_destination, gt_tracking_log_file,
+                        DEVICE, initial_rotation_axis_angle, initial_translation)
 
 
-def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE,
-                        initial_rotation_axis_angle, initial_translation):
+def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, translations,
+                        optical_flow_destination, rendering_destination, segmentation_destination, gt_tracking_log_file,
+                        DEVICE, initial_rotation_axis_angle, initial_translation):
     # The initial rotations are expected to be in radians
 
     if initial_rotation_axis_angle is None:
@@ -176,7 +197,10 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
     prev_encoder_result = None
     prev_ren_features = None
 
-    translations = torch.zeros(1, 1, 1, 3).to(DEVICE)
+    if translations is None:
+        translations = [torch.Tensor([0.0, 0.0, 0.0])] * len(rotations)
+
+    translations = torch.stack(translations)[None][None].to(DEVICE)
     translations[..., :] += initial_translation
 
     log_rows = []
@@ -190,7 +214,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
         rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
                                                         order=QuaternionCoeffOrder.WXYZ)[None]
-        current_encoder_result = EncoderResult(translations=translations,
+        current_translation = translations[:, :, frame_i, :][None]
+        current_encoder_result = EncoderResult(translations=current_translation,
                                                quaternions=composed_rotation_quaternion_tensor[None, None].to(DEVICE),
                                                vertices=vertices.to(DEVICE),
                                                texture_maps=None,
@@ -203,9 +228,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
         with torch.no_grad():
             log_rows.append([frame_i, rotation_x, rotation_y, rotation_z, 0, 0, 0])
-
             rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                               rendering.obj_center, vertices.to(DEVICE))
+                                                               current_translation[0], vertices.to(DEVICE))
 
             optical_flow = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
 
@@ -216,8 +240,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
                 ren_features = rendering_result.ren_mesh_vertices_features
 
             if prev_ren_features is not None:
-                # generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i,
-                #                                    optical_flow_destination)
+                generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i,
+                                                   optical_flow_destination)
                 pass
 
             save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,

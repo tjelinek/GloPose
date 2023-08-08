@@ -5,7 +5,8 @@ import warnings
 from pathlib import Path
 
 from dataset_generators.generator_utils import setup_renderer, \
-    generate_rotating_textured_object, render_object_poses, generate_rotations_y, generate_rotations_xy
+    generate_rotating_and_translating_textured_object, render_object_poses, generate_rotations_y, generate_rotations_xy, \
+    generate_zero_rotations, generate_sinusoidal_translations
 from main_settings import dataset_folder
 from utils import load_config
 
@@ -49,8 +50,9 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
     face_features = vertices_features[mesh.faces][None]
 
     # Render the object without using texture maps
-    render_object_poses(rendering, mesh.vertices, face_features, None, rotations, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE, None, None)
+    render_object_poses(rendering, mesh.vertices, face_features, None, rotations, None,
+                        optical_flow_destination, rendering_destination, segmentation_destination, gt_tracking_log_file,
+                        DEVICE, None, None)
 
 
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination,
@@ -103,21 +105,22 @@ def generate_6_colored_cube(config, rendering_destination, segmentation_destinat
         face_features[0, i, :, :] = torch.tensor(color)
 
     # Render the object without using texture maps
-    render_object_poses(rendering, vertices, face_features, None, rotations, optical_flow_destination,
+    render_object_poses(rendering, vertices, face_features, None, rotations, None, optical_flow_destination,
                         rendering_destination, segmentation_destination, gt_tracking_log_file, DEVICE, None, None)
 
 
 def generate_textured_sphere(config, rendering_destination: Path, segmentation_destination: Path,
-                             optical_flow_destination, gt_tracking_log_file, rotations):
+                             optical_flow_destination, gt_tracking_log_file, rotations, translations=None):
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
     width = 1000
     height = 1000
 
-    generate_rotating_textured_object(config, prototype_path, tex_path, rendering_destination, segmentation_destination,
-                                      optical_flow_destination, gt_tracking_log_file, width, height,
-                                      rotations=rotations)
+    generate_rotating_and_translating_textured_object(config, prototype_path, tex_path, rendering_destination,
+                                                      segmentation_destination, optical_flow_destination,
+                                                      gt_tracking_log_file, width, height, rotations=rotations,
+                                                      translations=translations)
 
 
 if __name__ == '__main__':
@@ -160,3 +163,19 @@ if __name__ == '__main__':
 
                 generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file,
                                   rots)
+
+    # Generate translations
+    obj_name = 'translating_sphere'
+
+    rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
+    segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
+    optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
+    gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path(
+        'gt_tracking_log.csv')
+
+    steps = 72
+    rots = generate_zero_rotations(steps=72)
+    translations = generate_sinusoidal_translations(steps=72)
+
+    generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file,
+                             rots, translations=translations)
