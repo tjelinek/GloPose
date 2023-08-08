@@ -35,6 +35,7 @@ def main():
         config["gt_texture"] = gt_texture_path
         config["gt_mesh_prototype"] = gt_mesh_path
         config["gt_tracking_log"] = gt_tracking_path
+        config["rot_init"] = [0, 0, 0]
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
 
@@ -47,6 +48,7 @@ def main():
 
         renderings_folder = 'renderings'
         segmentations_folder = 'segmentations'
+        optical_flows_folder = 'optical_flow'
 
         t0 = time.time()
 
@@ -55,10 +57,13 @@ def main():
         files.sort()
         segms = np.array(
             glob.glob(os.path.join(dataset_folder, args.dataset, segmentations_folder, args.sequence, '*.*')))
+        optical_flows = np.array(
+            glob.glob(os.path.join(dataset_folder, args.dataset, optical_flows_folder, args.sequence, '*.*')))
+        # optical_flows = None
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(args, config, files, segms, write_folder, None)
+        run_tracking_on_sequence(args, config, files, segms, write_folder, optical_flows=optical_flows)
 
 
 if __name__ == "__main__":
