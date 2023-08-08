@@ -63,9 +63,11 @@ def main():
         files.sort()
         segms = np.array(
             glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, segmentations_folder, '*.*')))
+        segms.sort()
         optical_flows = np.array(
             glob.glob(os.path.join(dataset_folder, args.dataset, args.sequence, optical_flows_folder, '*.*')))
-        optical_flows = None
+        optical_flows.sort()
+        # optical_flows = None
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
