@@ -311,6 +311,7 @@ class Tracking6D:
 
         if self.config.use_gt:
             ivertices = self.gt_mesh_prototype.vertices.numpy()
+            ivertices = ivertices - ivertices.mean(0)
             magnification = 1 / (ivertices.max() - ivertices.mean()) * 1.0
             ivertices *= magnification
             faces = self.gt_mesh_prototype.faces
