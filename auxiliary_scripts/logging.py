@@ -26,7 +26,7 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
-def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, output_dir):
+def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, output_dir, per_pixel_flow_error):
     """
     Visualize optical flow between two images and save the results as image files.
 
@@ -38,6 +38,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
         segment (torch.Tensor): Segmentation mask tensor.
         stepi (int): Index of the current step in the frame sequence.
         output_dir (Path): Flow output directory
+        per_pixel_flow_error: Error mask
 
     Returns:
         None. The function saves multiple visualization images to the disk.
@@ -74,6 +75,18 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     imageio.imwrite(new_image_path, image_new_pil)
     # imageio.imwrite(prev_image_path, image_old_pil)
     imageio.imwrite(flow_image_path, flow_illustration)
+
+    # PER PIXEL FLOW ERROR VISUALIZATION
+    numpy_array = per_pixel_flow_error.squeeze().detach().cpu().numpy()
+
+    # Normalize values for visualization (optional)
+    normalized_array = (numpy_array - numpy_array.min()) / (numpy_array.max() - numpy_array.min()) * 255
+
+    # Convert to uint8 and save using imageio
+    output_loss_viz = output_dir / Path('losses')
+    output_loss_viz.mkdir(parents=True, exist_ok=True)
+    output_filename = output_loss_viz / f'end_point_error_frame_{stepi}.png'
+    imageio.imwrite(output_filename, normalized_array.astype('uint8'))
 
 
 class WriteResults:

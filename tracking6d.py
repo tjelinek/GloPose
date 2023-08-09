@@ -238,7 +238,8 @@ class KeyframeBuffer:
 
 
 class Tracking6D:
-    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders', 'frame_losses'])
+    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders', 'frame_losses',
+                                             'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
         self.write_results: WriteResults = None
