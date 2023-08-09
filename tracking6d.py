@@ -627,7 +627,7 @@ class Tracking6D:
                                                                      verbose=False)
 
         def lambda_schedule(epoch):
-            return 1 / (1 + np.exp(-0.5 * (epoch - OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER)))
+            return 1 / (1 + np.exp(-0.25 * (epoch - OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER)))
 
         scheduler_non_positional_params = lr_scheduler.LambdaLR(self.optimizer_non_positional_parameters,
                                                                 lambda_schedule)
