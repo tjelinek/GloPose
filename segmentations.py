@@ -123,7 +123,8 @@ class PrecomputedTracker:
 
         return image, segments
 
-    def next_high_resolution(self, file):
+    @staticmethod
+    def next_high_resolution(file):
         I = imread(file)
         I = transforms.ToTensor()(I).float()
         return I[None]
