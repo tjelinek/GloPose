@@ -453,8 +453,6 @@ class Tracking6D:
                 else:  # We have ground truth flow annotations
                     # The annotations are assumed to be in the [0, 1] coordinate range
                     observed_flow = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
-                    observed_flow[..., 0] = observed_flow[..., 0]
-                    observed_flow[..., 1] = observed_flow[..., 1]
                     observed_flow = observed_flow.permute(0, 3, 1, 2)
                     observed_flow = resize_transform(observed_flow)
 
@@ -532,7 +530,7 @@ class Tracking6D:
 
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
-                                   stepi, self.write_folder)
+                                   stepi, self.write_folder, frame_result.per_pixel_flow_error)
 
             self.encoder.clear_logs()
 
