@@ -86,6 +86,7 @@ class FMOLoss(nn.Module):
                     3 * self.config.texture_size ** 2)
             losses["tv"] = losses["tv"].sum(dim=1)
 
+        per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
             segment_masks = observed_flow_mask[0, :, -1:]  # Shape (N, 1, H, W)
 
@@ -122,8 +123,8 @@ class FMOLoss(nn.Module):
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
-            end_point_error[0, :, :, :, 0] = end_point_error[0, :, :, :, 0] * flow_segment_masks_binary
-            end_point_error[0, :, :, :, 1] = end_point_error[0, :, :, :, 1] * flow_segment_masks_binary
+            # end_point_error[0, :, :, :, 0] = end_point_error[0, :, :, :, 0] * flow_segment_masks_binary
+            # end_point_error[0, :, :, :, 1] = end_point_error[0, :, :, :, 1] * flow_segment_masks_binary
             end_point_error_magnitude = torch.norm(end_point_error, dim=-1, p=2)
             end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
             per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
@@ -145,7 +146,7 @@ class FMOLoss(nn.Module):
         loss = 0
         for ls in losses:
             loss += losses[ls]
-        return losses_all, losses, loss
+        return losses_all, losses, loss, per_pixel_flow_loss
 
 
 def random_points_from_binary_mask(binary_mask, N):

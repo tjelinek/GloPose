@@ -656,11 +656,13 @@ class Tracking6D:
             theoretical_flow[..., 0] = theoretical_flow[..., 0] * (self.rendering.width / self.shape[-1])
             theoretical_flow[..., 1] = theoretical_flow[..., 1] * (self.rendering.height / self.shape[-2])
 
-            losses_all, losses, jloss = self.loss_function(renders, segments, input_batch, encoder_result,
-                                                           observed_flows,
-                                                           flow_segment_masks,
-                                                           theoretical_flow,
-                                                           self.last_encoder_result)
+            losses_all, losses, jloss, per_pixel_error = self.loss_function(renders, segments, input_batch,
+                                                                            encoder_result,
+                                                                            observed_flows,
+                                                                            flow_segment_masks,
+                                                                            theoretical_flow,
+                                                                            self.last_encoder_result)
+
             frame_losses.append(float(jloss))
 
             self.write_into_tensorboard_logs(jloss, losses, epoch)
@@ -718,7 +720,8 @@ class Tracking6D:
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
                                         renders=renders,
-                                        frame_losses=frame_losses)
+                                        frame_losses=frame_losses,
+                                        per_pixel_flow_error=per_pixel_error)
 
         return frame_result
 
@@ -811,9 +814,9 @@ class Tracking6D:
                                      encoder_result.vertices, self.encoder.face_features,
                                      encoder_result.texture_maps, encoder_result.lights)
             theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-            losses_all, losses, jloss = self.rgb_loss_function(renders, segments, input_batch, encoder_result,
-                                                               observed_flows, flow_segment_masks, theoretical_flow,
-                                                               self.last_encoder_result_rgb)
+            losses_all, losses, jloss, _ = self.rgb_loss_function(renders, segments, input_batch, encoder_result,
+                                                                  observed_flows, flow_segment_masks, theoretical_flow,
+                                                                  self.last_encoder_result_rgb)
             if epoch < self.config.iterations - 1:
                 jloss = jloss.mean()
                 self.rgb_optimizer.zero_grad()
