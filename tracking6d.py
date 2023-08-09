@@ -1,3 +1,4 @@
+import math
 from collections import namedtuple
 from dataclasses import dataclass
 
@@ -388,7 +389,6 @@ class Tracking6D:
 
         our_losses = -np.ones((files.shape[0] - 1, 1))
         self.write_results = WriteResults(self.write_folder, self.active_keyframes.images, files.shape[0])
-        self.config.loss_rgb_weight = 0
 
         prev_image = self.active_keyframes.images[:, -1]
         prev_segment = self.active_keyframes.segments[:, -1]
@@ -622,8 +622,16 @@ class Tracking6D:
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-        scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters, mode='min',
-                                                                     factor=0.9, patience=LR_SCHEDULER_PATIENCE,
+        if USE_LR_SCHEDULER:
+            self.config.loss_rgb_weight = 0
+            if step_i <= 2:
+                self.config.loss_flow_weight = 0
+            else:
+                self.config.loss_flow_weight = self.config_copy.loss_flow_weight
+
+        scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters,
+                                                                     mode='min', factor=0.9,
+                                                                     patience=LR_SCHEDULER_PATIENCE,
                                                                      verbose=False)
 
         def lambda_schedule(epoch):
