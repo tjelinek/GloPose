@@ -82,8 +82,6 @@ class Encoder(nn.Module):
             self.lights.requires_grad = req_grad
 
     def forward(self, opt_frames, not_optimized_frames=None):
-        if not_optimized_frames is None:
-            not_optimized_frames = set()
 
         if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
@@ -115,7 +113,7 @@ class Encoder(nn.Module):
         # Computes differences of consecutive translations and rotations
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
-        self.log_rotation_and_translation(opt_frames, quaternion)
+        self.log_rotation_and_translation(opt_frames, quaternion, translation)
 
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
@@ -127,13 +125,13 @@ class Encoder(nn.Module):
         return result
 
     def compute_tdiff_qdiff(self, opt_frames, quaternion0, quaternion, translation):
-        wghts = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
+        weights = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
         # Temporal distance between consecutive items in opt_frames, i.e. weight grows linearly with distance
-        tdiff = wghts * comp_tran_diff(translation[0, 0, opt_frames])
+        tdiff = weights * comp_tran_diff(translation[0, 0, opt_frames])
         key_dists = []
         for frmi in opt_frames[1:]:
             key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
-        qdiff = wghts * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
+        qdiff = weights * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         return tdiff, qdiff
 
     def get_total_rotation_at_frame(self, stepi):
@@ -171,17 +169,15 @@ class Encoder(nn.Module):
         self.quaternion_offsets[:, stepi] = qmult(qnorm(self.quaternion_offsets[:, stepi - 1]),
                                                   qnorm(self.quaternion[:, stepi - 1]).detach())
 
-    def log_rotation_and_translation(self, opt_frames, quaternion):
+    def log_rotation_and_translation(self, opt_frames, quaternion, translation):
         angles_rad = quaternion_to_angle_axis(quaternion[0], order=QuaternionCoeffOrder.WXYZ)
         angles_deg = angles_rad * 180.0 / math.pi
         last_optimized = max(opt_frames)
         self.rotation_by_gd_iter.append(angles_deg[last_optimized].detach())
-        self.translation_by_gd_iter.append(self.translation[0, 0, last_optimized].detach())
+        self.translation_by_gd_iter.append(translation[0, 0, last_optimized].detach())
 
     def clear_logs(self):
         self.rotation_by_gd_iter = []
-        self.initial_rotation_by_gd_iter = []
-        self.rotation_offsets_by_gd_iter = []
         self.translation_by_gd_iter = []
 
     def forward_normalize(self):
@@ -207,8 +203,8 @@ class Encoder(nn.Module):
             translation[:, :, :, :, 1] = self.aspect_ratio * translation_new[:, :, :, :, 1]
 
             if frmi > 0 and self.config.connect_frames:
-                translation[:, :, :, 1, :] = translation_all[-1][:, :, :, 1, :] + (1 + exp) * translation_all[-1][:, :,
-                                                                                              :, 0, :]
+                translation[:, :, :, 1, :] = translation_all[-1][:, :, :, 1, :] + (1 + exp) * \
+                                             translation_all[-1][:, :, :, 0, :]
 
             translation[:, :, :, 0, :] = translation[:, :, :, 0, :] - translation[:, :, :, 1, :]
 
