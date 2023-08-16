@@ -361,11 +361,16 @@ class WriteResults:
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
         fig, ax1 = plt.subplots()
-        tensors = tracking6d.encoder.rotation_by_gd_iter
+        fig.subplots_adjust(left=0.25)
+
+        rotation_tensors = tracking6d.encoder.rotation_by_gd_iter
+        translation_tensors = tracking6d.encoder.translation_by_gd_iter
+
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
         for i in range(3):
-            values = [tensor[i].item() for tensor in tensors]
-            ax1.plot(range(len(tensors)), values, label=axis_labels[i])
+            values = [tensor[i].item() for tensor in rotation_tensors]
+            ax1.plot(range(len(rotation_tensors)), values, label=axis_labels[i])
+
         ax1.set_xlabel('Gradient descend iteration')
         ax1.set_ylabel('Rotation [degrees]')
 
@@ -373,12 +378,28 @@ class WriteResults:
         ax2.set_ylabel('Loss')
         ax2.plot(range(len(frame_losses)), frame_losses, color='red', label='Loss')
 
+        ax3 = ax1.twinx()
+        ax3.set_ylabel('Translation')
+        translation_axis_labels = ['X-axis translation', 'Y-axis translation', 'Z-axis translation']
+        for i in range(3):
+            values = [tensor[i].item() for tensor in translation_tensors]
+            ax3.plot(range(len(translation_tensors)), values, label=translation_axis_labels[i], linestyle='dashed')
+        ax3.spines.left.set_position(("axes", -0.2))
+        ax3.spines.left.set_visible(True)
+        ax3.spines.right.set_visible(False)
+        ax3.yaxis.set_label_position('left')
+        ax3.yaxis.set_ticks_position('left')
+
         # Create a joint legend
         handles, labels = [], []
-        for ax in [ax1, ax2]:
+        for ax in [ax1, ax2, ax3]:
             h, l = ax.get_legend_handles_labels()
             handles.extend(h)
             labels.extend(l)
+
+            ax_min, ax_max = ax.get_ylim()
+            ax_range = max(abs(ax_min), abs(ax_max))
+            ax.set_ylim((-ax_range, ax_range))
 
         fig.legend(handles, labels, loc='upper right')
 
