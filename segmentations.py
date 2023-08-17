@@ -469,40 +469,6 @@ def get_bbox(segments):
     bounds = [x0, x1, y0, y1]
     return bounds
 
-# def segment_grabcut(files):
-#     perc = 0.2
-#     input_batch = torch.Tensor([])
-#     hs_frames = torch.Tensor([])
-#     for fl in files:
-#         I = imread(fl)
-
-#         # mask = np.zeros(I.shape[:2],np.uint8)
-#         bgdModel = np.zeros((1,65),np.float64)
-#         fgdModel = np.zeros((1,65),np.float64)
-#         # mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
-
-#         mask = cv2.GC_PR_BGD*np.ones(I.shape[:2],np.uint8)
-#         mask[500:900,150:400] = cv2.GC_FGD
-#         mask[0:200] = cv2.GC_BGD
-#         mask[950:] = cv2.GC_BGD
-#         mask[:,:70] = cv2.GC_BGD
-#         mask[:,-200:] = cv2.GC_BGD
-#         mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
-#         segment = ((mask == cv2.GC_PR_FGD) | (mask == cv2.GC_FGD)).astype(np.float64)
-#         width = int(I.shape[1] * perc)
-#         height = int(I.shape[0] * perc)
-#         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-#         I = uniform_filter(I, size=(3, 3, 1))
-#         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-
-#         It = transforms.ToTensor()(I/255.0)
-#         hs_frames_one = torch.cat((It.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
-
-#         input_batch_one = torch.cat((It, 0*It.clone()), 0).unsqueeze(0).float()
-#         input_batch = torch.cat( (input_batch, input_batch_one), 0)
-#         hs_frames = torch.cat( (hs_frames, hs_frames_one), 0)
-#     return input_batch, hs_frames
-
 
 # def segment_d3s(files):
 #     perc = 1
