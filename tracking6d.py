@@ -29,7 +29,7 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
-from utils import consecutive_quaternions_angular_difference
+from utils import consecutive_quaternions_angular_difference, rad_to_deg, deg_to_rad, normalize_vertices
 
 
 @dataclass
@@ -312,10 +312,7 @@ class Tracking6D:
         prot = self.config.shapes[0]
 
         if self.config.use_gt:
-            ivertices = self.gt_mesh_prototype.vertices.numpy()
-            ivertices = ivertices - ivertices.mean(0)
-            magnification = 1 / (ivertices.max() - ivertices.mean()) * 1.0
-            ivertices *= magnification
+            ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
             faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
         elif self.config.init_shape:

@@ -423,3 +423,11 @@ def consecutive_quaternions_angular_difference2(quaternion):
                                (quaternion[0, qi].norm() * quaternion[0, qi].norm()))) * 180.0 / np.pi
         angs.append(ang)
     return np.array(angs)
+
+
+def normalize_vertices(vertices):
+    vertices = vertices - vertices[0].mean(0)
+    magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
+    vertices *= magnification
+
+    return vertices

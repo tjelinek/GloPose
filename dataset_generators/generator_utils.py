@@ -9,7 +9,7 @@ from pathlib import Path
 
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
-from utils import deg_to_rad, qnorm, qmult
+from utils import deg_to_rad, qnorm, qmult, normalize_vertices
 from flow import visualize_flow_with_images
 
 
@@ -165,10 +165,8 @@ def generate_rotating_and_translating_textured_object(config, prototype_path, te
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
 
-    vertices = vertices - vertices[0].mean(0)
-    magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
+    magnification, vertices = normalize_vertices(vertices)
 
-    vertices *= magnification
     faces = mesh.faces
     face_features = mesh.uvs[mesh.face_uvs_idx][None]
 
