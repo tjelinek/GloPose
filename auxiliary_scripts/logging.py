@@ -177,7 +177,7 @@ class WriteResults:
             last_segment_reshaped = last_segment[:, 0]
             last_segment_mask = last_segment_reshaped[:, 1]
 
-            self.render_silhouette_overlap(last_rendered_silhouette, last_segment_reshaped, last_segment_mask,
+            self.render_silhouette_overlap(last_rendered_silhouette, last_segment_mask,
                                            stepi, tracking6d)
 
             write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
@@ -410,10 +410,10 @@ class WriteResults:
         plt.close()
 
     @staticmethod
-    def render_silhouette_overlap(last_rendered_silhouette, last_segment, last_segment_mask, stepi, tracking6d):
+    def render_silhouette_overlap(last_rendered_silhouette, last_segment_mask, stepi, tracking6d):
         last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0
         last_segment_mask_binary = last_segment_mask[0] > 0
-        silh_overlap_image = torch.zeros(1, *last_segment.shape[-2:], 3)
+        silh_overlap_image = torch.zeros(1, *last_segment_mask.shape[-2:], 3)
         R = torch.tensor([255.0, 0, 0])
         G = torch.tensor([0, 255.0, 0])
         B = torch.tensor([0, 0, 255.0])
