@@ -661,37 +661,11 @@ class Tracking6D:
 
         for epoch in range(self.config.iterations):
 
-            encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames)
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
+                flow_frames, flow_segment_masks,
+                input_batch, keyframes, observed_flows, segments)
 
-            renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
-                                     self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
-            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-
-            # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-            # actual image
-            theoretical_flow[..., 0] = theoretical_flow[..., 0] * (self.rendering.width / self.shape[-1])
-            theoretical_flow[..., 1] = theoretical_flow[..., 1] * (self.rendering.height / self.shape[-2])
-
-            losses_all, losses, jloss, per_pixel_error = self.loss_function(renders, segments, input_batch,
-                                                                            encoder_result,
-                                                                            observed_flows,
-                                                                            flow_segment_masks,
-                                                                            theoretical_flow,
-                                                                            self.last_encoder_result)
-
-            frame_losses.append(float(jloss))
-
-            self.write_into_tensorboard_logs(jloss, losses, epoch)
-
-            if "model" in losses:
-                model_loss = losses["model"].mean().item()
-            else:
-                model_loss = losses["silh"].mean().item()
-            if self.config.verbose and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
-                print("Epoch {:4d}".format(epoch + 1), end=" ")
-                for ls in losses:
-                    print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
-                print("; joint {:.3f}".format(jloss.item()))
+            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
 
             if model_losses_exponential_decay is None:
                 model_losses_exponential_decay = model_loss
@@ -718,17 +692,17 @@ class Tracking6D:
                     break
             if epoch < self.config.iterations - 1:
                 # with torch.autograd.detect_anomaly():
-                jloss = jloss.mean()
+                joint_loss = joint_loss.mean()
                 self.optimizer_non_positional_parameters.zero_grad()
                 self.optimizer_positional_parameters.zero_grad()
 
-                jloss.backward()
+                joint_loss.backward()
 
                 self.optimizer_non_positional_parameters.step()
                 self.optimizer_positional_parameters.step()
 
                 if USE_LR_SCHEDULER:
-                    scheduler_positional_params.step(jloss)
+                    scheduler_positional_params.step(joint_loss)
                     scheduler_non_positional_params.step()
 
         self.encoder.load_state_dict(self.best_model["encoder"])
@@ -740,6 +714,41 @@ class Tracking6D:
                                         per_pixel_flow_error=per_pixel_error)
 
         return frame_result
+
+    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses):
+
+        frame_losses.append(float(joint_loss))
+        self.write_into_tensorboard_logs(joint_loss, losses, epoch)
+        if "model" in losses:
+            model_loss = losses["model"].mean().item()
+        else:
+            model_loss = losses["silh"].mean().item()
+        if self.config.verbose and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
+            print("Epoch {:4d}".format(epoch + 1), end=" ")
+            for ls in losses:
+                print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
+            print("; joint {:.3f}".format(joint_loss.item()), end='')
+            print("; best {:.3f}".format(best_loss),
+                  f'lr: {self.optimizer_positional_parameters.param_groups[0]["lr"]}')
+        return model_loss
+
+    def infer_model(self, flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments):
+
+        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames)
+        renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+                                 self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
+        theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+        # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+        # actual image
+        theoretical_flow[..., 0] = theoretical_flow[..., 0] * (self.rendering.width / self.shape[-1])
+        theoretical_flow[..., 1] = theoretical_flow[..., 1] * (self.rendering.height / self.shape[-2])
+        losses_all, losses, joint_loss, per_pixel_error = self.loss_function(renders, segments, input_batch,
+                                                                             encoder_result,
+                                                                             observed_flows,
+                                                                             flow_segment_masks,
+                                                                             theoretical_flow,
+                                                                             self.last_encoder_result)
+        return encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow
 
     def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
         dict_tensorboard_values1 = {
