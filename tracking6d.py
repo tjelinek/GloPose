@@ -343,9 +343,9 @@ class Tracking6D:
                 param.detach_()
         if self.gt_rotations is not None:
             rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
-            self.gt_encoder.quaternion = rotation_quaternion
+            self.gt_encoder.quaternion[...] = rotation_quaternion
         if self.gt_translations is not None:
-            self.gt_encoder.translation = self.gt_translations
+            self.gt_encoder.translation[...] = self.gt_translations
 
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
@@ -609,6 +609,14 @@ class Tracking6D:
 
     def apply(self, input_batch, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
 
+        if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
+            encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
+                                                                                               flow_frames,
+                                                                                               encoder_type='gt_encoder')
+            observed_flows = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+            observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
+            observed_flows = self.normalize_rendered_flows(observed_flows)
+
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
 
@@ -757,6 +765,12 @@ class Tracking6D:
 
         return frame_result
 
+    def normalize_rendered_flows(self, rendered_flows):
+        rendered_flows[..., 0] = rendered_flows[..., 0] * (self.rendering.width / self.shape[-1])
+        rendered_flows[..., 1] = rendered_flows[..., 1] * (self.rendering.height / self.shape[-2])
+
+        return rendered_flows
+
     def reset_learning_rate(self):
         for param_group in self.optimizer_non_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
@@ -788,8 +802,8 @@ class Tracking6D:
         theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the
         # actual image
-        theoretical_flow[..., 0] = theoretical_flow[..., 0] * (self.rendering.width / self.shape[-1])
-        theoretical_flow[..., 1] = theoretical_flow[..., 1] * (self.rendering.height / self.shape[-2])
+        theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
+
         losses_all, losses, joint_loss, per_pixel_error = self.loss_function(renders, segments, input_batch,
                                                                              encoder_result,
                                                                              observed_flows,
@@ -819,7 +833,7 @@ class Tracking6D:
         dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
         self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
 
-    def frames_and_flow_frames_inference(self, keyframes, flow_frames, rgb_encoder=False):
+    def frames_and_flow_frames_inference(self, keyframes, flow_frames, encoder_type='deep_features'):
         joined_frames = sorted(set(keyframes + flow_frames))
         not_optimized_frames = set(flow_frames) - set(keyframes)
         optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
@@ -830,9 +844,11 @@ class Tracking6D:
         frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
         flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
 
-        if rgb_encoder:
+        if encoder_type == 'rgb':
             encoder = self.rgb_encoder
-        else:  # Deep features encoder
+        elif encoder_type == 'gt_encoder':
+            encoder = self.gt_encoder
+        else:  # 'deep_features' - Deep features encoder
             encoder = self.encoder
 
         joined_encoder_result: EncoderResult = encoder(optimized_frames)
@@ -881,7 +897,7 @@ class Tracking6D:
         for epoch in range(self.config.rgb_iters):
             encoder_result, encoder_result_flow_frames = \
                 self.frames_and_flow_frames_inference(self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes,
-                                                      rgb_encoder=True)
+                                                      encoder_type='rgb')
 
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions,
                                      encoder_result.vertices, self.encoder.face_features,
