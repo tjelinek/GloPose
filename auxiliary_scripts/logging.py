@@ -361,7 +361,7 @@ class WriteResults:
     @staticmethod
     def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
         fig, ax1 = plt.subplots()
-        fig.subplots_adjust(left=0.25)
+        fig.subplots_adjust(left=0.25, right=0.85)
 
         rotation_tensors = tracking6d.encoder.rotation_by_gd_iter
         translation_tensors = tracking6d.encoder.translation_by_gd_iter
