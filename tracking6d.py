@@ -613,7 +613,9 @@ class Tracking6D:
             encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
                                                                                                flow_frames,
                                                                                                encoder_type='gt_encoder')
+
             observed_flows = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+            observed_flows = observed_flows.detach()
             observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
             observed_flows = self.normalize_rendered_flows(observed_flows)
 
