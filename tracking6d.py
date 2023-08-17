@@ -340,7 +340,7 @@ class Tracking6D:
         non_positional_params = all_parameters - positional_params
 
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
-        self.optimizer_positional_parameters = torch.optim.Adam(positional_params, lr=self.config.learning_rate)
+        self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
 
         self.encoder.train()
         self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
@@ -617,10 +617,7 @@ class Tracking6D:
                            os.path.join(self.write_folder, 'weights.png'))
 
         # Restore the learning rate on its prior values
-        for param_group in self.optimizer_non_positional_parameters.param_groups:
-            param_group['lr'] = self.config.learning_rate
-        for param_group in self.optimizer_positional_parameters.param_groups:
-            param_group['lr'] = self.config.learning_rate
+        self.reset_learning_rate()
 
         if self.config.use_lr_scheduler:
             self.config.loss_rgb_weight = 0
@@ -631,11 +628,11 @@ class Tracking6D:
 
         scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters,
                                                                      mode='min', factor=0.9,
-                                                                     patience=LR_SCHEDULER_PATIENCE,
+                                                                     patience=self.config.lr_scheduler_patience,
                                                                      verbose=False)
 
         def lambda_schedule(epoch):
-            return 1 / (1 + np.exp(-0.25 * (epoch - OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER)))
+            return 1 / (1 + np.exp(-0.25 * (epoch - self.config.optimize_non_positional_params_after)))
 
         scheduler_non_positional_params = lr_scheduler.LambdaLR(self.optimizer_non_positional_parameters,
                                                                 lambda_schedule)
@@ -647,10 +644,55 @@ class Tracking6D:
         encoder_result = None
         theoretical_flow = None
         renders = None
+        per_pixel_error = None
 
         model_losses_exponential_decay = None
 
-        for epoch in range(self.config.iterations):
+        best_loss = math.inf
+        no_improvements = 0
+        epoch = 0
+        loss_improvement_threshold = 1e-4
+
+        # First optimize the positional parameters first while preventing steps that increase the loss
+        print("Optimizing positional parameters using linear learning rate scheduling")
+        while no_improvements < self.config.break_sgd_after_iters_with_no_change:
+
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
+                flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments)
+
+            joint_loss = joint_loss.mean()
+            self.optimizer_positional_parameters.zero_grad()
+            joint_loss.backward()
+
+            loss_improvement = best_loss - joint_loss
+            if loss_improvement > loss_improvement_threshold:
+                best_loss = joint_loss
+                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+
+                for param_group in self.optimizer_positional_parameters.param_groups:
+                    param_group['lr'] *= 2.0
+                no_improvements = 0
+
+            elif loss_improvement < 0:
+
+                self.encoder.load_state_dict(self.best_model["encoder"])
+                for param_group in self.optimizer_positional_parameters.param_groups:
+                    param_group['lr'] /= 2.0
+
+            elif 0 <= loss_improvement <= loss_improvement_threshold:
+                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
+                self.optimizer_positional_parameters.step()
+                epoch += 1
+                no_improvements += 1
+
+        self.encoder.load_state_dict(self.best_model["encoder"])
+
+        # Now optimize all the parameters jointly using normal gradient descent
+        print("Optimizing all parameters")
+
+        # self.reset_learning_rate()
+
+        for epoch in range(epoch, self.config.iterations):
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
                 flow_frames, flow_segment_masks,
@@ -706,6 +748,12 @@ class Tracking6D:
                                         per_pixel_flow_error=per_pixel_error)
 
         return frame_result
+
+    def reset_learning_rate(self):
+        for param_group in self.optimizer_non_positional_parameters.param_groups:
+            param_group['lr'] = self.config.learning_rate
+        for param_group in self.optimizer_positional_parameters.param_groups:
+            param_group['lr'] = self.config.learning_rate
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses):
 
