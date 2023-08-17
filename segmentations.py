@@ -67,7 +67,7 @@ class PrecomputedTracker:
         segment = cv2.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
         if len(segment.shape) > 2:
             segment = segment[:, :, :1]
-        segment = (segment > 0.5).astype(segment.dtype)
+        segment = (segment > 0).astype(segment.dtype)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
