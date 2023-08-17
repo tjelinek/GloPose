@@ -416,16 +416,16 @@ class WriteResults:
         silh_overlap_image = torch.zeros(1, *last_segment_mask.shape[-2:], 3)
         R = torch.tensor([255.0, 0, 0])
         G = torch.tensor([0, 255.0, 0])
-        B = torch.tensor([0, 0, 255.0])
+        Y = R + G
         # Set green where there is silhouette1 and silhouette2
         indicesG = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary > 0))
         silh_overlap_image[0, indicesG[:, 0], indicesG[:, 1]] = G
         # Set red where there is silhouette1 and not silhouette2
         indicesR = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary <= 0))
         silh_overlap_image[0, indicesR[:, 0], indicesR[:, 1]] = R
-        # Set blue where there is not silhouette1 and silhouette2
+        # Set yellow where there is not silhouette1 and silhouette2
         indicesB = torch.nonzero((last_segment_mask_binary <= 0) & (last_rendered_silhouette_binary > 0))
-        silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = B
+        silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = Y
 
         silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
         (tracking6d.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
