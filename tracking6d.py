@@ -114,7 +114,6 @@ class TrackerConfig:
     use_gt: bool = False
 
     # Optimization
-    use_gt_segmentation_mask_for_loss = False
     allow_break_sgd_after = 120
     break_sgd_after_iters_with_no_change = 10
     optimize_non_positional_params_after = 70
