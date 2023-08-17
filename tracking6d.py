@@ -31,15 +31,6 @@ from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
 from utils import consecutive_quaternions_angular_difference
 
-BREAK_AFTER_ITERS_WITH_NO_CHANGE = 10
-ALLOW_BREAK_AFTER = 70
-TRAINING_PRINT_STATUS_FREQUENCY = 20
-SILHOUETTE_LOSS_THRESHOLD = 0.3
-OPTIMIZE_NON_POSITIONAL_PARAMS_AFTER = 50
-
-LR_SCHEDULER_PATIENCE = 5
-USE_LR_SCHEDULER = True
-
 
 @dataclass
 class TrackerConfig:
@@ -375,7 +366,7 @@ class Tracking6D:
         self.best_model = {"value": 100,
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": faces,
-                           "encoder": None}
+                           "encoder": copy.deepcopy(self.encoder.state_dict())}
         keyframes = [0]
         flow_keyframes = [0]
 
@@ -631,7 +622,7 @@ class Tracking6D:
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-        if USE_LR_SCHEDULER:
+        if self.config.use_lr_scheduler:
             self.config.loss_rgb_weight = 0
             if step_i <= 2:
                 self.config.loss_flow_weight = 0
@@ -687,8 +678,9 @@ class Tracking6D:
                     self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
                     self.best_model["value"] = 100
             else:
-                if epoch > ALLOW_BREAK_AFTER and abs(model_losses_exponential_decay - model_loss) <= 1e-3 and \
-                        iters_without_change > BREAK_AFTER_ITERS_WITH_NO_CHANGE:
+                if epoch > self.config.allow_break_sgd_after and \
+                        abs(model_losses_exponential_decay - model_loss) <= 1e-3 and \
+                        iters_without_change > self.config.break_sgd_after_iters_with_no_change:
                     break
             if epoch < self.config.iterations - 1:
                 # with torch.autograd.detect_anomaly():
@@ -701,7 +693,7 @@ class Tracking6D:
                 self.optimizer_non_positional_parameters.step()
                 self.optimizer_positional_parameters.step()
 
-                if USE_LR_SCHEDULER:
+                if self.config.use_lr_scheduler:
                     scheduler_positional_params.step(joint_loss)
                     scheduler_non_positional_params.step()
 
@@ -723,7 +715,7 @@ class Tracking6D:
             model_loss = losses["model"].mean().item()
         else:
             model_loss = losses["silh"].mean().item()
-        if self.config.verbose and epoch % TRAINING_PRINT_STATUS_FREQUENCY == 0:
+        if self.config.verbose and epoch % self.config.training_print_status_frequency == 0:
             print("Epoch {:4d}".format(epoch + 1), end=" ")
             for ls in losses:
                 print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
