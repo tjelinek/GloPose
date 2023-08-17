@@ -1,3 +1,5 @@
+import math
+
 import glob
 import os
 import sys
@@ -16,8 +18,8 @@ sys.path.append('OSTrack/S2DNet')
 
 def main():
     dataset = 'GoogleScannedObjects'
-    sequences = ['INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count', 'Squirrel', 'STACKING_BEAR',
-                 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain', 'Tag_Dishtowel_Green']
+    sequences = ['INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count', 'Squirrel', 'Twinlab_Nitric_Fuel',
+                 'STACKING_BEAR', 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain', 'Tag_Dishtowel_Green']
 
     for sequence in sequences:
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
@@ -36,6 +38,7 @@ def main():
         config["gt_mesh_prototype"] = gt_mesh_path
         config["gt_tracking_log"] = gt_tracking_path
         config["rot_init"] = [0, 0, 0]
+        config['rot_init'] = [-math.pi / 2.0, 0, 0]
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
 
