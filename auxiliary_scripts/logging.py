@@ -517,18 +517,19 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
                                 Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
         flow_difference_path = tracking6d.write_folder / Path('flows') / \
                                Path(f"flow_difference_{stepi}_{stepi + 1}.png")
-        # rendering_1_path = tracking6d.write_folder / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
+        rendering_1_path = tracking6d.write_folder / Path('renderings') / \
+                           Path(f"rendering_{stepi}_{stepi + 1}_1.png")
         rendering_2_path = tracking6d.write_folder / Path('renderings') / \
                            Path(f"rendering_{stepi}_{stepi + 1}_2.png")
 
         # Convert tensors to NumPy arrays
-        # previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
-        # previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
+        previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
         current_rendered_image_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
         current_rendered_image_np = current_rendered_image_np.astype('uint8')
 
         # Save rendered images
-        # imageio.imwrite(rendering_1_path, previous_rendered_image_np)
+        imageio.imwrite(rendering_1_path, previous_rendered_image_np)
         imageio.imwrite(rendering_2_path, current_rendered_image_np)
 
         # Clone theoretical flow and adjust coordinates
