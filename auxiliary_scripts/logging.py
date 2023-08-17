@@ -65,7 +65,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     (output_dir / Path('gt_imgs')).mkdir(exist_ok=True, parents=True)
 
     # Define output file paths
-    # prev_image_path = output_dir / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
+    # prev_image_path = output_dir / Path('gt_imgs') / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
     new_image_path = output_dir / Path('gt_imgs') / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
     # flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
     flow_image_path = output_dir / Path('flows') / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
