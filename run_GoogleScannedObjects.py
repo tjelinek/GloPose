@@ -18,7 +18,7 @@ sys.path.append('OSTrack/S2DNet')
 
 def main():
     dataset = 'GoogleScannedObjects'
-    sequences = ['INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count', 'Squirrel', 'Twinlab_Nitric_Fuel',
+    sequences = ['INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count', 'Twinlab_Nitric_Fuel', 'Squirrel',
                  'STACKING_BEAR', 'Schleich_Allosaurus', 'Threshold_Ramekin_White_Porcelain', 'Tag_Dishtowel_Green']
 
     for sequence in sequences:
