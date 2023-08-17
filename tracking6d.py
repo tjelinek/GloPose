@@ -55,6 +55,7 @@ class TrackerConfig:
     write_results: bool = True
     write_intermediate: bool = True
     render_just_bounding_box: bool = False
+    training_print_status_frequency = 1
 
     # Frame and keyframe settings
     input_frames: int = 0
@@ -120,6 +121,14 @@ class TrackerConfig:
     gt_mesh_prototype: str = None
     gt_tracking_log: str = None
     use_gt: bool = False
+
+    # Optimization
+    use_gt_segmentation_mask_for_loss = False
+    allow_break_sgd_after = 120
+    break_sgd_after_iters_with_no_change = 10
+    optimize_non_positional_params_after = 70
+    use_lr_scheduler = False
+    lr_scheduler_patience = 5
 
     # Optical flow loss
     flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
