@@ -335,6 +335,18 @@ class Tracking6D:
         positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
         non_positional_params = all_parameters - positional_params
 
+        # Encoder for inferring the GT flow, and so on
+        self.gt_encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
+                                  images_feat.shape[2]).to(self.device)
+        for name, param in self.gt_encoder.named_parameters():
+            if isinstance(param, torch.Tensor):
+                param.detach_()
+        if self.gt_rotations is not None:
+            rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
+            self.gt_encoder.quaternion = rotation_quaternion
+        if self.gt_translations is not None:
+            self.gt_encoder.translation = self.gt_translations
+
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
 
