@@ -165,7 +165,7 @@ def generate_rotating_and_translating_textured_object(config, prototype_path, te
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
 
-    magnification, vertices = normalize_vertices(vertices)
+    vertices = normalize_vertices(vertices)
 
     faces = mesh.faces
     face_features = mesh.uvs[mesh.face_uvs_idx][None]
@@ -195,8 +195,13 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
     prev_encoder_result = None
     prev_ren_features = None
 
+    vertices = vertices.to(DEVICE)
+    face_features = face_features.to(DEVICE)
+
     if translations is None:
         translations = [torch.Tensor([0.0, 0.0, 0.0])] * len(rotations)
+    quaternions = torch.zeros(1, len(rotations), 4).to(DEVICE)
+    quaternions[:, :, 0] = 1.0
 
     translations = torch.stack(translations)[None][None].to(DEVICE)
     translations[..., :] += initial_translation
@@ -208,14 +213,15 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
         rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
                                                               order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
         composed_rotation_quaternion_tensor = qmult(qnorm(initial_rotation_quaternion[None]),
-                                                    qnorm(rotation_quaternion_tensor[None]))[0]
+                                                    qnorm(rotation_quaternion_tensor[None]))[0].to(DEVICE)
+        quaternions[0, frame_i] = composed_rotation_quaternion_tensor
 
         rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
                                                         order=QuaternionCoeffOrder.WXYZ)[None]
         current_translation = translations[:, :, frame_i, :][None]
         current_encoder_result = EncoderResult(translations=current_translation,
-                                               quaternions=composed_rotation_quaternion_tensor[None, None].to(DEVICE),
-                                               vertices=vertices.to(DEVICE),
+                                               quaternions=composed_rotation_quaternion_tensor[None, None],
+                                               vertices=vertices,
                                                texture_maps=None,
                                                lights=None,
                                                translation_difference=None,
@@ -226,23 +232,29 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
         with torch.no_grad():
             log_rows.append([frame_i, rotation_x, rotation_y, rotation_z, 0, 0, 0])
-            rendering_result = rendering.render_mesh_with_dibr(face_features.to(DEVICE), rotation_matrix.to(DEVICE),
-                                                               current_translation[0], vertices.to(DEVICE))
+            rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
+                                                               vertices)
 
             optical_flow = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
 
             if texture_maps is not None:
-                ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
-                                                                  texture_maps, mode='bilinear')
+                ren_features_and_mask = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
+                                                          quaternion=quaternions[:, frame_i:frame_i + 1, :],
+                                                          unit_vertices=vertices, face_features=face_features,
+                                                          texture_maps=texture_maps)
+
+                ren_features = ren_features_and_mask[0, 0, :, :3].permute(0, 2, 3, 1)
+                ren_silhouette = ren_features_and_mask[0, 0, :, 3]
             else:
                 ren_features = rendering_result.ren_mesh_vertices_features
+                ren_silhouette = rendering_result.ren_mask
 
             if prev_ren_features is not None:
                 generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow.clone(), frame_i,
                                                    optical_flow_destination)
                 pass
 
-            save_images_and_flow(frame_i, ren_features, rendering_result.ren_mask,
+            save_images_and_flow(frame_i, ren_features, ren_silhouette,
                                  optical_flow.detach().clone().cpu(), rendering_destination,
                                  segmentation_destination, optical_flow_destination)
 
