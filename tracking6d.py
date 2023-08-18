@@ -607,7 +607,7 @@ class Tracking6D:
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
-    def apply(self, input_batch, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
+    def apply(self, input_images, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
 
         if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
             encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
@@ -626,12 +626,12 @@ class Tracking6D:
 
         frame_losses = []
         if self.config.write_results:
-            save_image(input_batch[0, :, :3], os.path.join(self.write_folder, 'im.png'),
+            save_image(input_images[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
-            save_image(torch.cat((input_batch[0, :, :3], segments[0, :, [1]]), 1),
+            save_image(torch.cat((input_images[0, :, :3], segments[0, :, [1]]), 1),
                        os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
             if self.config.weight_by_gradient:
-                save_image(torch.cat((segments[0, :, [0, 0, 0]], 0 * input_batch[0, :, :1] + 1), 1),
+                save_image(torch.cat((segments[0, :, [0, 0, 0]], 0 * input_images[0, :, :1] + 1), 1),
                            os.path.join(self.write_folder, 'weights.png'))
 
         # Restore the learning rate on its prior values
@@ -676,7 +676,7 @@ class Tracking6D:
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
-                flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments)
+                flow_frames, flow_segment_masks, input_images, keyframes, observed_flows, segments)
 
             joint_loss = joint_loss.mean()
             self.optimizer_positional_parameters.zero_grad()
@@ -714,7 +714,7 @@ class Tracking6D:
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
                 flow_frames, flow_segment_masks,
-                input_batch, keyframes, observed_flows, segments)
+                input_images, keyframes, observed_flows, segments)
 
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
 
