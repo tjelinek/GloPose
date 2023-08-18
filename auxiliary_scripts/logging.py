@@ -416,13 +416,13 @@ class WriteResults:
         R = torch.tensor([255.0, 0, 0])
         G = torch.tensor([0, 255.0, 0])
         Y = R + G
-        # Set yellow where there is silhouette1 and silhouette2
+        # Set yellow where there is last_rendered_silhouette and last_segment_mask
         indicesG = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary > 0))
         silh_overlap_image[0, indicesG[:, 0], indicesG[:, 1]] = Y
-        # Set red where there is silhouette1 and not silhouette2
+        # Set red where there is last_rendered_silhouette and not last_segment_mask
         indicesR = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary <= 0))
         silh_overlap_image[0, indicesR[:, 0], indicesR[:, 1]] = R
-        # Set green where there is not silhouette1 and silhouette2
+        # Set green where there is not last_rendered_silhouette and last_segment_mask
         indicesB = torch.nonzero((last_segment_mask_binary <= 0) & (last_rendered_silhouette_binary > 0))
         silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = G
 
