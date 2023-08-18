@@ -1,3 +1,5 @@
+from abc import abstractmethod, ABC
+
 import glob
 import os
 import sys
@@ -19,10 +21,10 @@ from OSTrack.lib.test.tracker.ostrack import OSTrack
 from OSTrack.lib.test.parameter.ostrack import parameters
 
 
-def compute_segments(segment, I, width, height):
+def compute_segments(segment, image, width, height):
     segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-    It = transforms.ToTensor()(I / 255.0)
-    image = It.unsqueeze(0).float()
+    image_tensor = transforms.ToTensor()(image / 255.0)
+    image = image_tensor.unsqueeze(0).float()
     segm = transforms.ToTensor()(segment).unsqueeze(0)
     weights = compute_weights(image)
     segments = torch.cat((weights * segm, segm), 1)
@@ -50,8 +52,27 @@ def pad_image(image):
     return image
 
 
-class PrecomputedTracker:
-    def __init__(self, perc, max_width, baseline_dict, grabcut=False):
+class BaseTracker(ABC):
+    def __init__(self, perc, max_width, baseline_dict):
+        self.perc = perc
+        self.max_width = max_width
+        self.baseline_dict = baseline_dict
+        self.shape = None
+
+    @abstractmethod
+    def init_bbox(self, file0, bbox0, init_mask=None):
+        # Implement this method or replace with the actual initialization logic
+        pass
+
+    @abstractmethod
+    def next(self, file):
+        # Implement this method or replace with the actual logic
+        pass
+
+
+class PrecomputedTracker(BaseTracker):
+    def __init__(self, perc, max_width, baseline_dict):
+        super().__init__(perc, max_width, baseline_dict)
         self.perc = perc
         self.max_width = max_width
         self.baseline_dict = baseline_dict
@@ -60,21 +81,21 @@ class PrecomputedTracker:
         self.background_mdl = np.zeros((1, 65), np.float64)
         self.foreground_mdl = np.zeros((1, 65), np.float64)
 
-    def process(self, I, ind):
-        self.shape = I.shape
-        if self.max_width / I.shape[1] < self.perc:
-            self.perc = self.max_width / I.shape[1]
+    def process(self, image, ind):
+        self.shape = image.shape
+        if self.max_width / image.shape[1] < self.perc:
+            self.perc = self.max_width / image.shape[1]
         segment = cv2.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
         if len(segment.shape) > 2:
             segment = segment[:, :, :1]
         segment = (segment > 0).astype(segment.dtype)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
-        I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
+        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
 
-        It = transforms.ToTensor()(I / 255.0)
-        image = It.unsqueeze(0).float()
+        image_tensor = transforms.ToTensor()(image / 255.0)
+        image = image_tensor.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
         return image, segments
 
@@ -97,23 +118,48 @@ class PrecomputedTracker:
 
     def next(self, file):
         ind = os.path.splitext(os.path.basename(file))[0]
-        I = imread(file) * 255
-        image, segments = self.process(I, ind)
+        image = imread(file) * 255
+        image, segments = self.process(image, ind)
 
         segments = pad_image(segments)
         image = pad_image(image)
 
         return image, segments
 
-    @staticmethod
-    def next_high_resolution(file):
-        I = imread(file)
-        I = transforms.ToTensor()(I).float()
-        return I[None]
+
+class SyntheticDataGeneratingTracker(BaseTracker):
+
+    def __init__(self, perc, max_width, baseline_dict):
+        super().__init__(perc, max_width, baseline_dict)
+
+    def init_bbox(self, file0, bbox0, init_mask=None):
+        pass
+
+    def next(self, file):
+        pass
+        # if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
+        #     # If we have GT logs available, get directly the desired segmentations
+        #     encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
+        #                                                                                        flow_frames,
+        #                                                                                        encoder_type='gt_encoder')
+        #
+        #     observed_flows = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+        #     observed_flows = observed_flows.detach()
+        #     observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
+        #     observed_flows = self.normalize_rendered_flows(observed_flows)
+        #
+        #     renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+        #                              self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
+        #
+        #     input_images = renders[0, :, :, :-1, ...].detach()
+        #     segment = renders[0, :, :, -1:, ...].detach()
+        #     segment_np = segment.cpu().numpy()[0, 0].transpose(1, 2, 0)
+        #     segment = compute_segments_dist(segment_np, segment.shape[-1], segment.shape[-2])
+        #     segments = segment[None].cuda()
 
 
-class MyTracker():
-    def __init__(self, perc, max_width, grabcut):
+class MyTracker:
+    def __init__(self, perc, max_width):
         sys.path.insert(0, './d3s')
         from pytracking.tracker.segm import Segm
         from pytracking.parameter.segm import default_params as vot_params
@@ -122,22 +168,21 @@ class MyTracker():
         self.perc = perc
         self.shape = None
         self.max_width = max_width
-        self.grabcut = grabcut
         self.background_mdl = np.zeros((1, 65), np.float64)
         self.foreground_mdl = np.zeros((1, 65), np.float64)
 
-    def process(self, I):
-        self.shape = I.shape
-        if self.max_width / I.shape[1] < self.perc:
-            self.perc = self.max_width / I.shape[1]
-        segment = cv2.resize(self.tracker.mask, I.shape[1::-1]).astype(np.float64)
-        width = int(I.shape[1] * self.perc)
-        height = int(I.shape[0] * self.perc)
-        I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
+    def process(self, image):
+        self.shape = image.shape
+        if self.max_width / image.shape[1] < self.perc:
+            self.perc = self.max_width / image.shape[1]
+        segment = cv2.resize(self.tracker.mask, image.shape[1::-1]).astype(np.float64)
+        width = int(image.shape[1] * self.perc)
+        height = int(image.shape[0] * self.perc)
+        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
 
-        It = transforms.ToTensor()(I / 255.0)
-        image = It.unsqueeze(0).float()
+        image_tensor = transforms.ToTensor()(image / 255.0)
+        image = image_tensor.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
         return image, segments
 
@@ -152,55 +197,54 @@ class MyTracker():
         return segm
 
     def init_bbox(self, file0, bbox0, init_mask=None):
-        I = imread(file0) * 255
-        self.tracker.initialize(I, bbox0, init_mask=init_mask)
-        image, segments = self.process(I)
+        image = imread(file0) * 255
+        self.tracker.initialize(image, bbox0, init_mask=init_mask)
+        image, segments = self.process(image)
         return image, segments, self.perc
 
     def next(self, file):
-        I = imread(file) * 255
-        image, segments = self.process(I)
+        image = imread(file) * 255
+        image, segments = self.process(image)
         return image, segments
 
 
 class CSRTrack:
-    def __init__(self, perc, max_width, grabcut):
+    def __init__(self, perc, max_width):
         self.tracker = cv2.TrackerCSRT_create()
         self.perc = perc
         self.max_width = max_width
-        self.grabcut = grabcut
         self.background_mdl = np.zeros((1, 65), np.float64)
         self.foreground_mdl = np.zeros((1, 65), np.float64)
         self.shape = None
 
-    def process(self, I, bbox0):
-        self.shape = I.shape
+    def process(self, image, bbox0):
+        self.shape = image.shape
         bbox = (bbox0 + np.array([0, 0, bbox0[0], bbox0[1]]))
-        if self.max_width / I.shape[1] < self.perc:
-            self.perc = self.max_width / I.shape[1]
-        segment = np.zeros((I.shape[0], I.shape[1])).astype(np.float64)
+        if self.max_width / image.shape[1] < self.perc:
+            self.perc = self.max_width / image.shape[1]
+        segment = np.zeros((image.shape[0], image.shape[1])).astype(np.float64)
         segment[bbox[1]:bbox[3], bbox[0]:bbox[2]] = 1
-        width = int(I.shape[1] * self.perc)
-        height = int(I.shape[0] * self.perc)
-        I = cv2.resize(I.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
+        width = int(image.shape[1] * self.perc)
+        height = int(image.shape[0] * self.perc)
+        image = cv2.resize(image.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
 
-        It = transforms.ToTensor()(I / 255.0)
-        image = It.unsqueeze(0).float()
+        image_tranformed = transforms.ToTensor()(image / 255.0)
+        image = image_tranformed.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
         return image, segments
 
     def init_bbox(self, file0, bbox0, init_mask=None):
-        I = (imread(file0) * 255).astype(np.uint8)
+        image = (imread(file0) * 255).astype(np.uint8)
         bbox = bbox0.astype(int)
-        self.tracker.init(I, bbox)
-        image, segments = self.process(I, bbox)
+        self.tracker.init(image, bbox)
+        image, segments = self.process(image, bbox)
         return image, segments, self.perc
 
     def next(self, file):
-        I = (imread(file) * 255).astype(np.uint8)
-        ok, bbox0 = self.tracker.update(I)
-        image, segments = self.process(I, bbox0)
+        image = (imread(file) * 255).astype(np.uint8)
+        ok, bbox0 = self.tracker.update(image)
+        image, segments = self.process(image, bbox0)
         return image, segments
 
 
@@ -216,8 +260,8 @@ def get_ar(img, init_box, ar_path):
     return RF_module
 
 
-class OSTracker():
-    def __init__(self, perc, max_width, grabcut):
+class OSTracker:
+    def __init__(self, perc, max_width):
         params = parameters("vitb_384_mae_ce_32x4_ep300")
         params.debug = 0
         params.tracker_name = "ostrack"
@@ -228,18 +272,18 @@ class OSTracker():
         self.RF_module = None
         self.shape = None
 
-    def process(self, I, bbox0, segment):
-        self.shape = I.shape
+    def process(self, image, bbox0, segment):
+        self.shape = image.shape
         bbox = (bbox0 + np.array([0, 0, bbox0[0], bbox0[1]]))
-        if self.max_width / I.shape[1] < self.perc:
-            self.perc = self.max_width / I.shape[1]
+        if self.max_width / image.shape[1] < self.perc:
+            self.perc = self.max_width / image.shape[1]
         segment = (segment > 0.5).astype(np.float64)
-        width = int(I.shape[1] * self.perc)
-        height = int(I.shape[0] * self.perc)
-        I = cv2.resize(I.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
-        It = transforms.ToTensor()(I / 255.0)
-        image = It.unsqueeze(0).float()
+        width = int(image.shape[1] * self.perc)
+        height = int(image.shape[0] * self.perc)
+        image = cv2.resize(image.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
+        image_tensor = transforms.ToTensor()(image / 255.0)
+        image = image_tensor.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
         return image, segments
 
@@ -253,20 +297,20 @@ class OSTracker():
         return segm
 
     def init_bbox(self, file0, bbox0, init_mask=None):
-        I = (imread(file0) * 255).astype(np.uint8)
+        image = (imread(file0) * 255).astype(np.uint8)
         bbox = bbox0.astype(int)
-        self.tracker.initialize(I, {'init_bbox': bbox})
-        self.RF_module = get_ar(I, bbox, "/cluster/home/denysr/scratch/dataset/ostrack/SEcmnet_ep0040-c.pth.tar")
-        segment = self.RF_module.get_mask(I, np.array(bbox0))
-        image, segments = self.process(I, bbox, segment)
+        self.tracker.initialize(image, {'init_bbox': bbox})
+        self.RF_module = get_ar(image, bbox, "/cluster/home/denysr/scratch/dataset/ostrack/SEcmnet_ep0040-c.pth.tar")
+        segment = self.RF_module.get_mask(image, np.array(bbox0))
+        image, segments = self.process(image, bbox, segment)
         return image, segments, self.perc
 
     def next(self, file):
-        I = (imread(file) * 255).astype(np.uint8)
-        out = self.tracker.track(I)
+        image = (imread(file) * 255).astype(np.uint8)
+        out = self.tracker.track(image)
         bbox0 = [int(s) for s in out['target_bbox']]
-        segment = self.RF_module.get_mask(I, np.array(bbox0))
-        image, segments = self.process(I, bbox0, segment)
+        segment = self.RF_module.get_mask(image, np.array(bbox0))
+        image, segments = self.process(image, bbox0, segment)
         return image, segments
 
 
@@ -288,25 +332,26 @@ def segment_d3s_vot(files, bboxes):
     input_batch = torch.Tensor([])
     hs_frames = torch.Tensor([])
     for ind, fl in enumerate(files):
-        I = imread(fl) * 255
+        image = imread(fl) * 255
         if tracker is None:
             tracker = Segm(params)
-            tracker.initialize(I, bboxes[ind])
+            tracker.initialize(image, bboxes[ind])
         else:
-            prediction = tracker.track(I)
+            prediction = tracker.track(image)
 
-        segment = cv2.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
+        segment = cv2.resize(tracker.mask, image.shape[1::-1]).astype(np.float64)
 
-        width = int(I.shape[1] * perc)
-        height = int(I.shape[0] * perc)
-        I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
+        width = int(image.shape[1] * perc)
+        height = int(image.shape[0] * perc)
+        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
 
-        It = transforms.ToTensor()(I / 255.0)
-        hs_frames_one = torch.cat((It.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
+        image_tranformed = transforms.ToTensor()(image / 255.0)
+        hs_frames_one = torch.cat((image_tranformed.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(
+            0)
 
-        input_batch_one = torch.cat((It, 0 * It.clone()), 0).unsqueeze(0).float()
+        input_batch_one = torch.cat((image_tranformed, 0 * image_tranformed.clone()), 0).unsqueeze(0).float()
         input_batch = torch.cat((input_batch, input_batch_one), 0)
         hs_frames = torch.cat((hs_frames, hs_frames_one), 0)
     return input_batch, hs_frames
@@ -316,19 +361,19 @@ def segment_given(files, segms, perc=0.1):
     input_batch = torch.Tensor([])
     segments = torch.Tensor([])
     for ind, fl in enumerate(files):
-        I = imread(fl) * 255
+        image = imread(fl) * 255
         segment = (imread(segms[ind]) > 0.5).astype(np.float64)[:, :, 0]
 
-        width = int(I.shape[1] * perc)
-        height = int(I.shape[0] * perc)
-        I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        I = uniform_filter(I, size=(3, 3, 1))
+        width = int(image.shape[1] * perc)
+        height = int(image.shape[0] * perc)
+        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+        image = uniform_filter(image, size=(3, 3, 1))
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_LINEAR) > 0.05
 
-        It = transforms.ToTensor()(I / 255.0)
-        segment_one = torch.cat((It.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
+        image_tensor = transforms.ToTensor()(image / 255.0)
+        segment_one = torch.cat((image_tensor.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
 
-        input_batch_one = torch.cat((It, 0 * It.clone()), 0).unsqueeze(0).float()
+        input_batch_one = torch.cat((image_tensor, 0 * image_tensor.clone()), 0).unsqueeze(0).float()
         input_batch = torch.cat((input_batch, input_batch_one), 0)
         segments = torch.cat((segments, segment_one), 0)
     return input_batch, segments
