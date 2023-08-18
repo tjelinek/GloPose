@@ -85,23 +85,10 @@ class PrecomputedTracker:
 
     def process_segm(self, segm_path):
         img = (imread(segm_path) * 255).astype('uint8')
-        # breakpoint(mg
-        import imageio
-
-        # imageio.imwrite("control1.png", img)
         segment = cv2.resize(img, self.shape[1::-1], interpolation=cv2.INTER_NEAREST)  # .astype(np.float64)
-        # imageio.imwrite("control2.png", segment)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-        # imageio.imwrite("control3.png", segment)
-
-        # labels = label(segment)
-        # if labels.max() > 0:
-        #     segment = (labels == np.argmax(np.bincount(labels.flat)[1:]) + 1)
-
-        # imageio.imwrite("control4.png", segment.astype('uint8') * 255)
-        # breakpoint()
         segm = transforms.ToTensor()(segment)
         return segm
 
@@ -128,6 +115,7 @@ class PrecomputedTracker:
         I = imread(file)
         I = transforms.ToTensor()(I).float()
         return I[None]
+
 
 class MyTracker():
     def __init__(self, perc, max_width, grabcut):
@@ -180,14 +168,12 @@ class MyTracker():
 
     def next(self, file):
         I = imread(file) * 255
-        prediction = self.tracker.track(I)
         image, segments = self.process(I)
         return image, segments
 
 
 class CSRTrack:
     def __init__(self, perc, max_width, grabcut):
-        params = vot_params.parameters()
         self.tracker = cv2.TrackerCSRT_create()
         self.perc = perc
         self.max_width = max_width
@@ -292,7 +278,6 @@ class OSTracker():
         I = (imread(file) * 255).astype(np.uint8)
         out = self.tracker.track(I)
         bbox0 = [int(s) for s in out['target_bbox']]
-        # pred_bbox = self.RF_module.refine(I, np.array(bbox0))
         segment = self.RF_module.get_mask(I, np.array(bbox0))
         image, segments = self.process(I, bbox0, segment)
         return image, segments
@@ -468,7 +453,6 @@ def get_bbox(segments):
         x1 = min(all_segments.shape[0] - 1, x1 + add1)
     bounds = [x0, x1, y0, y1]
     return bounds
-
 
 # def segment_d3s(files):
 #     perc = 1
