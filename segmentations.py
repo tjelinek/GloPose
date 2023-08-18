@@ -56,7 +56,7 @@ class PrecomputedTracker:
         self.max_width = max_width
         self.baseline_dict = baseline_dict
         self.shape = None
-        self.grabcut = grabcut
+
         self.background_mdl = np.zeros((1, 65), np.float64)
         self.foreground_mdl = np.zeros((1, 65), np.float64)
 
@@ -72,12 +72,7 @@ class PrecomputedTracker:
         height = int(self.shape[0] * self.perc)
         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
         I = uniform_filter(I, size=(3, 3, 1))
-        if self.grabcut:
-            mask = segment.astype('uint8') * cv2.GC_PR_FGD
-            mask[mask == 0] = cv2.GC_PR_BGD
-            cv2.grabCut(I.astype('uint8'), mask, None, self.background_mdl, self.foreground_mdl, 5,
-                        cv2.GC_INIT_WITH_MASK)
-            segment = np.where((mask == cv2.GC_PR_BGD) | (mask == cv2.GC_BGD), 0, 1).astype('uint8').astype(np.float64)
+
         It = transforms.ToTensor()(I / 255.0)
         image = It.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
@@ -140,11 +135,7 @@ class MyTracker():
         height = int(I.shape[0] * self.perc)
         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
         I = uniform_filter(I, size=(3, 3, 1))
-        if self.grabcut:
-            mask = segment.astype('uint8') * cv2.GC_PR_FGD
-            cv2.grabCut(I.astype('uint8'), mask, None, self.background_mdl, self.foreground_mdl, 5,
-                        cv2.GC_INIT_WITH_MASK)
-            segment = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8').astype(np.float64)
+
         It = transforms.ToTensor()(I / 255.0)
         image = It.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
@@ -193,11 +184,7 @@ class CSRTrack:
         height = int(I.shape[0] * self.perc)
         I = cv2.resize(I.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
         I = uniform_filter(I, size=(3, 3, 1))
-        if self.grabcut:
-            mask = segment.astype('uint8')
-            cv2.grabCut(I.astype('uint8'), mask, bbox0, self.background_mdl, self.foreground_mdl, 5,
-                        cv2.GC_INIT_WITH_RECT)
-            segment = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8').astype(np.float64)
+
         It = transforms.ToTensor()(I / 255.0)
         image = It.unsqueeze(0).float()
         segments = compute_segments_dist(segment, width, height)
@@ -222,7 +209,7 @@ def get_ar(img, init_box, ar_path):
     sys.path.insert(0, './AlphaRefine')
     from pytracking.refine_modules.refine_module import RefineModule
     selector_path = 0
-    sr = 2.0;
+    sr = 2.0
     input_sz = int(128 * sr)  # 2.0 by default
     RF_module = RefineModule(ar_path, selector_path, search_factor=sr, input_sz=input_sz)
     RF_module.initialize(img, np.array(init_box))
