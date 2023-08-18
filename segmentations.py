@@ -31,12 +31,10 @@ def compute_segments(segment, image, width, height):
     return segments
 
 
-def compute_segments_dist(segment, width, height):
-    segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-    segm = transforms.ToTensor()(segment).unsqueeze(0)
-    dist = ndimage.distance_transform_edt(1 - segment)
-    distt = transforms.ToTensor()(dist).unsqueeze(0)
-    segments = torch.cat((distt, segm), 1)
+def compute_segments_dist(segment_resized, segment_orig_torch):
+    euclid_distance_to_background = ndimage.distance_transform_edt(1 - segment_resized)
+    distance_tensor = transforms.ToTensor()(euclid_distance_to_background).unsqueeze(0)
+    segments = torch.cat((distance_tensor, segment_orig_torch), 1)
     return segments
 
 
@@ -48,6 +46,16 @@ def pad_image(image):
     padding = [(pad_h + 1) // 2, pad_h // 2, pad_w // 2, (pad_w + 1) // 2]  # (top, bottom, left, right)
 
     image = F.pad(image, padding, mode='constant', value=0)
+
+    return image
+
+
+def resize_and_filter_image(image, new_width, new_height):
+    image = cv2.resize(image, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
+    image = uniform_filter(image, size=(3, 3, 1))
+
+    image_tensor = transforms.ToTensor()(image / 255.0)
+    image = image_tensor.unsqueeze(0).float()
 
     return image
 
@@ -69,6 +77,27 @@ class BaseTracker(ABC):
         # Implement this method or replace with the actual logic
         pass
 
+    def process_segm(self, segm_path):
+        img = imread(segm_path)
+        segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
+        width = int(self.shape[1] * self.perc)
+        height = int(self.shape[0] * self.perc)
+        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
+
+        segm = transforms.ToTensor()(segment)
+        return segm
+
+    def standardize_image_and_segment(self, image, segment):
+        new_width = int(image.shape[1] * self.perc)
+        new_height = int(image.shape[0] * self.perc)
+        image = resize_and_filter_image(image, new_width, new_height)
+
+        segment = (segment > 0).astype(np.float64)
+        segment_resized = cv2.resize(segment, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
+        segment_orig_torch = transforms.ToTensor()(segment).unsqueeze(0)
+        segments = compute_segments_dist(segment_resized, segment_orig_torch)
+        return image, segments
+
 
 class PrecomputedTracker(BaseTracker):
     def __init__(self, perc, max_width, baseline_dict):
@@ -88,15 +117,9 @@ class PrecomputedTracker(BaseTracker):
         segment = cv2.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
         if len(segment.shape) > 2:
             segment = segment[:, :, :1]
-        segment = (segment > 0).astype(segment.dtype)
-        width = int(self.shape[1] * self.perc)
-        height = int(self.shape[0] * self.perc)
-        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
 
-        image_tensor = transforms.ToTensor()(image / 255.0)
-        image = image_tensor.unsqueeze(0).float()
-        segments = compute_segments_dist(segment, width, height)
+        image, segments = self.standardize_image_and_segment(image, segment)
+
         return image, segments
 
     def process_segm(self, segm_path):
@@ -158,8 +181,9 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         #     segments = segment[None].cuda()
 
 
-class MyTracker:
-    def __init__(self, perc, max_width):
+class MyTracker(BaseTracker):
+    def __init__(self, perc, max_width, baseline_dict):
+        super().__init__(perc, max_width, baseline_dict)
         sys.path.insert(0, './d3s')
         from pytracking.tracker.segm import Segm
         from pytracking.parameter.segm import default_params as vot_params
@@ -176,25 +200,9 @@ class MyTracker:
         if self.max_width / image.shape[1] < self.perc:
             self.perc = self.max_width / image.shape[1]
         segment = cv2.resize(self.tracker.mask, image.shape[1::-1]).astype(np.float64)
-        width = int(image.shape[1] * self.perc)
-        height = int(image.shape[0] * self.perc)
-        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
 
-        image_tensor = transforms.ToTensor()(image / 255.0)
-        image = image_tensor.unsqueeze(0).float()
-        segments = compute_segments_dist(segment, width, height)
+        image, segments = self.standardize_image_and_segment(image, segment)
         return image, segments
-
-    def process_segm(self, segm_path):
-        img = imread(segm_path)
-        segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
-        width = int(self.shape[1] * self.perc)
-        height = int(self.shape[0] * self.perc)
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-
-        segm = transforms.ToTensor()(segment)
-        return segm
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image = imread(file0) * 255
@@ -208,7 +216,7 @@ class MyTracker:
         return image, segments
 
 
-class CSRTrack:
+class CSRTrack(BaseTracker):
     def __init__(self, perc, max_width):
         self.tracker = cv2.TrackerCSRT_create()
         self.perc = perc
@@ -224,14 +232,8 @@ class CSRTrack:
             self.perc = self.max_width / image.shape[1]
         segment = np.zeros((image.shape[0], image.shape[1])).astype(np.float64)
         segment[bbox[1]:bbox[3], bbox[0]:bbox[2]] = 1
-        width = int(image.shape[1] * self.perc)
-        height = int(image.shape[0] * self.perc)
-        image = cv2.resize(image.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
 
-        image_tranformed = transforms.ToTensor()(image / 255.0)
-        image = image_tranformed.unsqueeze(0).float()
-        segments = compute_segments_dist(segment, width, height)
+        image, segments = self.standardize_image_and_segment(image, segment)
         return image, segments
 
     def init_bbox(self, file0, bbox0, init_mask=None):
@@ -260,8 +262,9 @@ def get_ar(img, init_box, ar_path):
     return RF_module
 
 
-class OSTracker:
-    def __init__(self, perc, max_width):
+class OSTracker(BaseTracker):
+    def __init__(self, perc, max_width, baseline_dict):
+        super().__init__(perc, max_width, baseline_dict)
         params = parameters("vitb_384_mae_ce_32x4_ep300")
         params.debug = 0
         params.tracker_name = "ostrack"
@@ -277,24 +280,9 @@ class OSTracker:
         bbox = (bbox0 + np.array([0, 0, bbox0[0], bbox0[1]]))
         if self.max_width / image.shape[1] < self.perc:
             self.perc = self.max_width / image.shape[1]
-        segment = (segment > 0.5).astype(np.float64)
-        width = int(image.shape[1] * self.perc)
-        height = int(image.shape[0] * self.perc)
-        image = cv2.resize(image.astype(np.float64), dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
-        image_tensor = transforms.ToTensor()(image / 255.0)
-        image = image_tensor.unsqueeze(0).float()
-        segments = compute_segments_dist(segment, width, height)
+
+        image, segments = self.standardize_image_and_segment(image, segment)
         return image, segments
-
-    def process_segm(self, segm_path):
-        segment = cv2.resize(imread(segm_path), self.shape[1::-1]).astype(np.float64)
-        width = int(self.shape[1] * self.perc)
-        height = int(self.shape[0] * self.perc)
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-
-        segm = transforms.ToTensor()(segment)
-        return segm
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image = (imread(file0) * 255).astype(np.uint8)
