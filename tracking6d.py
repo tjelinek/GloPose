@@ -71,7 +71,6 @@ class TrackerConfig:
     camera_distance: float = None
     max_width: int = None
     image_downsample: float = None
-    grabcut: bool = False
 
     # Tracking settings
     tran_init: float = None
@@ -251,12 +250,7 @@ class Tracking6D:
 
         self.device = device
 
-        if self.config.flow_model == 'RAFT':
-            self.model_flow = get_flow_model_raft()
-        elif self.config.flow_model == 'GMA':
-            self.model_flow = get_flow_model_gma()
-        elif self.config.flow_model == 'MFT':
-            self.model_flow = get_flow_model_mft()
+        self.initialize_flow_model()
 
         self.gt_texture = None
         if 'gt_texture' in config and config['gt_texture'] is not None and config["use_gt"]:
@@ -277,18 +271,18 @@ class Tracking6D:
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
             self.tracker = PrecomputedTracker(self.config.image_downsample,
-                                              self.config.max_width, bbox0,
-                                              self.config.grabcut)
+                                              self.config.max_width, bbox0)
         else:
+            if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
+                self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width,
+                                                              bbox0, self.gt_encoder, self.gt_rotations,
+                                                              self.gt_translations)
             if self.config.tracker_type == 'csrt':
-                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width,
-                                        self.config.grabcut)
+                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
             elif self.config.tracker_type == 'ostrack':
-                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width,
-                                         self.config.grabcut)
+                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
             else:  # d3s
-                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width,
-                                         self.config.grabcut)
+                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
         if self.config.features == 'deep':
             self.net = S2DNet(device=device, checkpoint_path=g_ext_folder).to(device)
             self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
@@ -375,9 +369,11 @@ class Tracking6D:
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
+        self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images, segments)
+
+    def initialize_keyframes(self, flow_segment_masks, images, images_feat, observed_flows, prev_images, segments):
         keyframes = [0]
         flow_keyframes = [0]
-
         self.active_keyframes = KeyframeBuffer(keyframes=keyframes,
                                                flow_keyframes=flow_keyframes,
                                                images=images,
@@ -388,6 +384,14 @@ class Tracking6D:
                                                flow_segment_masks=flow_segment_masks)
         self.recently_flushed_keyframes = KeyframeBuffer()
         self.all_keyframes = self.active_keyframes
+
+    def initialize_flow_model(self):
+        if self.config.flow_model == 'RAFT':
+            self.model_flow = get_flow_model_raft()
+        elif self.config.flow_model == 'GMA':
+            self.model_flow = get_flow_model_gma()
+        elif self.config.flow_model == 'MFT':
+            self.model_flow = get_flow_model_mft()
 
     def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1

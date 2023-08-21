@@ -61,16 +61,18 @@ def resize_and_filter_image(image, new_width, new_height):
 
 
 class BaseTracker(ABC):
-    def __init__(self, perc, max_width, baseline_dict):
+    def __init__(self, perc, max_width):
         self.perc = perc
         self.max_width = max_width
-        self.baseline_dict = baseline_dict
         self.shape = None
 
-    @abstractmethod
     def init_bbox(self, file0, bbox0, init_mask=None):
-        # Implement this method or replace with the actual initialization logic
-        pass
+        image, segments = self.next(file0)
+
+        segments = pad_image(segments)
+        image = pad_image(image)
+
+        return image, segments, self.perc
 
     @abstractmethod
     def next(self, file):
@@ -101,7 +103,7 @@ class BaseTracker(ABC):
 
 class PrecomputedTracker(BaseTracker):
     def __init__(self, perc, max_width, baseline_dict):
-        super().__init__(perc, max_width, baseline_dict)
+        super().__init__(perc, max_width)
         self.perc = perc
         self.max_width = max_width
         self.baseline_dict = baseline_dict
@@ -152,11 +154,11 @@ class PrecomputedTracker(BaseTracker):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, perc, max_width, baseline_dict):
-        super().__init__(perc, max_width, baseline_dict)
-
-    def init_bbox(self, file0, bbox0, init_mask=None):
-        pass
+    def __init__(self, perc, max_width, baseline_dict, gt_encoder, gt_rotations, gt_translations):
+        super().__init__(perc, max_width)
+        self.gt_encoder = gt_encoder
+        self.gt_rotations = gt_rotations
+        self.gt_translations = gt_translations
 
     def next(self, file):
         pass
@@ -182,8 +184,8 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
 
 class MyTracker(BaseTracker):
-    def __init__(self, perc, max_width, baseline_dict):
-        super().__init__(perc, max_width, baseline_dict)
+    def __init__(self, perc, max_width):
+        super().__init__(perc, max_width, None)
         sys.path.insert(0, './d3s')
         from pytracking.tracker.segm import Segm
         from pytracking.parameter.segm import default_params as vot_params
@@ -218,6 +220,7 @@ class MyTracker(BaseTracker):
 
 class CSRTrack(BaseTracker):
     def __init__(self, perc, max_width):
+        super().__init__(perc, max_width)
         self.tracker = cv2.TrackerCSRT_create()
         self.perc = perc
         self.max_width = max_width
@@ -263,8 +266,8 @@ def get_ar(img, init_box, ar_path):
 
 
 class OSTracker(BaseTracker):
-    def __init__(self, perc, max_width, baseline_dict):
-        super().__init__(perc, max_width, baseline_dict)
+    def __init__(self, perc, max_width):
+        super().__init__(perc, max_width)
         params = parameters("vitb_384_mae_ce_32x4_ep300")
         params.debug = 0
         params.tracker_name = "ostrack"
