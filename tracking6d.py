@@ -241,6 +241,7 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.shape = None
         self.loss_function = None
         self.optimizer_positional_parameters = None
         self.optimizer_non_positional_parameters = None
@@ -292,17 +293,7 @@ class Tracking6D:
             else:  # d3s
                 self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
 
-        images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
-        images, segments = images[None].to(self.device), segments[None].to(self.device)
-        images_feat = self.feat(images).detach()
-        self.shape = segments.shape
-
-        observed_flows = segments * 0
-        flow_segment_masks = segments * 0
-
-        images_feat = self.feat(images).detach()
-
-        self.shape = segments.shape
+        images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
@@ -330,11 +321,19 @@ class Tracking6D:
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
-        self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images=images.clone(),
-                                  segments=segments)
+        self.initialize_keyframes(flow_segment_masks=segments, images=images, images_feat=images_feat,
+                                  observed_flows=observed_flows, prev_images=images.clone(), segments=segments)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def get_initial_images(self, file0, bbox0, init_mask):
+        images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
+        images, segments = images[None].to(self.device), segments[None].to(self.device)
+        images_feat = self.feat(images).detach()
+        self.shape = segments.shape
+        observed_flows = segments * 0
+        return images, images_feat, observed_flows, segments
 
     def initialize_optimizer_and_loss(self, ivertices):
         all_parameters = set(list(self.encoder.parameters()))
