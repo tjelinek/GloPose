@@ -241,6 +241,7 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.gt_mesh_prototype = None
         self.rgb_loss_function = None
         self.rgb_optimizer = None
         self.rgb_encoder = None
@@ -249,24 +250,16 @@ class Tracking6D:
         self.all_keyframes = None
         self.recently_flushed_keyframes = None
         self.write_results = None
+        self.gt_texture = None
         self.write_folder = Path(write_folder)
 
         self.config = TrackerConfig(**config)
         self.config.fmo_steps = 1
         self.config_copy = copy.deepcopy(self.config)
-
         self.device = device
 
+        faces, iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
-
-        self.gt_texture = None
-        if 'gt_texture' in config and config['gt_texture'] is not None and config["use_gt"]:
-            texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
-            self.gt_texture = texture_np.permute(2, 0, 1)[None].to(device) / 255.0
-
-        self.gt_mesh_prototype = None
-        if 'gt_mesh_prototype' in config and config['gt_mesh_prototype'] is not None:
-            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
 
         self.gt_rotations = None
         self.gt_translations = None
@@ -307,24 +300,6 @@ class Tracking6D:
         self.last_encoder_result_rgb = None
 
         self.shape = segments.shape
-        prot = self.config.shapes[0]
-
-        if self.config.use_gt:
-            ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
-            faces = self.gt_mesh_prototype.faces
-            iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
-        elif self.config.init_shape:
-            mesh = load_obj(self.config.init_shape)
-            ivertices = mesh.vertices.numpy()
-            ivertices = ivertices - ivertices.mean(0)
-            ivertices = ivertices / ivertices.max()
-            faces = mesh.faces.numpy().copy()
-            iface_features = generate_face_features(ivertices, faces)
-        else:
-            mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
-            ivertices = mesh.vertices.numpy()
-            faces = mesh.faces.numpy().copy()
-            iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
         self.faces = faces
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
@@ -364,6 +339,33 @@ class Tracking6D:
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_mesh(self):
+        if self.config.gt_texture is not None and self.config.use_gt:
+            texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
+            self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
+
+        if self.config.gt_mesh_prototype is not None:
+            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
+
+        prot = self.config.shapes[0]
+        if self.config.use_gt:
+            ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
+            faces = self.gt_mesh_prototype.faces
+            iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
+        elif self.config.init_shape:
+            mesh = load_obj(self.config.init_shape)
+            ivertices = mesh.vertices.numpy()
+            ivertices = ivertices - ivertices.mean(0)
+            ivertices = ivertices / ivertices.max()
+            faces = mesh.faces.numpy().copy()
+            iface_features = generate_face_features(ivertices, faces)
+        else:
+            mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
+            ivertices = mesh.vertices.numpy()
+            faces = mesh.faces.numpy().copy()
+            iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
+        return faces, iface_features, ivertices
 
     def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
         config = copy.deepcopy(self.config)
