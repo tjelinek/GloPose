@@ -167,7 +167,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
         renders = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
                                             encoder_result.vertices,
-                                            self.tracking6d.gt_encoder.face_features, encoder_result.texture_maps,
+                                            self.tracking6d.gt_encoder.face_features, self.tracking6d.gt_texture,
                                             encoder_result.lights)
 
         image = renders[0, 0, :, :-1, ...].detach()
