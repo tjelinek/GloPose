@@ -483,7 +483,9 @@ class Tracking6D:
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
-                if gt_flows is None:
+                if self.config.use_gt:
+                    observed_flow = self.tracker.next_flow(stepi)
+                elif gt_flows is None:
                     if self.config.flow_model != 'MFT':
                         _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
                     else:
@@ -649,16 +651,6 @@ class Tracking6D:
         return renders
 
     def apply(self, input_images, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
-
-        if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
-            encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
-                                                                                               flow_frames,
-                                                                                               encoder_type='gt_encoder')
-
-            observed_flows = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-            observed_flows = observed_flows.detach()
-            observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
-            observed_flows = self.normalize_rendered_flows(observed_flows)
 
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
