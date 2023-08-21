@@ -241,6 +241,7 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.faces = None
         self.gt_mesh_prototype = None
         self.rgb_loss_function = None
         self.rgb_optimizer = None
@@ -258,7 +259,7 @@ class Tracking6D:
         self.config_copy = copy.deepcopy(self.config)
         self.device = device
 
-        faces, iface_features, ivertices = self.initialize_mesh()
+        iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
 
         self.gt_rotations = None
@@ -301,9 +302,8 @@ class Tracking6D:
 
         self.shape = segments.shape
 
-        self.faces = faces
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
-        self.encoder = Encoder(self.config, ivertices, faces, iface_features, self.shape[-1], self.shape[-2],
+        self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                images_feat.shape[2]).to(self.device)
 
         all_parameters = set(list(self.encoder.parameters()))
@@ -311,7 +311,7 @@ class Tracking6D:
         non_positional_params = all_parameters - positional_params
 
         # Encoder for inferring the GT flow, and so on
-        self.gt_encoder = Encoder(self.config, ivertices, faces, iface_features, self.shape[-1], self.shape[-2],
+        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                   images_feat.shape[2]).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
@@ -326,14 +326,14 @@ class Tracking6D:
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
 
         self.encoder.train()
-        self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
+        self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
         if self.config.features == 'deep':
-            self.initialize_rgb_encoder(faces, iface_features, ivertices, self.shape)
+            self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.shape)
 
         self.best_model = {"value": 100,
                            "face_features": self.encoder.face_features.detach().clone(),
-                           "faces": faces,
+                           "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
         self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images, segments)
 
@@ -351,21 +351,21 @@ class Tracking6D:
         prot = self.config.shapes[0]
         if self.config.use_gt:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
-            faces = self.gt_mesh_prototype.faces
+            self.faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
         elif self.config.init_shape:
             mesh = load_obj(self.config.init_shape)
             ivertices = mesh.vertices.numpy()
             ivertices = ivertices - ivertices.mean(0)
             ivertices = ivertices / ivertices.max()
-            faces = mesh.faces.numpy().copy()
-            iface_features = generate_face_features(ivertices, faces)
+            self.faces = mesh.faces.numpy().copy()
+            iface_features = generate_face_features(ivertices, self.faces)
         else:
             mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
             ivertices = mesh.vertices.numpy()
-            faces = mesh.faces.numpy().copy()
+            self.faces = mesh.faces.numpy().copy()
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
-        return faces, iface_features, ivertices
+        return iface_features, ivertices
 
     def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
         config = copy.deepcopy(self.config)
