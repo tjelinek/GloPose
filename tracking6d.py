@@ -241,6 +241,9 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.gt_encoder = None
+        self.encoder = None
+        self.rendering = None
         self.loss_function = None
         self.optimizer_positional_parameters = None
         self.optimizer_non_positional_parameters = None
@@ -330,6 +333,7 @@ class Tracking6D:
             self.gt_encoder.quaternion[...] = rotation_quaternion
         if self.gt_translations is not None:
             self.gt_encoder.translation[...] = self.gt_translations
+        self.encoder.train()
 
     def get_initial_images(self, file0, bbox0, init_mask):
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
