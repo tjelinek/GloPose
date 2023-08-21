@@ -241,7 +241,14 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
-        self.write_results: WriteResults = None
+        self.rgb_loss_function = None
+        self.rgb_optimizer = None
+        self.rgb_encoder = None
+        self.model_flow = None
+        self.active_keyframes = None
+        self.all_keyframes = None
+        self.recently_flushed_keyframes = None
+        self.write_results = None
         self.write_folder = Path(write_folder)
 
         self.config = TrackerConfig(**config)
@@ -325,6 +332,7 @@ class Tracking6D:
         self.rendering = RenderingKaolin(self.config, self.faces, shape[-1], shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
                                images_feat.shape[2]).to(self.device)
+
         all_parameters = set(list(self.encoder.parameters()))
         positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
         non_positional_params = all_parameters - positional_params
@@ -346,30 +354,36 @@ class Tracking6D:
 
         self.encoder.train()
         self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
+
         if self.config.features == 'deep':
-            config = copy.deepcopy(self.config)
-            config.features = 'rgb'
-            self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(
-                self.device)
-            rgb_parameters = list(self.rgb_encoder.parameters())[-1:]
-            self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
-            self.rgb_encoder.train()
-            config.loss_laplacian_weight = 0
-            config.loss_tv_weight = 1.0
-            config.loss_iou_weight = 0
-            config.loss_dist_weight = 0
-            config.loss_q_weight = 0
-            config.loss_t_weight = 0
-            config.loss_flow_weight = 0
-            config.loss_texture_change_weight = 0
-            self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
-        if self.config.verbose:
-            print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+            self.initialize_rgb_encoder(faces, iface_features, ivertices, shape)
+
         self.best_model = {"value": 100,
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
         self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images, segments)
+
+        if self.config.verbose:
+            print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
+        config = copy.deepcopy(self.config)
+        config.features = 'rgb'
+        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(
+            self.device)
+        rgb_parameters = list(self.rgb_encoder.parameters())[-1:]
+        self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
+        self.rgb_encoder.train()
+        config.loss_laplacian_weight = 0
+        config.loss_tv_weight = 1.0
+        config.loss_iou_weight = 0
+        config.loss_dist_weight = 0
+        config.loss_q_weight = 0
+        config.loss_t_weight = 0
+        config.loss_flow_weight = 0
+        config.loss_texture_change_weight = 0
+        self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
 
     def initialize_keyframes(self, flow_segment_masks, images, images_feat, observed_flows, prev_images, segments):
         keyframes = [0]
