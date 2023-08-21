@@ -241,7 +241,6 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
-        self.shape = None
         self.loss_function = None
         self.optimizer_positional_parameters = None
         self.optimizer_non_positional_parameters = None
@@ -264,6 +263,7 @@ class Tracking6D:
         self.last_encoder_result = None
         self.last_encoder_result_rgb = None
 
+        self.shape = tuple()
         self.write_folder = Path(write_folder)
         self.config = TrackerConfig(**config)
         self.config.fmo_steps = 1
@@ -295,20 +295,8 @@ class Tracking6D:
 
         images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
 
-        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
-        self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
-                               images_feat.shape[2]).to(self.device)
-        # Encoder for inferring the GT flow, and so on
-        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
-                                  images_feat.shape[2]).to(self.device)
-        for name, param in self.gt_encoder.named_parameters():
-            if isinstance(param, torch.Tensor):
-                param.detach_()
-        if self.gt_rotations is not None:
-            rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
-            self.gt_encoder.quaternion[...] = rotation_quaternion
-        if self.gt_translations is not None:
-            self.gt_encoder.translation[...] = self.gt_translations
+        num_channels = images_feat.shape[2]
+        self.initialize_renderer_and_encoder(iface_features, ivertices, num_channels)
 
         self.encoder.train()
 
@@ -326,6 +314,22 @@ class Tracking6D:
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_renderer_and_encoder(self, iface_features, ivertices, num_channels):
+        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
+        self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
+                               num_channels).to(self.device)
+        # Encoder for inferring the GT flow, and so on
+        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
+                                  num_channels).to(self.device)
+        for name, param in self.gt_encoder.named_parameters():
+            if isinstance(param, torch.Tensor):
+                param.detach_()
+        if self.gt_rotations is not None:
+            rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
+            self.gt_encoder.quaternion[...] = rotation_quaternion
+        if self.gt_translations is not None:
+            self.gt_encoder.translation[...] = self.gt_translations
 
     def get_initial_images(self, file0, bbox0, init_mask):
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
