@@ -170,16 +170,16 @@ class SyntheticDataGeneratingTracker(BaseTracker):
                                             self.tracking6d.gt_encoder.face_features, encoder_result.texture_maps,
                                             encoder_result.lights)
 
-        input_images = renders[0, 0, :, :-1, ...].detach()
+        image = renders[0, 0, :, :-1, ...].detach()
         segment = renders[:, 0, 0, -1, ...].detach().cpu()
         segment_np = segment.cpu().numpy()
         segments = compute_segments_dist(segment_np, segment)
         segments = segments.cuda()
-        return input_images, segments
+        return image, segments
 
     def next_flow(self, keyframe):
         keyframes = [keyframe]
-        flow_frames = [keyframe]
+        flow_frames = [keyframe - 1]
 
         encoder_result, enc_flow = self.tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                     encoder_type='gt_encoder')
@@ -187,7 +187,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         observed_flows = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow)
         observed_flows = observed_flows.detach()
         observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
-        observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)
+        observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)[0]
 
         return observed_flows
 
