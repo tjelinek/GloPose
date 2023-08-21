@@ -277,8 +277,7 @@ class Tracking6D:
 
         torch.backends.cudnn.benchmark = True
         if type(bbox0) is dict:
-            self.tracker = PrecomputedTracker(self.config.image_downsample,
-                                              self.config.max_width, bbox0)
+            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
         else:
             if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
                 self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
