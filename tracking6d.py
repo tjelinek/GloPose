@@ -241,6 +241,9 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.loss_function = None
+        self.optimizer_positional_parameters = None
+        self.optimizer_non_positional_parameters = None
         self.feat = None
         self.feat_rgb = None
         self.net = None
@@ -318,14 +321,7 @@ class Tracking6D:
 
         self.encoder.train()
 
-        all_parameters = set(list(self.encoder.parameters()))
-        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
-        non_positional_params = all_parameters - positional_params
-
-        self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
-        self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
-
-        self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
+        self.initialize_optimizer_and_loss(ivertices)
 
         if self.config.features == 'deep':
             self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.shape)
@@ -334,10 +330,19 @@ class Tracking6D:
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
-        self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images, segments)
+        self.initialize_keyframes(flow_segment_masks, images, images_feat, observed_flows, prev_images=images.clone(),
+                                  segments=segments)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_optimizer_and_loss(self, ivertices):
+        all_parameters = set(list(self.encoder.parameters()))
+        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
+        non_positional_params = all_parameters - positional_params
+        self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
+        self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
+        self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
     def initialize_feature_extractor(self):
         if self.config.features == 'deep':
