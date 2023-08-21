@@ -79,8 +79,7 @@ class BaseTracker(ABC):
         # Implement this method or replace with the actual logic
         pass
 
-    def process_segm(self, segm_path):
-        img = imread(segm_path)
+    def process_segm(self, img):
         segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
         width = int(self.shape[1] * self.perc)
         height = int(self.shape[0] * self.perc)
@@ -145,33 +144,45 @@ class PrecomputedTracker(BaseTracker):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, perc, max_width, baseline_dict, gt_encoder, gt_rotations, gt_translations):
+    def __init__(self, perc, max_width, tracking6d, gt_rotations, gt_translations):
         super().__init__(perc, max_width)
-        self.gt_encoder = gt_encoder
+        self.tracking6d = tracking6d
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
 
-    def next(self, file):
-        pass
-        # if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
-        #     # If we have GT logs available, get directly the desired segmentations
-        #     encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes,
-        #                                                                                        flow_frames,
-        #                                                                                        encoder_type='gt_encoder')
-        #
-        #     observed_flows = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-        #     observed_flows = observed_flows.detach()
-        #     observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
-        #     observed_flows = self.normalize_rendered_flows(observed_flows)
-        #
-        #     renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
-        #                              self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
-        #
-        #     input_images = renders[0, :, :, :-1, ...].detach()
-        #     segment = renders[0, :, :, -1:, ...].detach()
-        #     segment_np = segment.cpu().numpy()[0, 0].transpose(1, 2, 0)
-        #     segment = compute_segments_dist(segment_np, segment.shape[-1], segment.shape[-2])
-        #     segments = segment[None].cuda()
+    def next(self, frame_id):
+        keyframes = [frame_id]
+        flow_frames = [frame_id]
+
+        encoder_result, _ = self.tracking6d.traframes_and_flow_frames_inference(keyframes, flow_frames,
+                                                                                encoder_type='gt_encoder')
+
+        renders = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
+                                            encoder_result.vertices,
+                                            self.tracking6d.gt_encoder.face_features, encoder_result.texture_maps,
+                                            encoder_result.lights)
+
+        input_images = renders[0, :, :, :-1, ...].detach()
+        segment = renders[0, :, :, -1:, ...].detach()
+        segment_np = segment.cpu().numpy()[0, 0].transpose(1, 2, 0)
+        segment = compute_segments_dist(segment_np, segment)
+        segments = segment[None].cuda()
+
+        return input_images, segments
+
+    def next_flow(self, keyframe):
+        keyframes = [keyframe]
+        flow_frames = [keyframe]
+
+        encoder_result, enc_flow = self.tracking6d.traframes_and_flow_frames_inference(keyframes, flow_frames,
+                                                                                       encoder_type='gt_encoder')
+
+        observed_flows = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow)
+        observed_flows = observed_flows.detach()
+        observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
+        observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)
+
+        return observed_flows
 
 
 class MyTracker(BaseTracker):

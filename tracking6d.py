@@ -281,9 +281,8 @@ class Tracking6D:
                                               self.config.max_width, bbox0)
         else:
             if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
-                self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width,
-                                                              bbox0, self.gt_encoder, self.gt_rotations,
-                                                              self.gt_translations)
+                self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
+                                                              self.gt_rotations, self.gt_translations)
             if self.config.tracker_type == 'csrt':
                 self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
             elif self.config.tracker_type == 'ostrack':
