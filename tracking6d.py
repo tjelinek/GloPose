@@ -241,6 +241,9 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
+        self.feat = None
+        self.feat_rgb = None
+        self.net = None
         self.faces = None
         self.gt_mesh_prototype = None
         self.rgb_loss_function = None
@@ -252,6 +255,8 @@ class Tracking6D:
         self.recently_flushed_keyframes = None
         self.write_results = None
         self.gt_texture = None
+        self.gt_rotations = None
+        self.gt_translations = None
         self.write_folder = Path(write_folder)
 
         self.config = TrackerConfig(**config)
@@ -261,9 +266,8 @@ class Tracking6D:
 
         iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
+        self.initialize_feature_extractor()
 
-        self.gt_rotations = None
-        self.gt_translations = None
         if self.config.gt_tracking_log is not None:
             _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_tracking_log)
             self.gt_rotations = gt_rotations.to(self.device)
@@ -283,12 +287,7 @@ class Tracking6D:
                 self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
             else:  # d3s
                 self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
-        if self.config.features == 'deep':
-            self.net = S2DNet(device=device, checkpoint_path=g_ext_folder).to(device)
-            self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
-            self.feat_rgb = lambda x: x
-        else:
-            self.feat = lambda x: x
+
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
         prev_images = images.clone()[None].to(self.device)
         self.prev_segments = segments.clone()[None].to(self.device)
@@ -339,6 +338,14 @@ class Tracking6D:
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_feature_extractor(self):
+        if self.config.features == 'deep':
+            self.net = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
+            self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
+            self.feat_rgb = lambda x: x
+        else:
+            self.feat = lambda x: x
 
     def initialize_mesh(self):
         if self.config.gt_texture is not None and self.config.use_gt:
