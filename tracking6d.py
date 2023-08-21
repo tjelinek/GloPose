@@ -10,6 +10,7 @@ import os
 import time
 import torch
 import torchvision.transforms as transforms
+from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion, quaternion_to_angle_axis
 from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
@@ -28,7 +29,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
-from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox
+from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
 from utils import consecutive_quaternions_angular_difference, rad_to_deg, deg_to_rad, normalize_vertices
 
 
@@ -286,9 +287,6 @@ class Tracking6D:
         if type(bbox0) is dict:
             self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
         else:
-            if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
-                self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
-                                                              self.gt_rotations, self.gt_translations)
             if self.config.tracker_type == 'csrt':
                 self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
             elif self.config.tracker_type == 'ostrack':
@@ -301,7 +299,11 @@ class Tracking6D:
         num_channels = images_feat.shape[2]
         self.initialize_renderer_and_encoder(iface_features, ivertices, num_channels)
 
-        self.encoder.train()
+        if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
+            self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
+                                                          self.gt_rotations, self.gt_translations)
+            # Re-render the images using the synthetic tracker
+            images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         self.initialize_optimizer_and_loss(ivertices)
 
@@ -323,8 +325,8 @@ class Tracking6D:
         self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                num_channels).to(self.device)
         # Encoder for inferring the GT flow, and so on
-        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
-                                  num_channels).to(self.device)
+        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features,
+                                  self.shape[-1], self.shape[-2], 3).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
                 param.detach_()
@@ -336,6 +338,8 @@ class Tracking6D:
         self.encoder.train()
 
     def get_initial_images(self, file0, bbox0, init_mask):
+        if type(self.tracker) is SyntheticDataGeneratingTracker:
+            file0 = 0
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
         images, segments = images[None].to(self.device), segments[None].to(self.device)
         images_feat = self.feat(images).detach()
@@ -446,7 +450,7 @@ class Tracking6D:
         b0 = None
         for stepi in range(1, self.config.input_frames):
 
-            image_raw, segment = self.tracker.next(files[stepi])
+            image_raw, segment = self.tracker.next(stepi if self.config.use_gt else files[stepi])
 
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
             if b0 is not None:

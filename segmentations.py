@@ -32,9 +32,16 @@ def compute_segments(segment, image, width, height):
 
 
 def compute_segments_dist(segment_resized, segment_orig_torch):
+    """
+
+    :param segment_resized: np.ndarray of shape [1, H, W]
+    :param segment_orig_torch: torch.Tensor of shape [1, H, W]
+    :return: Segmentation of shape [1, 2, H, W], where the 1st dimension contains distance to the background in pixels
+             and 2nd the segmentation mask as a floating point number in [0.0, 1.0].
+    """
     euclid_distance_to_background = ndimage.distance_transform_edt(1 - segment_resized)
-    distance_tensor = transforms.ToTensor()(euclid_distance_to_background).unsqueeze(0)
-    segments = torch.cat((distance_tensor, segment_orig_torch), 1)
+    distance_tensor = torch.from_numpy(euclid_distance_to_background)
+    segments = torch.cat((distance_tensor[None], segment_orig_torch[None]), 1)
     return segments
 
 
@@ -95,8 +102,8 @@ class BaseTracker(ABC):
 
         segment = (segment > 0).astype(np.float64)
         segment_resized = cv2.resize(segment, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
-        segment_orig_torch = transforms.ToTensor()(segment).unsqueeze(0)
-        segments = compute_segments_dist(segment_resized, segment_orig_torch)
+        segment_orig_torch = transforms.ToTensor()(segment)
+        segments = compute_segments_dist(segment_resized[None], segment_orig_torch)
         return image, segments
 
 
@@ -149,6 +156,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.tracking6d = tracking6d
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
+        self.shape = (self.tracking6d.rendering.width, self.tracking6d.rendering.height, 3)
 
     def next(self, frame_id):
         keyframes = [frame_id]
@@ -162,12 +170,11 @@ class SyntheticDataGeneratingTracker(BaseTracker):
                                             self.tracking6d.gt_encoder.face_features, encoder_result.texture_maps,
                                             encoder_result.lights)
 
-        input_images = renders[0, :, :, :-1, ...].detach()
-        segment = renders[0, :, :, -1:, ...].detach()
-        segment_np = segment.cpu().numpy()[0, 0].transpose(1, 2, 0)
-        segment = compute_segments_dist(segment_np, segment)
-        segments = segment[None].cuda()
-
+        input_images = renders[0, 0, :, :-1, ...].detach()
+        segment = renders[:, 0, 0, -1, ...].detach().cpu()
+        segment_np = segment.cpu().numpy()
+        segments = compute_segments_dist(segment_np, segment)
+        segments = segments.cuda()
         return input_images, segments
 
     def next_flow(self, keyframe):
@@ -183,6 +190,14 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)
 
         return observed_flows
+
+    def init_bbox(self, file0, bbox0, init_mask=None):
+        image, segments = self.next(file0)
+
+        segments = pad_image(segments)
+        image = pad_image(image)
+
+        return image, segments, self.perc
 
 
 class MyTracker(BaseTracker):
