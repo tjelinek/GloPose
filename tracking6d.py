@@ -257,8 +257,10 @@ class Tracking6D:
         self.gt_texture = None
         self.gt_rotations = None
         self.gt_translations = None
-        self.write_folder = Path(write_folder)
+        self.last_encoder_result = None
+        self.last_encoder_result_rgb = None
 
+        self.write_folder = Path(write_folder)
         self.config = TrackerConfig(**config)
         self.config.fmo_steps = 1
         self.config_copy = copy.deepcopy(self.config)
@@ -296,8 +298,6 @@ class Tracking6D:
         flow_segment_masks = segments * 0
 
         images_feat = self.feat(images).detach()
-        self.last_encoder_result = None
-        self.last_encoder_result_rgb = None
 
         self.shape = segments.shape
 
