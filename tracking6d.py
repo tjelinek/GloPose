@@ -290,9 +290,10 @@ class Tracking6D:
                 self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
 
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
-        prev_images = images.clone()[None].to(self.device)
-        self.prev_segments = segments.clone()[None].to(self.device)
         images, segments = images[None].to(self.device), segments[None].to(self.device)
+        images_feat = self.feat(images).detach()
+        self.shape = segments.shape
+
         observed_flows = segments * 0
         flow_segment_masks = segments * 0
 
