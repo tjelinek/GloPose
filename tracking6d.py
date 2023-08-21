@@ -304,11 +304,6 @@ class Tracking6D:
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                images_feat.shape[2]).to(self.device)
-
-        all_parameters = set(list(self.encoder.parameters()))
-        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
-        non_positional_params = all_parameters - positional_params
-
         # Encoder for inferring the GT flow, and so on
         self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                   images_feat.shape[2]).to(self.device)
@@ -321,10 +316,15 @@ class Tracking6D:
         if self.gt_translations is not None:
             self.gt_encoder.translation[...] = self.gt_translations
 
+        self.encoder.train()
+
+        all_parameters = set(list(self.encoder.parameters()))
+        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
+        non_positional_params = all_parameters - positional_params
+
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
 
-        self.encoder.train()
         self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
         if self.config.features == 'deep':
