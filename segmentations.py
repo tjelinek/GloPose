@@ -124,15 +124,6 @@ class PrecomputedTracker(BaseTracker):
 
         return image, segments
 
-    def process_segm(self, segm_path):
-        img = (imread(segm_path) * 255).astype('uint8')
-        segment = cv2.resize(img, self.shape[1::-1], interpolation=cv2.INTER_NEAREST)  # .astype(np.float64)
-        width = int(self.shape[1] * self.perc)
-        height = int(self.shape[0] * self.perc)
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-        segm = transforms.ToTensor()(segment)
-        return segm
-
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
 
