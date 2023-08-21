@@ -306,8 +306,7 @@ class Tracking6D:
         self.last_encoder_result = None
         self.last_encoder_result_rgb = None
 
-        shape = segments.shape
-        self.shape = shape
+        self.shape = segments.shape
         prot = self.config.shapes[0]
 
         if self.config.use_gt:
@@ -328,8 +327,8 @@ class Tracking6D:
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
         self.faces = faces
-        self.rendering = RenderingKaolin(self.config, self.faces, shape[-1], shape[-2]).to(self.device)
-        self.encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
+        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
+        self.encoder = Encoder(self.config, ivertices, faces, iface_features, self.shape[-1], self.shape[-2],
                                images_feat.shape[2]).to(self.device)
 
         all_parameters = set(list(self.encoder.parameters()))
@@ -337,7 +336,7 @@ class Tracking6D:
         non_positional_params = all_parameters - positional_params
 
         # Encoder for inferring the GT flow, and so on
-        self.gt_encoder = Encoder(self.config, ivertices, faces, iface_features, shape[-1], shape[-2],
+        self.gt_encoder = Encoder(self.config, ivertices, faces, iface_features, self.shape[-1], self.shape[-2],
                                   images_feat.shape[2]).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
@@ -355,7 +354,7 @@ class Tracking6D:
         self.loss_function = FMOLoss(self.config, ivertices, faces).to(self.device)
 
         if self.config.features == 'deep':
-            self.initialize_rgb_encoder(faces, iface_features, ivertices, shape)
+            self.initialize_rgb_encoder(faces, iface_features, ivertices, self.shape)
 
         self.best_model = {"value": 100,
                            "face_features": self.encoder.face_features.detach().clone(),
