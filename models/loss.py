@@ -104,6 +104,8 @@ class FMOLoss(nn.Module):
                 flow_from_tracking_tmp = flow_from_tracking_tmp * flow_segment_masks_binary_2_channels
                 flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
+            flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
+
             observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
             observed_flow_clone = observed_flow_clone * flow_segment_masks_binary_2_channels[None]
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
@@ -113,13 +115,6 @@ class FMOLoss(nn.Module):
                                                                            self.config.flow_sgd_n_samples)
 
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
-
-            # observed_flow_clone[..., 0] *= observed_flow_clone.shape[-2]
-            # observed_flow_clone[..., 1] *= observed_flow_clone.shape[-3]
-
-            flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
-            # flow_from_tracking_clone[..., 0] *= flow_from_tracking_clone.shape[-2]
-            # flow_from_tracking_clone[..., 1] *= flow_from_tracking_clone.shape[-3]
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
