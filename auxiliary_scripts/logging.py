@@ -411,8 +411,8 @@ class WriteResults:
 
     @staticmethod
     def render_silhouette_overlap(last_rendered_silhouette, last_segment_mask, stepi, tracking6d):
-        last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0
-        last_segment_mask_binary = last_segment_mask[0] > 0
+        last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0.5
+        last_segment_mask_binary = last_segment_mask[0] > 0.5
         silh_overlap_image = torch.zeros(1, *last_segment_mask.shape[-2:], 3)
         R = torch.tensor([255.0, 0, 0])
         G = torch.tensor([0, 255.0, 0])

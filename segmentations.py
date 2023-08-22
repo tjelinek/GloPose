@@ -100,7 +100,7 @@ class BaseTracker(ABC):
         new_height = int(image.shape[0] * self.perc)
         image = resize_and_filter_image(image, new_width, new_height)
 
-        segment = (segment > 0).astype(np.float64)
+        segment = (segment > 0.5).astype(np.float64)
         segment_resized = cv2.resize(segment, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
         segment_orig_torch = transforms.ToTensor()(segment)
         segments = compute_segments_dist(segment_resized[None], segment_orig_torch)
