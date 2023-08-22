@@ -231,6 +231,8 @@ class WriteResults:
                     gt_segm = last_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
+                elif tracking6d.config.use_gt:
+                    gt_segm = last_segment[0, 0, -1]
                 elif stepi in bboxes:
                     img = imread(bboxes[stepi])
                     gt_segm = tracking6d.tracker.process_segm(img)[0].to(tracking6d.device)
@@ -530,7 +532,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
 
         # Save rendered images
         imageio.imwrite(rendering_1_path, previous_rendered_image_np)
-        imageio.imwrite(rendering_2_path, current_rendered_image_np)
+        # imageio.imwrite(rendering_2_path, current_rendered_image_np)
 
         # Clone theoretical flow and adjust coordinates
         adjusted_theoretical_flow = theoretical_flow.clone().detach()

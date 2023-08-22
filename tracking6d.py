@@ -562,9 +562,15 @@ class Tracking6D:
                                                :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
                                                self.all_keyframes.keyframes, stepi)
 
-                    self.write_results.write_results(self, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
-                                                     self.all_keyframes.segments, self.all_keyframes.images,
-                                                     self.all_keyframes.images_feat, tex, frame_result.frame_losses)
+                    self.write_results.write_results(self, b0=b0,
+                                                     bboxes=bboxes, our_losses=our_losses,
+                                                     silh_losses=silh_losses, stepi=stepi,
+                                                     encoder_result=encoder_result,
+                                                     ground_truth_segments=self.all_keyframes.segments,
+                                                     images=self.all_keyframes.images,
+                                                     images_feat=self.all_keyframes.images_feat,
+                                                     tex=tex,
+                                                     frame_losses=frame_result.frame_losses)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None
