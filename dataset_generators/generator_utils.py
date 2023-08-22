@@ -162,6 +162,18 @@ def generate_circular_translation(steps=72):
     return result
 
 
+def generate_translation_that_is_off(steps=72):
+    step = (steps - 1) / 360.0
+    x = np.linspace(0, (steps - 1) * step, steps) * 0
+    translations_x = np.cos(x)
+    translations_y = np.sin(x)
+    translations_z = np.zeros(translations_x.shape)
+
+    result_tuples = list(zip(translations_x, translations_y, translations_z))
+    result = [torch.Tensor(t) for t in result_tuples]
+    return result
+
+
 def generate_rotating_and_translating_textured_object(config, prototype_path, texture_path: Path,
                                                       rendering_destination: Path, segmentation_destination: Path,
                                                       optical_flow_destination, gt_tracking_log_file, width, height,
@@ -243,7 +255,7 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             prev_encoder_result = current_encoder_result
 
         with torch.no_grad():
-            log_rows.append([frame_i, rotation_x, rotation_y, rotation_z, 0, 0, 0])
+            log_rows.append([frame_i, rotation_x, rotation_y, rotation_z] + current_translation[0, 0, 0].tolist())
             rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
                                                                vertices)
 

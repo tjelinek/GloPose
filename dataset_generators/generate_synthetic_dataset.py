@@ -6,7 +6,8 @@ from pathlib import Path
 
 from dataset_generators.generator_utils import setup_renderer, \
     generate_rotating_and_translating_textured_object, render_object_poses, generate_rotations_y, generate_rotations_xy, \
-    generate_zero_rotations, generate_sinusoidal_translations, generate_circular_translation
+    generate_zero_rotations, generate_sinusoidal_translations, generate_circular_translation, \
+    generate_translation_that_is_off, generate_rotations_x
 from main_settings import dataset_folder
 from utils import load_config
 
@@ -124,13 +125,11 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
 
 
 def generate_translations_for_obj(obj_name, synthetic_dataset_folder, rendering_dir, segmentation_dir,
-                                  optical_flow_dir, gt_tracking_log_dir, steps, translations):
+                                  optical_flow_dir, gt_tracking_log_dir, steps, translations, rots):
     rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
     segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
     optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
     gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path('gt_tracking_log.csv')
-
-    rots = generate_zero_rotations(steps=steps)
 
     generate_textured_sphere(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file,
                              rots, translations=translations)
@@ -179,7 +178,7 @@ if __name__ == '__main__':
     gt_tracking_log_dir = Path('gt_tracking_log')
 
     generate_rotating_objects()
-
+    #
     # Generate translating spheres
     steps = 72
     translations = generate_sinusoidal_translations(steps=steps)
@@ -189,3 +188,18 @@ if __name__ == '__main__':
     translations = generate_circular_translation(steps=steps)
     generate_translations_for_obj('Circulating_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations)
+
+    translations = generate_translation_that_is_off(steps=steps)
+    generate_translations_for_obj('Off_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
+                                  segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
+                                  rots=generate_zero_rotations(steps=steps))
+
+    translations = generate_translation_that_is_off(steps=steps)
+    generate_translations_for_obj('Off_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
+                                  segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
+                                  rots=generate_zero_rotations(steps=steps))
+
+    translations = generate_translation_that_is_off(steps=73)
+    generate_translations_for_obj('Off_Rotating_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
+                                  segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
+                                  rots=generate_rotations_x(step=5))
