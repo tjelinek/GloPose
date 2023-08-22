@@ -365,28 +365,6 @@ def segment_d3s_vot(files, bboxes):
     return input_batch, hs_frames
 
 
-def segment_given(files, segms, perc=0.1):
-    input_batch = torch.Tensor([])
-    segments = torch.Tensor([])
-    for ind, fl in enumerate(files):
-        image = imread(fl) * 255
-        segment = (imread(segms[ind]) > 0.5).astype(np.float64)[:, :, 0]
-
-        width = int(image.shape[1] * perc)
-        height = int(image.shape[0] * perc)
-        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_LINEAR) > 0.05
-
-        image_tensor = transforms.ToTensor()(image / 255.0)
-        segment_one = torch.cat((image_tensor.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
-
-        input_batch_one = torch.cat((image_tensor, 0 * image_tensor.clone()), 0).unsqueeze(0).float()
-        input_batch = torch.cat((input_batch, input_batch_one), 0)
-        segments = torch.cat((segments, segment_one), 0)
-    return input_batch, segments
-
-
 def get_length(cdtb_folder, seqs):
     lens = np.zeros(seqs.shape, dtype=int)
     for ki in range(seqs.shape[0]):
