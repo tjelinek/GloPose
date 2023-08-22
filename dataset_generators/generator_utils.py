@@ -150,6 +150,18 @@ def generate_sinusoidal_translations(steps=72):
     return result
 
 
+def generate_circular_translation(steps=72):
+    step = (steps - 1) / 360.0
+    x = np.linspace(0, (steps - 1) * step, steps)
+    translations_x = np.cos(x) * 0.5
+    translations_y = np.sin(x) * 0.5
+    translations_z = np.zeros(translations_x.shape)
+
+    result_tuples = list(zip(translations_x, translations_y, translations_z))
+    result = [torch.Tensor(t) for t in result_tuples]
+    return result
+
+
 def generate_rotating_and_translating_textured_object(config, prototype_path, texture_path: Path,
                                                       rendering_destination: Path, segmentation_destination: Path,
                                                       optical_flow_destination, gt_tracking_log_file, width, height,
