@@ -97,6 +97,17 @@ class FMOLoss(nn.Module):
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
             observed_flow_segmentation = observed_flow_segmentation[0, :, -1:]  # Shape (N, 1, H, W)
+            rendered_flow_segmentation = rendered_flow_segmentation[0]  # Shape (N, 1, H, W)
+
+            # Todo think about filtering by threshold 0.5 first
+            observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0).to(
+                observed_flow_segmentation.dtype)
+            observed_and_rendered_flow_segmentation = (observed_flow_segmentation * rendered_flow_segmentation > 0).to(
+                observed_flow_segmentation.dtype)
+            not_observed_rendered_flow_segmentation = (rendered_flow_segmentation - observed_flow_segmentation > 0).to(
+                observed_flow_segmentation.dtype)
+            observed_or_rendered_flow_segmentation = (rendered_flow_segmentation + observed_flow_segmentation > 0).to(
+                observed_flow_segmentation.dtype)
 
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
@@ -107,33 +118,29 @@ class FMOLoss(nn.Module):
                 flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, observed_flow_segmentation)
                 rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
-            # Shape (N, 2, H, W)
-            ground_truth_flow_silhouette_2_channels = observed_flow_segmentation.repeat(1, 2, 1, 1)
-            ground_truth_flow_silhouette_binary_2_channels = ground_truth_flow_silhouette_2_channels > 0
-            flow_segment_masks_binary: torch.Tensor = ground_truth_flow_silhouette_2_channels[:, 1] > 0
-
-            flow_from_tracking_silhouette = torch.linalg.vector_norm(rendered_flow, dim=-1, ord=2)
-
             flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, H, W, 2)
 
             observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             if self.config.flow_sgd:
-                flow_segment_masks_binary = random_points_from_binary_mask(flow_segment_masks_binary,
-                                                                           self.config.flow_sgd_n_samples)
+                observed_or_rendered_flow_segmentation = \
+                random_points_from_binary_mask(observed_or_rendered_flow_segmentation[:, 0],
+                                               self.config.flow_sgd_n_samples)[None]
 
-            object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
-            image_area = flow_segment_masks_binary.numel()
+            # object_areas = torch.count_nonzero(observed_or_rendered_flow_segmentation, dim=(1, 2))
+            image_area = rendered_images.shape[-2:].numel()
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
             end_point_error_magnitude = torch.norm(end_point_error, dim=-1, p=2)
-            end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
-            per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
-                                              end_point_error_sqrt)
+            # end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
+            # per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
+            #                                   end_point_error_sqrt)
+            per_pixel_flow_loss = end_point_error_magnitude
 
-            per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / (object_areas + 1)
+            breakpoint()
+            per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
             flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
