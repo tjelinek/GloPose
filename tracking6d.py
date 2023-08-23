@@ -878,7 +878,6 @@ class Tracking6D:
         joined_frames = sorted(set(keyframes + flow_frames))
         not_optimized_frames = set(flow_frames) - set(keyframes)
         optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
-        # TODO pass this directly to the encoder as opt_frames instead of using not_optimized_frames
 
         joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
 
