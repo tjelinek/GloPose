@@ -14,29 +14,35 @@ class FMOLoss(nn.Module):
         if self.config.loss_laplacian_weight > 0:
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
-    def forward(self, rendered_images, segmented_silhouette, observed_images, current_encoder_result: EncoderResult,
-                observed_flow, observed_flow_segmentation, flow_from_tracking, prev_encoder_result: EncoderResult):
+    def forward(self,
+                rendered_images, observed_images,
+                rendered_silhouettes, observed_silhouettes,
+                rendered_flow, observed_flow,
+                observed_flow_segmentation, rendered_flow_segmentation,
+                keyframes_encoder_result, last_keyframes_encoder_result):
         """
         Forward pass of the model.
 
         Args:
             rendered_images (torch.Tensor): Rendered images.
-            segmented_silhouette (torch.Tensor): Segment masks.
             observed_images (torch.Tensor): Input batch of images.
-            current_encoder_result (EncoderResult): Encoder result for the current frame.
+            rendered_silhouettes (torch.Tensor): Rendered silhouettes (segmentation masks from rendered images).
+            observed_silhouettes (torch.Tensor): Observed silhouettes (segmentation masks from input images).
+            rendered_flow (torch.Tensor): Flow obtained from the tracking results.
             observed_flow (torch.Tensor): Observed flow between frames.
-            observed_flow_segmentation (torch.Tensor): Flow masks.
-            flow_from_tracking (torch.Tensor): Flow obtained from the tracking results.
-            prev_encoder_result (EncoderResult): Encoder result for the previous frame.
+            observed_flow_segmentation (torch.Tensor): Flow masks for observed flow.
+            rendered_flow_segmentation (torch.Tensor): Flow masks for rendered flow.
+            keyframes_encoder_result (EncoderResult): Encoder result for the current frame.
+            last_keyframes_encoder_result (EncoderResult): Encoder result for the previous frame.
 
         Returns:
             tuple: A tuple containing losses_all, losses, and total loss.
 
         """
-        vertices = current_encoder_result.vertices
-        texture_maps = current_encoder_result.texture_maps
-        tdiff = current_encoder_result.translation_difference
-        qdiff = current_encoder_result.quaternion_difference
+        vertices = keyframes_encoder_result.vertices
+        texture_maps = keyframes_encoder_result.texture_maps
+        tdiff = keyframes_encoder_result.translation_difference
+        qdiff = keyframes_encoder_result.quaternion_difference
 
         losses = {}
         losses_all = {}
@@ -54,7 +60,7 @@ class FMOLoss(nn.Module):
             denom = rendered_images.shape[1]
             for frmi in range(rendered_images.shape[1]):
                 temp_loss = self.config.loss_iou_weight * fmo_loss(rendered_images[:, frmi],
-                                                                   segmented_silhouette[:, frmi, None])
+                                                                   observed_silhouettes[:, frmi, None])
                 losses_all["silh"].append(temp_loss.tolist()[0])
                 losses["silh"] = losses["silh"] + temp_loss / denom
         if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
@@ -75,7 +81,7 @@ class FMOLoss(nn.Module):
             losses["tdiff"] = self.config.loss_t_weight * tdiff[-1]
 
         if self.config.loss_dist_weight > 0:
-            dists = (segmented_silhouette[:, :, 0] * rendered_images[:, :, 0, -1])
+            dists = (observed_silhouettes[:, :, 0] * rendered_images[:, :, 0, -1])
             losses["dist"] = self.config.loss_dist_weight * (
                     dists.sum((0, 2, 3)) / rendered_images[:, :, 0, -1].sum((0, 2, 3))).mean()
 
@@ -97,16 +103,18 @@ class FMOLoss(nn.Module):
                 erosion_iterations = self.config.segmentation_mask_erosion_iters
                 observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
 
-                flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
-                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, ground_truth_flow_silhouette)
-                flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
+                flow_from_tracking_tmp = rendered_flow[0].permute(0, 3, 1, 2)
+                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, observed_flow_segmentation)
+                rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
             # Shape (N, 2, H, W)
             ground_truth_flow_silhouette_2_channels = observed_flow_segmentation.repeat(1, 2, 1, 1)
             ground_truth_flow_silhouette_binary_2_channels = ground_truth_flow_silhouette_2_channels > 0
             flow_segment_masks_binary: torch.Tensor = ground_truth_flow_silhouette_2_channels[:, 1] > 0
 
-            flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
+            flow_from_tracking_silhouette = torch.linalg.vector_norm(rendered_flow, dim=-1, ord=2)
+
+            flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, H, W, 2)
 
             observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
@@ -130,7 +138,7 @@ class FMOLoss(nn.Module):
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         if self.config.loss_texture_change_weight > 0:
-            change_in_texture = (prev_encoder_result.texture_maps - texture_maps) ** 2
+            change_in_texture = (last_keyframes_encoder_result.texture_maps - texture_maps) ** 2
             change_in_texture = change_in_texture.squeeze().permute(1, 2, 0)
             change_in_texture = change_in_texture.sum(dim=-1).flatten()
             least_changed_90_pct, _ = (-change_in_texture).topk(k=int(change_in_texture.size().numel() * 0.9))
