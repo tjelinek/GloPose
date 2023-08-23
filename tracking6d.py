@@ -714,8 +714,9 @@ class Tracking6D:
         print("Optimizing positional parameters using linear learning rate scheduling")
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
-                flow_frames, flow_segment_masks, input_images, keyframes, observed_flows, segments)
+            infer_result = self.infer_model(flow_frames, flow_segment_masks, input_images, keyframes,
+                                            observed_flows, segments, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             joint_loss = joint_loss.mean()
             self.optimizer_positional_parameters.zero_grad()
@@ -751,9 +752,9 @@ class Tracking6D:
 
         for epoch in range(epoch, self.config.iterations):
 
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = self.infer_model(
-                flow_frames, flow_segment_masks,
-                input_images, keyframes, observed_flows, segments)
+            infer_result = self.infer_model(flow_frames, flow_segment_masks, input_images, keyframes, observed_flows,
+                                            segments, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
 
@@ -835,9 +836,11 @@ class Tracking6D:
                   f'lr: {self.optimizer_positional_parameters.param_groups[0]["lr"]}')
         return model_loss
 
-    def infer_model(self, flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments):
+    def infer_model(self, flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments,
+                    encoder_type):
 
-        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames)
+        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
+                                                                                           encoder_type=encoder_type)
         renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                  self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
         theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
@@ -845,12 +848,15 @@ class Tracking6D:
         # actual image
         theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
 
-        losses_all, losses, joint_loss, per_pixel_error = self.loss_function(renders, segments, input_batch,
-                                                                             encoder_result,
-                                                                             observed_flows,
-                                                                             flow_segment_masks,
-                                                                             theoretical_flow,
-                                                                             self.last_encoder_result)
+        if encoder_type == 'rgb':
+            loss_function = self.rgb_loss_function
+        else:  # 'deep_features'
+            loss_function = self.loss_function
+
+        losses_all, losses, joint_loss, per_pixel_error = loss_function(renders, segments, input_batch,
+                                                                        encoder_result, observed_flows,
+                                                                        flow_segment_masks, theoretical_flow,
+                                                                        self.last_encoder_result)
         return encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow
 
     def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
@@ -935,19 +941,15 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
-            encoder_result, encoder_result_flow_frames = \
-                self.frames_and_flow_frames_inference(self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes,
-                                                      encoder_type='rgb')
+            infer_result = self.infer_model(flow_frames=self.all_keyframes.flow_keyframes,
+                                            flow_segment_masks=flow_segment_masks, input_batch=input_batch,
+                                            keyframes=self.all_keyframes.keyframes, observed_flows=observed_flows,
+                                            segments=segments, encoder_type='deep')
 
-            renders = self.rendering(encoder_result.translations, encoder_result.quaternions,
-                                     encoder_result.vertices, self.encoder.face_features,
-                                     encoder_result.texture_maps, encoder_result.lights)
-            theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-            losses_all, losses, jloss, _ = self.rgb_loss_function(renders, segments, input_batch, encoder_result,
-                                                                  observed_flows, flow_segment_masks, theoretical_flow,
-                                                                  self.last_encoder_result_rgb)
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
             if epoch < self.config.iterations - 1:
-                jloss = jloss.mean()
+                joint_loss = joint_loss.mean()
                 self.rgb_optimizer.zero_grad()
-                jloss.backward(retain_graph=True)
+                joint_loss.backward(retain_graph=True)
                 self.rgb_optimizer.step()
