@@ -107,7 +107,6 @@ class FMOLoss(nn.Module):
             flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
 
             observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
-            observed_flow_clone = observed_flow_clone * flow_segment_masks_binary_2_channels[None]
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             if self.config.flow_sgd:
