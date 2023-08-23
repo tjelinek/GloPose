@@ -139,7 +139,29 @@ class FMOLoss(nn.Module):
             #                                   end_point_error_sqrt)
             per_pixel_flow_loss = end_point_error_magnitude
 
-            breakpoint()
+            per_pixel_flow_loss_observed_not_rendered = per_pixel_flow_loss * observed_not_rendered_flow_segmentation
+            per_pixel_flow_loss_not_observed_rendered = per_pixel_flow_loss * not_observed_rendered_flow_segmentation
+            per_pixel_flow_loss_observed_and_rendered = per_pixel_flow_loss * observed_and_rendered_flow_segmentation
+            per_pixel_flow_loss_observed_or_rendered = per_pixel_flow_loss * observed_or_rendered_flow_segmentation
+
+            per_pixel_mean_flow_loss_observed_not_rendered = (
+                    per_pixel_flow_loss_observed_not_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            per_pixel_mean_flow_loss_not_observed_rendered = (
+                    per_pixel_flow_loss_not_observed_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            per_pixel_mean_flow_loss_observed_and_rendered = (
+                    per_pixel_flow_loss_observed_and_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            per_pixel_mean_flow_loss_observed_or_rendered = (
+                    per_pixel_flow_loss_observed_or_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+
+            losses[
+                "flow_loss_observed_not_rendered"] = per_pixel_mean_flow_loss_observed_not_rendered * self.config.loss_flow_weight
+            losses[
+                "flow_loss_not_observed_rendered"] = per_pixel_mean_flow_loss_not_observed_rendered * self.config.loss_flow_weight
+            losses[
+                "flow_loss_observed_and_rendered"] = per_pixel_mean_flow_loss_observed_and_rendered * self.config.loss_flow_weight
+            losses[
+                "flow_loss_observed_or_rendered"] = per_pixel_mean_flow_loss_observed_or_rendered * self.config.loss_flow_weight
+
             per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
             flow_loss = per_image_mean_flow.mean(dim=(1,))
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
