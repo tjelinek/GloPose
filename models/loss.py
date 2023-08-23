@@ -95,14 +95,14 @@ class FMOLoss(nn.Module):
                 erosion_iterations = self.config.segmentation_mask_erosion_iters
                 ground_truth_flow_silhouette = erode_segment_mask2(erosion_iterations, ground_truth_flow_silhouette)
 
+                flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
+                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, ground_truth_flow_silhouette)
+                flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
+
             # Shape (N, 2, H, W)
             ground_truth_flow_silhouette_2_channels = ground_truth_flow_silhouette.repeat(1, 2, 1, 1)
             ground_truth_flow_silhouette_binary_2_channels = ground_truth_flow_silhouette_2_channels > 0
             flow_segment_masks_binary: torch.Tensor = ground_truth_flow_silhouette_2_channels[:, 1] > 0
-
-            if self.config.segmentation_mask_erosion_iters:
-                flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
-                flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
             flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
 
