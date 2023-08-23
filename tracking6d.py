@@ -714,8 +714,8 @@ class Tracking6D:
         print("Optimizing positional parameters using linear learning rate scheduling")
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
-            infer_result = self.infer_model(flow_frames, flow_segment_masks, input_images, keyframes,
-                                            observed_flows, segments, 'deep_features')
+            infer_result = self.infer_model(input_images, segments, observed_flows, flow_segment_masks, keyframes,
+                                            flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             joint_loss = joint_loss.mean()
@@ -752,8 +752,8 @@ class Tracking6D:
 
         for epoch in range(epoch, self.config.iterations):
 
-            infer_result = self.infer_model(flow_frames, flow_segment_masks, input_images, keyframes, observed_flows,
-                                            segments, 'deep_features')
+            infer_result = self.infer_model(input_images, segments, observed_flows, flow_segment_masks, keyframes,
+                                            flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
@@ -836,8 +836,8 @@ class Tracking6D:
                   f'lr: {self.optimizer_positional_parameters.param_groups[0]["lr"]}')
         return model_loss
 
-    def infer_model(self, flow_frames, flow_segment_masks, input_batch, keyframes, observed_flows, segments,
-                    encoder_type):
+    def infer_model(self, observed_images, observed_segmentations, observed_flows, observed_flows_segmentations,
+                    keyframes, flow_frames, encoder_type):
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type=encoder_type)
@@ -870,7 +870,7 @@ class Tracking6D:
             k + '_loss': float(v) for k, v in losses.items()
         }
         dict_tensorboard_values2 = {
-            "jloss": float(jloss),
+            "joint_loss": float(jloss),
             'loss_laplacian_weight': self.config.loss_laplacian_weight,
             'loss_tv_weight': self.config.loss_tv_weight,
             'loss_iou_weight': self.config.loss_iou_weight,
@@ -947,10 +947,11 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
 
         for epoch in range(self.config.rgb_iters):
-            infer_result = self.infer_model(flow_frames=self.all_keyframes.flow_keyframes,
-                                            flow_segment_masks=flow_segment_masks, input_batch=input_batch,
-                                            keyframes=self.all_keyframes.keyframes, observed_flows=observed_flows,
-                                            segments=segments, encoder_type='deep')
+            infer_result = self.infer_model(observed_images=input_batch, observed_segmentations=segments,
+                                            observed_flows=observed_flows,
+                                            observed_flows_segmentations=flow_segment_masks,
+                                            keyframes=self.all_keyframes.keyframes,
+                                            flow_frames=self.all_keyframes.flow_keyframes, encoder_type='deep')
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
