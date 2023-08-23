@@ -843,7 +843,8 @@ class Tracking6D:
                                                                                            encoder_type=encoder_type)
         renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                  self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
-        theoretical_flow = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+        theoretical_flow, flow_segment_mask = self.rendering.compute_theoretical_flow(encoder_result,
+                                                                                      encoder_result_flow_frames)
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the
         # actual image
         theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
@@ -853,10 +854,10 @@ class Tracking6D:
         else:  # 'deep_features'
             loss_function = self.loss_function
 
-        losses_all, losses, joint_loss, per_pixel_error = loss_function(renders, segments, input_batch,
-                                                                        encoder_result, observed_flows,
-                                                                        flow_segment_masks, theoretical_flow,
-                                                                        self.last_encoder_result)
+        losses_all, losses, joint_loss, per_pixel_error = loss_function.forward(renders, segments, input_batch,
+                                                                                encoder_result, observed_flows,
+                                                                                flow_segment_masks, theoretical_flow,
+                                                                                self.last_encoder_result)
         return encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow
 
     def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
