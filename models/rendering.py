@@ -188,9 +188,9 @@ class RenderingKaolin(nn.Module):
             rendering_masks.append(ren_mask)
 
         theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
-        # flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, H, W])
+        flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, H, W])
 
-        return theoretical_flow
+        return theoretical_flow, flow_render_mask
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:

@@ -184,7 +184,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         encoder_result, enc_flow = self.tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                     encoder_type='gt_encoder')
 
-        observed_flows = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow)
+        observed_flows, _ = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow)
         observed_flows = observed_flows.detach()
         observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
         observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)[0]
