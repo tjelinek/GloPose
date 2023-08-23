@@ -3,6 +3,7 @@ import math
 import numpy as np
 import torch
 import yaml
+from kornia.morphology import erosion
 from scipy.ndimage import center_of_mass
 from skimage.measure import label, regionprops
 from torch import Tensor
@@ -15,6 +16,22 @@ def segment2bbox(segment):
     inds = segment.nonzero(as_tuple=False)
     bbox = [int(inds[:, 1].min()), int(inds[:, 0].min()), int(inds[:, 1].max()), int(inds[:, 0].max())]
     return bbox
+
+
+def erode_segment_mask2(erosion_iterations, segment_masks):
+    """
+
+    :param erosion_iterations: int - iterations of erosion by 3x3 kernel
+    :param segment_masks: Tensor of shape (N, 1, H, W)
+    :return: Eroded segment mask of the same shape
+    """
+
+    kernel = torch.ones(3, 3).to(segment_masks.device)
+    eroded_segment_masks = segment_masks.clone()
+
+    for _ in range(erosion_iterations):
+        eroded_segment_masks = erosion(eroded_segment_masks, kernel)
+    return eroded_segment_masks
 
 
 def erode_segment_mask(erosion_iterations, segment_masks):

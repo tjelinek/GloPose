@@ -4,7 +4,7 @@ import torch
 
 from kornia.losses import total_variation
 from models.encoder import EncoderResult
-from utils import erode_segment_mask
+from utils import erode_segment_mask, erode_segment_mask2
 
 
 class FMOLoss(nn.Module):
@@ -93,7 +93,7 @@ class FMOLoss(nn.Module):
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
                 erosion_iterations = self.config.segmentation_mask_erosion_iters
-                segment_masks = erode_segment_mask(erosion_iterations, segment_masks)
+                segment_masks = erode_segment_mask2(erosion_iterations, segment_masks)
 
             flow_segment_masks = segment_masks.repeat(1, 2, 1, 1)  # Shape (N, 2, H, W)
             flow_segment_masks_binary_2_channels = flow_segment_masks > 0
