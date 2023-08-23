@@ -15,7 +15,7 @@ class FMOLoss(nn.Module):
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
     def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
-                observed_flow_mask, flow_from_tracking, prev_encoder_result: EncoderResult):
+                ground_truth_flow_silhouette, flow_from_tracking, prev_encoder_result: EncoderResult):
         """
         Forward pass of the model.
 
@@ -25,7 +25,7 @@ class FMOLoss(nn.Module):
             input_batch (torch.Tensor): Input batch of images.
             current_encoder_result (EncoderResult): Encoder result for the current frame.
             observed_flow (torch.Tensor): Observed flow between frames.
-            observed_flow_mask (torch.Tensor): Flow masks.
+            ground_truth_flow_silhouette (torch.Tensor): Flow masks.
             flow_from_tracking (torch.Tensor): Flow obtained from the tracking results.
             prev_encoder_result (EncoderResult): Encoder result for the previous frame.
 
@@ -88,16 +88,17 @@ class FMOLoss(nn.Module):
 
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
-            segment_masks = observed_flow_mask[0, :, -1:]  # Shape (N, 1, H, W)
+            ground_truth_flow_silhouette = ground_truth_flow_silhouette[0, :, -1:]  # Shape (N, 1, H, W)
 
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
                 erosion_iterations = self.config.segmentation_mask_erosion_iters
-                segment_masks = erode_segment_mask2(erosion_iterations, segment_masks)
+                ground_truth_flow_silhouette = erode_segment_mask2(erosion_iterations, ground_truth_flow_silhouette)
 
-            flow_segment_masks = segment_masks.repeat(1, 2, 1, 1)  # Shape (N, 2, H, W)
-            flow_segment_masks_binary_2_channels = flow_segment_masks > 0
-            flow_segment_masks_binary: torch.Tensor = flow_segment_masks[:, 1] > 0
+            # Shape (N, 2, H, W)
+            ground_truth_flow_silhouette_2_channels = ground_truth_flow_silhouette.repeat(1, 2, 1, 1)
+            ground_truth_flow_silhouette_binary_2_channels = ground_truth_flow_silhouette_2_channels > 0
+            flow_segment_masks_binary: torch.Tensor = ground_truth_flow_silhouette_2_channels[:, 1] > 0
 
             if self.config.segmentation_mask_erosion_iters:
                 flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
