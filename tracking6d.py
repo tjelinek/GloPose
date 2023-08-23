@@ -536,8 +536,7 @@ class Tracking6D:
                                       self.all_keyframes.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.all_keyframes.observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.all_keyframes.flow_segment_masks[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
-                                      self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes,
-                                      step_i=stepi)
+                                      self.all_keyframes.keyframes, self.all_keyframes.flow_keyframes, step_i=stepi)
 
             encoder_result = frame_result.encoder_result
 
@@ -656,7 +655,8 @@ class Tracking6D:
         renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
         return renders
 
-    def apply(self, input_images, segments, observed_flows, flow_segment_masks, keyframes, flow_frames, step_i=0):
+    def apply(self, observed_images, observed_segmentations, observed_flows, observed_flows_segmentations,
+              keyframes, flow_frames, step_i=0):
 
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
@@ -665,12 +665,12 @@ class Tracking6D:
 
         frame_losses = []
         if self.config.write_results:
-            save_image(input_images[0, :, :3], os.path.join(self.write_folder, 'im.png'),
+            save_image(observed_images[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
-            save_image(torch.cat((input_images[0, :, :3], segments[0, :, [1]]), 1),
+            save_image(torch.cat((observed_images[0, :, :3], observed_segmentations[0, :, [1]]), 1),
                        os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
             if self.config.weight_by_gradient:
-                save_image(torch.cat((segments[0, :, [0, 0, 0]], 0 * input_images[0, :, :1] + 1), 1),
+                save_image(torch.cat((observed_segmentations[0, :, [0, 0, 0]], 0 * observed_images[0, :, :1] + 1), 1),
                            os.path.join(self.write_folder, 'weights.png'))
 
         # Restore the learning rate on its prior values
@@ -714,8 +714,8 @@ class Tracking6D:
         print("Optimizing positional parameters using linear learning rate scheduling")
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
-            infer_result = self.infer_model(input_images, segments, observed_flows, flow_segment_masks, keyframes,
-                                            flow_frames, 'deep_features')
+            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             joint_loss = joint_loss.mean()
@@ -752,8 +752,8 @@ class Tracking6D:
 
         for epoch in range(epoch, self.config.iterations):
 
-            infer_result = self.infer_model(input_images, segments, observed_flows, flow_segment_masks, keyframes,
-                                            flow_frames, 'deep_features')
+            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
@@ -854,11 +854,14 @@ class Tracking6D:
         else:  # 'deep_features'
             loss_function = self.loss_function
 
-        loss_result = loss_function.forward(rendered_images=renders, observed_images=input_batch,
-                                            rendered_silhouettes=None, observed_silhouettes=segments,
+        rendered_silhouettes = renders[0, :, :, -1:]
+
+        loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
+                                            rendered_silhouettes=rendered_silhouettes,
+                                            observed_silhouettes=observed_segmentations,
                                             rendered_flow=theoretical_flow, observed_flow=observed_flows,
-                                            observed_flow_segmentation=flow_segment_masks,
-                                            rendered_flow_segmentation=None,
+                                            observed_flow_segmentation=observed_flows_segmentations,
+                                            rendered_flow_segmentation=rendered_flow_segmentation,
                                             keyframes_encoder_result=encoder_result,
                                             last_keyframes_encoder_result=self.last_encoder_result)
         losses_all, losses, joint_loss, per_pixel_error = loss_result
