@@ -314,7 +314,7 @@ class Tracking6D:
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
-        self.initialize_keyframes(flow_segment_masks=segments, images=images, images_feat=images_feat,
+        self.initialize_keyframes(flow_segment_masks=segments[:, :, -1:], images=images, images_feat=images_feat,
                                   observed_flows=observed_flows, prev_images=images.clone(), segments=segments)
 
         if self.config.verbose:
@@ -510,7 +510,7 @@ class Tracking6D:
                 self.active_keyframes.observed_flows = torch.cat((self.active_keyframes.observed_flows,
                                                                   observed_flow[None]), dim=1)
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
-                                                                      prev_segment[None]), dim=1)
+                                                                      prev_segment[None, :, -1:]), dim=1)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
@@ -845,6 +845,8 @@ class Tracking6D:
                                  self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
         flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
         theoretical_flow, rendered_flow_segmentation = flow_result
+        rendered_flow_segmentation = rendered_flow_segmentation[None]
+
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the
         # actual image
         theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
