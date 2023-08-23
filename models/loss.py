@@ -14,18 +14,18 @@ class FMOLoss(nn.Module):
         if self.config.loss_laplacian_weight > 0:
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
-    def forward(self, renders, segments, input_batch, current_encoder_result: EncoderResult, observed_flow,
-                ground_truth_flow_silhouette, flow_from_tracking, prev_encoder_result: EncoderResult):
+    def forward(self, rendered_images, segmented_silhouette, observed_images, current_encoder_result: EncoderResult,
+                observed_flow, observed_flow_segmentation, flow_from_tracking, prev_encoder_result: EncoderResult):
         """
         Forward pass of the model.
 
         Args:
-            renders (torch.Tensor): Rendered images.
-            segments (torch.Tensor): Segment masks.
-            input_batch (torch.Tensor): Input batch of images.
+            rendered_images (torch.Tensor): Rendered images.
+            segmented_silhouette (torch.Tensor): Segment masks.
+            observed_images (torch.Tensor): Input batch of images.
             current_encoder_result (EncoderResult): Encoder result for the current frame.
             observed_flow (torch.Tensor): Observed flow between frames.
-            ground_truth_flow_silhouette (torch.Tensor): Flow masks.
+            observed_flow_segmentation (torch.Tensor): Flow masks.
             flow_from_tracking (torch.Tensor): Flow obtained from the tracking results.
             prev_encoder_result (EncoderResult): Encoder result for the previous frame.
 
@@ -41,18 +41,20 @@ class FMOLoss(nn.Module):
         losses = {}
         losses_all = {}
         if self.config.loss_rgb_weight > 0:
-            modelled_renders = torch.cat((renders[:, :, :, :-1] * renders[:, :, :, -1:], renders[:, :, :, -1:]),
-                                         3).mean(2)
-            segments_our = (renders[:, :, 0, -1:] > 0).to(renders.dtype)
-            track_segm_loss, t_all = fmo_model_loss(input_batch, modelled_renders, segments_our, self.config)
+            modelled_renders = torch.cat(
+                (rendered_images[:, :, :, :-1] * rendered_images[:, :, :, -1:], rendered_images[:, :, :, -1:]),
+                3).mean(2)
+            segments_our = (rendered_images[:, :, 0, -1:] > 0).to(rendered_images.dtype)
+            track_segm_loss, t_all = fmo_model_loss(observed_images, modelled_renders, segments_our, self.config)
             losses["model"] = self.config.loss_rgb_weight * track_segm_loss
             losses_all["track_segm_loss"] = t_all
         if True or self.config.loss_iou_weight > 0:
             losses["silh"] = 0
             losses_all["silh"] = []
-            denom = renders.shape[1]
-            for frmi in range(renders.shape[1]):
-                temp_loss = self.config.loss_iou_weight * fmo_loss(renders[:, frmi], segments[:, frmi, None])
+            denom = rendered_images.shape[1]
+            for frmi in range(rendered_images.shape[1]):
+                temp_loss = self.config.loss_iou_weight * fmo_loss(rendered_images[:, frmi],
+                                                                   segmented_silhouette[:, frmi, None])
                 losses_all["silh"].append(temp_loss.tolist()[0])
                 losses["silh"] = losses["silh"] + temp_loss / denom
         if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
@@ -73,9 +75,9 @@ class FMOLoss(nn.Module):
             losses["tdiff"] = self.config.loss_t_weight * tdiff[-1]
 
         if self.config.loss_dist_weight > 0:
-            dists = (segments[:, :, 0] * renders[:, :, 0, -1])
+            dists = (segmented_silhouette[:, :, 0] * rendered_images[:, :, 0, -1])
             losses["dist"] = self.config.loss_dist_weight * (
-                    dists.sum((0, 2, 3)) / renders[:, :, 0, -1].sum((0, 2, 3))).mean()
+                    dists.sum((0, 2, 3)) / rendered_images[:, :, 0, -1].sum((0, 2, 3))).mean()
 
         if self.config.loss_tv_weight > 0:
             texture_maps_rep = torch.cat((texture_maps[:, :, -1:], texture_maps, texture_maps[:, :, :1]), 2)
@@ -88,19 +90,19 @@ class FMOLoss(nn.Module):
 
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
-            ground_truth_flow_silhouette = ground_truth_flow_silhouette[0, :, -1:]  # Shape (N, 1, H, W)
+            observed_flow_segmentation = observed_flow_segmentation[0, :, -1:]  # Shape (N, 1, H, W)
 
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
                 erosion_iterations = self.config.segmentation_mask_erosion_iters
-                ground_truth_flow_silhouette = erode_segment_mask2(erosion_iterations, ground_truth_flow_silhouette)
+                observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
 
                 flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
                 flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, ground_truth_flow_silhouette)
                 flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
             # Shape (N, 2, H, W)
-            ground_truth_flow_silhouette_2_channels = ground_truth_flow_silhouette.repeat(1, 2, 1, 1)
+            ground_truth_flow_silhouette_2_channels = observed_flow_segmentation.repeat(1, 2, 1, 1)
             ground_truth_flow_silhouette_binary_2_channels = ground_truth_flow_silhouette_2_channels > 0
             flow_segment_masks_binary: torch.Tensor = ground_truth_flow_silhouette_2_channels[:, 1] > 0
 
