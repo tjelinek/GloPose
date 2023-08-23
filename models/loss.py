@@ -101,7 +101,6 @@ class FMOLoss(nn.Module):
 
             if self.config.segmentation_mask_erosion_iters:
                 flow_from_tracking_tmp = flow_from_tracking[0].permute(0, 3, 1, 2)
-                flow_from_tracking_tmp = flow_from_tracking_tmp * flow_segment_masks_binary_2_channels
                 flow_from_tracking = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
             flow_from_tracking_clone = flow_from_tracking.clone()  # Size (1, N, H, W, 2)
@@ -115,11 +114,10 @@ class FMOLoss(nn.Module):
                                                                            self.config.flow_sgd_n_samples)
 
             object_areas = torch.count_nonzero(flow_segment_masks_binary, dim=(1, 2))
+            image_area = flow_segment_masks_binary.numel()
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
-            # end_point_error[0, :, :, :, 0] = end_point_error[0, :, :, :, 0] * flow_segment_masks_binary
-            # end_point_error[0, :, :, :, 1] = end_point_error[0, :, :, :, 1] * flow_segment_masks_binary
             end_point_error_magnitude = torch.norm(end_point_error, dim=-1, p=2)
             end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
             per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
