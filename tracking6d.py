@@ -98,6 +98,8 @@ class TrackerConfig:
     loss_t_weight: float = None
     loss_rgb_weight: float = None
     loss_flow_weight: float = None
+    loss_fl_obs_and_rend: float = None
+    loss_fl_not_obs_rend: float = None
 
     # Additional settings
     sigmainv: float = None
@@ -242,30 +244,47 @@ class Tracking6D:
                                              'per_pixel_flow_error'])
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
-        self.gt_encoder = None
+        # Encoders and related components
         self.encoder = None
+        self.gt_encoder = None
+        self.rgb_encoder = None
+        self.last_encoder_result = None
+        self.last_encoder_result_rgb = None
+
+        # Rendering and mesh related
         self.rendering = None
-        self.loss_function = None
-        self.optimizer_positional_parameters = None
-        self.optimizer_non_positional_parameters = None
-        self.feat = None
-        self.feat_rgb = None
-        self.net = None
         self.faces = None
         self.gt_mesh_prototype = None
+        self.gt_texture = None
+
+        # Features
+        self.feat = None
+        self.feat_rgb = None
+
+        # Loss functions and optimizers
+        self.loss_function = None
         self.rgb_loss_function = None
+        self.optimizer_translational_parameters = None
+        self.optimizer_rotational_parameters = None
+        self.optimizer_positional_parameters = None
+        self.optimizer_non_positional_parameters = None
         self.rgb_optimizer = None
-        self.rgb_encoder = None
+
+        # Network related
+        self.net = None
         self.model_flow = None
+
+        # Ground truth related
+        self.gt_rotations = None
+        self.gt_translations = None
+
+        # Keyframes
         self.active_keyframes = None
         self.all_keyframes = None
         self.recently_flushed_keyframes = None
+
+        # Other utilities and flags
         self.write_results = None
-        self.gt_texture = None
-        self.gt_rotations = None
-        self.gt_translations = None
-        self.last_encoder_result = None
-        self.last_encoder_result_rgb = None
 
         self.shape = tuple()
         self.write_folder = Path(write_folder)
@@ -349,10 +368,14 @@ class Tracking6D:
 
     def initialize_optimizer_and_loss(self, ivertices):
         all_parameters = set(list(self.encoder.parameters()))
-        positional_params = set([self.encoder.translation] + [self.encoder.quaternion])
+        translational_params = {self.encoder.translation}
+        rotational_params = {self.encoder.quaternion}
+        positional_params = translational_params | rotational_params
         non_positional_params = all_parameters - positional_params
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
+        self.optimizer_translational_parameters = torch.optim.SGD(translational_params, lr=self.config.learning_rate)
+        self.optimizer_rotational_parameters = torch.optim.SGD(rotational_params, lr=self.config.learning_rate)
         self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
     def initialize_feature_extractor(self):
