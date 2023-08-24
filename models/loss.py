@@ -140,7 +140,7 @@ class FMOLoss(nn.Module):
             # end_point_error_l1_norm = torch.pow(end_point_error, exponent=1).sum(dim=-1).abs()
             end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=1)
             per_pixel_flow_loss = end_point_error_l1_norm
-            end_point_error_l2_norm = torch.pow(end_point_error, exponent=2).sum(dim=-1).abs()
+            end_point_error_l2_norm = torch.norm(end_point_error, dim=-1, p=2)
 
             per_pixel_flow_loss_observed_not_rendered = (end_point_error_l2_norm *
                                                          observed_not_rendered_flow_segmentation)
