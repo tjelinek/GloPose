@@ -19,7 +19,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 
 from models.loss import fmo_loss
 from segmentations import create_mask_from_string, get_bbox, pad_image
-from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread
+from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -122,6 +122,75 @@ class WriteResults:
 
         self.tracking_log.close()
         self.metrics_log.close()
+
+    @staticmethod
+    def visualize_loss_landscape(tracking6d, encoder, observed_images, observed_segmentations, observed_flows,
+                                 observed_flows_segmentations):
+        encoder.translation[0, 0, :] *= 0
+        encoder.quaternion[0, :, 0] = 1.0
+        encoder.quaternion[0, :, 1:] *= 0
+
+        num_translations = 100
+        num_rotations = 100
+        joint_losses = np.zeros((num_translations, num_rotations))
+
+        translations_space = np.linspace(-1, 1, num=num_translations)
+        rotations_space = np.linspace(-20, 20, num=num_rotations)
+
+        for i, translation_x in enumerate(translations_space):
+            for j, rotation_y_deg in enumerate(rotations_space):
+                translation_tensor = torch.Tensor([translation_x, 0, 0]).to(encoder.translation.device)
+
+                rotation_tensor_deg = torch.Tensor([0, rotation_y_deg, 0]).to(encoder.translation.device)
+                rotation_tensor_rad = deg_to_rad(rotation_tensor_deg)
+                rotation_tensor_quaternion = angle_axis_to_quaternion(rotation_tensor_rad,
+                                                                      order=QuaternionCoeffOrder.WXYZ)
+
+                # self.gt_encoder.translation = self.gt_encoder.translation.detach()
+                # self.gt_encoder.quaternion = self.gt_encoder.quaternion.detach()
+
+                encoder.translation[0, 0, 1, :] = translation_tensor
+                encoder.quaternion[0, 1, :] = rotation_tensor_quaternion
+
+                # self.gt_encoder.translation.requires_grad_()
+                # self.gt_encoder.quaternion.requires_grad_()
+
+                inference_result = tracking6d.infer_model(observed_images=observed_images,
+                                                          observed_segmentations=observed_segmentations,
+                                                          observed_flows=observed_flows,
+                                                          observed_flows_segmentations=observed_flows_segmentations,
+                                                          keyframes=[1],
+                                                          flow_frames=[0], encoder_type='gt_encoder')
+
+                _, joint_loss, losses, losses_all, _, _, _ = inference_result
+
+                joint_losses[j, i] = joint_loss
+
+            # END FOR
+        # END FOR
+
+        grad_x, grad_y = np.gradient(joint_losses, axis=(0, 1))
+        plt.imshow(joint_losses, aspect='auto', extent=[translations_space.min(), translations_space.max(),
+                                                        rotations_space.min(), rotations_space.max()])
+        plt.colorbar(label='joint_loss')
+        plt.ylabel('rotation_y_deg')
+        plt.xlabel('translation_x')
+
+        # add markers and labels
+        plt.scatter(0, 0, color='red', marker='x', label='Start')  # cross at (0, 0)
+        plt.text(0, 0, '  Start', verticalalignment='bottom')
+        plt.scatter(0, 5, color='green', marker='x', label='Optimum')  # point at (0, 5)
+        plt.text(0, 5, '  Optimum', verticalalignment='top')
+
+        # plot the gradient vectors
+        X, Y = np.meshgrid(translations_space, rotations_space)
+        plt.quiver(X, Y, grad_x, grad_y, color='blue')
+        contours = plt.contour(X, Y, joint_losses, 20)
+        plt.clabel(contours, inline=True, fontsize=10)
+
+        plt.title('Joint Loss')
+        plt.savefig('joint_loss_plot.eps', format='eps')
+        plt.show()
 
     def set_tensorboard_log_for_frame(self, frame_i):
         self.tensorboard_log = SummaryWriter(str(self.tensorboard_log_dir / f'Frame_{frame_i}'))
