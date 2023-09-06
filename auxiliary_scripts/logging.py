@@ -124,7 +124,7 @@ class WriteResults:
         self.metrics_log.close()
 
     def visualize_loss_landscape(self, tracking6d, encoder, observed_images, observed_segmentations, observed_flows,
-                                 observed_flows_segmentations):
+                                 observed_flows_segmentations, stepi):
         # TODO make the inference faster by not querying the encoder all the time but by making a batch inference
         # TODO by the renderer
         encoder.translation[0, 0, :] *= 0
@@ -133,36 +133,13 @@ class WriteResults:
 
         num_translations = 100
         num_rotations = 100
-        joint_losses = np.zeros((num_translations, num_rotations))
 
         translations_space = np.linspace(-0.25, 0.25, num=num_translations)
         rotations_space = np.linspace(-7, 7, num=num_rotations)
 
-        for i, translation_x in enumerate(translations_space):
-            for j, rotation_y_deg in enumerate(rotations_space):
-                translation_tensor = torch.Tensor([translation_x, 0, 0]).to(encoder.translation.device)
-
-                rotation_tensor_deg = torch.Tensor([0, rotation_y_deg, 0]).to(encoder.translation.device)
-                rotation_tensor_rad = deg_to_rad(rotation_tensor_deg)
-                rotation_tensor_quaternion = angle_axis_to_quaternion(rotation_tensor_rad,
-                                                                      order=QuaternionCoeffOrder.WXYZ)
-
-                encoder.translation[0, 0, 1, :] = translation_tensor
-                encoder.quaternion[0, 1, :] = rotation_tensor_quaternion
-
-                inference_result = tracking6d.infer_model(observed_images=observed_images,
-                                                          observed_segmentations=observed_segmentations,
-                                                          observed_flows=observed_flows,
-                                                          observed_flows_segmentations=observed_flows_segmentations,
-                                                          keyframes=[1],
-                                                          flow_frames=[0], encoder_type='gt_encoder')
-
-                _, joint_loss, losses, losses_all, _, _, _ = inference_result
-
-                joint_losses[i, j] = joint_loss
-
-            # END FOR
-        # END FOR
+        joint_losses: np.ndarray = self.compute_loss_landscape(observed_flows, observed_flows_segmentations,
+                                                               observed_images, observed_segmentations, tracking6d,
+                                                               rotations_space, translations_space, stepi=stepi)
 
         plt.figure(figsize=(10, 8))
         plt.imshow(joint_losses.T,
@@ -183,10 +160,62 @@ class WriteResults:
 
         # 3) Visualize the gradient
         gradient = np.gradient(joint_losses.T)
-        plt.quiver(translations_space, rotations_space, -gradient[1], gradient[0], color='white', width=0.003)
+        # plt.quiver(translations_space, rotations_space, -gradient[1], gradient[0], color='white', width=0.003)
 
         plt.title('Joint Losses')
-        plt.savefig(tracking6d.write_folder / 'joint_loss_plot.eps', format='eps')
+        plt.savefig(tracking6d.write_folder / f'joint_loss_landscape_{stepi}.eps', format='eps')
+
+    def compute_loss_landscape(self, observed_flows, observed_flows_segmentations, observed_images,
+                               observed_segmentations, tracking6d, rotation_x_space, translation_x_space, stepi):
+
+        joint_losses = np.zeros((translation_x_space.shape[0], rotation_x_space.shape[0]))
+
+        for i, translation_x in enumerate(translation_x_space):
+            for j, rotation_y_deg in enumerate(rotation_x_space):
+                translation_tensor = torch.Tensor([translation_x, 0, 0])
+                sampled_translation = translation_tensor[None, None, None].cuda()
+
+                rotation_tensor_deg = torch.Tensor([0, rotation_y_deg, 0])
+                rotation_tensor_rad = deg_to_rad(rotation_tensor_deg)
+                rotation_tensor_quaternion = angle_axis_to_quaternion(rotation_tensor_rad,
+                                                                      order=QuaternionCoeffOrder.WXYZ)
+
+                sampled_rotation = rotation_tensor_quaternion[None, None].cuda()
+
+                encoder_result, \
+                    encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference([stepi],
+                                                                                             [stepi - 1],
+                                                                                             encoder_type='deep_features')
+
+                encoder_result = encoder_result._replace(translations=sampled_translation, quaternions=sampled_rotation)
+
+                renders = tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
+                                               encoder_result.vertices, tracking6d.encoder.face_features,
+                                               encoder_result.texture_maps, encoder_result.lights)
+
+                flow_result = tracking6d.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+                theoretical_flow, rendered_flow_segmentation = flow_result
+                rendered_flow_segmentation = rendered_flow_segmentation[None]
+                # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+                # actual image
+                theoretical_flow = tracking6d.normalize_rendered_flows(theoretical_flow)
+                loss_function = tracking6d.loss_function
+
+                rendered_silhouettes = renders[0, :, :, -1:]
+                loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
+                                                    rendered_silhouettes=rendered_silhouettes,
+                                                    observed_silhouettes=observed_segmentations,
+                                                    rendered_flow=theoretical_flow, observed_flow=observed_flows,
+                                                    observed_flow_segmentation=observed_flows_segmentations,
+                                                    rendered_flow_segmentation=rendered_flow_segmentation,
+                                                    keyframes_encoder_result=encoder_result,
+                                                    last_keyframes_encoder_result=encoder_result)
+
+                losses_all, losses, joint_loss, per_pixel_error = loss_result
+
+                joint_losses[i, j] = joint_loss
+
+        return joint_losses
 
     def set_tensorboard_log_for_frame(self, frame_i):
         self.tensorboard_log = SummaryWriter(str(self.tensorboard_log_dir / f'Frame_{frame_i}'))
