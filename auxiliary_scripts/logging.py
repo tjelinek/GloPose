@@ -149,6 +149,18 @@ class WriteResults:
         plt.xlabel('Translation (x-axis)')
         plt.ylabel('Rotation (degrees) (y-axis)')
 
+        # Set y-ticks for all integral numbers based on the range of rotations_space
+        plt.yticks(np.arange(int(rotations_space[0]), int(rotations_space[-1]) + 1, 1))
+
+        # Set x-ticks at every 0.1 step based on the range of translations_space
+        plt.xticks(np.arange(translations_space[0], translations_space[-1] + 0.1, 0.1))
+
+        # Add grid
+        plt.grid(True, which='both', linestyle='--', linewidth=0.25)
+
+        prev_iteration_x_translation = None
+        prev_iteration_y_rotation_deg = None
+
         # TODO add more axes than x, y axis
         for i in range(len(tracking6d.logged_sgd_translations)):
             iteration_x_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, 0].detach().cpu()
@@ -159,17 +171,23 @@ class WriteResults:
 
             if i == 0:
                 plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='white', marker='x', label='Start')
-                plt.text(iteration_x_translation, iteration_y_rotation_deg, '  Start', verticalalignment='bottom',
+                plt.text(iteration_x_translation, iteration_y_rotation_deg, 'Start', verticalalignment='bottom',
                          color='white')
             elif i == len(tracking6d.logged_sgd_translations) - 1:
                 plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='yellow', marker='x', label='End')
-                plt.text(iteration_x_translation, iteration_y_rotation_deg, '  End', verticalalignment='bottom',
+                plt.text(iteration_x_translation, iteration_y_rotation_deg, 'End', verticalalignment='bottom',
                          color='yellow')
             else:
-                plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='orange', marker='x')
+                plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='orange', marker='.', label=str(i))
+                plt.plot([prev_iteration_x_translation, iteration_x_translation],
+                         [prev_iteration_y_rotation_deg, iteration_y_rotation_deg], color='yellow', linewidth=0.1,
+                         linestyle='dotted')
 
-        plt.scatter(gt_translation[0], gt_rotation_deg[1], color='green', marker='x', label='Optimum')
-        plt.text(gt_translation[0], gt_rotation_deg[1], '  Optimum', verticalalignment='top', color='green')
+            prev_iteration_x_translation = iteration_x_translation
+            prev_iteration_y_rotation_deg = iteration_y_rotation_deg
+
+        plt.scatter(gt_translation[0], gt_rotation_deg[1], color='green', marker='x', label='GT')
+        plt.text(gt_translation[0], gt_rotation_deg[1], 'GT', verticalalignment='top', color='green')
 
         # 2) Show contours of the values
         contours = plt.contour(translations_space, rotations_space, joint_losses.T, levels=20)
