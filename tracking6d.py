@@ -779,7 +779,7 @@ class Tracking6D:
                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
+            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
             if model_losses_exponential_decay is None:
                 model_losses_exponential_decay = model_loss
@@ -842,7 +842,10 @@ class Tracking6D:
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
 
-    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses):
+    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result):
+
+        self.logged_sgd_translations.append(encoder_result.translations)
+        self.logged_sgd_quaternions.append(encoder_result.quaternions)
 
         frame_losses.append(float(joint_loss))
         self.write_into_tensorboard_logs(joint_loss, losses, epoch)
