@@ -46,6 +46,7 @@ class TrackerConfig:
     verbose: bool = True
     write_results: bool = True
     write_intermediate: bool = True
+    visualize_loss_landscape: bool = True
     render_just_bounding_box: bool = False
     training_print_status_frequency = 1
 
@@ -73,11 +74,15 @@ class TrackerConfig:
     max_width: int = None
     image_downsample: float = None
 
+    # Learning rates
+    learning_rate: float = None
+    quaternion_learning_rate_coef: float = 1.0
+    translation_learning_rate_coef: float = 1.0
+
     # Tracking settings
     tran_init: float = None
     rot_init: List[float] = None
     inc_step: float = None
-    learning_rate: float = None
     iterations: int = None
     stop_value: float = None
     rgb_iters: int = None
@@ -376,6 +381,14 @@ class Tracking6D:
         rotational_params = {self.encoder.quaternion}
         positional_params = translational_params | rotational_params
         non_positional_params = all_parameters - positional_params
+        positional_params = [
+            {'params': list(rotational_params),
+             'lr': self.config.learning_rate * self.config.quaternion_learning_rate_coef,
+             'name': 'rots'},
+            {'params': list(translational_params),
+             'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
+             'name': 'trans'},
+        ]
         self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
         self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
         self.optimizer_translational_parameters = torch.optim.SGD(translational_params, lr=self.config.learning_rate)
@@ -885,8 +898,9 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
-                                                    observed_flows, observed_flows_segmentations, step_i)
+        if self.config.visualize_loss_landscape:
+            self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
+                                                        observed_flows, observed_flows_segmentations, step_i)
 
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
@@ -907,6 +921,10 @@ class Tracking6D:
             param_group['lr'] = self.config.learning_rate
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
+            if param_group['name'] == 'rots':
+                param_group['lr'] *= self.config.quaternion_learning_rate_coef
+            elif param_group['name'] == 'trans':
+                param_group['lr'] *= self.config.translation_learning_rate_coef
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result):
 
