@@ -169,14 +169,17 @@ class FMOLoss(nn.Module):
             losses["fl_obs_or_rend"] = (per_pixel_mean_flow_loss_observed_or_rendered *
                                         self.config.loss_flow_weight)
 
-            losses["flow_loss"] = (per_pixel_mean_flow_loss_not_observed_rendered *
-                                   self.config.loss_fl_not_obs_rend_weight +
-                                   per_pixel_mean_flow_loss_observed_and_rendered *
-                                   self.config.loss_fl_obs_and_rend_weight)
+            if self.config.alternate_rotation_and_translation_optimization:
+                losses["flow_loss"] = (per_pixel_mean_flow_loss_not_observed_rendered *
+                                       self.config.loss_fl_not_obs_rend_weight +
+                                       per_pixel_mean_flow_loss_observed_and_rendered *
+                                       self.config.loss_fl_obs_and_rend_weight)
 
-            per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
-            flow_loss = per_image_mean_flow.mean(dim=(1,))
-            # losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
+            else:
+                per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
+                # per_image_mean_flow = per_pixel_flow_loss_not_observed_rendered.sum(dim=(2, 3)) / image_area
+                flow_loss = per_image_mean_flow.mean(dim=(1,))
+                losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         if self.config.loss_texture_change_weight > 0:
             change_in_texture = (last_keyframes_encoder_result.texture_maps - texture_maps) ** 2

@@ -126,6 +126,7 @@ class TrackerConfig:
     # Optical flow loss
     flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
     segmentation_mask_erosion_iters: int = 0
+    alternate_rotation_and_translation_optimization: bool = False
     flow_sgd: bool = False
     flow_sgd_n_samples: int = 100
 
@@ -750,13 +751,43 @@ class Tracking6D:
         print("Optimizing positional parameters using linear learning rate scheduling")
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
-            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
-                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            # OPTIMIZE ROTATION ON RENDERED FLOW AND GT FLOW
+            if self.config.alternate_rotation_and_translation_optimization:
+                self.config.loss_fl_not_obs_rend_weight = 0
+                self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
 
-            joint_loss = joint_loss.mean()
-            self.optimizer_positional_parameters.zero_grad()
-            joint_loss.backward()
+                infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                                observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
+                joint_loss = joint_loss.mean()
+                self.optimizer_rotational_parameters.zero_grad()
+                joint_loss.backward()
+
+                # OPTIMIZE TRANSLATION ON RENDERED FLOW BUT NOT GT FLOW
+
+                self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
+                self.config.loss_fl_obs_and_rend_weight = 0
+
+                infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                                observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
+                joint_loss = joint_loss.mean()
+                self.optimizer_translational_parameters.zero_grad()
+                joint_loss.backward()
+            # OPTIMIZE BOTH
+            else:
+                self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
+                self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
+
+                infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                                observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
+                joint_loss = joint_loss.mean()
+                self.optimizer_positional_parameters.zero_grad()
+                joint_loss.backward()
 
             loss_improvement = best_loss - joint_loss
             if loss_improvement > loss_improvement_threshold:
@@ -765,6 +796,11 @@ class Tracking6D:
 
                 for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] *= 2.0
+                if self.config.alternate_rotation_and_translation_optimization:
+                    for param_group in self.optimizer_translational_parameters.param_groups:
+                        param_group['lr'] *= 2.0
+                    for param_group in self.optimizer_rotational_parameters.param_groups:
+                        param_group['lr'] *= 2.0
                 no_improvements = 0
 
             elif loss_improvement < 0:
@@ -772,10 +808,21 @@ class Tracking6D:
                 self.encoder.load_state_dict(self.best_model["encoder"])
                 for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] /= 2.0
+                if self.config.alternate_rotation_and_translation_optimization:
+                    for param_group in self.optimizer_translational_parameters.param_groups:
+                        param_group['lr'] /= 2.0
+                    for param_group in self.optimizer_rotational_parameters.param_groups:
+                        param_group['lr'] /= 2.0
 
             elif 0 <= loss_improvement <= loss_improvement_threshold:
-                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses)
-                self.optimizer_positional_parameters.step()
+                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+                if self.config.alternate_rotation_and_translation_optimization:
+                    if epoch % 2 == 0:
+                        self.optimizer_translational_parameters.step()
+                    else:
+                        self.optimizer_rotational_parameters.step()
+                else:
+                    self.optimizer_positional_parameters.step()
                 epoch += 1
                 no_improvements += 1
 
@@ -823,6 +870,9 @@ class Tracking6D:
                 joint_loss = joint_loss.mean()
                 self.optimizer_non_positional_parameters.zero_grad()
                 self.optimizer_positional_parameters.zero_grad()
+                if self.config.alternate_rotation_and_translation_optimization:
+                    self.optimizer_translational_parameters.zero_grad()
+                    self.optimizer_rotational_parameters.zero_grad()
 
                 joint_loss.backward()
 
@@ -834,6 +884,9 @@ class Tracking6D:
                     scheduler_non_positional_params.step()
 
         self.encoder.load_state_dict(self.best_model["encoder"])
+
+        self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
+                                                    observed_flows, observed_flows_segmentations, step_i)
 
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
