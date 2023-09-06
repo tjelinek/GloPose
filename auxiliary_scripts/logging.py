@@ -19,7 +19,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 
 from models.loss import fmo_loss
 from segmentations import create_mask_from_string, get_bbox, pad_image
-from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad
+from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -123,19 +123,19 @@ class WriteResults:
         self.tracking_log.close()
         self.metrics_log.close()
 
-    def visualize_loss_landscape(self, tracking6d, encoder, observed_images, observed_segmentations, observed_flows,
+    def visualize_loss_landscape(self, tracking6d, observed_images, observed_segmentations, observed_flows,
                                  observed_flows_segmentations, stepi):
         # TODO make the inference faster by not querying the encoder all the time but by making a batch inference
         # TODO by the renderer
-        encoder.translation[0, 0, :] *= 0
-        encoder.quaternion[0, :, 0] = 1.0
-        encoder.quaternion[0, :, 1:] *= 0
 
-        num_translations = 100
-        num_rotations = 100
+        num_translations = 50
+        num_rotations = 50
 
-        translations_space = np.linspace(-0.25, 0.25, num=num_translations)
-        rotations_space = np.linspace(-7, 7, num=num_rotations)
+        gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+        gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
+
+        translations_space = np.linspace(gt_translation[0] - 0.5, gt_translation[0] + 0.5, num=num_translations)
+        rotations_space = np.linspace(gt_rotation_deg[1] - 7, gt_rotation_deg[1] + 7, num=num_rotations)
 
         joint_losses: np.ndarray = self.compute_loss_landscape(observed_flows, observed_flows_segmentations,
                                                                observed_images, observed_segmentations, tracking6d,
@@ -146,13 +146,30 @@ class WriteResults:
                    extent=[translations_space[0], translations_space[-1], rotations_space[-1], rotations_space[0]],
                    aspect='auto', cmap='hot', interpolation='none')
         plt.colorbar(label='Joint Loss')
-        plt.xlabel('Translation')
-        plt.ylabel('Rotation (degrees)')
+        plt.xlabel('Translation (x-axis)')
+        plt.ylabel('Rotation (degrees) (y-axis)')
 
-        plt.scatter(0, 0, color='red', marker='x', label='Start')  # cross at (0, 0)
-        plt.text(0, 0, '  Start', verticalalignment='bottom')
-        plt.scatter(0, 5, color='green', marker='x', label='Optimum')  # point at (0, 5)
-        plt.text(0, 5, '  Optimum', verticalalignment='top')
+        # TODO add more axes than x, y axis
+        for i in range(len(tracking6d.logged_sgd_translations)):
+            iteration_x_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, 0].detach().cpu()
+            iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
+            iteration_rotation_rad = quaternion_to_angle_axis(iteration_rotation_quaternion,
+                                                              order=QuaternionCoeffOrder.WXYZ)
+            iteration_y_rotation_deg = rad_to_deg(iteration_rotation_rad)[0, 0, 1]
+
+            if i == 0:
+                plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='white', marker='x', label='Start')
+                plt.text(iteration_x_translation, iteration_y_rotation_deg, '  Start', verticalalignment='bottom',
+                         color='white')
+            elif i == len(tracking6d.logged_sgd_translations) - 1:
+                plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='yellow', marker='x', label='End')
+                plt.text(iteration_x_translation, iteration_y_rotation_deg, '  End', verticalalignment='bottom',
+                         color='yellow')
+            else:
+                plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='orange', marker='x')
+
+        plt.scatter(gt_translation[0], gt_rotation_deg[1], color='green', marker='x', label='Optimum')
+        plt.text(gt_translation[0], gt_rotation_deg[1], '  Optimum', verticalalignment='top', color='green')
 
         # 2) Show contours of the values
         contours = plt.contour(translations_space, rotations_space, joint_losses.T, levels=20)
@@ -163,7 +180,9 @@ class WriteResults:
         # plt.quiver(translations_space, rotations_space, -gradient[1], gradient[0], color='white', width=0.003)
 
         plt.title('Joint Losses')
-        plt.savefig(tracking6d.write_folder / f'joint_loss_landscape_{stepi}.eps', format='eps')
+        loss_landscape_folder = Path(tracking6d.write_folder / 'loss_landscapes')
+        loss_landscape_folder.mkdir(parents=True, exist_ok=True)
+        plt.savefig(loss_landscape_folder / f'joint_loss_landscape_{stepi}.eps', format='eps')
 
     def compute_loss_landscape(self, observed_flows, observed_flows_segmentations, observed_images,
                                observed_segmentations, tracking6d, rotation_x_space, translation_x_space, stepi):
