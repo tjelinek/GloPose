@@ -286,6 +286,8 @@ class Tracking6D:
 
         # Other utilities and flags
         self.write_results = None
+        self.logged_sgd_translations = []
+        self.logged_sgd_quaternions = []
 
         self.shape = tuple()
         self.write_folder = Path(write_folder)
@@ -534,7 +536,7 @@ class Tracking6D:
                 self.active_keyframes.observed_flows = torch.cat((self.active_keyframes.observed_flows,
                                                                   observed_flow[None]), dim=1)
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
-                                                                      prev_segment[None, :, -1:]), dim=1)
+                                                                      segment[0][None, :, -1:]), dim=1)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
@@ -682,6 +684,12 @@ class Tracking6D:
     def apply(self, observed_images, observed_segmentations, observed_flows, observed_flows_segmentations,
               keyframes, flow_frames, step_i=0):
 
+        self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
+        self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
+
+        self.logged_sgd_quaternions = []
+        self.logged_sgd_translations = []
+
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
 
@@ -726,6 +734,10 @@ class Tracking6D:
         theoretical_flow = None
         renders = None
         per_pixel_error = None
+
+        # rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
+        # self.encoder.quaternion_offsets = rotation_quaternion.clone()
+        # self.encoder.translation_offsets = self.gt_translations.clone()
 
         model_losses_exponential_decay = None
 
