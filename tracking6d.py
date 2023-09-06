@@ -98,8 +98,9 @@ class TrackerConfig:
     loss_t_weight: float = None
     loss_rgb_weight: float = None
     loss_flow_weight: float = None
-    loss_fl_obs_and_rend: float = None
-    loss_fl_not_obs_rend: float = None
+    loss_fl_obs_and_rend_weight: float = None
+    loss_fl_not_obs_rend_weight: float = None
+    loss_fl_obs_not_rend_weight: float = None
 
     # Additional settings
     sigmainv: float = None
