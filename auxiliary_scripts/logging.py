@@ -131,16 +131,18 @@ class WriteResults:
         num_translations = 50
         num_rotations = 50
 
-        gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
-        gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
-
-        translations_space = np.linspace(gt_translation[0] - 0.3, gt_translation[0] + 0.3, num=num_translations)
-        rotations_space = np.linspace(gt_rotation_deg[1] - 7, gt_rotation_deg[1] + 7, num=num_rotations)
-
         trans_axes = ['x', 'y', 'z']
         rot_axes = ['x', 'y', 'z']
 
         for trans_axis_idx, rot_axis_idx in product(range(len(trans_axes)), range(len(rot_axes))):
+
+            gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+            gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
+
+            translations_space = np.linspace(gt_translation[trans_axis_idx] - 0.3,
+                                             gt_translation[trans_axis_idx] + 0.3, num=num_translations)
+            rotations_space = np.linspace(gt_rotation_deg[rot_axis_idx] - 7,
+                                          gt_rotation_deg[rot_axis_idx] + 7, num=num_rotations)
 
             print(f"Visualizing loss landscape for translation axis {trans_axes[trans_axis_idx]} "
                   f"and rotation axis {rot_axes[rot_axis_idx]}")
