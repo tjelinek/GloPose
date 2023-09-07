@@ -134,7 +134,7 @@ class WriteResults:
         gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
         gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
 
-        translations_space = np.linspace(gt_translation[0] - 0.5, gt_translation[0] + 0.5, num=num_translations)
+        translations_space = np.linspace(gt_translation[0] - 0.25, gt_translation[0] + 0.25, num=num_translations)
         rotations_space = np.linspace(gt_rotation_deg[1] - 7, gt_rotation_deg[1] + 7, num=num_rotations)
 
         joint_losses: np.ndarray = self.compute_loss_landscape(observed_flows, observed_flows_segmentations,
