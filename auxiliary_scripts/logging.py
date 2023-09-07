@@ -177,6 +177,9 @@ class WriteResults:
                 plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='yellow', marker='x', label='End')
                 plt.text(iteration_x_translation, iteration_y_rotation_deg, 'End', verticalalignment='bottom',
                          color='yellow')
+                plt.plot([prev_iteration_x_translation, iteration_x_translation],
+                         [prev_iteration_y_rotation_deg, iteration_y_rotation_deg], color='yellow', linewidth=0.1,
+                         linestyle='dotted')
             else:
                 plt.scatter(iteration_x_translation, iteration_y_rotation_deg, color='orange', marker='.', label=str(i))
                 plt.plot([prev_iteration_x_translation, iteration_x_translation],
