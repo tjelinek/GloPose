@@ -127,8 +127,6 @@ class WriteResults:
 
     def visualize_loss_landscape(self, tracking6d, observed_images, observed_segmentations, observed_flows,
                                  observed_flows_segmentations, stepi):
-        # TODO make the inference faster by not querying the encoder all the time but by making a batch inference
-        # TODO by the renderer
 
         num_translations = 50
         num_rotations = 50
@@ -182,7 +180,6 @@ class WriteResults:
             prev_iteration_x_translation = None
             prev_iteration_y_rotation_deg = None
 
-            # TODO add more axes than x, y axis
             for i in range(len(tracking6d.logged_sgd_translations)):
                 iteration_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, trans_axis_idx].detach().cpu()
                 iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
