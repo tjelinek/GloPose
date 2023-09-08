@@ -15,7 +15,7 @@ sys.path.append('OSTrack/S2DNet')
 
 def main():
     dataset = 'SyntheticObjects'
-    sequences = ['Textured_Sphere_5_y'
+    sequences = ['Textured_Sphere_5_y',
                  'Translating_Textured_Sphere',
                  'Textured_Sphere_5_xy',
                  'Rotating_Translating_Textured_Sphere_5_y',
