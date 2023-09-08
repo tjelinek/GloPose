@@ -15,8 +15,14 @@ sys.path.append('OSTrack/S2DNet')
 
 def main():
     dataset = 'SyntheticObjects'
-    sequences = ['Translating_Textured_Sphere', 'Textured_Sphere_2_y', '8_Colored_Sphere_5_x',
-                 '6_Colored_Cube_5_z', 'Textured_Sphere_5_xy']
+    sequences = ['Textured_Sphere_5_y'
+                 'Translating_Textured_Sphere',
+                 'Textured_Sphere_5_xy',
+                 'Rotating_Translating_Textured_Sphere_5_y',
+                 'Rotating_Translating_Textured_Sphere_5_xy'
+                 'Textured_Sphere_5_y',
+                 '8_Colored_Sphere_5_x',
+                 '6_Colored_Cube_5_z']
 
     for sequence in sequences:
 
@@ -34,7 +40,6 @@ def main():
                            Path('gt_tracking_log.csv')
 
         args = parse_args(sequence, dataset)
-        args.perc = 0.5
 
         experiment_name = args.experiment
         config = load_config(args.config)
