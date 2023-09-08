@@ -921,6 +921,8 @@ class Tracking6D:
                     param_group['lr'] *= 2.0
                 for param_group in self.optimizer_rotational_parameters.param_groups:
                     param_group['lr'] *= 2.0
+                for param_group in self.optimizer_positional_parameters.param_groups:
+                    param_group['lr'] *= 2.0
                 no_improvements = 0
 
             elif loss_improvement < 0:
@@ -928,6 +930,8 @@ class Tracking6D:
                 for param_group in self.optimizer_translational_parameters.param_groups:
                     param_group['lr'] /= 2.0
                 for param_group in self.optimizer_rotational_parameters.param_groups:
+                    param_group['lr'] /= 2.0
+                for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] /= 2.0
 
             elif 0 <= loss_improvement <= loss_improvement_threshold:
