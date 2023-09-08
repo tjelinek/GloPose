@@ -11,8 +11,7 @@
 #SBATCH --err=/mnt/personal/jelint19/GenerateDataset.err
 #SBATCH --out=/mnt/personal/jelint19/GenerateDataset.out
 
-ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.6.7-foss-2021b-CUDA-11.4.1 tensorboard/2.8.0-foss-2021b kornia/0.6.8-foss-2021b-CUDA-11.4.1 kaolin/0.12.0-foss-2021b-CUDA-11.4.1 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.13.0-foss-2021b-CUDA-11.4.1 PyTorch3D/0.7.1-foss-2021b-CUDA-11.4.1
-
+ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.6.7-foss-2021b-CUDA-11.4.1 tensorboard/2.8.0-foss-2021b kornia/0.6.8-foss-2021b-CUDA-11.4.1 kaolin/0.12.0-foss-2021b-CUDA-11.4.1 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.13.0-foss-2021b-CUDA-11.4.1 PyTorch3D/0.7.1-foss-2021b-CUDA-11.4.1 PyTorch3D/0.7.1-foss-2021b-CUDA-11.4.1 OpenCV/4.5.5-foss-2021b-CUDA-11.4.1-contrib
 
 python -m dataset_generators.generate_synthetic_dataset  2>&1 &
 python -m dataset_generators.generate_google_scanned_objects_dataset 2>&1
