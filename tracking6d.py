@@ -836,7 +836,7 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        if self.config.visualize_loss_landscape:
+        if self.config.visualize_loss_landscape and (step_i in {0, 1, 2, 3} or step_i % 18 == 0):
             self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
                                                         observed_flows, observed_flows_segmentations, step_i)
 
