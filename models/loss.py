@@ -169,7 +169,7 @@ class FMOLoss(nn.Module):
             losses["fl_obs_or_rend"] = (per_pixel_mean_flow_loss_observed_or_rendered *
                                         self.config.loss_flow_weight)
 
-            if self.config.alternate_rotation_and_translation_optimization:
+            if self.config.coordinate_descent and False:
                 losses["flow_loss"] = (per_pixel_mean_flow_loss_not_observed_rendered *
                                        self.config.loss_fl_not_obs_rend_weight +
                                        per_pixel_mean_flow_loss_observed_and_rendered *
