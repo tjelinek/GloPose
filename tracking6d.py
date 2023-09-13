@@ -763,13 +763,11 @@ class Tracking6D:
         # First optimize the positional parameters first while preventing steps that increase the loss
         print("Optimizing positional parameters using linear learning rate scheduling")
         if self.config.coordinate_descent:
-            optim_result = self.coordinate_descent_with_linear_lr_schedule(best_loss, encoder_result, epoch,
-                                                                           flow_frames, frame_losses, keyframes,
-                                                                           loss_improvement_threshold,
-                                                                           no_improvements, observed_flows,
+            optim_result = self.coordinate_descent_with_linear_lr_schedule(best_loss, epoch, flow_frames, frame_losses,
+                                                                           keyframes, loss_improvement_threshold,
+                                                                           observed_flows,
                                                                            observed_flows_segmentations,
-                                                                           observed_images, observed_segmentations,
-                                                                           per_pixel_error, renders, theoretical_flow)
+                                                                           observed_images, observed_segmentations)
         else:
             optim_result = self.gradient_descent_with_linear_lr_schedule(best_loss, encoder_result, epoch, flow_frames,
                                                                          frame_losses, keyframes,
@@ -881,24 +879,19 @@ class Tracking6D:
                 no_improvements += 1
         return best_loss, encoder_result, epoch, per_pixel_error, renders, theoretical_flow
 
-    def coordinate_descent_with_linear_lr_schedule(self, best_loss, encoder_result, epoch, flow_frames, frame_losses,
-                                                   keyframes, loss_improvement_threshold, no_improvements,
-                                                   observed_flows, observed_flows_segmentations, observed_images,
-                                                   observed_segmentations, per_pixel_error, renders, theoretical_flow):
-        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
-                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
-        joint_loss = joint_loss.mean()
-        best_loss = joint_loss
-        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-        self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+    def coordinate_descent_with_linear_lr_schedule(self, best_loss, epoch, flow_frames, frame_losses, keyframes,
+                                                   loss_improvement_threshold, observed_flows,
+                                                   observed_flows_segmentations, observed_images,
+                                                   observed_segmentations):
+        no_improvements = 0
+
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
             infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-            encoder_result1, joint_loss1, losses1, losses_all1, per_pixel_error1, renders1, theoretical_flow1 = infer_result
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            joint_loss1 = joint_loss1.mean()
+            joint_loss1 = joint_loss.mean()
 
             self.optimizer_rotational_parameters.zero_grad()
             joint_loss1.backward()
@@ -914,7 +907,7 @@ class Tracking6D:
             self.optimizer_translational_parameters.step()
 
             loss_improvement = best_loss - joint_loss
-            if loss_improvement > loss_improvement_threshold:
+            if loss_improvement >= 0:
                 best_loss = joint_loss
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
                 for param_group in self.optimizer_translational_parameters.param_groups:
@@ -923,7 +916,13 @@ class Tracking6D:
                     param_group['lr'] *= 2.0
                 for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] *= 2.0
-                no_improvements = 0
+
+                epoch += 1
+                if loss_improvement <= loss_improvement_threshold:
+                    no_improvements += 1
+                else:
+                    no_improvements = 0
+                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
             elif loss_improvement < 0:
                 self.encoder.load_state_dict(self.best_model["encoder"])
@@ -933,12 +932,9 @@ class Tracking6D:
                     param_group['lr'] /= 2.0
                 for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] /= 2.0
-
-            elif 0 <= loss_improvement <= loss_improvement_threshold:
-                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss1, losses1, encoder_result1)
-                self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
-                epoch += 1
                 no_improvements += 1
+
+        self.encoder.load_state_dict(self.best_model["encoder"])
         return best_loss, encoder_result, epoch, per_pixel_error, renders, theoretical_flow
 
     def normalize_rendered_flows(self, rendered_flows):
