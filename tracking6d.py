@@ -885,6 +885,11 @@ class Tracking6D:
                                                    observed_segmentations):
         no_improvements = 0
 
+        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+        self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
             infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
