@@ -730,7 +730,7 @@ class Tracking6D:
                 self.config.loss_flow_weight = self.config_copy.loss_flow_weight
 
         scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters,
-                                                                     mode='min', factor=0.9,
+                                                                     mode='min', factor=0.8,
                                                                      patience=self.config.lr_scheduler_patience,
                                                                      verbose=False)
 
