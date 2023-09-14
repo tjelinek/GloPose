@@ -81,7 +81,7 @@ class Encoder(nn.Module):
         if self.config.use_lights:
             self.lights.requires_grad = req_grad
 
-    def forward(self, opt_frames, not_optimized_frames=None):
+    def forward(self, opt_frames):
 
         if self.config.predict_vertices:
             vertices = self.ivertices + self.vertices
