@@ -157,10 +157,15 @@ class Encoder(nn.Module):
     def get_total_rotation_at_frame_vectorized(self):
         offset_initial_quaternion = quaternion_multiply(qnorm_vectorized(self.initial_quaternion),
                                                         qnorm_vectorized(self.quaternion_offsets))
+        quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
         total_rotation_quaternion = qnorm_vectorized(quaternion_multiply(offset_initial_quaternion,
-                                                                         qnorm_vectorized(self.quaternion)))
+                                                                         qnorm_vectorized(quaternion)))
 
         return total_rotation_quaternion
+
+    def get_total_rotation_at_frame_vectorized_axis_angle(self):
+        axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
+        return self.initial_axis_angle + self.axis_angle_offsets + axis_angle_rot
 
     def get_total_translation_at_frame_vectorized(self):
         # The formula is initial_translation * translation_offsets * translation
@@ -169,11 +174,16 @@ class Encoder(nn.Module):
     def compute_next_offset(self, stepi):
         self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
         self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
+        self.initial_axis_angle[:, stepi] = self.initial_axis_angle[:, stepi - 1]
 
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
+        quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
         self.quaternion_offsets[:, stepi] = qmult(qnorm(self.quaternion_offsets[:, stepi - 1]),
-                                                  qnorm(self.quaternion[:, stepi - 1]).detach())
+                                                  qnorm(quaternion[:, stepi - 1]).detach())
+
+        axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
+        self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
 
     def log_rotation_and_translation(self, opt_frames, quaternion, translation):
         angles_rad = quaternion_to_angle_axis(quaternion[0], order=QuaternionCoeffOrder.WXYZ)
@@ -204,7 +214,7 @@ class Encoder(nn.Module):
             translation_new[:, :, :, :, 2][translation[:, :, :, :, 2] < 0] = translation[:, :, :, :, 2][
                                                                                  translation[:, :, :, :, 2] < 0] * thrn
             translation_new[:, :, :, :, :2] = translation[:, :, :, :, :2] * (
-                        (self.config.camera_distance - translation_new[:, :, :, :, 2:]) / 2)
+                    (self.config.camera_distance - translation_new[:, :, :, :, 2:]) / 2)
             translation = translation_new
             translation[:, :, :, :, 1] = self.aspect_ratio * translation_new[:, :, :, :, 1]
 
