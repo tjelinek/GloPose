@@ -134,15 +134,6 @@ class Encoder(nn.Module):
         qdiff = weights * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         return tdiff, qdiff
 
-    def get_total_rotation_at_frame(self, stepi):
-        # The formula is initial_quaternion * quaternion_offsets * quaternion
-
-        offset_initial_quaternion = qmult(qnorm(self.initial_quaternion[:, stepi]),
-                                          qnorm(self.quaternion_offsets[:, stepi]))
-        total_rotation_quaternion = qnorm(qmult(offset_initial_quaternion, qnorm(self.quaternion[:, stepi])))
-
-        return total_rotation_quaternion
-
     def get_total_rotation_at_frame_vectorized(self):
         offset_initial_quaternion = quaternion_multiply(qnorm_vectorized(self.initial_quaternion),
                                                         qnorm_vectorized(self.quaternion_offsets))
@@ -150,11 +141,6 @@ class Encoder(nn.Module):
                                                                          qnorm_vectorized(self.quaternion)))
 
         return total_rotation_quaternion
-
-    def get_total_translation_at_frame(self, stepi):
-        # The formula is initial_translation * translation_offsets * translation
-        return self.initial_translation[:, :, stepi] + self.translation_offsets[:, :, stepi] + \
-            self.translation[:, :, stepi]
 
     def get_total_translation_at_frame_vectorized(self):
         # The formula is initial_translation * translation_offsets * translation
