@@ -360,7 +360,13 @@ class Tracking6D:
                 param.detach_()
         if self.gt_rotations is not None:
             rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
-            self.gt_encoder.quaternion[...] = rotation_quaternion
+            self.gt_encoder.quaternion_w[...] = rotation_quaternion[..., 0, None]
+            self.gt_encoder.quaternion_x[...] = rotation_quaternion[..., 1, None]
+            self.gt_encoder.quaternion_y[...] = rotation_quaternion[..., 2, None]
+            self.gt_encoder.quaternion_z[...] = rotation_quaternion[..., 3, None]
+            self.gt_encoder.axis_angle_x[...] = self.gt_rotations[..., 0, None]
+            self.gt_encoder.axis_angle_y[...] = self.gt_rotations[..., 1, None]
+            self.gt_encoder.axis_angle_z[...] = self.gt_rotations[..., 2, None]
         if self.gt_translations is not None:
             self.gt_encoder.translation[...] = self.gt_translations
         self.encoder.train()
@@ -378,13 +384,31 @@ class Tracking6D:
     def initialize_optimizer_and_loss(self, ivertices):
         all_parameters = set(list(self.encoder.parameters()))
         translational_params = {self.encoder.translation}
-        rotational_params = {self.encoder.quaternion}
+        rotational_params = {self.encoder.quaternion_w, self.encoder.quaternion_x,
+                             self.encoder.quaternion_y, self.encoder.quaternion_z}
         positional_params = translational_params | rotational_params
+        rotational_params = [
+            {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
+             'lr': self.config.learning_rate,
+             'name': 'axes_quat'},
+            {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
+             'lr': self.config.learning_rate,
+             'name': 'axis_angle'},
+            {'params': [self.encoder.quaternion_w],
+             'lr': self.config.learning_rate * 1e-2,
+             'name': 'half_cosine'}
+        ]
         non_positional_params = all_parameters - positional_params
         positional_params = [
-            {'params': list(rotational_params),
-             'lr': self.config.learning_rate * self.config.quaternion_learning_rate_coef,
-             'name': 'rots'},
+            {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
+             'lr': self.config.learning_rate,
+             'name': 'axes_quat'},
+            {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
+             'lr': self.config.learning_rate,
+             'name': 'axis_angle'},
+            {'params': [self.encoder.quaternion_w],
+             'lr': self.config.learning_rate * 1e-1,
+             'name': 'half_cosine'},
             {'params': list(translational_params),
              'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
              'name': 'trans'},
@@ -953,7 +977,7 @@ class Tracking6D:
             param_group['lr'] = self.config.learning_rate
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
-            if param_group['name'] == 'rots':
+            if param_group['name'] in ['axes_quat', 'half_cosine', 'axis_angle']:
                 param_group['lr'] *= self.config.quaternion_learning_rate_coef
             elif param_group['name'] == 'trans':
                 param_group['lr'] *= self.config.translation_learning_rate_coef

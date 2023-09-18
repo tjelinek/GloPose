@@ -29,21 +29,36 @@ class Encoder(nn.Module):
         self.register_buffer('init_quat', init_quat)
         qinit[:, 0, :] = init_quat.clone()
 
-        # Used translation and quaternion
+        # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
         self.register_buffer('initial_quaternion', qinit.clone())
+        self.register_buffer('initial_axis_angle', init_angle.clone())
 
-        # The offsets store the
+        # Offsets initialization
         quaternion_offsets = torch.zeros(1, config.input_frames, 4)
         quaternion_offsets[:, :, 0] = 1.0
-        translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
         self.register_buffer('quaternion_offsets', quaternion_offsets)
+
+        translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
         self.register_buffer('translation_offsets', translation_offsets)
+
+        axis_angle_offsets = torch.zeros(1, config.input_frames, 3)
+        self.register_buffer('axis_angle_offsets', axis_angle_offsets)
 
         self.translation = nn.Parameter(torch.zeros(translation_offsets.shape))
         quat = torch.zeros(1, config.input_frames, 4)
         quat[:, :, 0] = 1.0
-        self.quaternion = nn.Parameter(quat)
+
+        self.quaternion_w = nn.Parameter(quat[..., 0, None])
+        self.quaternion_x = nn.Parameter(quat[..., 1, None])
+        self.quaternion_y = nn.Parameter(quat[..., 2, None])
+        self.quaternion_z = nn.Parameter(quat[..., 3, None])
+        # self.quaternion = nn.Parameter(quat)
+
+        axis_angles = torch.zeros(1, config.input_frames, 3)
+        self.axis_angle_x = nn.Parameter(axis_angles[..., 0, None])
+        self.axis_angle_y = nn.Parameter(axis_angles[..., 1, None])
+        self.axis_angle_z = nn.Parameter(axis_angles[..., 2, None])
 
         # For logging purposes, store the values of development of estimated rotations and translations thorough the
         # gradient descent iterations
@@ -94,6 +109,7 @@ class Encoder(nn.Module):
 
         translation = self.get_total_translation_at_frame_vectorized()
         quaternion = self.get_total_rotation_at_frame_vectorized()
+        rotation = self.get_total_rotation_at_frame_vectorized_axis_angle()
         translation[:, :, 0] = translation[:, :, 0].detach()
         quaternion[:, 0] = quaternion[:, 0].detach()
 
@@ -101,8 +117,10 @@ class Encoder(nn.Module):
 
         translation[:, :, noopt] = translation[:, :, noopt].detach()
         quaternion[:, noopt] = quaternion[:, noopt].detach()
+        rotation[:, noopt] = rotation[:, noopt].detach()
 
         quaternion = quaternion[:, :opt_frames[-1] + 1]
+        rotation = rotation[:, :opt_frames[-1] + 1]
         translation = translation[:, :, :opt_frames[-1] + 1]
 
         if self.config.features == 'deep':
@@ -114,6 +132,8 @@ class Encoder(nn.Module):
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
         self.log_rotation_and_translation(opt_frames, quaternion, translation)
+
+        quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
 
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
