@@ -17,10 +17,12 @@ def main():
     dataset = 'SyntheticObjects'
     sequences = [
         'Textured_Sphere_5_y',
-        # 'Translating_Textured_Sphere',
-        # 'Textured_Sphere_5_xy',
+        'Translating_Textured_Sphere',
+        'Textured_Sphere_5_xy',
         'Rotating_Translating_Textured_Sphere_5_y',
-        'Rotating_Translating_Textured_Sphere_5_xy'
+        'Rotating_Translating_Textured_Sphere_5_xy',
+        'Rotating_Contra_Translating_Textured_Sphere_5_y',
+        'Rotating_Contra_Translating_Textured_Sphere_5_xy',
         '8_Colored_Sphere_5_x',
         '6_Colored_Cube_5_z']
 
