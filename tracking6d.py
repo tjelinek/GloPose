@@ -7,10 +7,12 @@ import imageio
 import kaolin
 import numpy as np
 import os
+import scipy
 import time
 import torch
 import torchvision.transforms as transforms
-from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion, quaternion_to_angle_axis
+from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion, quaternion_to_angle_axis, \
+    quaternion_to_rotation_matrix
 from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
@@ -26,7 +28,7 @@ from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.initial_mesh import generate_face_features
-from models.kaolin_wrapper import load_obj
+from models.kaolin_wrapper import load_obj, prepare_vertices
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
@@ -122,8 +124,8 @@ class TrackerConfig:
     use_gt: bool = False
 
     # Optimization
-    allow_break_sgd_after = 120
-    break_sgd_after_iters_with_no_change = 10
+    allow_break_sgd_after = 30
+    break_sgd_after_iters_with_no_change = 20
     optimize_non_positional_params_after = 70
     use_lr_scheduler = False
     lr_scheduler_patience = 5
@@ -392,10 +394,10 @@ class Tracking6D:
              'lr': self.config.learning_rate,
              'name': 'axes_quat'},
             {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-             'lr': self.config.learning_rate,
+             'lr': self.config.learning_rate * 1e-0,
              'name': 'axis_angle'},
             {'params': [self.encoder.quaternion_w],
-             'lr': self.config.learning_rate * 1e-2,
+             'lr': self.config.learning_rate * 1e-0,
              'name': 'half_cosine'}
         ]
         non_positional_params = all_parameters - positional_params
@@ -404,10 +406,10 @@ class Tracking6D:
              'lr': self.config.learning_rate,
              'name': 'axes_quat'},
             {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-             'lr': self.config.learning_rate,
+             'lr': self.config.learning_rate * 1e-0,
              'name': 'axis_angle'},
             {'params': [self.encoder.quaternion_w],
-             'lr': self.config.learning_rate * 1e-1,
+             'lr': self.config.learning_rate * 1e-0,
              'name': 'half_cosine'},
             {'params': list(translational_params),
              'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
@@ -637,16 +639,16 @@ class Tracking6D:
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None
-                    self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
-                                                        keyframes=self.active_keyframes.keyframes,
-                                                        predicted_vertices=encoder_result.vertices,
-                                                        predicted_quaternion=encoder_result.quaternions,
-                                                        predicted_translation=encoder_result.translations,
-                                                        predicted_mask=frame_result.renders[:, :, 0, -1, ...],
-                                                        gt_vertices=gt_mesh_vertices,
-                                                        gt_rotation=self.gt_rotations,
-                                                        gt_translation=self.gt_translations,
-                                                        gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
+                    # self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
+                    #                                     keyframes=self.active_keyframes.keyframes,
+                    #                                     predicted_vertices=encoder_result.vertices,
+                    #                                     predicted_quaternion=encoder_result.quaternions,
+                    #                                     predicted_translation=encoder_result.translations,
+                    #                                     predicted_mask=frame_result.renders[:, :, 0, -1, ...],
+                    #                                     gt_vertices=gt_mesh_vertices,
+                    #                                     gt_rotation=self.gt_rotations,
+                    #                                     gt_translation=self.gt_translations,
+                    #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
@@ -784,6 +786,137 @@ class Tracking6D:
         epoch = 0
         loss_improvement_threshold = 1e-4
 
+        def learning_rate_preconditioning():
+
+            encoder_result, _ = self.frames_and_flow_frames_inference(keyframes, flow_frames, encoder_type='deep')
+
+            vertices = encoder_result.vertices
+
+            def get_vertices_image_pos(translations_x, translations_y, translations_z, rotations_x, rotations_y,
+                                       rotations_z):
+                rotations_w = torch.Tensor([[1 - (rotations_x ** 2 + rotations_y ** 2 + rotations_z ** 2)]]).to(
+                    rotations_z.device)
+                rotations = torch.cat([rotations_w, rotations_x, rotations_y, rotations_z], dim=-1)
+                # rotations = torch.cat([rotations_x, rotations_y, rotations_z], dim=-1)
+                rotations = angle_axis_to_quaternion(rotations, order=QuaternionCoeffOrder.WXYZ)
+
+                translations = torch.cat([translations_x, translations_y, translations_z], dim=-1)
+
+                rotation_matrix = quaternion_to_rotation_matrix(rotations,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+
+                # Rotate and translate the vertices using the given rotation_matrix and translation_vector
+                rotated_vertices = kaolin.render.camera.rotate_translate_points(vertices, rotation_matrix,
+                                                                                self.rendering.obj_center)
+                rotated_vertices = rotated_vertices + translations
+
+                _, face_vertices_image, face_normals = prepare_vertices(rotated_vertices, self.rendering.faces,
+                                                                        self.rendering.camera_rot,
+                                                                        self.rendering.camera_trans,
+                                                                        self.rendering.camera_proj)
+
+                face_normals_z = face_normals[:, :, -1]
+
+                breakpoint()
+
+                return face_vertices_image
+
+            def compute_custom_jacobian(func, inputs):
+                epsilon = float(1e-7)
+                # inputs_copy = copy.deepcopy(inputs)
+                jacobi_matrices = []
+                for i in range(len(inputs)):
+                    output_0 = func(*inputs)  # .flatten()
+                    inputs[i] += epsilon
+                    output_1 = func(*inputs)  # .flatten()
+
+                    gradient_tensor = torch.zeros(*output_0.shape, *inputs[i].shape)
+                    grad = (output_1 - output_0) / epsilon
+                    if len(inputs[i].shape) == 3:  # translations
+                        gradient_tensor[:, :, :, :, 0, 0, 0] = grad
+                    else:  # quaternions
+                        gradient_tensor[:, :, :, :, 0, 0] = grad
+
+                    inputs[i] -= epsilon
+                    jacobi_matrices.append(gradient_tensor)
+
+                return jacobi_matrices
+
+            translations = encoder_result.translations[:, :, -1]
+            rotations = encoder_result.quaternions[:, -1]
+            # rotations = quaternion_to_angle_axis(rotations, order=QuaternionCoeffOrder.WXYZ)
+            breakpoint()
+            jacobian = compute_custom_jacobian(func=get_vertices_image_pos,
+                                               inputs=[translations[..., 0:1], translations[..., 1:2],
+                                                       translations[..., 2:3], rotations[..., 0:1],
+                                                       rotations[..., 1:2], rotations[..., 2:3]])
+            # breakpoint()
+            jacobian2 = torch.autograd.functional.jacobian(func=get_vertices_image_pos,
+                                                           inputs=(translations[..., 0:1], translations[..., 1:2],
+                                                                   translations[..., 2:3], rotations[..., 0:1],
+                                                                   rotations[..., 1:2], rotations[..., 2:3]),
+                                                           strict=True)
+            # breakpoint()
+            jacobian_translation_x = jacobian[0][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_translation_y = jacobian[1][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_translation_z = jacobian[2][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_translation = torch.cat([jacobian_translation_x, jacobian_translation_y, jacobian_translation_z],
+                                             dim=-1)[:, 0, 0, :]
+            jacobian_rotation_x = jacobian[3][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_rotation_y = jacobian[4][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_rotation_z = jacobian[5][0, ...].flatten(start_dim=0, end_dim=2)
+            jacobian_quaternions = torch.cat([jacobian_rotation_x, jacobian_rotation_y, jacobian_rotation_z], dim=-1)
+            jacobian_quaternions = jacobian_quaternions[:, 0, :]
+            # jacobian_quaternions = jacobian[3][0, ...].flatten(start_dim=0, end_dim=-2)
+            # breakpoint()
+            jacobian_pos = torch.cat([jacobian_translation, jacobian_quaternions], dim=-1)
+
+            hessian = torch.matmul(jacobian_pos.t(), jacobian_pos)
+            hessian_np = hessian.detach().cpu().numpy()
+
+            # breakpoint()
+
+            def zca_whitening_matrix(X):
+                """
+                Function to compute ZCA whitening matrix (aka Mahalanobis whitening).
+                INPUT:  X: [M x N] matrix.
+                    Rows: Variables
+                    Columns: Observations
+                OUTPUT: ZCAMatrix: [M x M] matrix
+                """
+                # Covariance matrix [column-wise variables]: Sigma = (X-mu)' * (X-mu) / N
+                sigma = np.cov(X, rowvar=True)  # [M x M]
+                # Singular Value Decomposition. X = U * np.diag(S) * V
+                U, S, V = np.linalg.svd(sigma)
+                # U: [M x M] eigenvectors of sigma.
+                # S: [M x 1] eigenvalues of sigma.
+                # V: [M x M] transpose of U
+                # Whitening constant: prevents division by zero
+                epsilon = 1e-5
+                # ZCA Whitening matrix: U * Lambda * U'
+                ZCAMatrix = np.dot(U, np.dot(np.diag(1.0 / np.sqrt(S + epsilon)), U.T))  # [M x M]
+                return ZCAMatrix
+
+            LAMBDA = 0.1
+            MU = 1e-8
+            diag = np.diagonal(hessian_np)
+            hessian_diag = np.diag(diag)
+            hessian_np_prime = ((hessian_np + LAMBDA * hessian_diag) + MU * np.identity(n=diag.shape[0]))
+
+            # breakpoint()
+            P_inv_sqrtm = scipy.linalg.inv(scipy.linalg.sqrtm(hessian_np_prime))
+
+            P_inv_zca = zca_whitening_matrix(hessian_np_prime)
+
+            learning_rates_sqrtm = np.matmul(P_inv_sqrtm, np.ones(diag.shape))
+            learning_rates_sqrtm_norm = learning_rates_sqrtm / learning_rates_sqrtm.sum()
+            learning_rates_zca = np.matmul(P_inv_zca, np.ones(diag.shape))
+            learning_rates_zca_norm = learning_rates_zca / learning_rates_zca.sum()
+
+            breakpoint()
+
+        # learning_rate_preconditioning()
+
         # First optimize the positional parameters first while preventing steps that increase the loss
         print("Optimizing positional parameters using linear learning rate scheduling")
         if self.config.coordinate_descent:
@@ -849,8 +982,8 @@ class Tracking6D:
 
                 joint_loss.backward()
 
-                self.optimizer_non_positional_parameters.step()
-                self.optimizer_positional_parameters.step()
+                # self.optimizer_non_positional_parameters.step()
+                # self.optimizer_positional_parameters.step()
 
                 if self.config.use_lr_scheduler:
                     scheduler_positional_params.step(joint_loss)
@@ -901,6 +1034,13 @@ class Tracking6D:
                 self.optimizer_positional_parameters.step()
                 epoch += 1
                 no_improvements += 1
+
+        self.encoder.load_state_dict(self.best_model["encoder"])
+        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        encoder_result3, joint_loss3, losses3, losses_all3, per_pixel_error3, renders3, theoretical_flow3 = infer_result
+        joint_loss3 = joint_loss3.mean()
+        breakpoint()
         return best_loss, encoder_result, epoch, per_pixel_error, renders, theoretical_flow
 
     def coordinate_descent_with_linear_lr_schedule(self, best_loss, epoch, flow_frames, frame_losses, keyframes,
@@ -909,21 +1049,38 @@ class Tracking6D:
                                                    observed_segmentations):
         no_improvements = 0
 
+        # observed_flows_clone = observed_flows.detach().clone()
+        # observed_flows_segmentations_clone = observed_flows_segmentations.detach().clone()
+        # observed_images_clone = observed_images.detach().clone()
+        # observed_segmentations_clone = observed_segmentations.detach().clone()
+
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                         observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+        joint_loss = joint_loss.mean()
+        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+
         self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
+        # loss_seq = []
+        # loss_seq_all = []
+        # parameters_newest = []
+        # best_translation = None
+
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
+
+            # TODO inferring the model three times per step is ubiquitous, it is sufficient to remember the values
+            # TODO from the last iteration, and if we revert to the latest checkpoint, one can save the values from
+            # TODO the checkpoint as well
 
             infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            joint_loss1 = joint_loss.mean()
+            joint_loss = joint_loss.mean()
 
             self.optimizer_rotational_parameters.zero_grad()
-            joint_loss1.backward()
+            joint_loss.backward()
             self.optimizer_rotational_parameters.step()
 
             infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
@@ -931,13 +1088,25 @@ class Tracking6D:
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             joint_loss = joint_loss.mean()
+
             self.optimizer_translational_parameters.zero_grad()
             joint_loss.backward()
             self.optimizer_translational_parameters.step()
 
+            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            joint_loss = joint_loss.mean()
+
             loss_improvement = best_loss - joint_loss
+
+            # loss_seq_all.append((float(joint_loss), float(self.encoder.translation[0, 0, 1, 0]), float(loss_improvement)))
+
             if loss_improvement >= 0:
+                # loss_seq.append((float(joint_loss), float(self.encoder.translation[0, 0, 1, 0]), float(loss_improvement), 'saved_encoder'))
                 best_loss = joint_loss
+                # best_translation = encoder_result.translations
+
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
                 for param_group in self.optimizer_translational_parameters.param_groups:
                     param_group['lr'] *= 2.0
@@ -963,8 +1132,53 @@ class Tracking6D:
                     param_group['lr'] /= 2.0
                 no_improvements += 1
 
+            parameters_newest = [param.detach().clone() for param in self.encoder.parameters()]
+
+        # for it in loss_seq:
+        #     print(it)
+        #
+        # print("-----------------")
+        #
+        # for it in loss_seq_all:
+        #     print(it)
+
+        # print("Encoder before reloading", float(self.encoder.translation[0, 0, 1, 0]))
+
         self.encoder.load_state_dict(self.best_model["encoder"])
-        return best_loss, encoder_result, epoch, per_pixel_error, renders, theoretical_flow
+
+        # print("Encoder  after reloading", float(self.encoder.translation[0, 0, 1, 0]))
+        #
+        # parameters_best = [param.detach().clone() for param in self.encoder.parameters()]
+        #
+        # print([torch.equal(parameters_newest[i], parameters_best[i]) for i in range(len(parameters_best))])
+        #
+        # values_list = [val for val in self.best_model['encoder'].values()]
+        # print([torch.equal(values_list[i], parameters_newest[i]) for i in range(len(parameters_best))])
+
+        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        encoder_result3, joint_loss3, losses3, losses_all3, per_pixel_error3, renders3, theoretical_flow3 = infer_result
+        # joint_loss3 = joint_loss3.mean()
+
+        # encoder_result2_tensors = [encres for encres in encoder_result if type(encres) is torch.Tensor]
+        # encoder_result3_tensors = [encres for encres in encoder_result3 if type(encres) is torch.Tensor]
+        # print("Enc res comparison", [torch.equal(encoder_result2_tensors[i], encoder_result3_tensors[i]) for i in range(len(encoder_result2_tensors))])
+        #
+        # print("-----------------")
+        # print(float(joint_loss3), float(self.encoder.translation[0, 0, 1, 0]))
+        # print(f'Best model: {best_translation}\n', f'reloaded best model: {encoder_result3.translations}\n',
+        #       f'last model: {encoder_result.translations}')
+        #
+        # objective_functions_defaults = [
+        #                                 torch.equal(observed_flows, observed_flows_clone),
+        #                                 torch.equal(observed_images, observed_images_clone),
+        #                                 torch.equal(observed_flows_segmentations, observed_flows_segmentations_clone),
+        #                                 torch.equal(observed_segmentations, observed_segmentations_clone),
+        #                                 ]
+        # print("Objective function defaults", objective_functions_defaults)
+        # breakpoint()
+
+        return best_loss, encoder_result3, epoch, per_pixel_error3, renders3, theoretical_flow3
 
     def normalize_rendered_flows(self, rendered_flows):
         rendered_flows[..., 0] = rendered_flows[..., 0] * (self.rendering.width / self.shape[-1])
@@ -1024,11 +1238,11 @@ class Tracking6D:
 
         rendered_silhouettes = renders[0, :, :, -1:]
 
-        loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
+        loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images.clone(),
                                             rendered_silhouettes=rendered_silhouettes,
-                                            observed_silhouettes=observed_segmentations,
-                                            rendered_flow=theoretical_flow, observed_flow=observed_flows,
-                                            observed_flow_segmentation=observed_flows_segmentations,
+                                            observed_silhouettes=observed_segmentations.clone(),
+                                            rendered_flow=theoretical_flow, observed_flow=observed_flows.clone(),
+                                            observed_flow_segmentation=observed_flows_segmentations.clone(),
                                             rendered_flow_segmentation=rendered_flow_segmentation,
                                             keyframes_encoder_result=encoder_result,
                                             last_keyframes_encoder_result=self.last_encoder_result)
@@ -1106,6 +1320,13 @@ class Tracking6D:
                                                    lights=joined_encoder_result.lights,
                                                    translation_difference=flow_frames_tdiff,
                                                    quaternion_difference=flow_frames_qdiff)
+
+        # if encoder_type != 'gt_encoder':
+        #     quaternion = encoder_result.quaternions
+        #     flow_quaternion = encoder_result_flow_frames.quaternions
+        #     for i in range(20):
+        #         quaternion = quaternion_multiply(quaternion, quaternion)
+        #         flow_quaternion = quaternion_multiply(flow_quaternion, flow_quaternion)
 
         return encoder_result, encoder_result_flow_frames
 
