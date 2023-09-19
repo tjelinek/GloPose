@@ -204,21 +204,23 @@ def generate_rotating_translating_spheres():
             # (generate_rotations_xyz, 'xyz')
         ]
 
+        # Generate sinusoidal translations
+        steps = 72  # Adjust if necessary
+
         for rots_gen, suffix in rot_gens:
             # Defining rotating spheres
             objects = [
-                (f'Rotating_Translating_Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere),
+                (f'Rotating_Translating_Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere,
+                 generate_sinusoidal_translations(steps=steps)),
+                (f'Rotating_Contra_Translating_Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere,
+                 [-it for it in generate_sinusoidal_translations(steps=steps)]),
                 # Add any other objects if necessary
             ]
 
             # Generate rotations
             rots = rots_gen(step=float(rot_mag))
 
-            # Generate sinusoidal translations
-            steps = 72  # Adjust if necessary
-            translations = generate_sinusoidal_translations(steps=steps)
-
-            for obj_name, generate_obj_func in objects:
+            for obj_name, generate_obj_func, translations_gen in objects:
                 rendering_path = synthetic_dataset_folder / obj_name / rendering_dir
                 segmentation_path = synthetic_dataset_folder / obj_name / segmentation_dir
                 optical_flow_path = synthetic_dataset_folder / obj_name / optical_flow_dir
@@ -226,7 +228,7 @@ def generate_rotating_translating_spheres():
                     'gt_tracking_log.csv')
 
                 generate_obj_func(_config, rendering_path, segmentation_path, optical_flow_path, gt_tracking_log_file,
-                                  rots, translations)
+                                  rots, translations_gen)
 
 
 if __name__ == '__main__':
