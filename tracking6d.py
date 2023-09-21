@@ -949,11 +949,6 @@ class Tracking6D:
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
-
-            if model_losses_exponential_decay is None:
-                model_losses_exponential_decay = model_loss
-            else:
-                model_losses_exponential_decay = 0.8 * model_losses_exponential_decay + 0.2 * model_loss
             if abs(model_loss - self.best_model["value"]) > 1e-3:
                 iters_without_change = 0
                 self.best_model["value"] = model_loss
@@ -971,11 +966,10 @@ class Tracking6D:
                     self.best_model["value"] = 100
             else:
                 if epoch > self.config.allow_break_sgd_after and \
-                        abs(model_losses_exponential_decay - model_loss) <= 1e-3 and \
+                        abs(self.best_model["losses"] - model_loss) <= 1e-3 and \
                         iters_without_change > self.config.break_sgd_after_iters_with_no_change:
                     break
             if epoch < self.config.iterations - 1:
-                # with torch.autograd.detect_anomaly():
                 joint_loss = joint_loss.mean()
                 self.optimizer_non_positional_parameters.zero_grad()
                 self.optimizer_positional_parameters.zero_grad()
