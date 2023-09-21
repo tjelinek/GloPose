@@ -45,6 +45,8 @@ class RenderingKaolin(nn.Module):
                                                                                 camera_up_direction)
         self.register_buffer('camera_rot', camera_rot)
         self.set_faces(faces)
+        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).cuda()
+        self.register_buffer('kernel', kernel)
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
@@ -52,9 +54,6 @@ class RenderingKaolin(nn.Module):
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps=None, lights=None,
                 render_depth=False):
-        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
-            translation.device)
-
         rendered_verts_positions = []
         all_renders = []
         ren_mesh_vertices_features_list = []
@@ -99,7 +98,7 @@ class RenderingKaolin(nn.Module):
                 ren_features = ren_features * lighting
             result = ren_features.permute(0, 3, 1, 2)
             if self.config.erode_renderer_mask > 0:
-                ren_mask = erosion(rendering_result.ren_mask[:, None], kernel)[:, 0]
+                ren_mask = erosion(rendering_result.ren_mask[:, None], self.kernel)[:, 0]
             else:
                 ren_mask = torch.ones(1, self.height, self.width)
 
