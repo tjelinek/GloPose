@@ -876,8 +876,7 @@ class Tracking6D:
     def run_lebesgue_marquardt_method(self, flow_frames, keyframes, observed_images, observed_segmentations,
                                       observed_flows, observed_flows_segmentations):
 
-        def loss_function_wrapper(translations_quaternions_, encoder_result_, flow_frames_translations_,
-                                  flow_frames_quaternions_):
+        def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
             print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
             translations_ = translations_quaternions_[..., :3]
             quaternions_ = translations_quaternions_[..., 3:]
@@ -891,9 +890,7 @@ class Tracking6D:
 
             print("---Render end  ", int(torch.cuda.memory_allocated() / 1024))
             print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
-            flow_result_ = self.rendering.compute_theoretical_flow2(translations_, quaternions_,
-                                                                    flow_frames_translations_, flow_frames_quaternions_,
-                                                                    encoder_result_.vertices)
+            flow_result_ = self.rendering.compute_theoretical_flow(encoder_result_, encoder_result_flow_frames_)
             print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
             theoretical_flow_, rendered_flow_segmentation_ = flow_result_
             rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
@@ -934,12 +931,8 @@ class Tracking6D:
                                                                                            encoder_type='deep_features')
         kf_translations = encoder_result.translations[0]
         kf_quaternions = encoder_result.quaternions
-        kf_vertices = encoder_result.vertices
-        ff_translations = encoder_result_flow_frames.translations
-        ff_quaternions = encoder_result_flow_frames.quaternions
         translations_quaternions = torch.cat([kf_translations, kf_quaternions], dim=-1)
-        p = translations_quaternions
-        additional_args = (encoder_result, ff_translations, ff_quaternions)
+        additional_args = (encoder_result, encoder_result_flow_frames)
         fun = lambda p: loss_function_wrapper(p, *additional_args)
         # loss_function_wrapper(translations_quaternions, encoder_result, encoder_result_flow_frames)
         # jac = torch.autograd.functional.jacobian(fun, inputs=(translations_quaternions), vectorize=True)
