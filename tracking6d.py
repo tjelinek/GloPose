@@ -913,9 +913,8 @@ class Tracking6D:
             learning_rates_zca = np.matmul(P_inv_zca, np.ones(diag.shape))
             learning_rates_zca_norm = learning_rates_zca / learning_rates_zca.sum()
 
-            breakpoint()
-
-        # learning_rate_preconditioning()
+        self.run_lbfgs_optimization(epoch, observed_images, observed_segmentations, observed_flows,
+                                    observed_flows_segmentations, keyframes, flow_frames, frame_losses)
 
         # First optimize the positional parameters first while preventing steps that increase the loss
         print("Optimizing positional parameters using linear learning rate scheduling")
@@ -996,6 +995,71 @@ class Tracking6D:
                                         per_pixel_flow_error=per_pixel_error)
 
         return frame_result
+
+    def run_lbfgs_optimization(self, epoch, observed_images, observed_segmentations, observed_flows,
+                               observed_flows_segmentations, keyframes, flow_frames, frame_losses):
+        """
+            Runs the LBFGS optimization on the positional parameters of the model.
+
+            This method is an experimental approach to optimizing the positional parameters using the LBFGS algorithm.
+            The optimization is terminated either after 5 iterations or when the best loss becomes less than or
+            equal to 1e-4.
+
+            Parameters:
+            - epoch (int): The starting epoch for the optimization.
+            - observed_images (torch.Tensor): Observed images for the model inference.
+            - observed_segmentations (torch.Tensor): Segmentations corresponding to the observed images.
+            - observed_flows (torch.Tensor): Observed optical flows.
+            - observed_flows_segmentations (torch.Tensor): Segmentations corresponding to the observed optical flows.
+            - keyframes (torch.Tensor): Keyframes used for model inference.
+            - flow_frames (torch.Tensor): Optical flow frames used for model inference.
+            - frame_losses (list): List to store individual frame losses for logging purposes.
+
+            Returns:
+            - float: Best loss achieved during the optimization.
+            - int: Last epoch after optimization.
+
+            Note:
+            The method saves the state dictionary of the best encoder model achieved during the optimization.
+        """
+        self.optimizer_positional_parameters = torch.optim.LBFGS(self.positional_params,
+                                                                 lr=self.config.learning_rate)
+        best_loss = math.inf
+        iters_without_change = 0
+
+        def closure():
+            nonlocal iters_without_change
+            nonlocal best_loss
+
+            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+
+            joint_loss = joint_loss.mean()
+
+            if abs(best_loss - joint_loss) > 1e-3:
+                iters_without_change = 0
+                best_loss = joint_loss
+                self.best_model["value"] = model_loss
+                self.best_model["losses"] = losses_all
+                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+            else:
+                iters_without_change += 1
+
+            self.optimizer_positional_parameters.zero_grad()
+            joint_loss.backward()
+
+            return joint_loss
+
+        for i in range(5):
+            self.optimizer_positional_parameters.step(closure)
+            epoch += 1
+            if best_loss <= 1e-4:
+                break
+        self.encoder.load_state_dict(self.best_model["encoder"])
+
+        return best_loss, epoch
 
     def gradient_descent_with_linear_lr_schedule(self, best_loss, encoder_result, epoch, flow_frames, frame_losses,
                                                  keyframes, loss_improvement_threshold, no_improvements, observed_flows,
