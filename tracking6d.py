@@ -786,132 +786,9 @@ class Tracking6D:
         epoch = 0
         loss_improvement_threshold = 1e-4
 
-        def learning_rate_preconditioning():
-
-            encoder_result, _ = self.frames_and_flow_frames_inference(keyframes, flow_frames, encoder_type='deep')
-
-            vertices = encoder_result.vertices
-
-            def get_vertices_image_pos(translations_x, translations_y, translations_z, rotations_x, rotations_y,
-                                       rotations_z):
-                rotations_w = torch.Tensor([[1 - (rotations_x ** 2 + rotations_y ** 2 + rotations_z ** 2)]]).to(
-                    rotations_z.device)
-                rotations = torch.cat([rotations_w, rotations_x, rotations_y, rotations_z], dim=-1)
-                # rotations = torch.cat([rotations_x, rotations_y, rotations_z], dim=-1)
-                rotations = angle_axis_to_quaternion(rotations, order=QuaternionCoeffOrder.WXYZ)
-
-                translations = torch.cat([translations_x, translations_y, translations_z], dim=-1)
-
-                rotation_matrix = quaternion_to_rotation_matrix(rotations,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
-
-                # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-                rotated_vertices = kaolin.render.camera.rotate_translate_points(vertices, rotation_matrix,
-                                                                                self.rendering.obj_center)
-                rotated_vertices = rotated_vertices + translations
-
-                _, face_vertices_image, face_normals = prepare_vertices(rotated_vertices, self.rendering.faces,
-                                                                        self.rendering.camera_rot,
-                                                                        self.rendering.camera_trans,
-                                                                        self.rendering.camera_proj)
-
-                face_normals_z = face_normals[:, :, -1]
-
-                breakpoint()
-
-                return face_vertices_image
-
-            def compute_custom_jacobian(func, inputs):
-                epsilon = float(1e-7)
-                # inputs_copy = copy.deepcopy(inputs)
-                jacobi_matrices = []
-                for i in range(len(inputs)):
-                    output_0 = func(*inputs)  # .flatten()
-                    inputs[i] += epsilon
-                    output_1 = func(*inputs)  # .flatten()
-
-                    gradient_tensor = torch.zeros(*output_0.shape, *inputs[i].shape)
-                    grad = (output_1 - output_0) / epsilon
-                    if len(inputs[i].shape) == 3:  # translations
-                        gradient_tensor[:, :, :, :, 0, 0, 0] = grad
-                    else:  # quaternions
-                        gradient_tensor[:, :, :, :, 0, 0] = grad
-
-                    inputs[i] -= epsilon
-                    jacobi_matrices.append(gradient_tensor)
-
-                return jacobi_matrices
-
-            translations = encoder_result.translations[:, :, -1]
-            rotations = encoder_result.quaternions[:, -1]
-            # rotations = quaternion_to_angle_axis(rotations, order=QuaternionCoeffOrder.WXYZ)
-            breakpoint()
-            jacobian = compute_custom_jacobian(func=get_vertices_image_pos,
-                                               inputs=[translations[..., 0:1], translations[..., 1:2],
-                                                       translations[..., 2:3], rotations[..., 0:1],
-                                                       rotations[..., 1:2], rotations[..., 2:3]])
-            # breakpoint()
-            jacobian2 = torch.autograd.functional.jacobian(func=get_vertices_image_pos,
-                                                           inputs=(translations[..., 0:1], translations[..., 1:2],
-                                                                   translations[..., 2:3], rotations[..., 0:1],
-                                                                   rotations[..., 1:2], rotations[..., 2:3]),
-                                                           strict=True)
-            # breakpoint()
-            jacobian_translation_x = jacobian[0][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_translation_y = jacobian[1][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_translation_z = jacobian[2][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_translation = torch.cat([jacobian_translation_x, jacobian_translation_y, jacobian_translation_z],
-                                             dim=-1)[:, 0, 0, :]
-            jacobian_rotation_x = jacobian[3][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_rotation_y = jacobian[4][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_rotation_z = jacobian[5][0, ...].flatten(start_dim=0, end_dim=2)
-            jacobian_quaternions = torch.cat([jacobian_rotation_x, jacobian_rotation_y, jacobian_rotation_z], dim=-1)
-            jacobian_quaternions = jacobian_quaternions[:, 0, :]
-            # jacobian_quaternions = jacobian[3][0, ...].flatten(start_dim=0, end_dim=-2)
-            # breakpoint()
-            jacobian_pos = torch.cat([jacobian_translation, jacobian_quaternions], dim=-1)
-
-            hessian = torch.matmul(jacobian_pos.t(), jacobian_pos)
-            hessian_np = hessian.detach().cpu().numpy()
-
-            # breakpoint()
-
-            def zca_whitening_matrix(X):
-                """
-                Function to compute ZCA whitening matrix (aka Mahalanobis whitening).
-                INPUT:  X: [M x N] matrix.
-                    Rows: Variables
-                    Columns: Observations
-                OUTPUT: ZCAMatrix: [M x M] matrix
-                """
-                # Covariance matrix [column-wise variables]: Sigma = (X-mu)' * (X-mu) / N
-                sigma = np.cov(X, rowvar=True)  # [M x M]
-                # Singular Value Decomposition. X = U * np.diag(S) * V
-                U, S, V = np.linalg.svd(sigma)
-                # U: [M x M] eigenvectors of sigma.
-                # S: [M x 1] eigenvalues of sigma.
-                # V: [M x M] transpose of U
-                # Whitening constant: prevents division by zero
-                epsilon = 1e-5
-                # ZCA Whitening matrix: U * Lambda * U'
-                ZCAMatrix = np.dot(U, np.dot(np.diag(1.0 / np.sqrt(S + epsilon)), U.T))  # [M x M]
-                return ZCAMatrix
-
-            LAMBDA = 0.1
-            MU = 1e-8
-            diag = np.diagonal(hessian_np)
-            hessian_diag = np.diag(diag)
-            hessian_np_prime = ((hessian_np + LAMBDA * hessian_diag) + MU * np.identity(n=diag.shape[0]))
-
-            # breakpoint()
-            P_inv_sqrtm = scipy.linalg.inv(scipy.linalg.sqrtm(hessian_np_prime))
-
-            P_inv_zca = zca_whitening_matrix(hessian_np_prime)
-
-            learning_rates_sqrtm = np.matmul(P_inv_sqrtm, np.ones(diag.shape))
-            learning_rates_sqrtm_norm = learning_rates_sqrtm / learning_rates_sqrtm.sum()
-            learning_rates_zca = np.matmul(P_inv_zca, np.ones(diag.shape))
-            learning_rates_zca_norm = learning_rates_zca / learning_rates_zca.sum()
+        encoder_result = self.run_lebesgue_marquardt_method(flow_frames, keyframes, observed_images,
+                                                            observed_segmentations, observed_flows,
+                                                            observed_flows_segmentations)
 
         self.run_lbfgs_optimization(epoch, observed_images, observed_segmentations, observed_flows,
                                     observed_flows_segmentations, keyframes, flow_frames, frame_losses)
@@ -995,6 +872,81 @@ class Tracking6D:
                                         per_pixel_flow_error=per_pixel_error)
 
         return frame_result
+
+    def run_lebesgue_marquardt_method(self, flow_frames, keyframes, observed_images, observed_segmentations,
+                                      observed_flows, observed_flows_segmentations):
+
+        def loss_function_wrapper(translations_quaternions_, encoder_result_, flow_frames_translations_,
+                                  flow_frames_quaternions_):
+            print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
+            translations_ = translations_quaternions_[..., :3]
+            quaternions_ = translations_quaternions_[..., 3:]
+            encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=kf_quaternions)
+
+            print("---Render start", int(torch.cuda.memory_allocated() / 1024))
+            renders_ = self.rendering(translations_, quaternions_, encoder_result_.vertices,
+                                      self.encoder.face_features, encoder_result_.texture_maps,
+                                      None)
+            print("---Render size ", int(renders_.nelement() * renders_.element_size() / 1024))
+
+            print("---Render end  ", int(torch.cuda.memory_allocated() / 1024))
+            print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
+            flow_result_ = self.rendering.compute_theoretical_flow2(translations_, quaternions_,
+                                                                    flow_frames_translations_, flow_frames_quaternions_,
+                                                                    encoder_result_.vertices)
+            print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
+            theoretical_flow_, rendered_flow_segmentation_ = flow_result_
+            rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
+
+            # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+            # actual image
+            theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow_)
+
+            rendered_silhouettes_ = renders_[0, :, :, -1:]
+
+            loss_result = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
+                                                     rendered_silhouettes=rendered_silhouettes_,
+                                                     observed_silhouettes=observed_segmentations,
+                                                     rendered_flow=theoretical_flow_,
+                                                     observed_flow=observed_flows,
+                                                     observed_flow_segmentation=observed_flows_segmentations,
+                                                     rendered_flow_segmentation=rendered_flow_segmentation_,
+                                                     keyframes_encoder_result=encoder_result_,
+                                                     last_keyframes_encoder_result=self.last_encoder_result,
+                                                     return_epes=True)
+
+            loss_result = loss_result[loss_result.nonzero()]
+
+            del renders_
+            del theoretical_flow_
+            del rendered_silhouettes_
+
+            return loss_result
+
+            # losses_all, losses, joint_loss, per_pixel_error = loss_result
+            # joint_loss = joint_loss.mean()
+
+            print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
+
+            # return joint_loss[None].to(torch.float)
+
+        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
+                                                                                           encoder_type='deep_features')
+        kf_translations = encoder_result.translations[0]
+        kf_quaternions = encoder_result.quaternions
+        kf_vertices = encoder_result.vertices
+        ff_translations = encoder_result_flow_frames.translations
+        ff_quaternions = encoder_result_flow_frames.quaternions
+        translations_quaternions = torch.cat([kf_translations, kf_quaternions], dim=-1)
+        p = translations_quaternions
+        additional_args = (encoder_result, ff_translations, ff_quaternions)
+        fun = lambda p: loss_function_wrapper(p, *additional_args)
+        # loss_function_wrapper(translations_quaternions, encoder_result, encoder_result_flow_frames)
+        # jac = torch.autograd.functional.jacobian(fun, inputs=(translations_quaternions), vectorize=True)
+        # breakpoint()
+        # coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=())
+        # breakpoint()
+        return encoder_result
 
     def run_lbfgs_optimization(self, epoch, observed_images, observed_segmentations, observed_flows,
                                observed_flows_segmentations, keyframes, flow_frames, frame_losses):
