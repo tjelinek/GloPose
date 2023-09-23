@@ -845,7 +845,7 @@ class Tracking6D:
                     self.best_model["value"] = 100
             else:
                 if epoch > self.config.allow_break_sgd_after and \
-                        abs(self.best_model["losses"] - model_loss) <= 1e-3 and \
+                        abs(self.best_model["value"] - model_loss) <= 1e-3 and \
                         iters_without_change > self.config.break_sgd_after_iters_with_no_change:
                     break
             if epoch < self.config.iterations - 1:
