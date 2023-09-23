@@ -779,8 +779,6 @@ class Tracking6D:
         # self.encoder.quaternion_offsets = rotation_quaternion.clone()
         # self.encoder.translation_offsets = self.gt_translations.clone()
 
-        model_losses_exponential_decay = None
-
         best_loss = math.inf
         no_improvements = 0
         epoch = 0
