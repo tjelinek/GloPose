@@ -271,6 +271,11 @@ class Tracking6D:
         self.feat_rgb = None
 
         # Loss functions and optimizers
+        self.all_parameters = None
+        self.translational_params = None
+        self.rotational_params = None
+        self.positional_params = None
+        self.non_positional_params = None
         self.loss_function = None
         self.rgb_loss_function = None
         self.optimizer_translational_parameters = None
