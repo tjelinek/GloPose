@@ -736,6 +736,7 @@ class Tracking6D:
 
         # Updates offset of the next rotation
         self.encoder.compute_next_offset(step_i)
+        self.encoder.clear_logs()
 
         self.write_results.set_tensorboard_log_for_frame(step_i)
 
