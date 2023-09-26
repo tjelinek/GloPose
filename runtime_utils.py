@@ -47,7 +47,7 @@ def parse_args(sequence, dataset, folder_name=None):
     parser.add_argument("--start", required=False, default=0)
     parser.add_argument("--length", required=False, default=360)
     parser.add_argument("--skip", required=False, default=1)
-    parser.add_argument("--perc", required=False, default=0.25)
+    parser.add_argument("--perc", required=False, default=1.0)
     parser.add_argument("--folder_name", required=False, default=folder_name)
     parser.add_argument("--experiment", required=False, default='')  # Experiment name
     return parser.parse_args()
