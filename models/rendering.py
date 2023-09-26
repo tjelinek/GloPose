@@ -191,6 +191,43 @@ class RenderingKaolin(nn.Module):
 
         return theoretical_flow, flow_render_mask
 
+    def rendered_world_mesh_coordinates(self, encoder):
+        rendered_camera_coordinates = []
+        for frame_i in range(0, encoder.quaternions.shape[1]):
+            translation_vector = encoder.translations[:, :, frame_i]
+            rotation_matrix = quaternion_to_rotation_matrix(encoder.quaternions[:, frame_i],
+                                                            order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+
+            # Rotate and translate the vertices using the given rotation_matrix and translation_vector
+            vertices = kaolin.render.camera.rotate_translate_points(encoder.vertices,
+                                                                    rotation_matrix, self.obj_center)
+
+            vertices = vertices + translation_vector
+
+            face_vertices_cam, face_vertices_image, face_normals = prepare_vertices(vertices, self.faces,
+                                                                                    self.camera_rot, self.camera_trans,
+                                                                                    self.camera_proj)
+
+            face_vertices_z = face_vertices_cam[:, :, :, -1]
+            face_normals_z = face_normals[:, :, -1]
+
+            features_for_rendering = face_vertices_cam
+
+            ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                                     face_vertices_z,
+                                                                                     face_vertices_image,
+                                                                                     features_for_rendering,
+                                                                                     face_normals_z,
+                                                                                     sigmainv=self.config.sigmainv,
+                                                                                     boxlen=0.02, knum=30,
+                                                                                     multiplier=1000)
+
+            rendered_camera_coordinates.append(ren_outputs)
+
+        rendered_camera_coordinates = torch.stack(rendered_camera_coordinates, dim=1)
+
+        return rendered_camera_coordinates
+
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
