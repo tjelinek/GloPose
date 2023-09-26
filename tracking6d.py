@@ -867,6 +867,11 @@ class Tracking6D:
             self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
                                                         observed_flows, observed_flows_segmentations, step_i)
 
+        # Inferring the most up-to date state after the optimization is finished
+        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
         frame_result = self.FrameResult(theoretical_flow=theoretical_flow,
                                         encoder_result=encoder_result,
                                         renders=renders,
