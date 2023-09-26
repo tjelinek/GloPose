@@ -1228,10 +1228,11 @@ class Tracking6D:
             param_group['lr'] = self.config.learning_rate
         for param_group in self.optimizer_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
-            if param_group['name'] in ['axes_quat', 'half_cosine', 'axis_angle']:
-                param_group['lr'] *= self.config.quaternion_learning_rate_coef
-            elif param_group['name'] == 'trans':
-                param_group['lr'] *= self.config.translation_learning_rate_coef
+            if 'name' in param_group.keys():
+                if param_group['name'] in ['axes_quat', 'half_cosine', 'axis_angle']:
+                    param_group['lr'] *= self.config.quaternion_learning_rate_coef
+                elif param_group['name'] == 'trans':
+                    param_group['lr'] *= self.config.translation_learning_rate_coef
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result):
 
