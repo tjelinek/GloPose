@@ -7,12 +7,10 @@ import imageio
 import kaolin
 import numpy as np
 import os
-import scipy
 import time
 import torch
 import torchvision.transforms as transforms
-from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion, quaternion_to_angle_axis, \
-    quaternion_to_rotation_matrix
+from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
@@ -28,11 +26,12 @@ from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.initial_mesh import generate_face_features
-from models.kaolin_wrapper import load_obj, prepare_vertices
+from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
+from optimization import lsq_gna_custom, lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
-from utils import consecutive_quaternions_angular_difference, rad_to_deg, deg_to_rad, normalize_vertices
+from utils import consecutive_quaternions_angular_difference, normalize_vertices
 
 
 @dataclass
@@ -876,25 +875,26 @@ class Tracking6D:
 
         return frame_result
 
-    def run_lebesgue_marquardt_method(self, flow_frames, keyframes, observed_images, observed_segmentations,
-                                      observed_flows, observed_flows_segmentations):
+    def run_levenberg_marquardt_method(self, flow_frames, keyframes, observed_images, observed_segmentations,
+                                       observed_flows, observed_flows_segmentations, frame_losses):
 
         def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
-            print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
+            # print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
             translations_ = translations_quaternions_[..., :3]
             quaternions_ = translations_quaternions_[..., 3:]
-            encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=kf_quaternions)
+            # quaternions_ = encoder_result_.quaternions
+            encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=quaternions_)
 
-            print("---Render start", int(torch.cuda.memory_allocated() / 1024))
+            # print("---Render start", int(torch.cuda.memory_allocated() / 1024))
             renders_ = self.rendering(translations_, quaternions_, encoder_result_.vertices,
                                       self.encoder.face_features, encoder_result_.texture_maps,
                                       None)
-            print("---Render size ", int(renders_.nelement() * renders_.element_size() / 1024))
+            # print("---Render size ", int(renders_.nelement() * renders_.element_size() / 1024))
 
-            print("---Render end  ", int(torch.cuda.memory_allocated() / 1024))
-            print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
+            # print("---Render end  ", int(torch.cuda.memory_allocated() / 1024))
+            # print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
             flow_result_ = self.rendering.compute_theoretical_flow(encoder_result_, encoder_result_flow_frames_)
-            print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
+            # print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
             theoretical_flow_, rendered_flow_segmentation_ = flow_result_
             rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
 
@@ -915,20 +915,11 @@ class Tracking6D:
                                                      last_keyframes_encoder_result=self.last_encoder_result,
                                                      return_epes=True)
 
-            loss_result = loss_result[loss_result.nonzero()]
-
             del renders_
             del theoretical_flow_
             del rendered_silhouettes_
 
-            return loss_result
-
-            # losses_all, losses, joint_loss, per_pixel_error = loss_result
-            # joint_loss = joint_loss.mean()
-
-            print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
-
-            # return joint_loss[None].to(torch.float)
+            return loss_result.to(torch.float)
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type='deep_features')
@@ -937,11 +928,48 @@ class Tracking6D:
         translations_quaternions = torch.cat([kf_translations, kf_quaternions], dim=-1)
         additional_args = (encoder_result, encoder_result_flow_frames)
         fun = lambda p: loss_function_wrapper(p, *additional_args)
-        # loss_function_wrapper(translations_quaternions, encoder_result, encoder_result_flow_frames)
-        # jac = torch.autograd.functional.jacobian(fun, inputs=(translations_quaternions), vectorize=True)
-        # breakpoint()
-        # coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=())
-        # breakpoint()
+
+        # coeffs_list = lsq_gna_custom(p=translations_quaternions, function=fun, args=())
+        coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=())
+
+        for epoch in range(len(coeffs_list)):
+            coeff_row = coeffs_list[epoch]
+            row_translation = coeff_row[None, :, :, :3]
+            row_quaternion = coeff_row[:, :, 3:]
+            encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
+            renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+                                     self.encoder.face_features, encoder_result.texture_maps, None)
+
+            flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+            theoretical_flow, rendered_flow_segmentation = flow_result
+            rendered_flow_segmentation = rendered_flow_segmentation[None]
+
+            theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow)
+            rendered_silhouettes = renders[0, :, :, -1:]
+
+            loss_result = self.loss_function.forward(rendered_images=renders, observed_images=observed_images,
+                                                     rendered_silhouettes=rendered_silhouettes,
+                                                     observed_silhouettes=observed_segmentations,
+                                                     rendered_flow=theoretical_flow_,
+                                                     observed_flow=observed_flows,
+                                                     observed_flow_segmentation=observed_flows_segmentations,
+                                                     rendered_flow_segmentation=rendered_flow_segmentation,
+                                                     keyframes_encoder_result=encoder_result,
+                                                     last_keyframes_encoder_result=self.last_encoder_result,
+                                                     return_epes=False)
+
+            losses_all, losses, joint_loss, per_pixel_error = loss_result
+            joint_loss = joint_loss.mean()
+            self.best_model["losses"] = losses_all
+
+            self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+
+        self.encoder.translation[0, 0, keyframes, :].data = encoder_result.translations[0, 0, :, :]
+        self.encoder.quaternion_w[0, keyframes, :].data = encoder_result.quaternions[0, :, 0]
+        self.encoder.quaternion_x[0, keyframes, :].data = encoder_result.quaternions[0, :, 1]
+        self.encoder.quaternion_y[0, keyframes, :].data = encoder_result.quaternions[0, :, 2]
+        self.encoder.quaternion_z[0, keyframes, :].data = encoder_result.quaternions[0, :, 3]
+
         return encoder_result
 
     def run_lbfgs_optimization(self, epoch, observed_images, observed_segmentations, observed_flows,
