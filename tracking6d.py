@@ -1072,9 +1072,7 @@ class Tracking6D:
         self.encoder.load_state_dict(self.best_model["encoder"])
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                         observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-        encoder_result3, joint_loss3, losses3, losses_all3, per_pixel_error3, renders3, theoretical_flow3 = infer_result
-        joint_loss3 = joint_loss3.mean()
-        breakpoint()
+        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
         return best_loss, encoder_result, epoch, per_pixel_error, renders, theoretical_flow
 
     def coordinate_descent_with_linear_lr_schedule(self, best_loss, epoch, flow_frames, frame_losses, keyframes,
