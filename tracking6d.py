@@ -926,6 +926,8 @@ class Tracking6D:
 
             return loss_result.to(torch.float)
 
+        self.best_model["value"] = 100
+
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type='deep_features')
         kf_translations = encoder_result.translations[0]
@@ -965,15 +967,16 @@ class Tracking6D:
 
             losses_all, losses, joint_loss, per_pixel_error = loss_result
             joint_loss = joint_loss.mean()
-            self.best_model["losses"] = losses_all
+            if joint_loss < self.best_model["value"]:
+                self.best_model["losses"] = losses_all
+                self.best_model["value"] = joint_loss
+
+                self.encoder.translation_offsets[0, 0, keyframes, :] = encoder_result.translations[0, 0, :, :].detach()
+                self.encoder.quaternion_offsets[0, keyframes, :] = encoder_result.quaternions[0, :].detach()
+
+                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
             self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
-
-        self.encoder.translation[0, 0, keyframes, :].data = encoder_result.translations[0, 0, :, :]
-        self.encoder.quaternion_w[0, keyframes, :].data = encoder_result.quaternions[0, :, 0]
-        self.encoder.quaternion_x[0, keyframes, :].data = encoder_result.quaternions[0, :, 1]
-        self.encoder.quaternion_y[0, keyframes, :].data = encoder_result.quaternions[0, :, 2]
-        self.encoder.quaternion_z[0, keyframes, :].data = encoder_result.quaternions[0, :, 3]
 
         return encoder_result
 
