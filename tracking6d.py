@@ -784,7 +784,6 @@ class Tracking6D:
         # self.encoder.quaternion_offsets = rotation_quaternion.clone()
         # self.encoder.translation_offsets = self.gt_translations.clone()
 
-        best_loss = math.inf
         no_improvements = 0
         epoch = 0
         loss_improvement_threshold = 1e-4
@@ -827,7 +826,8 @@ class Tracking6D:
                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+            model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
+                                                    losses, encoder_result)
             if abs(model_loss - self.best_model["value"]) > 1e-3:
                 iters_without_change = 0
                 self.best_model["value"] = model_loss
