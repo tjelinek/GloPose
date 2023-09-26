@@ -918,7 +918,7 @@ class Tracking6D:
                                                      rendered_flow_segmentation=rendered_flow_segmentation_,
                                                      keyframes_encoder_result=encoder_result_,
                                                      last_keyframes_encoder_result=self.last_encoder_result,
-                                                     return_epes=True)
+                                                     return_end_point_errors=True)
 
             del renders_
             del theoretical_flow_
@@ -961,7 +961,7 @@ class Tracking6D:
                                                      rendered_flow_segmentation=rendered_flow_segmentation,
                                                      keyframes_encoder_result=encoder_result,
                                                      last_keyframes_encoder_result=self.last_encoder_result,
-                                                     return_epes=False)
+                                                     return_end_point_errors=False)
 
             losses_all, losses, joint_loss, per_pixel_error = loss_result
             joint_loss = joint_loss.mean()
