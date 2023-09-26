@@ -504,12 +504,12 @@ class WriteResults:
 
                 ious = torch.zeros(gt_object_mask.shape[1])
                 for frame_i in range(gt_object_mask.shape[1]):
-                    frame_iou = 1 - fmo_loss(gt_object_mask[None, None, :, frame_i],
-                                             predicted_mask[None, None, :, frame_i])
+                    frame_iou = 1 - fmo_loss(predicted_mask[None, None, :, frame_i],
+                                             gt_object_mask[None, None, :, frame_i])
                     ious[frame_i] = frame_iou
 
                 last_iou_2d = float(frame_iou)
-                miou_2d = float(torch.max(ious))
+                miou_2d = float(torch.mean(ious))
 
             # ["Frame", "mIoU", "lastIoU" "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
             #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
