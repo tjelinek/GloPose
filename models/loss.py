@@ -1,10 +1,10 @@
 import numpy as np
-import torch.nn as nn
 import torch
-
+import torch.nn as nn
 from kornia.losses import total_variation
+
 from models.encoder import EncoderResult
-from utils import erode_segment_mask, erode_segment_mask2
+from utils import erode_segment_mask2
 
 
 class FMOLoss(nn.Module):
@@ -19,7 +19,8 @@ class FMOLoss(nn.Module):
                 rendered_silhouettes, observed_silhouettes,
                 rendered_flow, observed_flow,
                 observed_flow_segmentation, rendered_flow_segmentation,
-                keyframes_encoder_result, last_keyframes_encoder_result):
+                keyframes_encoder_result, last_keyframes_encoder_result,
+                return_end_point_errors=False):
         """
         Forward pass of the model.
 
@@ -34,6 +35,8 @@ class FMOLoss(nn.Module):
             rendered_flow_segmentation (torch.Tensor): Flow masks for rendered flow.
             keyframes_encoder_result (EncoderResult): Encoder result for the current frame.
             last_keyframes_encoder_result (EncoderResult): Encoder result for the previous frame.
+            return_end_point_errors (bool): Indicates whether to return concatenated end point errors for two
+                                            consecutive flow frames rather than the mean of the end point errors.
 
         Returns:
             tuple: A tuple containing losses_all, losses, and total loss.
@@ -127,8 +130,9 @@ class FMOLoss(nn.Module):
                 observed_or_rendered_flow_segmentation = \
                     random_points_from_binary_mask(observed_or_rendered_flow_segmentation[:, 0],
                                                    self.config.flow_sgd_n_samples)[None]
-
-            image_area = rendered_images.shape[-2:].numel()
+                image_area = self.config.flow_sgd_n_samples
+            else:
+                image_area = rendered_images.shape[-2:].numel()
 
             # end_point_error_sqrt = torch.norm(end_point_error, dim=-1, p=0.5)
             # per_pixel_flow_loss = torch.where(end_point_error_magnitude < 1, end_point_error_magnitude,
@@ -136,7 +140,7 @@ class FMOLoss(nn.Module):
 
             # Compute the mean of the loss divided by the total object area to take into account different objects size
             end_point_error = observed_flow_clone - flow_from_tracking_clone
-            end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=1)
+            end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=2)
 
             per_pixel_flow_loss_observed_not_rendered = (end_point_error_l1_norm *
                                                          observed_not_rendered_flow_segmentation)
@@ -148,6 +152,10 @@ class FMOLoss(nn.Module):
                                                         observed_or_rendered_flow_segmentation)
 
             per_pixel_flow_loss = per_pixel_flow_loss_observed_or_rendered
+            if return_end_point_errors:
+                nonzero_indices = tuple(observed_or_rendered_flow_segmentation.nonzero().t())
+                per_pixel_flow_loss = per_pixel_flow_loss[nonzero_indices]
+                return per_pixel_flow_loss.flatten()
 
             per_pixel_mean_flow_loss_observed_not_rendered = (
                     per_pixel_flow_loss_observed_not_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
@@ -158,14 +166,14 @@ class FMOLoss(nn.Module):
             per_pixel_mean_flow_loss_observed_or_rendered = (
                     per_pixel_flow_loss_observed_or_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
 
-            losses["fl_obs_not_rend"] = (per_pixel_mean_flow_loss_observed_not_rendered *
-                                         self.config.loss_flow_weight)
-            losses["fl_not_obs_rend"] = (per_pixel_mean_flow_loss_not_observed_rendered *
-                                         self.config.loss_fl_not_obs_rend_weight)
-            losses["fl_obs_and_rend"] = (per_pixel_mean_flow_loss_observed_and_rendered *
-                                         self.config.loss_fl_obs_and_rend_weight)
-            losses["fl_obs_or_rend"] = (per_pixel_mean_flow_loss_observed_or_rendered *
-                                        self.config.loss_flow_weight)
+            # losses["fl_obs_not_rend"] = (per_pixel_mean_flow_loss_observed_not_rendered *
+            #                              self.config.loss_flow_weight)
+            # losses["fl_not_obs_rend"] = (per_pixel_mean_flow_loss_not_observed_rendered *
+            #                              self.config.loss_fl_not_obs_rend_weight)
+            # losses["fl_obs_and_rend"] = (per_pixel_mean_flow_loss_observed_and_rendered *
+            #                              self.config.loss_fl_obs_and_rend_weight)
+            # losses["fl_obs_or_rend"] = (per_pixel_mean_flow_loss_observed_or_rendered *
+            #                             self.config.loss_flow_weight)
 
             # per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
             # flow_loss = per_image_mean_flow.mean(dim=(1,))
