@@ -886,9 +886,8 @@ class Tracking6D:
 
         def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
             # print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
-            translations_ = translations_quaternions_[..., :3]
+            translations_ = translations_quaternions_[None, ..., :3]
             quaternions_ = translations_quaternions_[..., 3:]
-            # quaternions_ = encoder_result_.quaternions
             encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=quaternions_)
 
             # print("---Render start", int(torch.cuda.memory_allocated() / 1024))
