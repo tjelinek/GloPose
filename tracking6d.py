@@ -952,13 +952,13 @@ class Tracking6D:
             theoretical_flow, rendered_flow_segmentation = flow_result
             rendered_flow_segmentation = rendered_flow_segmentation[None]
 
-            theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow)
+            theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
             rendered_silhouettes = renders[0, :, :, -1:]
 
             loss_result = self.loss_function.forward(rendered_images=renders, observed_images=observed_images,
                                                      rendered_silhouettes=rendered_silhouettes,
                                                      observed_silhouettes=observed_segmentations,
-                                                     rendered_flow=theoretical_flow_,
+                                                     rendered_flow=theoretical_flow,
                                                      observed_flow=observed_flows,
                                                      observed_flow_segmentation=observed_flows_segmentations,
                                                      rendered_flow_segmentation=rendered_flow_segmentation,
