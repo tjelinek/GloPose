@@ -885,21 +885,14 @@ class Tracking6D:
                                        observed_flows, observed_flows_segmentations, frame_losses):
 
         def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
-            # print("--Lf wrap start", int(torch.cuda.memory_allocated() / 1024))
             translations_ = translations_quaternions_[None, ..., :3]
             quaternions_ = translations_quaternions_[..., 3:]
             encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=quaternions_)
 
-            # print("---Render start", int(torch.cuda.memory_allocated() / 1024))
             renders_ = self.rendering(translations_, quaternions_, encoder_result_.vertices,
-                                      self.encoder.face_features, encoder_result_.texture_maps,
-                                      None)
-            # print("---Render size ", int(renders_.nelement() * renders_.element_size() / 1024))
+                                      self.encoder.face_features, encoder_result_.texture_maps, None)
 
-            # print("---Render end  ", int(torch.cuda.memory_allocated() / 1024))
-            # print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
             flow_result_ = self.rendering.compute_theoretical_flow(encoder_result_, encoder_result_flow_frames_)
-            # print("---The fl start", int(torch.cuda.memory_allocated() / 1024))
             theoretical_flow_, rendered_flow_segmentation_ = flow_result_
             rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
 
@@ -908,7 +901,6 @@ class Tracking6D:
             theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow_)
 
             rendered_silhouettes_ = renders_[0, :, :, -1:]
-
             loss_result = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
                                                      rendered_silhouettes=rendered_silhouettes_,
                                                      observed_silhouettes=observed_segmentations,
@@ -930,14 +922,13 @@ class Tracking6D:
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type='deep_features')
-        kf_translations = encoder_result.translations[0]
-        kf_quaternions = encoder_result.quaternions
+        kf_translations = encoder_result.translations[0].detach()
+        kf_quaternions = encoder_result.quaternions.detach()
         translations_quaternions = torch.cat([kf_translations, kf_quaternions], dim=-1)
         additional_args = (encoder_result, encoder_result_flow_frames)
         fun = lambda p: loss_function_wrapper(p, *additional_args)
 
-        # coeffs_list = lsq_gna_custom(p=translations_quaternions, function=fun, args=())
-        coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=())
+        coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=(), max_iter=25)
 
         for epoch in range(len(coeffs_list)):
             coeff_row = coeffs_list[epoch]
