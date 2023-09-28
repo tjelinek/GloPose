@@ -1381,7 +1381,7 @@ class Tracking6D:
                                             observed_flows=observed_flows,
                                             observed_flows_segmentations=flow_segment_masks,
                                             keyframes=self.all_keyframes.keyframes,
-                                            flow_frames=self.all_keyframes.flow_keyframes, encoder_type='deep')
+                                            flow_frames=self.all_keyframes.flow_keyframes, encoder_type='rgb')
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
