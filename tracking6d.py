@@ -895,22 +895,22 @@ class Tracking6D:
             theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow_)
 
             rendered_silhouettes_ = renders_[0, :, :, -1:]
-            loss_result = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
-                                                     rendered_silhouettes=rendered_silhouettes_,
-                                                     observed_silhouettes=observed_segmentations,
-                                                     rendered_flow=theoretical_flow_,
-                                                     observed_flow=observed_flows,
-                                                     observed_flow_segmentation=observed_flows_segmentations,
-                                                     rendered_flow_segmentation=rendered_flow_segmentation_,
-                                                     keyframes_encoder_result=encoder_result_,
-                                                     last_keyframes_encoder_result=self.last_encoder_result,
-                                                     return_end_point_errors=True)
+            loss_result_ = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
+                                                      rendered_silhouettes=rendered_silhouettes_,
+                                                      observed_silhouettes=observed_segmentations,
+                                                      rendered_flow=theoretical_flow_,
+                                                      observed_flow=observed_flows,
+                                                      observed_flow_segmentation=observed_flows_segmentations,
+                                                      rendered_flow_segmentation=rendered_flow_segmentation_,
+                                                      keyframes_encoder_result=encoder_result_,
+                                                      last_keyframes_encoder_result=self.last_encoder_result,
+                                                      return_end_point_errors=True)
 
             del renders_
             del theoretical_flow_
             del rendered_silhouettes_
 
-            return loss_result.to(torch.float)
+            return loss_result_.to(torch.float)
 
         self.best_model["value"] = 100
 
@@ -922,13 +922,13 @@ class Tracking6D:
         additional_args = (encoder_result, encoder_result_flow_frames)
         fun = lambda p: loss_function_wrapper(p, *additional_args)
 
-        coeffs_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=(),
-                                     max_iter=self.config.levenberg_marquardt_max_ter)
+        coefficients_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=(),
+                                           max_iter=self.config.levenberg_marquardt_max_ter)
 
-        for epoch in range(len(coeffs_list)):
-            coeff_row = coeffs_list[epoch]
-            row_translation = coeff_row[None, :, :, :3]
-            row_quaternion = coeff_row[:, :, 3:]
+        for epoch in range(len(coefficients_list)):
+            coefficients_row = coefficients_list[epoch]
+            row_translation = coefficients_row[None, :, :, :3]
+            row_quaternion = coefficients_row[:, :, 3:]
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                      self.encoder.face_features, encoder_result.texture_maps, None)
