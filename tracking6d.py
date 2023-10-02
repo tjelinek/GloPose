@@ -844,13 +844,11 @@ class Tracking6D:
                     break
             if epoch < self.config.iterations - 1:
                 joint_loss = joint_loss.mean()
-                self.optimizer_non_positional_parameters.zero_grad()
-                self.optimizer_positional_parameters.zero_grad()
+                # self.optimizer_all_parameters.zero_grad()
 
                 joint_loss.backward()
 
-                # self.optimizer_non_positional_parameters.step()
-                # self.optimizer_positional_parameters.step()
+                # self.optimizer_all_parameters.step()
 
                 if self.config.use_lr_scheduler:
                     scheduler_positional_params.step(joint_loss)
@@ -858,9 +856,9 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        if self.config.visualize_loss_landscape and (step_i in {0, 1, 2, 3} or step_i % 18 == 0) and self.config.use_gt:
-            self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
-                                                        observed_flows, observed_flows_segmentations, step_i)
+        # if self.config.visualize_loss_landscape and (step_i in {0, 1, 2, 3} or step_i % 18 == 0) and self.config.use_gt:
+        #     self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
+        #                                                 observed_flows, observed_flows_segmentations, step_i)
 
         # Inferring the most up-to date state after the optimization is finished
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
@@ -1134,12 +1132,9 @@ class Tracking6D:
 
             loss_improvement = best_loss - joint_loss
 
-            # loss_seq_all.append((float(joint_loss), float(self.encoder.translation[0, 0, 1, 0]), float(loss_improvement)))
-
             if loss_improvement >= 0:
                 # loss_seq.append((float(joint_loss), float(self.encoder.translation[0, 0, 1, 0]), float(loss_improvement), 'saved_encoder'))
                 best_loss = joint_loss
-                # best_translation = encoder_result.translations
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
                 for param_group in self.optimizer_translational_parameters.param_groups:
@@ -1170,50 +1165,10 @@ class Tracking6D:
                     param_group['lr'] /= 2.0
                 no_improvements += 1
 
-            parameters_newest = [param.detach().clone() for param in self.encoder.parameters()]
-
-        # for it in loss_seq:
-        #     print(it)
-        #
-        # print("-----------------")
-        #
-        # for it in loss_seq_all:
-        #     print(it)
-
-        # print("Encoder before reloading", float(self.encoder.translation[0, 0, 1, 0]))
-
         self.encoder.load_state_dict(self.best_model["encoder"])
-
-        # print("Encoder  after reloading", float(self.encoder.translation[0, 0, 1, 0]))
-        #
-        # parameters_best = [param.detach().clone() for param in self.encoder.parameters()]
-        #
-        # print([torch.equal(parameters_newest[i], parameters_best[i]) for i in range(len(parameters_best))])
-        #
-        # values_list = [val for val in self.best_model['encoder'].values()]
-        # print([torch.equal(values_list[i], parameters_newest[i]) for i in range(len(parameters_best))])
 
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                         observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-        # joint_loss3 = joint_loss3.mean()
-
-        # encoder_result2_tensors = [encres for encres in encoder_result if type(encres) is torch.Tensor]
-        # encoder_result3_tensors = [encres for encres in encoder_result3 if type(encres) is torch.Tensor]
-        # print("Enc res comparison", [torch.equal(encoder_result2_tensors[i], encoder_result3_tensors[i]) for i in range(len(encoder_result2_tensors))])
-        #
-        # print("-----------------")
-        # print(float(joint_loss3), float(self.encoder.translation[0, 0, 1, 0]))
-        # print(f'Best model: {best_translation}\n', f'reloaded best model: {encoder_result3.translations}\n',
-        #       f'last model: {encoder_result.translations}')
-        #
-        # objective_functions_defaults = [
-        #                                 torch.equal(observed_flows, observed_flows_clone),
-        #                                 torch.equal(observed_images, observed_images_clone),
-        #                                 torch.equal(observed_flows_segmentations, observed_flows_segmentations_clone),
-        #                                 torch.equal(observed_segmentations, observed_segmentations_clone),
-        #                                 ]
-        # print("Objective function defaults", objective_functions_defaults)
-        # breakpoint()
 
         return infer_result
 
