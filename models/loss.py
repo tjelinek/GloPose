@@ -102,7 +102,6 @@ class FMOLoss(nn.Module):
             observed_flow_segmentation = observed_flow_segmentation[0, :, -1:]  # Shape (N, 1, H, W)
             rendered_flow_segmentation = rendered_flow_segmentation[0]  # Shape (N, 1, H, W)
 
-            # Todo think about filtering by threshold 0.5 first
             observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0).to(
                 observed_flow_segmentation.dtype)
             observed_and_rendered_flow_segmentation = (observed_flow_segmentation * rendered_flow_segmentation > 0).to(
@@ -111,6 +110,8 @@ class FMOLoss(nn.Module):
                 observed_flow_segmentation.dtype)
             observed_or_rendered_flow_segmentation = (rendered_flow_segmentation + observed_flow_segmentation > 0).to(
                 observed_flow_segmentation.dtype)
+            observed_flow_segmentation_binary = (observed_flow_segmentation > 0).to(observed_flow_segmentation.dtype)
+            rendered_flow_segmentation_binary = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
 
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
@@ -150,6 +151,8 @@ class FMOLoss(nn.Module):
                                                          observed_and_rendered_flow_segmentation)
             per_pixel_flow_loss_observed_or_rendered = (end_point_error_l1_norm *
                                                         observed_or_rendered_flow_segmentation)
+            per_pixel_flow_loss_observed = (end_point_error_l1_norm * observed_flow_segmentation_binary)
+            per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation_binary)
 
             per_pixel_flow_loss = per_pixel_flow_loss_observed_or_rendered
             if return_end_point_errors:
@@ -165,14 +168,22 @@ class FMOLoss(nn.Module):
                     per_pixel_flow_loss_observed_and_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
             per_pixel_mean_flow_loss_observed_or_rendered = (
                     per_pixel_flow_loss_observed_or_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            per_pixel_mean_flow_loss_observed = (
+                    per_pixel_flow_loss_observed.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            per_pixel_mean_flow_loss_rendered = (
+                    per_pixel_flow_loss_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
 
-            # losses["fl_obs_not_rend"] = (per_pixel_mean_flow_loss_observed_not_rendered *
+            # losses["fl_obs_not_ren"] = (per_pixel_mean_flow_loss_observed_not_rendered *
             #                              self.config.loss_flow_weight)
-            # losses["fl_not_obs_rend"] = (per_pixel_mean_flow_loss_not_observed_rendered *
+            # losses["fl_not_obs_ren"] = (per_pixel_mean_flow_loss_not_observed_rendered *
             #                              self.config.loss_fl_not_obs_rend_weight)
-            # losses["fl_obs_and_rend"] = (per_pixel_mean_flow_loss_observed_and_rendered *
+            # losses["fl_obs_and_ren"] = (per_pixel_mean_flow_loss_observed_and_rendered *
             #                              self.config.loss_fl_obs_and_rend_weight)
-            # losses["fl_obs_or_rend"] = (per_pixel_mean_flow_loss_observed_or_rendered *
+            # losses["fl_obs_or_ren"] = (per_pixel_mean_flow_loss_observed_or_rendered *
+            #                             self.config.loss_flow_weight)
+            # losses["fl_obs"] = (per_pixel_mean_flow_loss_observed *
+            #                             self.config.loss_flow_weight)
+            # losses["fl_ren"] = (per_pixel_mean_flow_loss_rendered *
             #                             self.config.loss_flow_weight)
 
             # per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
