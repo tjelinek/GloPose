@@ -390,41 +390,44 @@ class Tracking6D:
         return images, images_feat, observed_flows, segments
 
     def initialize_optimizer_and_loss(self, ivertices):
-        all_parameters = set(list(self.encoder.parameters()))
-        translational_params = {self.encoder.translation}
-        rotational_params = {self.encoder.quaternion_w, self.encoder.quaternion_x,
-                             self.encoder.quaternion_y, self.encoder.quaternion_z}
-        positional_params = translational_params | rotational_params
-        rotational_params = [
-            {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
-             'lr': self.config.learning_rate,
-             'name': 'axes_quat'},
-            {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-             'lr': self.config.learning_rate * 1e-0,
-             'name': 'axis_angle'},
-            {'params': [self.encoder.quaternion_w],
-             'lr': self.config.learning_rate * 1e-0,
-             'name': 'half_cosine'}
-        ]
-        non_positional_params = all_parameters - positional_params
-        positional_params = [
-            {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
-             'lr': self.config.learning_rate,
-             'name': 'axes_quat'},
-            {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-             'lr': self.config.learning_rate * 1e-0,
-             'name': 'axis_angle'},
-            {'params': [self.encoder.quaternion_w],
-             'lr': self.config.learning_rate * 1e-0,
-             'name': 'half_cosine'},
-            {'params': list(translational_params),
-             'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
-             'name': 'trans'},
-        ]
-        self.optimizer_non_positional_parameters = torch.optim.Adam(non_positional_params, lr=self.config.learning_rate)
-        self.optimizer_positional_parameters = torch.optim.SGD(positional_params, lr=self.config.learning_rate)
-        self.optimizer_translational_parameters = torch.optim.SGD(translational_params, lr=self.config.learning_rate)
-        self.optimizer_rotational_parameters = torch.optim.SGD(rotational_params, lr=self.config.learning_rate)
+        self.all_parameters = set(list(self.encoder.parameters()))
+        self.translational_params = {self.encoder.translation}
+        self.rotational_params = {self.encoder.quaternion_w, self.encoder.quaternion_x,
+                                  self.encoder.quaternion_y, self.encoder.quaternion_z}
+        self.positional_params = self.translational_params | self.rotational_params
+        # rotational_params = [
+        #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
+        #      'lr': self.config.learning_rate,
+        #      'name': 'axes_quat'},
+        #     {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
+        #      'lr': self.config.learning_rate * 1e-0,
+        #      'name': 'axis_angle'},
+        #     {'params': [self.encoder.quaternion_w],
+        #      'lr': self.config.learning_rate * 1e-0,
+        #      'name': 'half_cosine'}
+        # ]
+        self.non_positional_params = self.all_parameters - self.positional_params
+        # positional_params = [
+        #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
+        #      'lr': self.config.learning_rate,
+        #      'name': 'axes_quat'},
+        #     {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
+        #      'lr': self.config.learning_rate * 1e-0,
+        #      'name': 'axis_angle'},
+        #     {'params': [self.encoder.quaternion_w],
+        #      'lr': self.config.learning_rate * 1e-0,
+        #      'name': 'half_cosine'},
+        #     {'params': list(translational_params),
+        #      'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
+        #      'name': 'trans'},
+        # ]
+        self.optimizer_non_positional_parameters = torch.optim.Adam(self.non_positional_params,
+                                                                    lr=self.config.learning_rate)
+        self.optimizer_positional_parameters = torch.optim.SGD(self.positional_params, lr=self.config.learning_rate)
+        self.optimizer_translational_parameters = torch.optim.SGD(self.translational_params,
+                                                                  lr=self.config.learning_rate)
+        self.optimizer_all_parameters = torch.optim.Adam(self.all_parameters, lr=self.config.learning_rate)
+        self.optimizer_rotational_parameters = torch.optim.SGD(self.rotational_params, lr=self.config.learning_rate)
         self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
     def initialize_feature_extractor(self):
