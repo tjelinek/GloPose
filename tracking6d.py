@@ -1003,9 +1003,9 @@ class Tracking6D:
             nonlocal iters_without_change
             nonlocal best_loss
 
-            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
-                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            infer_result_ = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result_
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
             joint_loss = joint_loss.mean()
