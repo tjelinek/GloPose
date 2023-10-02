@@ -126,7 +126,37 @@ class WriteResults:
         self.metrics_log.close()
 
     def visualize_loss_landscape(self, tracking6d, observed_images, observed_segmentations, observed_flows,
-                                 observed_flows_segmentations, stepi):
+                                 observed_flows_segmentations, stepi, relative_mode=False):
+        """
+        Visualizes the loss landscape by computing the joint losses across varying translations and rotations.
+
+        Parameters:
+        - tracking6d (Tracking6DClassType): The 6D tracking data, containing ground truth rotations, translations,
+                                            and other relevant properties.
+        - observed_images (Tensor or ndarray): Observed images.
+        - observed_segmentations (Tensor or ndarray): Segmentations corresponding to the observed images.
+        - observed_flows (Tensor or ndarray): Observed optical flows.
+        - observed_flows_segmentations (Tensor or ndarray): Segmentations corresponding to the observed optical flows.
+        - stepi (int): Current step or iteration.
+        - relative_mode (bool, optional): If True and stepi >= 1, it will compute the ground truth marker with respect
+                                          the previous predicted value.
+
+        Behavior:
+        - The function computes joint losses over a grid defined by translations and rotations around different axes.
+        - It visualizes these joint losses as a 2D heatmap, overlaying paths of SGD iterations and ground truth values.
+        - The resultant visualization is saved as an EPS file in a 'loss_landscapes' directory under
+          `tracking6d.write_folder`.
+
+        Notes:
+        - Only certain combinations of translation and rotation axes are considered.
+        - The range of translations and rotations are derived from the ground truth values and are limited to specific
+          intervals for visualization.
+        - Ground truth, start and end points of the SGD path, and contour lines for the loss values are overlaid on the
+        heatmap.
+
+        Returns:
+        None
+        """
 
         num_translations = 50
         num_rotations = 50
@@ -136,8 +166,30 @@ class WriteResults:
 
         for trans_axis_idx, rot_axis_idx in product(range(len(trans_axes)), range(len(rot_axes))):
 
-            gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
-            gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
+            if trans_axis_idx in [1, 2] or rot_axis_idx in [2]:
+                continue
+
+            if relative_mode and stepi >= 1:
+                gt_rotation_deg_prev = rad_to_deg(tracking6d.gt_rotations[0, stepi - 1]).cpu()
+                gt_translation_prev = tracking6d.gt_translations[0, 0, stepi - 1].cpu()
+
+                gt_rotation_deg_current = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+                gt_translation_current = tracking6d.gt_translations[0, 0, stepi].cpu()
+
+                gt_translation_diff = gt_translation_current - gt_translation_prev
+                gt_rotation_diff = gt_rotation_deg_current - gt_rotation_deg_prev
+
+                gt_translation = tracking6d.logged_sgd_translations[stepi - 1][0, 0, 0].detach().cpu() + \
+                                 gt_translation_diff
+
+                gt_rotation_quaternion = tracking6d.logged_sgd_quaternions[stepi - 1].detach().cpu()
+                gt_rotation_rad = quaternion_to_angle_axis(gt_rotation_quaternion,
+                                                           order=QuaternionCoeffOrder.WXYZ)
+                gt_rotation_deg = rad_to_deg(gt_rotation_rad)[0, 0]
+                gt_rotation_deg = gt_rotation_deg + gt_rotation_diff
+            else:
+                gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+                gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
 
             translations_space = np.linspace(gt_translation[trans_axis_idx] - 0.3,
                                              gt_translation[trans_axis_idx] + 0.3, num=num_translations)
