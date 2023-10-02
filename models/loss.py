@@ -102,16 +102,16 @@ class FMOLoss(nn.Module):
             observed_flow_segmentation = observed_flow_segmentation[0, :, -1:]  # Shape (N, 1, H, W)
             rendered_flow_segmentation = rendered_flow_segmentation[0]  # Shape (N, 1, H, W)
 
-            observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0).to(
-                observed_flow_segmentation.dtype)
-            observed_and_rendered_flow_segmentation = (observed_flow_segmentation * rendered_flow_segmentation > 0).to(
-                observed_flow_segmentation.dtype)
-            not_observed_rendered_flow_segmentation = (rendered_flow_segmentation - observed_flow_segmentation > 0).to(
-                observed_flow_segmentation.dtype)
-            observed_or_rendered_flow_segmentation = (rendered_flow_segmentation + observed_flow_segmentation > 0).to(
-                observed_flow_segmentation.dtype)
-            observed_flow_segmentation_binary = (observed_flow_segmentation > 0).to(observed_flow_segmentation.dtype)
-            rendered_flow_segmentation_binary = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
+            # observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0)\
+            #     .to(observed_flow_segmentation.dtype)
+            # observed_and_rendered_flow_segmentation = (observed_flow_segmentation * rendered_flow_segmentation > 0)\
+            #     .to(observed_flow_segmentation.dtype)
+            # not_observed_rendered_flow_segmentation = (rendered_flow_segmentation - observed_flow_segmentation > 0)\
+            #     .to(observed_flow_segmentation.dtype)
+            # observed_or_rendered_flow_segmentation = (rendered_flow_segmentation + observed_flow_segmentation > 0)\
+            #     .to(observed_flow_segmentation.dtype)
+            observed_flow_segmentation = (observed_flow_segmentation > 0).to(observed_flow_segmentation.dtype)
+            rendered_flow_segmentation = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
 
             # Perform erosion of the segmentation mask
             if self.config.segmentation_mask_erosion_iters:
@@ -119,7 +119,7 @@ class FMOLoss(nn.Module):
                 observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
 
                 flow_from_tracking_tmp = rendered_flow[0].permute(0, 3, 1, 2)
-                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, observed_flow_segmentation)
+                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, rendered_flow_segmentation)
                 rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
             flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, H, W, 2)
@@ -128,8 +128,8 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             if self.config.flow_sgd:
-                observed_or_rendered_flow_segmentation = \
-                    random_points_from_binary_mask(observed_or_rendered_flow_segmentation[:, 0],
+                rendered_flow_segmentation = \
+                    random_points_from_binary_mask(rendered_flow_segmentation[:, 0],
                                                    self.config.flow_sgd_n_samples)[None]
                 image_area = self.config.flow_sgd_n_samples
             else:
@@ -143,33 +143,33 @@ class FMOLoss(nn.Module):
             end_point_error = observed_flow_clone - flow_from_tracking_clone
             end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=2)
 
-            per_pixel_flow_loss_observed_not_rendered = (end_point_error_l1_norm *
-                                                         observed_not_rendered_flow_segmentation)
-            per_pixel_flow_loss_not_observed_rendered = (end_point_error_l1_norm *
-                                                         not_observed_rendered_flow_segmentation)
-            per_pixel_flow_loss_observed_and_rendered = (end_point_error_l1_norm *
-                                                         observed_and_rendered_flow_segmentation)
-            per_pixel_flow_loss_observed_or_rendered = (end_point_error_l1_norm *
-                                                        observed_or_rendered_flow_segmentation)
-            per_pixel_flow_loss_observed = (end_point_error_l1_norm * observed_flow_segmentation_binary)
-            per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation_binary)
+            # per_pixel_flow_loss_observed_not_rendered = (end_point_error_l1_norm *
+            #                                              observed_not_rendered_flow_segmentation)
+            # per_pixel_flow_loss_not_observed_rendered = (end_point_error_l1_norm *
+            #                                              not_observed_rendered_flow_segmentation)
+            # per_pixel_flow_loss_observed_and_rendered = (end_point_error_l1_norm *
+            #                                              observed_and_rendered_flow_segmentation)
+            # per_pixel_flow_loss_observed_or_rendered = (end_point_error_l1_norm *
+            #                                             observed_or_rendered_flow_segmentation)
+            # per_pixel_flow_loss_observed = (end_point_error_l1_norm * observed_flow_segmentation_binary)
+            per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation)
 
-            per_pixel_flow_loss = per_pixel_flow_loss_observed_or_rendered
+            per_pixel_flow_loss = per_pixel_flow_loss_rendered
             if return_end_point_errors:
-                nonzero_indices = tuple(observed_or_rendered_flow_segmentation.nonzero().t())
+                nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
                 per_pixel_flow_loss = per_pixel_flow_loss[nonzero_indices]
                 return per_pixel_flow_loss.flatten()
 
-            per_pixel_mean_flow_loss_observed_not_rendered = (
-                    per_pixel_flow_loss_observed_not_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
-            per_pixel_mean_flow_loss_not_observed_rendered = (
-                    per_pixel_flow_loss_not_observed_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
-            per_pixel_mean_flow_loss_observed_and_rendered = (
-                    per_pixel_flow_loss_observed_and_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
-            per_pixel_mean_flow_loss_observed_or_rendered = (
-                    per_pixel_flow_loss_observed_or_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
-            per_pixel_mean_flow_loss_observed = (
-                    per_pixel_flow_loss_observed.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            # per_pixel_mean_flow_loss_observed_not_rendered = (
+            #         per_pixel_flow_loss_observed_not_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            # per_pixel_mean_flow_loss_not_observed_rendered = (
+            #         per_pixel_flow_loss_not_observed_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            # per_pixel_mean_flow_loss_observed_and_rendered = (
+            #         per_pixel_flow_loss_observed_and_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            # per_pixel_mean_flow_loss_observed_or_rendered = (
+            #         per_pixel_flow_loss_observed_or_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+            # per_pixel_mean_flow_loss_observed = (
+            #         per_pixel_flow_loss_observed.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
             per_pixel_mean_flow_loss_rendered = (
                     per_pixel_flow_loss_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
 
@@ -188,7 +188,7 @@ class FMOLoss(nn.Module):
 
             # per_image_mean_flow = per_pixel_flow_loss.sum(dim=(2, 3)) / image_area
             # flow_loss = per_image_mean_flow.mean(dim=(1,))
-            flow_loss = per_pixel_mean_flow_loss_observed_or_rendered
+            flow_loss = per_pixel_mean_flow_loss_rendered
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
 
         if self.config.loss_texture_change_weight > 0:
