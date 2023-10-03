@@ -470,7 +470,7 @@ class Tracking6D:
         config.features = 'rgb'
         self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(
             self.device)
-        rgb_parameters = list(self.rgb_encoder.parameters())[-1:]
+        rgb_parameters = [self.rgb_encoder.texture_map]
         self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
         self.rgb_encoder.train()
         config.loss_laplacian_weight = 0
