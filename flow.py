@@ -7,6 +7,7 @@ import torch
 import torchvision
 import imageio
 import torchvision.transforms as T
+from matplotlib import pyplot as plt
 
 from pathlib import Path
 from typing import Iterable
@@ -94,7 +95,7 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
 
     for y in range(step, height, step):
         for x in range(step, width, step):
-            draw1.ellipse((x - r, y - r, x + r, y + r), fill='red')
+            draw1.ellipse((x - r, y - r, x + r, y + r), fill='black')
 
             shift_up_x = flow_up[y, x, 0]
             shift_up_y = flow_up[y, x, 1]
@@ -102,18 +103,23 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
             # end_up = (x - shift_up_x, y + shift_up_y)
             # end_prime_up = (x - shift_up_prime_x, y + shift_up_prime_y)
 
-            draw2.ellipse((x - r, y - r, x + r, y + r), fill='red')
+            draw2.ellipse((x - r, y - r, x + r, y + r), fill='black')
+            # draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
+
             draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
-                       fill='green')
+                       fill='red')
             draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
-                       fill='green')
+                       fill='red')
             if flow_up_prime is not None:
                 shift_up_prime_x = flow_up_prime[y, x, 0]
                 shift_up_prime_y = flow_up_prime[y, x, 1]
+
+                # draw2.line((x, y, x + shift_up_prime_x, y + shift_up_prime_y), fill='green')
+
                 draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
-                            y + shift_up_prime_y + r), fill='purple')
+                            y + shift_up_prime_y + r), fill='green')
                 draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y + r, x + shift_up_prime_x + r,
-                            y + shift_up_prime_y - r), fill='purple')
+                            y + shift_up_prime_y - r), fill='green')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
