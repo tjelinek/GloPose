@@ -1,9 +1,8 @@
 from collections import namedtuple
 
-import math
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder, quaternion_to_angle_axis
+from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
 from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qnorm_vectorized
@@ -60,11 +59,6 @@ class Encoder(nn.Module):
         self.axis_angle_x = nn.Parameter(axis_angles[..., 0, None])
         self.axis_angle_y = nn.Parameter(axis_angles[..., 1, None])
         self.axis_angle_z = nn.Parameter(axis_angles[..., 2, None])
-
-        # For logging purposes, store the values of development of estimated rotations and translations thorough the
-        # gradient descent iterations
-        self.rotation_by_gd_iter = []
-        self.translation_by_gd_iter = []
 
         # Lights initialization
         if self.config.use_lights:
@@ -186,17 +180,6 @@ class Encoder(nn.Module):
         axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
         self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
 
-    def log_rotation_and_translation(self, opt_frames, quaternion, translation):
-        angles_rad = quaternion_to_angle_axis(quaternion[0], order=QuaternionCoeffOrder.WXYZ)
-        angles_deg = angles_rad * 180.0 / math.pi
-        last_optimized = max(opt_frames)
-        self.rotation_by_gd_iter.append(angles_deg[last_optimized].detach())
-        self.translation_by_gd_iter.append(translation[0, 0, last_optimized].detach())
-
-    def clear_logs(self):
-        self.rotation_by_gd_iter = []
-        self.translation_by_gd_iter = []
-
     def forward_normalize(self):
         exp = 0
         if self.config.connect_frames:
@@ -225,7 +208,8 @@ class Encoder(nn.Module):
 
             translation[:, :, :, 0, :] = translation[:, :, :, 0, :] - translation[:, :, :, 1, :]
 
-            quaternion = self.quaternion[:, frmi]
+            quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
+            quaternion = quaternion[:, frmi]
             quaternion = quaternion.view(quaternion.shape[:1] + torch.Size([1, 2, 4]))
 
             translation_all.append(translation)
