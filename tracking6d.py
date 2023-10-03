@@ -1140,7 +1140,6 @@ class Tracking6D:
             loss_improvement = best_loss - joint_loss
 
             if loss_improvement >= 0:
-                # loss_seq.append((float(joint_loss), float(self.encoder.translation[0, 0, 1, 0]), float(loss_improvement), 'saved_encoder'))
                 best_loss = joint_loss
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
@@ -1198,8 +1197,9 @@ class Tracking6D:
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result):
 
-        self.logged_sgd_translations.append(encoder_result.translations)
-        self.logged_sgd_quaternions.append(encoder_result.quaternions)
+        self.logged_sgd_translations.append(encoder_result.translations.detach().clone())
+        self.logged_sgd_quaternions.append(encoder_result.quaternions.detach().clone())
+        joint_loss = joint_loss.detach().clone()
 
         frame_losses.append(float(joint_loss))
         self.write_into_tensorboard_logs(joint_loss, losses, epoch)
