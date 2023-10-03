@@ -38,18 +38,6 @@ def get_flow_from_files(files_source_dir: Path, model):
         yield (imfile1, imfile2), (flow_low, flow_up)
 
 
-def visualize_flow_with_images(image1, image2, flow_up):
-    """
-    Visualizes flow_up along with image1 and image2.
-
-    :param image1: uint8 image with 0-255 as color in [C, H, W] format
-    :param image2: uint8 image with 0-255 as color in [C, H, W] format
-    :param flow_up: np.ndarray [H, W, 2] fine flow
-    :return: PIL Image
-    """
-    return visualize_flow(image1, image2, flow_up, None)
-
-
 def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
     """
     Visualizes flow_up and flow_up_prime along with image1 and image2.
@@ -60,10 +48,10 @@ def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
     :param flow_up_prime: np.ndarray [H, W, 2] flow
     :return: PIL Image
     """
-    return visualize_flow(image1, image2, flow_up, flow_up_prime)
+    return visualize_flow_with_images(image1, image2, flow_up, flow_up_prime)
 
 
-def visualize_flow(image1, image2, flow_up, flow_up_prime):
+def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime):
     """
 
     :param image1: uint8 image with 0-255 as color in [C, H, W] format
@@ -74,16 +62,18 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
     """
     width, height = image1.shape[-1], image1.shape[-2]
 
-    flow_up_image = flow_viz.flow_to_image(flow_up)
-
     # Tensors to PIL Images
     transform = T.ToPILImage()
     image1 = transform(image1)
     image2 = transform(image2)
-    flow_pil = transform(flow_up_image)
+
+    flow_pil = None
+    if flow_up is not None:
+        flow_up_image = flow_viz.flow_to_image(flow_up)
+        flow_pil = transform(flow_up_image)
 
     if flow_up_prime is not None:
-        flow_up_prime_image = flow_viz.flow_to_image(flow_up)
+        flow_up_prime_image = flow_viz.flow_to_image(flow_up_prime)
         flow_prime_pil = transform(flow_up_prime_image)
 
     draw1 = ImageDraw.Draw(image1)
@@ -96,20 +86,18 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
     for y in range(step, height, step):
         for x in range(step, width, step):
             draw1.ellipse((x - r, y - r, x + r, y + r), fill='black')
-
-            shift_up_x = flow_up[y, x, 0]
-            shift_up_y = flow_up[y, x, 1]
-
-            # end_up = (x - shift_up_x, y + shift_up_y)
-            # end_prime_up = (x - shift_up_prime_x, y + shift_up_prime_y)
-
             draw2.ellipse((x - r, y - r, x + r, y + r), fill='black')
-            # draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
 
-            draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
-                       fill='red')
-            draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
-                       fill='red')
+            if flow_up is not None:
+                shift_up_x = flow_up[y, x, 0]
+                shift_up_y = flow_up[y, x, 1]
+
+                # draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
+
+                draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
+                           fill='red')
+                draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
+                           fill='red')
             if flow_up_prime is not None:
                 shift_up_prime_x = flow_up_prime[y, x, 0]
                 shift_up_prime_y = flow_up_prime[y, x, 1]
@@ -123,7 +111,8 @@ def visualize_flow(image1, image2, flow_up, flow_up_prime):
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
     canvas.paste(image1, (0, 0))
-    canvas.paste(flow_pil, (width, 0))
+    if flow_pil is not None:
+        canvas.paste(flow_pil, (width, 0))
     canvas.paste(image2, (2 * width, 0))
 
     return canvas

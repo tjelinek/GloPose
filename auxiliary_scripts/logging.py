@@ -58,7 +58,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
 
-    flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up)
+    flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up, None)
     transform = transforms.ToPILImage()
     # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
@@ -774,7 +774,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, bounding_box, obser
 
         # Visualize flow and flow difference
         flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0], current_rendered_image_rgb[0],
-                                                       theoretical_flow_np)
+                                                       None, theoretical_flow_np)
         flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
                                                                  current_rendered_image_rgb[0],
                                                                  observed_flow_np, theoretical_flow_np)
