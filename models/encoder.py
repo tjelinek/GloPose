@@ -126,8 +126,6 @@ class Encoder(nn.Module):
         # Computes differences of consecutive translations and rotations
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
-        self.log_rotation_and_translation(opt_frames, quaternion, translation)
-
         quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
 
         result = EncoderResult(translations=translation,
