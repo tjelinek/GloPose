@@ -788,6 +788,12 @@ class Tracking6D:
         epoch = 0
         loss_improvement_threshold = 1e-4
 
+        # First inference just to log the results
+        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+        self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
+
         print("Pre-initializing the objects position")
         # First optimize the positional parameters first while preventing steps that increase the loss
         if self.config.preinitialization_method == 'levenberg-marquardt':
@@ -859,9 +865,10 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        # if self.config.visualize_loss_landscape and (step_i in {0, 1, 2, 3} or step_i % 18 == 0) and self.config.use_gt:
-        #     self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
-        #                                                 observed_flows, observed_flows_segmentations, step_i)
+        if self.config.visualize_loss_landscape and (step_i in {0, 1, 2, 3} or step_i % 18 == 0) and self.config.use_gt:
+            self.write_results.visualize_loss_landscape(self, observed_images, observed_segmentations,
+                                                        observed_flows, observed_flows_segmentations, step_i,
+                                                        relative_mode=True)
 
         # Inferring the most up-to date state after the optimization is finished
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,

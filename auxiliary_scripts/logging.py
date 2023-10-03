@@ -20,7 +20,7 @@ from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoef
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from models.loss import fmo_loss
-from segmentations import create_mask_from_string, get_bbox, pad_image
+from segmentations import create_mask_from_string, pad_image
 from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
@@ -169,7 +169,7 @@ class WriteResults:
             if trans_axis_idx in [1, 2] or rot_axis_idx in [2]:
                 continue
 
-            if relative_mode and stepi >= 1:
+            if relative_mode and stepi > 1:
                 gt_rotation_deg_prev = rad_to_deg(tracking6d.gt_rotations[0, stepi - 1]).cpu()
                 gt_translation_prev = tracking6d.gt_translations[0, 0, stepi - 1].cpu()
 
@@ -179,14 +179,14 @@ class WriteResults:
                 gt_translation_diff = gt_translation_current - gt_translation_prev
                 gt_rotation_diff = gt_rotation_deg_current - gt_rotation_deg_prev
 
-                gt_translation = tracking6d.logged_sgd_translations[stepi - 1][0, 0, 0].detach().cpu() + \
+                gt_translation = tracking6d.logged_sgd_translations[0][0, 0, 0].detach().cpu() + \
                                  gt_translation_diff
 
-                gt_rotation_quaternion = tracking6d.logged_sgd_quaternions[stepi - 1].detach().cpu()
-                gt_rotation_rad = quaternion_to_angle_axis(gt_rotation_quaternion,
-                                                           order=QuaternionCoeffOrder.WXYZ)
-                gt_rotation_deg = rad_to_deg(gt_rotation_rad)[0, 0]
-                gt_rotation_deg = gt_rotation_deg + gt_rotation_diff
+                gt_rotation_quaternion = tracking6d.logged_sgd_quaternions[0].detach().cpu()
+                gt_rotation_rad = quaternion_to_angle_axis(gt_rotation_quaternion, order=QuaternionCoeffOrder.WXYZ)
+                last_rotation_deg = rad_to_deg(gt_rotation_rad)[0, 0]
+
+                gt_rotation_deg = last_rotation_deg + gt_rotation_diff
             else:
                 gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
                 gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
@@ -263,8 +263,12 @@ class WriteResults:
 
             plt.scatter(gt_translation[trans_axis_idx], gt_rotation_deg[rot_axis_idx],
                         color='green', marker='x', label='GT')
-            plt.text(gt_translation[trans_axis_idx], gt_rotation_deg[rot_axis_idx],
-                     'GT', verticalalignment='top', color='green')
+            if relative_mode:
+                plt.text(gt_translation[trans_axis_idx], gt_rotation_deg[rot_axis_idx],
+                         'Relative optimum', verticalalignment='top', color='green')
+            else:
+                plt.text(gt_translation[trans_axis_idx], gt_rotation_deg[rot_axis_idx],
+                         'GT', verticalalignment='top', color='green')
 
             # 2) Show contours of the values
             contours = plt.contour(translations_space, rotations_space, joint_losses.T, levels=20)
@@ -578,8 +582,11 @@ class WriteResults:
         fig, ax1 = plt.subplots()
         fig.subplots_adjust(left=0.25, right=0.85)
 
-        rotation_tensors = tracking6d.encoder.rotation_by_gd_iter
-        translation_tensors = tracking6d.encoder.translation_by_gd_iter
+        translation_tensors = [t[0, 0, 0].detach().cpu() for t in tracking6d.logged_sgd_translations]
+        rotation_tensors = [
+            rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, 0]
+            for q in tracking6d.logged_sgd_quaternions
+        ]
 
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
         for i in range(3):
