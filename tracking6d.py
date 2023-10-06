@@ -29,7 +29,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
-from optimization import lsq_gna_custom, lsq_lma_custom
+from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
 from utils import consecutive_quaternions_angular_difference, normalize_vertices
 
@@ -663,10 +663,13 @@ class Tracking6D:
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
                                    stepi, self.write_folder, frame_result.per_pixel_flow_error)
 
-            keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
-            keep_keyframes = keep_keyframes[active_buffer_indices]
-            min_index = np.argmin(silh_losses[active_buffer_indices])
-            keep_keyframes[min_index] = True  # keep the best (in case all are bad)
+            if 0 in self.all_keyframes.keyframes:
+                keep_keyframes = np.ones(len(active_buffer_indices), dtype=np.bool)
+            else:
+                keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
+                keep_keyframes = keep_keyframes[active_buffer_indices]
+                min_index = np.argmin(silh_losses[active_buffer_indices])
+                keep_keyframes[min_index] = True  # keep the best (in case all are bad)
 
             # normTdist = compute_trandist(renders)
 
