@@ -128,9 +128,8 @@ class FMOLoss(nn.Module):
             observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
 
             if self.config.flow_sgd:
-                rendered_flow_segmentation = \
-                    random_points_from_binary_mask(rendered_flow_segmentation[:, 0],
-                                                   self.config.flow_sgd_n_samples)[None]
+                rendered_flow_segmentation = random_points_from_binary_mask(rendered_flow_segmentation[0],
+                                                                            self.config.flow_sgd_n_samples)[None]
                 image_area = self.config.flow_sgd_n_samples
             else:
                 image_area = rendered_images.shape[-2:].numel()
@@ -157,8 +156,8 @@ class FMOLoss(nn.Module):
             per_pixel_flow_loss = per_pixel_flow_loss_rendered
             if return_end_point_errors:
                 nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
-                per_pixel_flow_loss = per_pixel_flow_loss[nonzero_indices]
-                return per_pixel_flow_loss.flatten()
+                per_pixel_flow_loss_nonzero = per_pixel_flow_loss[nonzero_indices]
+                return per_pixel_flow_loss_nonzero.flatten()
 
             # per_pixel_mean_flow_loss_observed_not_rendered = (
             #         per_pixel_flow_loss_observed_not_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
