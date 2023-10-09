@@ -1183,12 +1183,6 @@ class Tracking6D:
 
         return infer_result
 
-    def normalize_rendered_flows(self, rendered_flows):
-        rendered_flows[..., 0] = rendered_flows[..., 0] * (self.rendering.width / self.shape[-1])
-        rendered_flows[..., 1] = rendered_flows[..., 1] * (self.rendering.height / self.shape[-2])
-
-        return rendered_flows
-
     def reset_learning_rate(self):
         for param_group in self.optimizer_non_positional_parameters.param_groups:
             param_group['lr'] = self.config.learning_rate
