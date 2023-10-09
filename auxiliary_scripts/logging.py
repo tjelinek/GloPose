@@ -21,7 +21,8 @@ from pytorch3d.loss.chamfer import chamfer_distance
 
 from models.loss import fmo_loss
 from segmentations import create_mask_from_string, pad_image
-from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
+from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
+    normalize_rendered_flows
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -321,7 +322,9 @@ class WriteResults:
                 rendered_flow_segmentation = rendered_flow_segmentation[None]
                 # Renormalization compensating for the fact that we render into bounding box that is smaller than the
                 # actual image
-                theoretical_flow = tracking6d.normalize_rendered_flows(theoretical_flow)
+                theoretical_flow = normalize_rendered_flows(theoretical_flow, tracking6d.rendering.width,
+                                                            tracking6d.rendering.height,
+                                                            tracking6d.shape[-1], tracking6d.shape[-2])
                 loss_function = tracking6d.loss_function
 
                 rendered_silhouettes = renders[0, :, :, -1:]

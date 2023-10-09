@@ -14,7 +14,7 @@ from scipy.ndimage import uniform_filter
 from torchvision import transforms
 import torch.nn.functional as F
 
-from utils import imread
+from utils import imread, normalize_rendered_flows
 
 sys.path.insert(0, 'OSTrack')
 from OSTrack.lib.test.tracker.ostrack import OSTrack
@@ -187,7 +187,10 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         observed_flows, _ = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow)
         observed_flows = observed_flows.detach()
         observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
-        observed_flows = self.tracking6d.normalize_rendered_flows(observed_flows)[0]
+        observed_flows = normalize_rendered_flows(observed_flows, self.tracking6d.rendering.width,
+                                                  self.tracking6d.rendering.height,
+                                                  self.tracking6d.shape[-1],
+                                                  self.tracking6d.shape[-2])[0]
 
         return observed_flows
 
