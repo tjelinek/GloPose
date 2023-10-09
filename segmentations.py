@@ -40,8 +40,9 @@ def compute_segments_dist(segment_resized, segment_orig_torch):
              and 2nd the segmentation mask as a floating point number in [0.0, 1.0].
     """
     euclid_distance_to_background = ndimage.distance_transform_edt(1 - segment_resized)
-    distance_tensor = torch.from_numpy(euclid_distance_to_background)
-    segments = torch.cat((distance_tensor[None], segment_orig_torch[None]), 1)
+    distance_tensor = torch.from_numpy(euclid_distance_to_background)[None]
+    segment_resized_torch = torch.from_numpy(segment_resized)[None]
+    segments = torch.cat((distance_tensor, segment_resized_torch), 1)
     return segments
 
 
