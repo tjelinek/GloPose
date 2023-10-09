@@ -25,6 +25,7 @@ from flow_raft import get_flow_model_raft
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
+from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
@@ -927,17 +928,22 @@ class Tracking6D:
                                                                                            encoder_type='deep_features')
         kf_translations = encoder_result.translations[0].detach()
         kf_quaternions = encoder_result.quaternions.detach()
-        translations_quaternions = torch.cat([kf_translations, kf_quaternions], dim=-1)
-        additional_args = (encoder_result, encoder_result_flow_frames)
-        fun = lambda p: loss_function_wrapper(p, *additional_args)
+        translations_quaternions = torch.cat([kf_translations, kf_quaternions[..., 1:]], dim=-1)
 
-        coefficients_list = lsq_lma_custom(p=translations_quaternions, function=fun, args=(),
+        flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
+                                              self.loss_function, observed_images, observed_segmentations,
+                                              observed_flows, observed_flows_segmentations, self.rendering.width,
+                                              self.rendering.height, self.shape[-1], self.shape[-2])
+
+        coefficients_list = lsq_lma_custom(p=translations_quaternions, function=flow_loss_model.forward, args=(),
                                            max_iter=self.config.levenberg_marquardt_max_ter)
 
         for epoch in range(len(coefficients_list)):
             coefficients_row = coefficients_list[epoch]
             row_translation = coefficients_row[None, :, :, :3]
             row_quaternion = coefficients_row[:, :, 3:]
+            quaternions_weights = 1 - torch.linalg.vector_norm(row_quaternion, dim=-1).unsqueeze(-1)
+            row_quaternion = torch.cat([quaternions_weights, row_quaternion], dim=-1)
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
             renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
                                      self.encoder.face_features, encoder_result.texture_maps, None)
