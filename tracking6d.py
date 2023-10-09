@@ -31,7 +31,7 @@ from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
-from utils import consecutive_quaternions_angular_difference, normalize_vertices
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
 
 
 @dataclass
@@ -900,7 +900,8 @@ class Tracking6D:
 
             # Renormalization compensating for the fact that we render into bounding box that is smaller than the
             # actual image
-            theoretical_flow_ = self.normalize_rendered_flows(theoretical_flow_)
+            theoretical_flow_ = normalize_rendered_flows(theoretical_flow_, self.rendering.width,
+                                                         self.rendering.height, self.shape[-1], self.shape[-2])
 
             rendered_silhouettes_ = renders_[0, :, :, -1:]
             loss_result_ = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
@@ -945,7 +946,8 @@ class Tracking6D:
             theoretical_flow, rendered_flow_segmentation = flow_result
             rendered_flow_segmentation = rendered_flow_segmentation[None]
 
-            theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
+            theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendering.width,
+                                                        self.rendering.height, self.shape[-1], self.shape[-2])
             rendered_silhouettes = renders[0, :, :, -1:]
 
             loss_result = self.loss_function.forward(rendered_images=renders, observed_images=observed_images,
@@ -1011,9 +1013,9 @@ class Tracking6D:
             nonlocal iters_without_change
             nonlocal best_loss
 
-            infer_result_ = self.infer_model(observed_images, observed_segmentations, observed_flows,
-                                             observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result_
+            infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
+                                            observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
             joint_loss = joint_loss.mean()
@@ -1232,7 +1234,8 @@ class Tracking6D:
 
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the
         # actual image
-        theoretical_flow = self.normalize_rendered_flows(theoretical_flow)
+        theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendering.width, self.rendering.height,
+                                                    self.shape[-1], self.shape[-2])
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function

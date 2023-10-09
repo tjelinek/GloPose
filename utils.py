@@ -442,6 +442,14 @@ def consecutive_quaternions_angular_difference2(quaternion):
     return np.array(angs)
 
 
+def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,
+                             original_height):
+    rendered_flows[..., 0] = rendered_flows[..., 0] * (rendering_width / original_width)
+    rendered_flows[..., 1] = rendered_flows[..., 1] * (rendering_height / original_height)
+
+    return rendered_flows
+
+
 def normalize_vertices(vertices):
     vertices = vertices - vertices[0].mean(0)
     magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
