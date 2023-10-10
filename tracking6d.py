@@ -886,41 +886,24 @@ class Tracking6D:
 
     def run_levenberg_marquardt_method(self, flow_frames, keyframes, observed_images, observed_segmentations,
                                        observed_flows, observed_flows_segmentations, frame_losses):
+        loss_coefs_names = [
+            'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight',
+            'loss_dist_weight', 'loss_q_weight', 'loss_texture_change_weight',
+            'loss_t_weight', 'loss_rgb_weight', 'loss_flow_weight'
+        ]
 
-        def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
-            translations_ = translations_quaternions_[None, ..., :3]
-            quaternions_ = translations_quaternions_[..., 3:]
-            encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=quaternions_)
+        # We only care about the flow loss at the moment
+        for field_name in loss_coefs_names:
+            if field_name != "loss_flow_weight":
+                setattr(self.config, field_name, 0)
 
-            renders_ = self.rendering(translations_, quaternions_, encoder_result_.vertices,
-                                      self.encoder.face_features, encoder_result_.texture_maps, None)
-
-            flow_result_ = self.rendering.compute_theoretical_flow(encoder_result_, encoder_result_flow_frames_)
-            theoretical_flow_, rendered_flow_segmentation_ = flow_result_
-            rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
-
-            # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-            # actual image
-            theoretical_flow_ = normalize_rendered_flows(theoretical_flow_, self.rendering.width,
-                                                         self.rendering.height, self.shape[-1], self.shape[-2])
-
-            rendered_silhouettes_ = renders_[0, :, :, -1:]
-            loss_result_ = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
-                                                      rendered_silhouettes=rendered_silhouettes_,
-                                                      observed_silhouettes=observed_segmentations,
-                                                      rendered_flow=theoretical_flow_,
-                                                      observed_flow=observed_flows,
-                                                      observed_flow_segmentation=observed_flows_segmentations,
-                                                      rendered_flow_segmentation=rendered_flow_segmentation_,
-                                                      keyframes_encoder_result=encoder_result_,
-                                                      last_keyframes_encoder_result=self.last_encoder_result,
-                                                      return_end_point_errors=True)
-
-            del renders_
-            del theoretical_flow_
-            del rendered_silhouettes_
-
-            return loss_result_.to(torch.float)
+        if 0 in keyframes:
+            flow_frames = flow_frames[1:]
+            keyframes = keyframes[1:]
+            observed_images = observed_images.clone()[:, 1:]
+            observed_segmentations = observed_segmentations.clone()[:, 1:]
+            observed_flows = observed_flows.clone()[:, 1:]
+            observed_flows_segmentations = observed_flows_segmentations.clone()[:, 1:]
 
         self.best_model["value"] = 100
 
@@ -984,6 +967,10 @@ class Tracking6D:
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
             self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+
+        for field_name in loss_coefs_names:
+            if field_name != "loss_flow_weight":
+                setattr(self.config, field_name, getattr(self.config_copy, field_name))
 
         infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
                                         observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
