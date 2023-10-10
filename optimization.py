@@ -1,3 +1,5 @@
+import time
+
 from torchimize.functions.jacobian import jacobian_approx_t
 from typing import Callable, Union, Tuple, List
 
@@ -30,78 +32,21 @@ def jacobian_approx_t_custom(p, f):
     :return: jacobian
     """
 
-    try:
-        jac = torch.autograd.functional.jacobian(f, p, vectorize=True)  # create_graph=True
-    except RuntimeError:
-        jac = torch.autograd.functional.jacobian(f, p, strict=True, vectorize=False)
+    # time_start = time.process_time()
+    # try:
+    #     jac = torch.autograd.functional.jacobian(f, p, vectorize=True)  # create_graph=True
+    #     print(f"Vectorized Jacobian time {time.process_time() - time_start}")
+    # except RuntimeError:
+    #     print(f"Vectorized Jacobian time {time.process_time() - time_start}")
+    # time_start = time.process_time()
+    # fun = f
+    jac = torch.autograd.functional.jacobian(f, p, strict=True, vectorize=False)
+    # jac = torch.func.jacfwd(f)(p)
+    # jac = torch.func.jacrev(f)(p)
+    # breakpoint()
+    # print(f"Non-vectorized Jacobian time {time.process_time() - time_start}")
 
     return jac
-
-
-def lsq_gna_custom(
-        # https://github.com/hahnec/torchimize
-        p: torch.Tensor,
-        function: Callable,
-        jac_function: Callable = None,
-        args: Union[Tuple, List] = (),
-        ftol: float = 1e-8,
-        ptol: float = 1e-8,
-        gtol: float = 1e-8,
-        l: float = 1.,
-        max_iter: int = 100,
-) -> List[torch.Tensor]:
-    """
-    # https://github.com/hahnec/torchimize
-    Gauss-Newton implementation for least-squares fitting of non-linear functions
-
-    :param p: initial value(s)
-    :param function: user-provided function which takes p (and additional arguments) as input
-    :param jac_function: user-provided Jacobian function which takes p (and additional arguments) as input
-    :param args: optional arguments passed to function
-    :param ftol: relative change in cost function as stop condition
-    :param ptol: relative change in independent variables as stop condition
-    :param gtol: maximum gradient tolerance as stop condition
-    :param l: step size damping parameter
-    :param max_iter: maximum number of iterations
-    :return: list of results
-    """
-
-    if len(args) > 0:
-        # pass optional arguments to function
-        fun = lambda p: function(p, *args)
-    else:
-        fun = function
-
-    if jac_function is None:
-        # use numerical Jacobian if analytical is not provided
-        jac_fun = lambda p: jacobian_approx_t(p, f=fun)
-    else:
-        jac_fun = lambda p: jac_function(p, *args)
-
-    f = fun(p)
-    jac = jac_fun(p)[:, 0, 0, :]
-    g = torch.matmul(jac.T, f)
-    H = torch.matmul(jac.T, jac)
-    breakpoint()
-    p_list = [p]
-    while len(p_list) < max_iter:
-        h = -l * torch.linalg.lstsq(H, g, rcond=None, driver=None)[0]
-        p = p + h
-        p_list.append(p.clone())
-        f_prev = f.clone()
-        f = fun(p)
-        jac = jac_fun(p)[:, 0, 0, :]
-        g = torch.matmul(jac.T, f)
-        H = torch.matmul(jac.T, jac)
-
-        # stop conditions
-        gcon = max(abs(g)) < gtol
-        pcon = (h ** 2).sum() ** .5 < ptol * (ptol + (p ** 2).sum() ** .5)
-        fcon = ((f_prev - f) ** 2).sum() < ((ftol * f) ** 2).sum()
-        if gcon or pcon or fcon:
-            break
-
-    return p_list
 
 
 def lsq_lma_custom(
@@ -167,6 +112,7 @@ def lsq_lma_custom(
     p_list = [p]
     it_idx = 0
     while len(p_list) < max_iter:
+        time_start = time.process_time()
         # print(f"Iter {it_idx} begin", int(torch.cuda.memory_allocated() / 1024))
         D = torch.eye(jac.shape[1], device=jac.device)
         D *= 1 if meth == 'lev' else torch.max(torch.maximum(H.diagonal(), D.diagonal()))
@@ -193,6 +139,7 @@ def lsq_lma_custom(
         fcon = ((f_prev - f) ** 2).sum() < ((ftol * f) ** 2).sum() if rho > 0 else False
         # print(f"Iter {it_idx} end  ", int(torch.cuda.memory_allocated() / 1024))
         it_idx += 1
+        print(f"Levenberg-Marquardt iteration {len(p_list)} took {time.process_time() - time_start}, rho {rho > 0}")
         if gcon or pcon or fcon:
             break
 
