@@ -38,7 +38,8 @@ def get_flow_from_files(files_source_dir: Path, model):
         yield (imfile1, imfile2), (flow_low, flow_up)
 
 
-def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
+def compare_flows_with_images(image1, image2, flow_up, flow_up_prime,
+                              gt_silhouette_current=None, gt_silhouette_prev=None):
     """
     Visualizes flow_up and flow_up_prime along with image1 and image2.
 
@@ -46,26 +47,59 @@ def compare_flows_with_images(image1, image2, flow_up, flow_up_prime):
     :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
+    :param gt_silhouette_current: Silhouette of the ground truth in the current frame
+    :param gt_silhouette_prev: Silhouette of the ground truth in the previous frame
     :return: PIL Image
     """
-    return visualize_flow_with_images(image1, image2, flow_up, flow_up_prime)
+    return visualize_flow_with_images(image1, image2, flow_up, flow_up_prime, gt_silhouette_current, gt_silhouette_prev)
 
 
-def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime):
+def tensor_to_pil_with_alpha(tensor, alpha=0.2):
+    # Convert tensor to numpy array and scale to 255 if necessary
+    array = (tensor.numpy() * 255).astype(np.uint8)
+
+    # Create an RGBA image with the given alpha value for the segmentation
+    rgba_array = np.zeros((array.shape[0], array.shape[1], 4), dtype=np.uint8)
+    rgba_array[..., :1] = array[:, :, None]  # Assign the tensor values to red and green channels
+    rgba_array[..., 3] = (array > 0) * alpha * 256.0  # Create alpha channel based on tensor values
+
+    # Convert to PIL image
+    img = Image.fromarray(rgba_array, 'RGBA')
+
+    return img
+
+
+def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
+                               gt_silhouette_current=None, gt_silhouette_prev=None):
     """
 
     :param image1: uint8 image with 0-255 as color in [C, H, W] format
     :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
+    :param gt_silhouette_current: Silhouette of the ground truth in the current frame
+    :param gt_silhouette_prev: Silhouette of the ground truth in the previous frame
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
 
     # Tensors to PIL Images
     transform = T.ToPILImage()
-    image1 = transform(image1)
-    image2 = transform(image2)
+    image1_pil = transform(image1)
+    image2_pil = transform(image2)
+
+    if gt_silhouette_prev is not None:
+        silh1_PIL = tensor_to_pil_with_alpha(gt_silhouette_prev.cpu(), alpha=0.25)
+        background1_PIL = Image.new('RGBA', image1_pil.size, (0, 0, 0, 0))
+        background1_PIL.paste(silh1_PIL, (0, 0))
+        background1_PIL.paste(image1_pil, (0, 0))
+        image1_pil = background1_PIL
+    if gt_silhouette_current is not None:
+        silh2_PIL = tensor_to_pil_with_alpha(gt_silhouette_current.cpu(), alpha=0.25)
+        background2_PIL = Image.new('RGBA', image2_pil.size, (0, 0, 0, 0))
+        background2_PIL.paste(silh2_PIL, (0, 0))
+        background2_PIL.paste(image2_pil, (0, 0))
+        image2_pil = background2_PIL
 
     flow_pil = None
     if flow_up is not None:
@@ -76,8 +110,8 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime):
         flow_up_prime_image = flow_viz.flow_to_image(flow_up_prime)
         flow_prime_pil = transform(flow_up_prime_image)
 
-    draw1 = ImageDraw.Draw(image1)
-    draw2 = ImageDraw.Draw(image2)
+    draw1 = ImageDraw.Draw(image1_pil)
+    draw2 = ImageDraw.Draw(image2_pil)
 
     step = max(width, height) // 20
 
@@ -110,10 +144,10 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime):
                             y + shift_up_prime_y - r), fill='green')
 
     canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
-    canvas.paste(image1, (0, 0))
+    canvas.paste(image1_pil, (0, 0))
     if flow_pil is not None:
         canvas.paste(flow_pil, (width, 0))
-    canvas.paste(image2, (2 * width, 0))
+    canvas.paste(image2_pil, (2 * width, 0))
 
     return canvas
 

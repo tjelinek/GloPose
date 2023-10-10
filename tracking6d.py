@@ -607,7 +607,6 @@ class Tracking6D:
             self.last_encoder_result_rgb = EncoderResult(*[tensor.clone()
                                                            if tensor is not None else None for tensor in
                                                            self.rgb_encoder(self.all_keyframes.keyframes)])
-
             frame_result = self.apply(self.all_keyframes.images_feat[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.all_keyframes.segments[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
                                       self.all_keyframes.observed_flows[:, :, :, b0[0]:b0[1], b0[2]:b0[3]],
@@ -632,9 +631,11 @@ class Tracking6D:
 
             if self.config.write_results:
                 with torch.no_grad():
-                    visualize_theoretical_flow(self, frame_result.theoretical_flow.clone().detach(), b0,
-                                               self.all_keyframes.observed_flows[
-                                               :, -1, :, b0[0]:b0[1], b0[2]:b0[3]].clone().detach(),
+                    visualize_theoretical_flow(self, frame_result.theoretical_flow.detach().clone(),
+                                               self.all_keyframes.segments[0, :, 1, b0[0]:b0[1], b0[2]:b0[3]]
+                                               .detach().clone(), b0,
+                                               self.all_keyframes.observed_flows[:, -1, :, b0[0]:b0[1], b0[2]:b0[3]]
+                                               .detach().clone(),
                                                self.all_keyframes.keyframes, stepi)
 
                     self.write_results.write_results(self, b0=b0,
@@ -661,7 +662,8 @@ class Tracking6D:
                     #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
                     # Visualize flow we get from the video
-                    visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255, segment,
+                    visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255,
+                                   self.all_keyframes.segments[0, :, 1, b0[0]:b0[1], b0[2]:b0[3]].detach().clone(),
                                    stepi, self.write_folder, frame_result.per_pixel_flow_error)
 
             if 0 in self.all_keyframes.keyframes:
