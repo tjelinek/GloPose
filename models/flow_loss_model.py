@@ -23,9 +23,11 @@ class LossFunctionWrapper(torch.nn.Module):
         self.original_width = original_width
         self.original_height = original_height
 
-    def forward(self, translations_quaternions_):
-        translations = translations_quaternions_[None, ..., :3]
-        quaternions = translations_quaternions_[..., 3:]
+    def forward(self, trans_quats):
+        trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
+
+        translations = trans_quats[None, ..., :3]
+        quaternions = trans_quats[..., 3:]
         quaternions_weights = 1 - torch.linalg.vector_norm(quaternions, dim=-1).unsqueeze(-1)
         quaternions = torch.cat([quaternions_weights, quaternions], dim=-1)
 
