@@ -577,11 +577,9 @@ class Tracking6D:
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
                                                                       segment[0][None, :, -1:]), dim=1)
                 self.active_keyframes.observed_flows_occlusions = torch.cat(
-                    (self.active_keyframes.observed_flows_occlusions,
-                     occlusions[None]), dim=1)
+                    (self.active_keyframes.observed_flows_occlusions, occlusions[None]), dim=1)
                 self.active_keyframes.observed_flows_uncertainties = torch.cat(
-                    (self.active_keyframes.observed_flows_uncertainties,
-                     uncertainties[None]), dim=1)
+                    (self.active_keyframes.observed_flows_uncertainties, uncertainties[None]), dim=1)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
