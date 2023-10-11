@@ -29,7 +29,8 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
-def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, output_dir, per_pixel_flow_error):
+def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_image, segment_prev_image, stepi,
+                   output_dir, per_pixel_flow_error):
     """
     Visualize optical flow between two images and save the results as image files.
 
@@ -38,7 +39,8 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
         image (torch.Tensor): Original image tensor.
         image_new (torch.Tensor): New (second) image tensor.
         image_prev (torch.Tensor): Previous (first) image tensor.
-        segment (torch.Tensor): Segmentation mask tensor.
+        segment_current_image (torch.Tensor): Segmentation mask tensor.
+        segment_prev_image (torch.Tensor): Segmentation mask tensor.
         stepi (int): Index of the current step in the frame sequence.
         output_dir (Path): Flow output directory
         per_pixel_flow_error: Error mask
@@ -60,7 +62,8 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
 
     flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up, None,
-                                                   gt_silhouette_current=segment[-1], gt_silhouette_prev=segment[-2])
+                                                   gt_silhouette_current=segment_current_image,
+                                                   gt_silhouette_prev=segment_prev_image)
     transform = transforms.ToPILImage()
     # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
@@ -81,7 +84,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment, stepi, 
     imageio.imwrite(flow_image_path, flow_illustration)
 
     # PER PIXEL FLOW ERROR VISUALIZATION
-    per_pixel_flow_loss_np = per_pixel_flow_error.squeeze()[-1].detach().cpu().numpy()
+    per_pixel_flow_loss_np = per_pixel_flow_error.squeeze().detach().cpu().numpy()
 
     # Normalize values for visualization (optional)
     per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
@@ -696,8 +699,8 @@ class WriteResults:
         return encoder_result_prime, keyframes_prime
 
 
-def visualize_theoretical_flow(tracking6d, theoretical_flow, gt_segmentations, bounding_box, observed_flow, opt_frames,
-                               stepi):
+def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segmentation, previous_image_segmentation,
+                               bounding_box, observed_flow, opt_frames, stepi):
     """
     Visualizes the theoretical flow and related images for a given step.
 
@@ -705,7 +708,8 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, gt_segmentations, b
         tracking6d (Tracking6D): The Tracking6D instance.
         theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
                                          image coordinates.
-        gt_segmentations (torch.Tensor): Gt segmentations of shape (1, B, H, W) in  [0, 1] range.
+        current_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, H, W) in  [0, 1] range.
+        previous_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, H, W) in  [0, 1] range.
         bounding_box (torch.Tensor: Bounding box of the observed object
         observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
                                       coordinates.
@@ -782,13 +786,13 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, gt_segmentations, b
         # Visualize flow and flow difference
         flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0], current_rendered_image_rgb[0],
                                                        None, theoretical_flow_np,
-                                                       gt_silhouette_current=gt_segmentations[-1],
-                                                       gt_silhouette_prev=gt_segmentations[-2])
+                                                       gt_silhouette_current=current_image_segmentation,
+                                                       gt_silhouette_prev=previous_image_segmentation)
         flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
                                                                  current_rendered_image_rgb[0],
                                                                  observed_flow_np, theoretical_flow_np,
-                                                                 gt_silhouette_current=gt_segmentations[-1],
-                                                                 gt_silhouette_prev=gt_segmentations[-2])
+                                                                 gt_silhouette_current=current_image_segmentation,
+                                                                 gt_silhouette_prev=previous_image_segmentation)
 
         # Save flow illustrations
         imageio.imwrite(theoretical_flow_path, flow_illustration)

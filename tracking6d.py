@@ -625,11 +625,12 @@ class Tracking6D:
             if self.config.write_results:
                 with torch.no_grad():
                     visualize_theoretical_flow(self, frame_result.theoretical_flow.detach().clone(),
-                                               self.all_keyframes.segments[0, :, 1, b0[0]:b0[1], b0[2]:b0[3]]
-                                               .detach().clone(), b0,
-                                               self.all_keyframes.observed_flows[:, -1, :, b0[0]:b0[1], b0[2]:b0[3]]
+                                               self.all_keyframes.segments[0, -1, 1, b0[0]:b0[1], b0[2]:b0[3]]
                                                .detach().clone(),
-                                               self.all_keyframes.keyframes, stepi)
+                                               self.all_keyframes.flow_segment_masks[0, -1, 0, b0[0]:b0[1], b0[2]:b0[3]]
+                                               .detach().clone(),
+                                               b0, self.all_keyframes.observed_flows[:, -1, :, b0[0]:b0[1], b0[2]:b0[3]]
+                                               .detach().clone(), self.all_keyframes.keyframes, stepi)
 
                     self.write_results.write_results(self, b0=b0,
                                                      bboxes=bboxes, our_losses=our_losses,
@@ -656,8 +657,9 @@ class Tracking6D:
 
                     # Visualize flow we get from the video
                     visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255,
-                                   self.all_keyframes.segments[0, :, 1, b0[0]:b0[1], b0[2]:b0[3]].detach().clone(),
-                                   stepi, self.write_folder, frame_result.per_pixel_flow_error)
+                                   self.all_keyframes.segments[0, -1, 1, b0[0]:b0[1], b0[2]:b0[3]].detach().clone(),
+                                   self.all_keyframes.flow_segment_masks[0, -1, 0, b0[0]:b0[1], b0[2]:b0[3]]
+                                   .detach().clone(), stepi, self.write_folder, frame_result.per_pixel_flow_error)
 
             if 0 in self.all_keyframes.keyframes:
                 keep_keyframes = np.ones(len(active_buffer_indices), dtype=np.bool)
