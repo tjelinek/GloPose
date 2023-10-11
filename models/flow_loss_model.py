@@ -57,49 +57,4 @@ class LossFunctionWrapper(torch.nn.Module):
                                                  last_keyframes_encoder_result=None,
                                                  return_end_point_errors=True)
 
-        del renders
-        del theoretical_flow
-        del rendered_silhouettes
-
         return loss_result.to(torch.float)
-
-        # def loss_function_wrapper(translations_quaternions_, encoder_result_, encoder_result_flow_frames_):
-        #     # quaternions_, translations_ = se3_exp(translations_quaternions_)
-        #     # translations_ = translations_[None]
-        #
-        #     translations_ = translations_quaternions_[None, ..., :3]
-        #     quaternions_ = translations_quaternions_[..., 3:]
-        #     quaternions_weights_ = 1 - torch.linalg.vector_norm(quaternions_, dim=-1).unsqueeze(-1)
-        #     quaternions_ = torch.cat([quaternions_weights_, quaternions_], dim=-1)
-        #
-        #     encoder_result_ = encoder_result_._replace(translations=translations_, quaternions=quaternions_)
-        #
-        #     renders_ = self.rendering(translations_, quaternions_, encoder_result_.vertices,
-        #                               self.encoder.face_features, encoder_result_.texture_maps, None)
-        #
-        #     flow_result_ = self.rendering.compute_theoretical_flow(encoder_result_, encoder_result_flow_frames_)
-        #     theoretical_flow_, rendered_flow_segmentation_ = flow_result_
-        #     rendered_flow_segmentation_ = rendered_flow_segmentation_[None]
-        #
-        #     # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-        #     # actual image
-        #     theoretical_flow_ = normalize_rendered_flows(theoretical_flow_, self.rendering.width,
-        #                                                  self.rendering.height, self.shape[-1], self.shape[-2])
-        #
-        #     rendered_silhouettes_ = renders_[0, :, :, -1:]
-        #     loss_result_ = self.loss_function.forward(rendered_images=renders_, observed_images=observed_images,
-        #                                               rendered_silhouettes=rendered_silhouettes_,
-        #                                               observed_silhouettes=observed_segmentations,
-        #                                               rendered_flow=theoretical_flow_,
-        #                                               observed_flow=observed_flows,
-        #                                               observed_flow_segmentation=observed_flows_segmentations,
-        #                                               rendered_flow_segmentation=rendered_flow_segmentation_,
-        #                                               keyframes_encoder_result=encoder_result_,
-        #                                               last_keyframes_encoder_result=self.last_encoder_result,
-        #                                               return_end_point_errors=True)
-        #
-        #     del renders_
-        #     del theoretical_flow_
-        #     del rendered_silhouettes_
-        #
-        #     return loss_result_.to(torch.float)
