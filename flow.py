@@ -1,5 +1,6 @@
 import glob
 import os
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -7,10 +8,11 @@ import torch
 import torchvision
 import imageio
 import torchvision.transforms as T
-from matplotlib import pyplot as plt
 
 from pathlib import Path
 from typing import Iterable
+from argparse import Namespace
+from abc import ABC, abstractmethod
 
 from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
@@ -253,3 +255,84 @@ def get_flow_from_images_raft(image1, image2, model):
         flow_up = padder.unpad(flow_up)
 
     return flow_low, flow_up
+
+
+class FlowModelGetter(ABC):
+
+    @staticmethod
+    @abstractmethod
+    def get_flow_model():
+        raise NotImplementedError
+
+    @staticmethod
+    def prepare_model(args, model):
+        model.load_state_dict(torch.load(args.model))
+        print(f"Loaded checkpoint at {args.model}")
+        model = model.module
+        model.to(DEVICE)
+        model.eval()
+        return model
+
+
+class FlowModelGetterRAFT(FlowModelGetter):
+
+    @staticmethod
+    def get_flow_model():
+        sys.path.append('RAFTPrinceton')
+        from RAFTPrinceton.core.raft import RAFT
+
+        args = Namespace(model='tmp/raft_models/models/raft-things.pth', model_name='RAFTPrinceton', path=None,
+                         mixed_precision=True,
+                         alternate_corr=False, small=False)
+
+        model = torch.nn.DataParallel(RAFT(args))
+        model = FlowModelGetter.prepare_model(args, model)
+
+        return model
+
+
+class FlowModelGetterGMA(FlowModelGetter):
+
+    @staticmethod
+    def get_flow_model():
+        sys.path.append('GMA')
+        from GMA.core.network import RAFTGMA
+
+        args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
+                         position_only=False,
+                         position_and_content=False, mixed_precision=True)
+
+        model = torch.nn.DataParallel(RAFTGMA(args=args))
+        model = FlowModelGetter.prepare_model(args, model)
+
+        return model
+
+
+class FlowModelGetterMFT(FlowModelGetter):
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(FlowModelGetterMFT.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model():
+        sys.path.append('MFT')
+        from MFT.RAFT.core.raft import RAFT
+
+        args = Namespace(model='MFT/RAFT/models/'
+                               'raft-things-sintel-kubric-splitted-occlusion-uncertainty-non-occluded-base-sintel.pth',
+                         model_name='MFT', path=None,
+                         mixed_precision=False, alternate_corr=False, small=False)
+
+        raft_params = {
+            'occlusion_module': 'separate_with_uncertainty',
+            'restore_ckpt': 'MFT/RAFT/models',
+            'small': False,
+            'mixed_precision': False,
+        }
+        raft_params = FlowModelGetterMFT.AttrDict(**raft_params)
+
+        model = torch.nn.DataParallel(RAFT(raft_params))
+        model = FlowModelGetter.prepare_model(args, model)
+
+        return model

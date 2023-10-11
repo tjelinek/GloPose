@@ -18,10 +18,8 @@ from typing import List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
-from flow import get_flow_from_images, get_flow_from_images_mft
-from flow_gma import get_flow_model_gma
-from flow_mft import get_flow_model_mft
-from flow_raft import get_flow_model_raft
+from flow import get_flow_from_images, get_flow_from_images_mft, FlowModelGetterRAFT, FlowModelGetter, \
+    FlowModelGetterGMA, FlowModelGetterMFT
 from helpers.torch_helpers import write_renders
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -499,12 +497,15 @@ class Tracking6D:
         self.all_keyframes = self.active_keyframes
 
     def initialize_flow_model(self):
-        if self.config.flow_model == 'RAFT':
-            self.model_flow = get_flow_model_raft()
+        if self.config.flow_model == 'RAFTPrinceton':
+            flow_getter = FlowModelGetterRAFT
         elif self.config.flow_model == 'GMA':
-            self.model_flow = get_flow_model_gma()
+            flow_getter = FlowModelGetterGMA
         elif self.config.flow_model == 'MFT':
-            self.model_flow = get_flow_model_mft()
+            flow_getter = FlowModelGetterMFT
+        else:
+            flow_getter = FlowModelGetter
+        self.model_flow = flow_getter.get_flow_model()
 
     def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
