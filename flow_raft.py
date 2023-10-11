@@ -1,13 +1,9 @@
-import glob
-import os
 from argparse import Namespace
-from typing import Iterable
-import torchvision
 import torch
 
 import sys
 
-from flow import get_flow_from_files, export_flow_from_files
+from flow import export_flow_from_files
 
 sys.path.append('RAFT')
 
