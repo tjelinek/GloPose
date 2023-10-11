@@ -5,14 +5,15 @@ import sys
 
 from flow import export_flow_from_files
 
-sys.path.append('RAFT')
+sys.path.append('RAFTPrinceton')
 
 from cfg import *
-from RAFT.core.raft import RAFT
+from RAFTPrinceton.core.raft import RAFT
 
 
 def get_flow_model_raft():
-    args = Namespace(model='tmp/raft_models/models/raft-things.pth', model_name='RAFT', path=None, mixed_precision=True,
+    args = Namespace(model='tmp/raft_models/models/raft-things.pth', model_name='RAFTPrinceton', path=None,
+                     mixed_precision=True,
                      alternate_corr=False, small=False)
     model = torch.nn.DataParallel(RAFT(args))
     model.load_state_dict(torch.load(args.model))
