@@ -120,6 +120,7 @@ class TrackerConfig:
     gt_mesh_prototype: str = None
     gt_tracking_log: str = None
     use_gt: bool = False
+    generate_synthetic_flows_for_gt: bool = False
 
     # Optimization
     allow_break_sgd_after = 30
@@ -148,6 +149,8 @@ class KeyframeBuffer:
     segments: torch.Tensor = None
     observed_flows: torch.Tensor = None
     flow_segment_masks: torch.Tensor = None
+    observed_flows_occlusions: torch.Tensor = None
+    observed_flows_uncertainties: torch.Tensor = None
 
     @staticmethod
     def merge(buffer1, buffer2):
@@ -233,6 +236,8 @@ class KeyframeBuffer:
         self.segments = self.segments[:, keep_keyframes]
         self.observed_flows = self.observed_flows[:, keep_keyframes]
         self.flow_segment_masks = self.flow_segment_masks[:, keep_keyframes]
+        self.observed_flows_occlusions = self.observed_flows_occlusions[:, keep_keyframes]
+        self.observed_flows_uncertainties = self.observed_flows_uncertainties[:, keep_keyframes]
 
         return deleted_buffer
 
@@ -485,6 +490,8 @@ class Tracking6D:
     def initialize_keyframes(self, flow_segment_masks, images, images_feat, observed_flows, prev_images, segments):
         keyframes = [0]
         flow_keyframes = [0]
+        observed_flows_occlusions = torch.zeros(flow_segment_masks.shape).to(flow_segment_masks.device)
+        observed_flows_uncertainties = torch.zeros(flow_segment_masks.shape).to(flow_segment_masks.device)
         self.active_keyframes = KeyframeBuffer(keyframes=keyframes,
                                                flow_keyframes=flow_keyframes,
                                                images=images,
@@ -492,7 +499,9 @@ class Tracking6D:
                                                images_feat=images_feat,
                                                segments=segments,
                                                observed_flows=observed_flows,
-                                               flow_segment_masks=flow_segment_masks)
+                                               flow_segment_masks=flow_segment_masks,
+                                               observed_flows_occlusions=observed_flows_occlusions,
+                                               observed_flows_uncertainties=observed_flows_uncertainties)
         self.recently_flushed_keyframes = KeyframeBuffer()
         self.all_keyframes = self.active_keyframes
 
@@ -560,34 +569,19 @@ class Tracking6D:
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
-                if self.config.use_gt:
-                    observed_flow = self.tracker.next_flow(stepi)
-                elif gt_flows is None:
-                    if self.config.flow_model != 'MFT':
-                        _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
-                    else:
-                        observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_prev_x255,
-                                                                                         image_new_x255,
-                                                                                         self.model_flow)
-                        # TODO finish this part of the occlusion computation
-                        if image_preprev_x255 is not None:
-                            _, occlusion_preprev, _ = get_flow_from_images_mft(image_preprev_x255, image_new_x255,
-                                                                               self.model_flow)
-                        else:
-                            occlusion_fraction = 0.0
-
-                    observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / observed_flow.shape[-2]
-                    observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / observed_flow.shape[-1]
-                else:  # We have ground truth flow annotations
-                    # The annotations are assumed to be in the [0, 1] coordinate range
-                    observed_flow = torch.load(gt_flows[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
-                    observed_flow = observed_flow.permute(0, 3, 1, 2)
-                    observed_flow = resize_transform(observed_flow)
+                observed_flow, occlusions, uncertainties = self.next_gt_flow(image_new_x255, image_prev_x255,
+                                                                             resize_transform, gt_flows, stepi)
 
                 self.active_keyframes.observed_flows = torch.cat((self.active_keyframes.observed_flows,
                                                                   observed_flow[None]), dim=1)
                 self.active_keyframes.flow_segment_masks = torch.cat((self.active_keyframes.flow_segment_masks,
                                                                       segment[0][None, :, -1:]), dim=1)
+                self.active_keyframes.observed_flows_occlusions = torch.cat(
+                    (self.active_keyframes.observed_flows_occlusions,
+                     occlusions[None]), dim=1)
+                self.active_keyframes.observed_flows_uncertainties = torch.cat(
+                    (self.active_keyframes.observed_flows_uncertainties,
+                     uncertainties[None]), dim=1)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
@@ -698,6 +692,34 @@ class Tracking6D:
             prev_segment = segment[0]
 
         return self.best_model
+
+    def next_gt_flow(self, image_new_x255, image_prev_x255, resize_transform, gt_flow_files, stepi):
+        occlusion = None
+        uncertainty = None
+
+        if self.config.generate_synthetic_flows_for_gt:
+            observed_flow = self.tracker.next_flow(stepi)
+        elif gt_flow_files is None:
+            if self.config.flow_model != 'MFT':
+                _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
+            else:
+                observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_prev_x255, image_new_x255,
+                                                                                 self.model_flow)
+
+            observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / observed_flow.shape[-2]
+            observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / observed_flow.shape[-1]
+        else:  # We have ground truth flow annotations
+            # The annotations are assumed to be in the [0, 1] coordinate range
+            observed_flow = torch.load(gt_flow_files[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
+            observed_flow = observed_flow.permute(0, 3, 1, 2)
+            observed_flow = resize_transform(observed_flow)
+
+        if occlusion is None:
+            occlusion = torch.zeros(1, 1, *observed_flow.shape[2:]).to(observed_flow.device)
+        if uncertainty is None:
+            uncertainty = torch.zeros(1, 1, *observed_flow.shape[2:]).to(observed_flow.device)
+
+        return observed_flow, occlusion, uncertainty
 
     def get_rendered_image_features(self, lights, quaternion, texture_maps, translation, vertices):
         feat_renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
