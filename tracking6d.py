@@ -120,7 +120,7 @@ class TrackerConfig:
     gt_mesh_prototype: str = None
     gt_tracking_log: str = None
     use_gt: bool = False
-    generate_synthetic_flows_for_gt: bool = False
+    gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic', 'FromFiles'
 
     # Optimization
     allow_break_sgd_after = 30
@@ -131,7 +131,7 @@ class TrackerConfig:
     lr_scheduler_patience = 5
 
     # Optical flow loss
-    flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
+    flow_model: str = 'MFT'  # 'RAFT' 'GMA' and 'MFT'
     segmentation_mask_erosion_iters: int = 0
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent' and 'lbfgs'
     preinitialization_method: str = 'levenberg-marquardt'
@@ -690,10 +690,14 @@ class Tracking6D:
     def next_gt_flow(self, image_new_x255, image_prev_x255, resize_transform, gt_flow_files, stepi):
         occlusion = None
         uncertainty = None
-
-        if self.config.generate_synthetic_flows_for_gt:
+        if self.config.gt_flow_source == 'GenerateSynthetic':
             observed_flow = self.tracker.next_flow(stepi)
-        elif gt_flow_files is None:
+        elif self.config.gt_flow_source == 'FromFiles':  # We have ground truth flow annotations
+            # The annotations are assumed to be in the [0, 1] coordinate range
+            observed_flow = torch.load(gt_flow_files[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
+            observed_flow = observed_flow.permute(0, 3, 1, 2)
+            observed_flow = resize_transform(observed_flow)
+        else:
             if self.config.flow_model != 'MFT':
                 _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
             else:
@@ -702,11 +706,6 @@ class Tracking6D:
 
             observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / observed_flow.shape[-2]
             observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / observed_flow.shape[-1]
-        else:  # We have ground truth flow annotations
-            # The annotations are assumed to be in the [0, 1] coordinate range
-            observed_flow = torch.load(gt_flow_files[stepi])[0].to(self.device)  # torch.Size([1, H, W, 2])
-            observed_flow = observed_flow.permute(0, 3, 1, 2)
-            observed_flow = resize_transform(observed_flow)
 
         if occlusion is None:
             occlusion = torch.zeros(1, 1, *observed_flow.shape[2:]).to(observed_flow.device)
