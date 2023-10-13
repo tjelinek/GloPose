@@ -259,7 +259,7 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
             rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
                                                                vertices)
 
-            optical_flow, _ = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
+            optical_flow, _, _ = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
 
             if texture_maps is not None:
                 ren_features_and_mask = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
