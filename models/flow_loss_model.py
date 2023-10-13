@@ -7,7 +7,7 @@ class LossFunctionWrapper(torch.nn.Module):
 
     def __init__(self, encoder_result, encoder_result_flow_frames, encoder, rendering, loss_function, observed_images,
                  observed_segmentations, observed_flows, observed_flows_segmentations, rendered_width, rendered_height,
-                 original_width, original_height):
+                 original_width, original_height, tracking6d):
         super().__init__()
         self.encoder_result = encoder_result
         self.encoder_result_flow_frames = encoder_result_flow_frames
@@ -22,6 +22,7 @@ class LossFunctionWrapper(torch.nn.Module):
         self.rendered_height = rendered_height
         self.original_width = original_width
         self.original_height = original_height
+        self.tracking6d = tracking6d
 
     def forward(self, trans_quats):
         trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
@@ -33,7 +34,7 @@ class LossFunctionWrapper(torch.nn.Module):
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 
-        inference_result = self.infer_renderer(encoder_result, self.encoder_result_flow_frames)
+        inference_result = self.tracking6d.infer_renderer(encoder_result, self.encoder_result_flow_frames)
         renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the

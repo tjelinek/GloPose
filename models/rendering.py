@@ -183,21 +183,23 @@ class RenderingKaolin(nn.Module):
                                                                                      sigmainv=self.config.sigmainv,
                                                                                      boxlen=0.02, knum=30,
                                                                                      multiplier=1000)
+            theoretical_flow = ren_outputs[..., :2]
+            occlusion_mask = ren_outputs[..., 2]
 
-            theoretical_flow = ren_outputs  # torch.Size([1, H, W, 2])
             theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
             theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
             theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
             theoretical_flow = theoretical_flow_new
 
             theoretical_flows.append(theoretical_flow)
-
+            occlusion_masks.append(occlusion_mask)
             rendering_masks.append(ren_mask)
 
         theoretical_flow = torch.stack(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
         flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, H, W])
+        occlusion_mask = torch.stack(occlusion_masks, 1)  # torch.Size([1, N, H, W])
 
-        return theoretical_flow, flow_render_mask
+        return theoretical_flow, flow_render_mask, occlusion_mask
 
     def rendered_world_mesh_coordinates(self, encoder):
         rendered_camera_coordinates = []

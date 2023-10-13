@@ -936,7 +936,7 @@ class Tracking6D:
         flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
                                               self.loss_function, observed_images, observed_segmentations,
                                               observed_flows, observed_flows_segmentations, self.rendering.width,
-                                              self.rendering.height, self.shape[-1], self.shape[-2])
+                                              self.rendering.height, self.shape[-1], self.shape[-2], self)
 
         fun = flow_loss_model.forward
         jac_f = lambda p: torch.autograd.functional.jacobian(fun, p, strict=True, vectorize=False)
