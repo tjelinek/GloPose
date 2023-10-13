@@ -318,18 +318,9 @@ class WriteResults:
 
                 encoder_result = encoder_result._replace(translations=sampled_translation, quaternions=sampled_rotation)
 
-                renders = tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
-                                               encoder_result.vertices, tracking6d.encoder.face_features,
-                                               encoder_result.texture_maps, encoder_result.lights)
+                inference_result = tracking6d.infer_renderer(encoder_result, encoder_result_flow_frames)
+                renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
-                flow_result = tracking6d.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-                theoretical_flow, rendered_flow_segmentation = flow_result
-                rendered_flow_segmentation = rendered_flow_segmentation[None]
-                # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-                # actual image
-                theoretical_flow = normalize_rendered_flows(theoretical_flow, tracking6d.rendering.width,
-                                                            tracking6d.rendering.height,
-                                                            tracking6d.shape[-1], tracking6d.shape[-2])
                 loss_function = tracking6d.loss_function
 
                 rendered_silhouettes = renders[0, :, :, -1:]
