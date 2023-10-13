@@ -343,7 +343,9 @@ class Tracking6D:
             self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
                                                           self.gt_rotations, self.gt_translations)
             # Re-render the images using the synthetic tracker
-            images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
+            images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
+            if self.config.gt_flow_source == 'GenerateSynthetic':
+                observed_flows = observed_flows_generated
 
         self.initialize_optimizer_and_loss(ivertices)
 
@@ -951,15 +953,10 @@ class Tracking6D:
             quaternions_weights = 1 - torch.linalg.vector_norm(row_quaternion, dim=-1).unsqueeze(-1)
             row_quaternion = torch.cat([quaternions_weights, row_quaternion], dim=-1)
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
-            renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
-                                     self.encoder.face_features, encoder_result.texture_maps, None)
 
-            flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-            theoretical_flow, rendered_flow_segmentation = flow_result
-            rendered_flow_segmentation = rendered_flow_segmentation[None]
+            inference_result = self.infer_renderer(encoder_result, encoder_result_flow_frames)
+            renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
-            theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendering.width,
-                                                        self.rendering.height, self.shape[-1], self.shape[-2])
             rendered_silhouettes = renders[0, :, :, -1:]
 
             loss_result = self.loss_function.forward(rendered_images=renders, observed_images=observed_images,
@@ -1236,16 +1233,8 @@ class Tracking6D:
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type=encoder_type)
-        renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
-                                 self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
-        flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
-        theoretical_flow, rendered_flow_segmentation = flow_result
-        rendered_flow_segmentation = rendered_flow_segmentation[None]
-
-        # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-        # actual image
-        theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendering.width, self.rendering.height,
-                                                    self.shape[-1], self.shape[-2])
+        inference_result = self.infer_renderer(encoder_result, encoder_result_flow_frames)
+        renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function
@@ -1265,6 +1254,18 @@ class Tracking6D:
         losses_all, losses, joint_loss, per_pixel_error = loss_result
 
         return encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow
+
+    def infer_renderer(self, encoder_result, encoder_result_flow_frames):
+        renders = self.rendering(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+                                 self.encoder.face_features, encoder_result.texture_maps, encoder_result.lights)
+        flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames)
+        theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
+        rendered_flow_segmentation = rendered_flow_segmentation[None]
+        # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+        # actual image
+        theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendering.width, self.rendering.height,
+                                                    self.shape[-1], self.shape[-2])
+        return renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks
 
     def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
         dict_tensorboard_values1 = {

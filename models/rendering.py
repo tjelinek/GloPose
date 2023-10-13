@@ -130,6 +130,7 @@ class RenderingKaolin(nn.Module):
         """
         theoretical_flows = []
         rendering_masks = []
+        occlusion_masks = []
         for frame_i in range(0, encoder_out.quaternions.shape[1]):
             translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i]
             rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
@@ -159,13 +160,20 @@ class RenderingKaolin(nn.Module):
 
             # Extract the z-coordinates of the face vertices in camera space
             face_vertices_z_1 = face_vertices_cam_1[:, :, :, -1]
+            # face_vertices_z_2 = face_vertices_cam_2[:, :, :, -1]
 
             # Extract the z-components of the face normals
             face_normals_z_1 = face_normals_1[:, :, -1]
+            face_normals_z_2 = face_normals_2[:, :, -1]
 
-            face_vertices_3d_motion = face_vertices_cam_2 - face_vertices_cam_1
+            face_occlusion_indication = torch.sign(face_normals_z_1 * face_normals_z_2)
+            face_occlusion_indication_features = face_occlusion_indication[..., None, None].repeat(1, 1, 3, 1)
+
+            # face_vertices_3d_motion = face_vertices_cam_2 - face_vertices_cam_1
             face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
-            features_for_rendering = face_vertices_image_motion
+
+            features_for_rendering = torch.cat([face_vertices_image_motion,
+                                                face_occlusion_indication_features], dim=-1)
 
             ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
                                                                                      face_vertices_z_1,

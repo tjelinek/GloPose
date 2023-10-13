@@ -33,12 +33,8 @@ class LossFunctionWrapper(torch.nn.Module):
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 
-        renders = self.rendering(translations, quaternions, encoder_result.vertices,
-                                 self.encoder.face_features, encoder_result.texture_maps, None)
-
-        flow_result = self.rendering.compute_theoretical_flow(encoder_result, self.encoder_result_flow_frames)
-        theoretical_flow, rendered_flow_segmentation = flow_result
-        rendered_flow_segmentation = rendered_flow_segmentation[None]
+        inference_result = self.infer_renderer(encoder_result, self.encoder_result_flow_frames)
+        renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
         # Renormalization compensating for the fact that we render into bounding box that is smaller than the
         # actual image
