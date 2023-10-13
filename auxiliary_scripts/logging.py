@@ -84,7 +84,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
     imageio.imwrite(flow_image_path, flow_illustration)
 
     # PER PIXEL FLOW ERROR VISUALIZATION
-    per_pixel_flow_loss_np = per_pixel_flow_error.squeeze().detach().cpu().numpy()
+    per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
 
     # Normalize values for visualization (optional)
     per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
