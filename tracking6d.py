@@ -526,7 +526,6 @@ class Tracking6D:
         self.write_results = WriteResults(self.write_folder, self.active_keyframes.images, files.shape[0])
 
         prev_image = self.active_keyframes.images[:, -1]
-        prev_segment = self.active_keyframes.segments[:, -1]
         self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
 
@@ -556,10 +555,6 @@ class Tracking6D:
 
             image_prev_x255 = (self.active_keyframes.prev_images[:, -1, :, :, :]).float() * 255
             image_new_x255 = (self.active_keyframes.images[:, -1, :, :, :]).float() * 255
-            if self.active_keyframes.images.shape[1] > 2:
-                image_preprev_x255 = (self.active_keyframes.images[:, -1, :, :, :]).float() * 255
-            else:
-                image_preprev_x255 = None
 
             start = time.time()
             if self.config.render_just_bounding_box:
@@ -689,7 +684,6 @@ class Tracking6D:
                 self.recently_flushed_keyframes.stochastic_update(4)
 
             prev_image = image[0]
-            prev_segment = segment[0]
 
         return self.best_model
 
