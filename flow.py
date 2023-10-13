@@ -105,9 +105,13 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
 
     flow_pil = None
     if flow_up is not None:
-        flow_up_image = flow_viz.flow_to_image(flow_up)
+        if flow_up_prime is not None:
+            flow_up_image = flow_viz.flow_to_image(np.concatenate([flow_up, flow_up_prime], axis=1))
+        else:
+            flow_up_image = flow_viz.flow_to_image(flow_up)
         flow_pil = transform(flow_up_image)
 
+    flow_prime_pil = None
     if flow_up_prime is not None:
         flow_up_prime_image = flow_viz.flow_to_image(flow_up_prime)
         flow_prime_pil = transform(flow_up_prime_image)
@@ -145,11 +149,14 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
                 draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y + r, x + shift_up_prime_x + r,
                             y + shift_up_prime_y - r), fill='green')
 
-    canvas = Image.new('RGBA', (width * 3, height), (255, 255, 255, 255))
+    canvas_width_coef = int(flow_pil is not None) + int(flow_prime_pil is not None) + 2
+    canvas = Image.new('RGBA', (width * canvas_width_coef, height), (255, 255, 255, 255))
     canvas.paste(image1_pil, (0, 0))
     if flow_pil is not None:
         canvas.paste(flow_pil, (width, 0))
-    canvas.paste(image2_pil, (2 * width, 0))
+    elif flow_prime_pil is not None and flow_pil is None:
+        canvas.paste(flow_prime_pil, (width, 0))
+    canvas.paste(image2_pil, ((canvas_width_coef - 1) * width, 0))
 
     return canvas
 
@@ -205,9 +212,9 @@ def get_flow_from_images_mft(image1, image2, model):
 
     all_predictions = model(image1, image2, iters=12, test_mode=True)
 
-    flow = torch.squeeze(padder.unpad(all_predictions['flow']), dim=0)
-    occlusion = torch.squeeze(padder.unpad(all_predictions['occlusion'].softmax(dim=1)[:, 1:2, :, :]), dim=0)
-    uncertainty = torch.squeeze(padder.unpad(all_predictions['uncertainty']), dim=0)
+    flow = padder.unpad(all_predictions['flow'])
+    occlusion = padder.unpad(all_predictions['occlusion'].softmax(dim=1)[:, 1:2, :, :])
+    uncertainty = padder.unpad(all_predictions['uncertainty'])
 
     return flow, occlusion, uncertainty
 
