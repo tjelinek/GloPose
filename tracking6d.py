@@ -827,8 +827,7 @@ class Tracking6D:
         loss_improvement_threshold = 1e-4
 
         # First inference just to log the results
-        infer_result = self.infer_model(observed_images, observed_segmentations, observed_flows,
-                                        observed_flows_segmentations, keyframes, flow_frames, 'deep_features')
+        infer_result = self.infer_model(observations, keyframes, flow_frames, 'deep_features')
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
 
