@@ -50,6 +50,7 @@ class LossFunctionWrapper(torch.nn.Module):
                                                  observed_flow=self.observed_flows,
                                                  observed_flow_segmentation=self.observed_flows_segmentations,
                                                  rendered_flow_segmentation=rendered_flow_segmentation,
+                                                 observed_flow_occlusion=None, observed_flow_uncertainties=None,
                                                  keyframes_encoder_result=encoder_result,
                                                  last_keyframes_encoder_result=None,
                                                  return_end_point_errors=True)

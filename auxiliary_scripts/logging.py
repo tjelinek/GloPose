@@ -131,19 +131,16 @@ class WriteResults:
         self.tracking_log.close()
         self.metrics_log.close()
 
-    def visualize_loss_landscape(self, tracking6d, observed_images, observed_segmentations, observed_flows,
-                                 observed_flows_segmentations, stepi, relative_mode=False):
+    def visualize_loss_landscape(self, observations, tracking6d, stepi, relative_mode=False):
         """
         Visualizes the loss landscape by computing the joint losses across varying translations and rotations.
 
         Parameters:
         - tracking6d (Tracking6DClassType): The 6D tracking data, containing ground truth rotations, translations,
                                             and other relevant properties.
-        - observed_images (Tensor or ndarray): Observed images.
-        - observed_segmentations (Tensor or ndarray): Segmentations corresponding to the observed images.
-        - observed_flows (Tensor or ndarray): Observed optical flows.
-        - observed_flows_segmentations (Tensor or ndarray): Segmentations corresponding to the observed optical flows.
+        - observations (Observations): Observations.
         - stepi (int): Current step or iteration.
+
         - relative_mode (bool, optional): If True and stepi >= 1, it will compute the ground truth marker with respect
                                           the previous predicted value.
 
@@ -205,8 +202,10 @@ class WriteResults:
             print(f"Visualizing loss landscape for translation axis {trans_axes[trans_axis_idx]} "
                   f"and rotation axis {rot_axes[rot_axis_idx]}")
 
-            joint_losses: np.ndarray = self.compute_loss_landscape(observed_flows, observed_flows_segmentations,
-                                                                   observed_images, observed_segmentations, tracking6d,
+            joint_losses: np.ndarray = self.compute_loss_landscape(observations.observed_flows,
+                                                                   observations.observed_flows_segmentations,
+                                                                   observations.observed_images,
+                                                                   observations.observed_segmentations, tracking6d,
                                                                    rotations_space, translations_space, trans_axis_idx,
                                                                    rot_axis_idx, stepi)
 
@@ -330,6 +329,7 @@ class WriteResults:
                                                     rendered_flow=theoretical_flow, observed_flow=observed_flows,
                                                     observed_flow_segmentation=observed_flows_segmentations,
                                                     rendered_flow_segmentation=rendered_flow_segmentation,
+                                                    observed_flow_occlusion=None, observed_flow_uncertainties=None,
                                                     keyframes_encoder_result=encoder_result,
                                                     last_keyframes_encoder_result=encoder_result)
 
