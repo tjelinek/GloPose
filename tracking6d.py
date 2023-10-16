@@ -691,9 +691,11 @@ class Tracking6D:
             rot_degree_th = 45
             small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
             if small_rotation:  # and small_translation):
-                keep_keyframes[-1] = True
-                keep_keyframes[-2] = False or self.config.all_frames_keyframes  # Default False
-                keep_keyframes[-3] = True
+                keep_n_previous = 2
+                keep_keyframes[-min(keep_n_previous, len(keep_keyframes) - 1):] = True
+                if keep_n_previous <= len(keep_keyframes) - 2:
+                    keep_keyframes[-keep_n_previous - 1] = False
+                keep_keyframes[:-keep_n_previous - 1] = True
 
             if not self.config.all_frames_keyframes:
                 deleted_keyframes = self.active_keyframes.keep_selected_keyframes(keep_keyframes)
