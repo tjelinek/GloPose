@@ -14,7 +14,7 @@ from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quat
 from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
-from typing import List
+from typing import List, Tuple, Optional
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
@@ -269,9 +269,9 @@ class Tracking6D:
 
     def __init__(self, config, device, write_folder, file0, bbox0, init_mask=None):
         # Encoders and related components
-        self.encoder = None
-        self.gt_encoder = None
-        self.rgb_encoder = None
+        self.encoder: Optional[Encoder] = None
+        self.gt_encoder: Optional[Encoder] = None
+        self.rgb_encoder: Optional[Encoder] = None
         self.last_encoder_result = None
         self.last_encoder_result_rgb = None
 
@@ -297,6 +297,7 @@ class Tracking6D:
         self.optimizer_rotational_parameters = None
         self.optimizer_positional_parameters = None
         self.optimizer_non_positional_parameters = None
+        self.optimizer_all_parameters = None
         self.rgb_optimizer = None
 
         # Network related
@@ -308,9 +309,9 @@ class Tracking6D:
         self.gt_translations = None
 
         # Keyframes
-        self.active_keyframes = None
-        self.all_keyframes = None
-        self.recently_flushed_keyframes = None
+        self.active_keyframes: Optional[KeyframeBuffer] = None
+        self.all_keyframes: Optional[KeyframeBuffer] = None
+        self.recently_flushed_keyframes: Optional[KeyframeBuffer] = None
 
         # Other utilities and flags
         self.write_results = None
@@ -456,7 +457,7 @@ class Tracking6D:
 
     def initialize_mesh(self):
         if self.config.gt_texture is not None and self.config.use_gt:
-            texture_np = torch.from_numpy(imageio.imread(Path(self.config.gt_texture)))
+            texture_np = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
 
         if self.config.gt_mesh_prototype is not None:
