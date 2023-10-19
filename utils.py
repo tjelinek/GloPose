@@ -10,6 +10,7 @@ from torch import Tensor
 from typing import Tuple
 
 from main_settings import tmp_folder
+from models.rendering import RenderingKaolin
 
 
 def segment2bbox(segment):
@@ -456,3 +457,19 @@ def normalize_vertices(vertices):
     vertices *= magnification
 
     return vertices
+
+
+def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
+                                encoder_result_flow_frames, flow_arcs_indices, input_image_width,
+                                input_image_height):
+    renders = renderer(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+                       encoder_face_features, encoder_result.texture_maps, encoder_result.lights)
+    flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                    flow_arcs_indices)
+    theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
+    rendered_flow_segmentation = rendered_flow_segmentation[None]
+    # Renormalization compensating for the fact that we render into bounding box that is smaller than the
+    # actual image
+    theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height,
+                                                input_image_width, input_image_height)
+    return renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks

@@ -1,18 +1,21 @@
 import torch
 
-from utils import normalize_rendered_flows
+from models.encoder import Encoder
+from models.rendering import RenderingKaolin
+from utils import infer_normalized_renderings
 
 
 class LossFunctionWrapper(torch.nn.Module):
 
-    def __init__(self, encoder_result, encoder_result_flow_frames, encoder, rendering, loss_function, observed_images,
-                 observed_segmentations, observed_flows, observed_flows_segmentations, rendered_width, rendered_height,
-                 original_width, original_height, tracking6d):
+    def __init__(self, encoder_result, encoder_result_flow_frames, encoder, rendering, flow_arcs_indices, loss_function,
+                 observed_images, observed_segmentations, observed_flows, observed_flows_segmentations, rendered_width,
+                 rendered_height, original_width, original_height):
         super().__init__()
         self.encoder_result = encoder_result
         self.encoder_result_flow_frames = encoder_result_flow_frames
-        self.rendering = rendering
-        self.encoder = encoder
+        self.rendering: RenderingKaolin = rendering
+        self.encoder: Encoder = encoder
+        self.flow_arcs_indices = flow_arcs_indices
         self.loss_function = loss_function
         self.observed_images = observed_images
         self.observed_segmentations = observed_segmentations
@@ -34,7 +37,11 @@ class LossFunctionWrapper(torch.nn.Module):
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 
-        inference_result = self.tracking6d.infer_renderer(encoder_result, self.encoder_result_flow_frames)
+        inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features,
+                                                       encoder_result, self.encoder_result_flow_frames,
+                                                       self.flow_arcs_indices, self.original_width,
+                                                       self.original_height)
+
         renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
         rendered_silhouettes = renders[0, :, :, -1:]

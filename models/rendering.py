@@ -116,13 +116,15 @@ class RenderingKaolin(nn.Module):
 
         return all_renders
 
-    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames):
+    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames, flow_arcs_indices):
         """
         Computes the theoretical flow between consecutive frames.
 
         Args:
             encoder_out (EncoderResult): The encoder result for the current frame.
             encoder_out_prev_frames (EncoderResult): The encoder results for the previous frames.
+            flow_arcs_indices (Sorted[Tuple[int, int]]): Indexes in encoder_out_prev_frames and encoder_out given as a 
+                                                         sorted collection of tuples.
 
         Returns:
             torch.Tensor: The computed theoretical flow between consecutive frames. The output flow is respective to the
@@ -131,9 +133,9 @@ class RenderingKaolin(nn.Module):
         theoretical_flows = []
         rendering_masks = []
         occlusion_masks = []
-        for frame_i in range(0, encoder_out.quaternions.shape[1]):
-            translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i]
-            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i],
+        for frame_i_prev, frame_i in flow_arcs_indices:
+            translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i_prev]
+            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i_prev],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
             translation_vector_2 = encoder_out.translations[:, :, frame_i]

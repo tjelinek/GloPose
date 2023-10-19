@@ -22,7 +22,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from models.loss import fmo_loss
 from segmentations import create_mask_from_string, pad_image
 from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
-    normalize_rendered_flows
+    infer_normalized_renderings
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -310,14 +310,15 @@ class WriteResults:
 
                 sampled_rotation = rotation_tensor_quaternion[None, None].cuda()
 
-                encoder_result, \
-                    encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference([stepi],
-                                                                                             [stepi - 1],
-                                                                                             encoder_type='deep_features')
+                encoder_result, encoder_result_flow_frames = \
+                    tracking6d.frames_and_flow_frames_inference([stepi], [stepi - 1], encoder_type='deep_features')
 
                 encoder_result = encoder_result._replace(translations=sampled_translation, quaternions=sampled_rotation)
 
-                inference_result = tracking6d.infer_renderer(encoder_result, encoder_result_flow_frames)
+                inference_result = infer_normalized_renderings(tracking6d.rendering, tracking6d.encoder.face_features,
+                                                               tracking6d.rendering, encoder_result,
+                                                               encoder_result_flow_frames, tracking6d.shape[-1],
+                                                               tracking6d.shape[-2])
                 renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
                 loss_function = tracking6d.loss_function
@@ -361,7 +362,8 @@ class WriteResults:
 
             stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
                                                   set(tracking6d.active_keyframes.keyframes))
-            print("Keyframes:", tracking6d.active_keyframes.keyframes)
+            print(f"Keyframes: {tracking6d.active_keyframes.keyframes}, "
+                  f"flow arcs: {tracking6d.active_keyframes.flow_arcs}")
             print("Stochastically added keyframes: ", stochastically_added_keyframes)
 
             self.tracking_log.write(f"Step {stepi}:\n")
