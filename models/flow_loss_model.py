@@ -37,11 +37,6 @@ class LossFunctionWrapper(torch.nn.Module):
         inference_result = self.tracking6d.infer_renderer(encoder_result, self.encoder_result_flow_frames)
         renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
-        # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-        # actual image
-        theoretical_flow = normalize_rendered_flows(theoretical_flow, self.rendered_width, self.rendered_height,
-                                                    self.original_width, self.original_height)
-
         rendered_silhouettes = renders[0, :, :, -1:]
         loss_result = self.loss_function.forward(rendered_images=renders, observed_images=self.observed_images,
                                                  rendered_silhouettes=rendered_silhouettes,
