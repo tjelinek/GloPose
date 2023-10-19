@@ -1335,13 +1335,6 @@ class Tracking6D:
                                                    translation_difference=flow_frames_tdiff,
                                                    quaternion_difference=flow_frames_qdiff)
 
-        # if encoder_type != 'gt_encoder':
-        #     quaternion = encoder_result.quaternions
-        #     flow_quaternion = encoder_result_flow_frames.quaternions
-        #     for i in range(20):
-        #         quaternion = quaternion_multiply(quaternion, quaternion)
-        #         flow_quaternion = quaternion_multiply(flow_quaternion, flow_quaternion)
-
         return encoder_result, encoder_result_flow_frames
 
     def rgb_apply(self, observations):
