@@ -140,7 +140,7 @@ class TrackerConfig:
     use_lr_scheduler = False
     lr_scheduler_patience = 5
 
-    # Optical flow loss
+    # Optical flow settings
     flow_model: str = 'MFT'  # 'RAFT' 'GMA' and 'MFT'
     add_flow_arcs_strategy: int = 'single-previous'  # One of 'all-previous' and 'single-previous'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
@@ -149,7 +149,7 @@ class TrackerConfig:
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent' and 'lbfgs'
     preinitialization_method: str = 'levenberg-marquardt'
     flow_sgd: bool = True
-    flow_sgd_n_samples: int = 1000
+    flow_sgd_n_samples: int = 100
 
 
 @dataclass
