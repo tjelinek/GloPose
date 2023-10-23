@@ -204,8 +204,8 @@ class WriteResults:
 
             joint_losses: np.ndarray = self.compute_loss_landscape(observations.observed_flows,
                                                                    observations.observed_flows_segmentations,
-                                                                   observations.observed_images,
-                                                                   observations.observed_segmentations, tracking6d,
+                                                                   observations.observed_image,
+                                                                   observations.observed_segmentation, tracking6d,
                                                                    rotations_space, translations_space, trans_axis_idx,
                                                                    rot_axis_idx, stepi)
 
@@ -363,7 +363,7 @@ class WriteResults:
             stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
                                                   set(tracking6d.active_keyframes.keyframes))
             print(f"Keyframes: {tracking6d.active_keyframes.keyframes}, "
-                  f"flow arcs: {tracking6d.active_keyframes.flow_arcs}")
+                  f"flow arcs: {sorted(tracking6d.active_keyframes.G.edges, key=lambda x: x[::-1])}")
             print("Stochastically added keyframes: ", stochastically_added_keyframes)
 
             self.tracking_log.write(f"Step {stepi}:\n")

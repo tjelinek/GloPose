@@ -1,30 +1,71 @@
-import copy
-from dataclasses import dataclass, field
+from bisect import insort
+
+from typing import Tuple, List
 
 import numpy as np
 import torch
-from typing import Set, Tuple, List
+import networkx as nx
 
-from tracking6d import Observations
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Observation:
+
+    def trim_bounding_box(self, bounding_box: Tuple[int, int, int, int]):
+        for attr_name, attr_type in self.__annotations__.items():
+            to_trim = getattr(self, attr_name)
+            trimmed = to_trim[:, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+            setattr(self, attr_name, trimmed)
+
+
+@dataclass
+class FrameObservation(Observation):
+    observed_image: torch.Tensor = None
+    observed_image_features: torch.Tensor = None
+    observed_segmentation: torch.Tensor = None
+
+    @staticmethod
+    def concatenate(*observations):
+        concatenated_observations = FrameObservation()
+
+        for attr_name, attr_type in FrameObservation.__annotations__.items():
+            to_concatenate = [getattr(observation, attr_name) for observation in observations]
+            concatenated_attr = torch.cat(to_concatenate, dim=1)
+            setattr(concatenated_observations, attr_name, concatenated_attr)
+
+        return concatenated_observations
+
+
+@dataclass
+class FlowObservation(Observation):
+    observed_flow: torch.Tensor = None
+    observed_flow_segmentation: torch.Tensor = None
+    observed_flow_occlusion: torch.Tensor = None
+    observed_flow_uncertainty: torch.Tensor = None
+
+    @staticmethod
+    def concatenate(*observations: 'FlowObservation') -> 'FlowObservation':
+        concatenated_observations = FlowObservation()
+
+        for attr_name, attr_type in FlowObservation.__annotations__.items():
+            concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
+            setattr(concatenated_observations, attr_name, concatenated_attr)
+        return concatenated_observations
 
 
 @dataclass
 class KeyframeBuffer:
-    keyframes: list = None  # Ordinal of a frame that we optimize for shape etc.
-    flow_frames: list = None  # Ordinal of a frame that we may not optimize but serve as a keyframe source
-    # Pairs (f1, f2), where f1 is in flow_keyframes, and f2 in keyframes
-    flow_arcs: Set[Tuple[int, int]] = field(default_factory=set)
-    images: torch.Tensor = None
-    prev_images: torch.Tensor = None
-    images_feat: torch.Tensor = None
-    segments: torch.Tensor = None
-    observed_flows: List[torch.Tensor] = None
-    observed_flows_segmentations: List[torch.Tensor] = None
-    observed_flows_occlusions: List[torch.Tensor] = None
-    observed_flows_uncertainties: List[torch.Tensor] = None
+    G: nx.DiGraph = field(default_factory=nx.DiGraph)
+
+    # Contains ordinals of a frame that we optimize for shape etc.
+    keyframes: list = field(default_factory=list)
+    # Contains ordinals of a frame that we may not optimize but serve as a keyframe source
+    flow_frames: list = field(default_factory=list)
 
     @staticmethod
     def merge(buffer1, buffer2):
+        # TODO
         """
         Concatenates and merges two KeyframeBuffer instances while sorting the keyframes. Assumes buffer1.keyframes
         and buffer2.keyframes are disjoint.
@@ -38,131 +79,93 @@ class KeyframeBuffer:
             indices of buffer1 keyframes in the merged buffer, and indices of buffer2 keyframes in the merged buffer.
 
         """
-        if buffer1.keyframes is None and buffer2.keyframes is None:
-            return KeyframeBuffer(), [], []
-        elif buffer1.keyframes is None or (buffer1.keyframes is not None and len(buffer1.keyframes) == 0):
-            return copy.deepcopy(buffer2), [], [k for k in
-                                                range(len(buffer2.keyframes))] if buffer2.keyframes is not None else []
-        elif buffer2.keyframes is None or (buffer2.keyframes is not None and len(buffer2.keyframes) == 0):
-            return copy.deepcopy(buffer1), [k for k in
-                                            range(len(buffer1.keyframes))] if buffer1.keyframes is not None else [], []
-
-        all_keyframes = sorted(set(buffer1.keyframes + buffer2.keyframes))
-        all_flow_frames = sorted(set(buffer1.flow_frames + buffer2.flow_frames))
-        all_flow_arcs = buffer1.flow_arcs | buffer2.flow_arcs
-
-        merged_buffer = KeyframeBuffer()
-        merged_buffer.keyframes = all_keyframes
-        merged_buffer.flow_frames = all_flow_frames
-        merged_buffer.flow_arcs = all_flow_arcs
+        all_keyframes = list(sorted(set(buffer1.keyframes) | set(buffer2.keyframes)))
+        all_flow_frames = list(sorted(set(buffer1.flow_frames) | set(buffer2.flow_frames)))
 
         indices_buffer1 = []
         indices_buffer2 = []
 
-        for attr_name, attr_type in merged_buffer.__annotations__.items():
-            merged_attr = None
-            if attr_type is list:
-                merged_attr = [getattr(buffer1, attr_name)[buffer1.keyframes.index(k)] if k in buffer1.keyframes else
-                               getattr(buffer2, attr_name)[buffer2.keyframes.index(k)]
-                               for k in all_keyframes]
-            elif attr_type is torch.Tensor:
-                attr1 = getattr(buffer1, attr_name)
-                attr2 = getattr(buffer2, attr_name)
-                merged_attr = torch.cat(
-                    [attr1[:, buffer1.keyframes.index(k)].unsqueeze(1) if k in buffer1.keyframes else
-                     attr2[:, buffer2.keyframes.index(k)].unsqueeze(1)
-                     for k in all_keyframes], dim=1)
-            setattr(merged_buffer, attr_name, merged_attr)
+        merged_buffer = KeyframeBuffer()
+        merged_buffer.keyframes = all_keyframes
+        merged_buffer.flow_frames = all_flow_frames
+        merged_buffer.G = nx.compose(buffer1.G, buffer2.G)
 
-        # Track indices of keyframes in the merged buffer
         indices_buffer1.extend([buffer1.keyframes.index(k) for k in all_keyframes if k in buffer1.keyframes])
         indices_buffer2.extend([buffer2.keyframes.index(k) for k in all_keyframes if k in buffer2.keyframes])
 
         return merged_buffer, indices_buffer1, indices_buffer2
 
-    def append_new_keyframe(self, observed_image, observed_image_features, observed_image_segmentation,
-                            previously_observed_image, keyframe_index):
-        self.images = torch.cat((self.images, observed_image), 1)
-        self.images_feat = torch.cat((self.images_feat, observed_image_features), 1)
-        self.segments = torch.cat((self.segments, observed_image_segmentation), 1)
-        self.prev_images = torch.cat((self.prev_images, previously_observed_image), dim=1)
+    def add_new_keyframe(self, observed_image, observed_image_features, observed_image_segmentation, keyframe_index):
 
-        self.observed_flows += [torch.empty(1, 0, 2, *self.prev_images.shape[-2:]).cuda()]
-        self.observed_flows_segmentations += [torch.empty(1, 0, 1, *self.prev_images.shape[-2:]).cuda()]
-        self.observed_flows_occlusions += [torch.empty(1, 0, 1, *self.prev_images.shape[-2:]).cuda()]
-        self.observed_flows_uncertainties += [torch.empty(1, 0, 1, *self.prev_images.shape[-2:]).cuda()]
+        vertex_attribute = FrameObservation(observed_image=observed_image,
+                                            observed_image_features=observed_image_features,
+                                            observed_segmentation=observed_image_segmentation)
 
-        self.keyframes += [keyframe_index]
-        self.flow_frames += [keyframe_index - 1]
+        self.G.add_node(keyframe_index, observations=vertex_attribute)
 
-    def add_new_flow(self, observed_flows: torch.Tensor, observed_flows_segmentations: torch.Tensor,
-                     observed_flows_occlusions: torch.Tensor, observed_flows_uncertainties: torch.Tensor,
+        insort(self.keyframes, keyframe_index)
+
+    def add_new_flow(self, observed_flow: torch.Tensor, observed_flows_segmentation: torch.Tensor,
+                     observed_flows_occlusion: torch.Tensor, observed_flows_uncertainty: torch.Tensor,
                      source_frame: int, target_frame: int) -> None:
+        if source_frame not in self.G:
+            raise ValueError("source_frame not in the graph")
+        elif target_frame not in self.G:
+            raise ValueError("target_frame not in the graph")
+
+        arc_attributes = FlowObservation(observed_flow=observed_flow,
+                                         observed_flow_segmentation=observed_flows_segmentation,
+                                         observed_flow_uncertainty=observed_flows_uncertainty,
+                                         observed_flow_occlusion=observed_flows_occlusion)
         if source_frame not in self.flow_frames:
-            raise ValueError("Requested frame must be in frames sources self.flow_keyframes_sources")
-        frame_source_idx = self.flow_frames.index(source_frame)
-        self.flow_arcs |= {(source_frame, target_frame)}
+            insort(self.flow_frames, source_frame)
+        self.G.add_edge(source_frame, target_frame, flow_observations=arc_attributes)
 
-        self.observed_flows[frame_source_idx] = \
-            torch.cat([self.observed_flows[frame_source_idx], observed_flows], dim=1)
-        self.observed_flows_segmentations[frame_source_idx] = \
-            torch.cat([self.observed_flows_segmentations[frame_source_idx], observed_flows_segmentations], dim=1)
-        self.observed_flows_occlusions[frame_source_idx] = \
-            torch.cat([self.observed_flows_occlusions[frame_source_idx], observed_flows_occlusions], dim=1)
-        self.observed_flows_uncertainties[frame_source_idx] = \
-            torch.cat([self.observed_flows_uncertainties[frame_source_idx], observed_flows_uncertainties], dim=1)
+    def get_flows_from_frame(self, source_frame: int) -> FlowObservation:
 
-    def get_flows_from_frame(self, source_frame: int):
-        source_frame_idx = self.flow_frames.index(source_frame)
-        observed_flows = self.observed_flows[source_frame_idx]
-        observed_flows_segmentations = self.observed_flows_segmentations[source_frame_idx]
-        observed_flows_occlusions = self.observed_flows_occlusions[source_frame_idx]
-        observed_flows_uncertainties = self.observed_flows_uncertainties[source_frame_idx]
+        outgoing_arcs = list(self.G.edges(source_frame))
+        outgoing_arcs.sort(key=lambda edge: edge[:2:-1])  # Sort by target frame
+        outgoing_arcs_observations = [arc['flow_observations'] for arc in outgoing_arcs]
 
-        return observed_flows, observed_flows_segmentations, observed_flows_uncertainties, observed_flows_occlusions
+        concatenated_tensors = FlowObservation.concatenate(*outgoing_arcs_observations)
 
-    def get_observations(self, bounding_box: Tuple[int, int, int, int] = None) -> Observations:
+        return concatenated_tensors
 
-        observed_flows, observed_flows_segmentations, observed_flows_uncertainties, \
-            observed_flows_occlusions = self.get_flows_observations(bounding_box)
+    def get_observations_for_all_keyframes(self, bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
+        vertices = list(filter(lambda vertex: vertex[0] in self.keyframes, self.G.nodes(data=True)))
+        vertices.sort(key=lambda vertex: vertex[0])
 
-        observed_images = self.images
-        observed_segmentations = self.segments
+        vertices_observations = [vertex[1]['observations'] for vertex in vertices]
+        concatenated_observations = FrameObservation.concatenate(*vertices_observations)
+
         if bounding_box is not None:
-            observed_images, observed_segmentations = self.trim_bounding_box(bounding_box, observed_images,
-                                                                             observed_segmentations)
-        observations = Observations(
-            observed_images=observed_images.clone(),
-            observed_segmentations=observed_segmentations.clone(),
-            observed_flows=observed_flows.clone(),
-            observed_flows_segmentations=observed_flows_segmentations.clone(),
-            observed_flows_occlusions=observed_flows_occlusions.clone(),
-            observed_flows_uncertainties=observed_flows_uncertainties.clone()
-        )
+            concatenated_observations.trim_bounding_box(bounding_box)
+
+        return concatenated_observations
+
+    def get_observations_for_keyframe(self, keyframe,
+                                      bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
+        observations = self.G.nodes[keyframe]['observations']
+
+        if bounding_box is not None:
+            observations = observations.trim_bounding_box(bounding_box)
 
         return observations
 
+    def get_flow_frames_for_keyframe(self, keyframe):
+        return sorted(self.G.predecessors(keyframe))
+
     def get_flows_observations(self, bounding_box=None):
-        observed_flows = torch.cat(self.observed_flows, dim=1)
-        observed_flows_segmentations = torch.cat(self.observed_flows_segmentations, dim=1)
-        observed_flows_occlusions = torch.cat(self.observed_flows_occlusions, dim=1)
-        observed_flows_uncertainties = torch.cat(self.observed_flows_uncertainties, dim=1)
+        arcs = list(self.G.edges(data=True))
+        arcs.sort(key=lambda edge: edge[:2:-1])  # Sort by the target frame, then by the source frame
+
+        flow_observations = [arc[2]['flow_observations'] for arc in arcs]
+        concatenated_tensors = FlowObservation.concatenate(*flow_observations)
 
         if bounding_box is not None:
-            trimmed = self.trim_bounding_box(bounding_box, observed_flows, observed_flows_occlusions,
-                                             observed_flows_segmentations, observed_flows_uncertainties)
-            observed_flows, observed_flows_occlusions, observed_flows_segmentations, \
-                observed_flows_uncertainties = trimmed
+            concatenated_tensors.trim_bounding_box(bounding_box)
 
-        return observed_flows, observed_flows_segmentations, observed_flows_uncertainties, observed_flows_occlusions
-
-    @staticmethod
-    def trim_bounding_box(bounding_box: Tuple[int, int, int, int], *args):
-        trimmed_args = []
-        for arg in args:
-            trimmed_arg = arg[:, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-            trimmed_args.append(trimmed_arg)
-        return tuple(trimmed_args)
+        return concatenated_tensors
 
     def trim_keyframes(self, max_keyframes):
         if len(self.keyframes) > max_keyframes:
@@ -174,49 +177,27 @@ class KeyframeBuffer:
         else:
             return KeyframeBuffer()
 
-    def __copy_selected_keyframes_data_to_buffer(self, keyframe_buffer_instance, to_be_copied_attributes):
-        for attr_name, attr_type in keyframe_buffer_instance.__annotations__.items():
-            if attr_type is list:
-                modified_attr = (np.array(getattr(self, attr_name))[to_be_copied_attributes]).tolist()
-                setattr(keyframe_buffer_instance, attr_name, modified_attr)
-            elif attr_type is torch.Tensor:
-                modified_attr = getattr(self, attr_name)[:, to_be_copied_attributes]
-                setattr(keyframe_buffer_instance, attr_name, modified_attr)
-
     def keep_selected_keyframes(self, keep_keyframes):
         not_keep_keyframes = ~ keep_keyframes
+        kept_keyframes = (np.array(sorted(self.keyframes))[keep_keyframes]).tolist()
+        deleted_keyframes = (np.array(sorted(self.keyframes))[not_keep_keyframes]).tolist()
 
-        # Get the deleted keyframes
+        kept_graph: nx.DiGraph = self.G.subgraph(kept_keyframes + self.flow_frames).copy()
+        deleted_graph: nx.DiGraph = self.G.subgraph(deleted_keyframes + self.flow_frames).copy()
+
         deleted_buffer = KeyframeBuffer()
-        self.__copy_selected_keyframes_data_to_buffer(deleted_buffer, not_keep_keyframes)
+        kept_graph.remove_nodes_from([node for node in set(self.flow_frames) & set(kept_graph.nodes)
+                                      if kept_graph.out_degree(node) == 0])
+        deleted_graph.remove_nodes_from([node for node in set(self.flow_frames) & set(deleted_graph.nodes)
+                                         if deleted_graph.out_degree(node) == 0])
 
-        flow_frames_arcs_new = []
-        for source_keyframe, target_keyframe in self.flow_arcs:
+        deleted_buffer.flow_frames = sorted(set(self.flow_frames) & set(deleted_graph.nodes))
+        deleted_buffer.keyframes = sorted(set(self.keyframes) & set(deleted_graph.nodes))
+        deleted_buffer.G = deleted_graph
 
-            source_keyframe_idx = self.flow_frames.index(source_keyframe)
-            target_keyframe_idx = self.keyframes.index(target_keyframe)
-
-            if not keep_keyframes[target_keyframe_idx]:
-                attributes_to_modify = [
-                    self.observed_flows,
-                    self.observed_flows_segmentations,
-                    self.observed_flows_uncertainties,
-                    self.observed_flows_occlusions,
-                ]
-
-                for flow_attribute in attributes_to_modify:
-                    flow_attribute_at_idx = flow_attribute[source_keyframe_idx]
-                    modified_attr = torch.cat(
-                        (flow_attribute_at_idx[:, :target_keyframe_idx],
-                         flow_attribute_at_idx[:, target_keyframe_idx + 1:]), dim=1)
-                    flow_attribute[source_keyframe_idx] = modified_attr
-            else:
-                flow_frames_arcs_new.append((source_keyframe, target_keyframe))
-
-        self.flow_arcs = set(flow_frames_arcs_new)
-
-        # This will retain only those observations corresponding to keyframes where keep_keyframes is one
-        self.__copy_selected_keyframes_data_to_buffer(self, keep_keyframes)
+        self.flow_frames = sorted(set(self.flow_frames) & set(kept_graph.nodes))
+        self.keyframes = sorted(set(self.keyframes) & set(kept_graph.nodes))
+        self.G = kept_graph
 
         return deleted_buffer
 
