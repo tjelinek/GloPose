@@ -99,16 +99,16 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
 
 class WriteResults:
 
-    def __init__(self, write_folder, images, num_frames):
+    def __init__(self, write_folder, shape, num_frames):
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
-                                         10, (images.shape[4], images.shape[3]), True)
+                                         10, (shape[1], shape[0]), True)
         self.all_segm = cv2.VideoWriter(os.path.join(write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                        (images.shape[4], images.shape[3]), True)
+                                        (shape[1], shape[0]), True)
         self.all_proj = cv2.VideoWriter(os.path.join(write_folder, 'all_proj.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                        (images.shape[4], images.shape[3]), True)
+                                        (shape[1], shape[0]), True)
         self.all_proj_filtered = cv2.VideoWriter(os.path.join(write_folder, 'all_proj_filtered.avi'),
                                                  cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                                 (images.shape[4], images.shape[3]), True)
+                                                 (shape[1], shape[0]), True)
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
@@ -473,15 +473,26 @@ class WriteResults:
                        delimiter='\n')
             np.savetxt(os.path.join(tracking6d.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
             np.savetxt(os.path.join(tracking6d.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
-            self.all_input.write(
-                (images[0, :, :3].clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1, 0)[:, :,
-                 [2, 1, 0], -1] * 255).astype(np.uint8))
-            self.all_segm.write(((images[0, :, :3] * ground_truth_segments[0, :, 1:2]).clamp(min=0,
-                                                                                             max=1).cpu().numpy().transpose(
-                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
-            self.all_proj.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(2, 3, 1,
-                                                                                                           0)[:, :,
-                                 [2, 1, 0], -1] * 255).astype(np.uint8))
+
+            image_to_write = images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
+            image_to_write = image_to_write.transpose(2, 3, 1, 0)
+            image_to_write = image_to_write[:, :, [2, 1, 0], -1]
+            image_to_write = (image_to_write * 255).astype(np.uint8)
+            self.all_input.write(image_to_write)
+
+            segmentation_to_write = (images[0, :, :3] * ground_truth_segments[0, :, 1:2])
+            segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
+            segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
+            segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
+            segmentation_to_write = (segmentation_to_write * 255).astype(np.uint8)
+            self.all_segm.write(segmentation_to_write)
+
+            projection_to_write = renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy()
+            projection_to_write = projection_to_write.transpose(2, 3, 1, 0)
+            projection_to_write = projection_to_write[:, :, [2, 1, 0], -1]
+            projection_to_write = (projection_to_write * 255).astype(np.uint8)
+            self.all_proj.write(projection_to_write)
+
             if silh_losses[-1] > 0.3:
                 renders[0, -1, 0, 3] = last_segment[0, 0, -1]
                 renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]

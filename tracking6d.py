@@ -290,7 +290,7 @@ class Tracking6D:
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
         images, segments = images[None].to(self.device), segments[None].to(self.device)
         images_feat = self.feat(images).detach()
-        self.shape = segments.shape
+        self.shape = segments.shape[-2:]
         observed_flows = torch.zeros(1, 0, 2, *segments.shape[-2:])
         return images, images_feat, observed_flows, segments
 
