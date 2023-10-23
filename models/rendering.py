@@ -13,16 +13,6 @@ import cfg
 from models.kaolin_wrapper import prepare_vertices
 
 
-def deringing(coeffs, window):
-    deringed_coeffs = torch.zeros_like(coeffs)
-    deringed_coeffs[:, 0] += coeffs[:, 0]
-    deringed_coeffs[:, 1:1 + 3] += \
-        coeffs[:, 1:1 + 3] * math.pow(math.sin(math.pi * 1.0 / window) / (math.pi * 1.0 / window), 4.0)
-    deringed_coeffs[:, 4:4 + 5] += \
-        coeffs[:, 4:4 + 5] * math.pow(math.sin(math.pi * 2.0 / window) / (math.pi * 2.0 / window), 4.0)
-    return deringed_coeffs
-
-
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
                                                    'ren_mask', 'ren_mesh_vertices_features',
                                                    'ren_mesh_vertices_coords',
