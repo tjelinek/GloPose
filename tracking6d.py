@@ -334,7 +334,7 @@ class Tracking6D:
             self.feat = lambda x: x
 
     def initialize_mesh(self):
-        if self.config.gt_texture is not None and self.config.use_gt:
+        if self.config.gt_texture is not None:
             texture_np = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture)))
             self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
 
@@ -775,7 +775,8 @@ class Tracking6D:
 
         if (self.config.visualize_loss_landscape and (frame_index in {0, 1, 2, 3} or frame_index % 18 == 0) and
                 self.config.use_gt):
-            self.write_results.visualize_loss_landscape(observations, self, frame_index, relative_mode=True)
+            self.write_results.visualize_loss_landscape(observations, flow_observations, self, frame_index,
+                                                        relative_mode=True)
 
         # Inferring the most up-to date state after the optimization is finished
         infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
@@ -870,7 +871,6 @@ class Tracking6D:
                 self.encoder.quaternion_offsets[0, keyframes, :] = encoder_result.quaternions[0, :].detach()
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-
             self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
         for field_name in loss_coefs_names:
@@ -1226,7 +1226,8 @@ class Tracking6D:
 
         return encoder_result, encoder_result_flow_frames
 
-    def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations, flow_observations):
+    def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
+                  flow_observations: FlowObservation):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -1240,8 +1241,7 @@ class Tracking6D:
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            if epoch < self.config.iterations - 1:
-                joint_loss = joint_loss.mean()
-                self.rgb_optimizer.zero_grad()
-                joint_loss.backward(retain_graph=True)
-                self.rgb_optimizer.step()
+            joint_loss = joint_loss.mean()
+            self.rgb_optimizer.zero_grad()
+            joint_loss.backward(retain_graph=True)
+            self.rgb_optimizer.step()
