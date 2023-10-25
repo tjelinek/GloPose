@@ -594,9 +594,9 @@ class WriteResults:
         fig, ax1 = plt.subplots()
         fig.subplots_adjust(left=0.25, right=0.85)
 
-        translation_tensors = [t[0, 0, 0].detach().cpu() for t in tracking6d.logged_sgd_translations]
+        translation_tensors = [t[0, 0, -1].detach().cpu() for t in tracking6d.logged_sgd_translations]
         rotation_tensors = [
-            rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, 0]
+            rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, -1]
             for q in tracking6d.logged_sgd_quaternions
         ]
 
