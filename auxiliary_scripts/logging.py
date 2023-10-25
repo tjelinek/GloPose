@@ -131,14 +131,16 @@ class WriteResults:
         self.tracking_log.close()
         self.metrics_log.close()
 
-    def visualize_loss_landscape(self, observations, tracking6d, stepi, relative_mode=False):
+    def visualize_loss_landscape(self, observations: FrameObservation, flow_observations: FlowObservation, tracking6d,
+                                 stepi, relative_mode=False):
         """
         Visualizes the loss landscape by computing the joint losses across varying translations and rotations.
 
         Parameters:
         - tracking6d (Tracking6DClassType): The 6D tracking data, containing ground truth rotations, translations,
                                             and other relevant properties.
-        - observations (Observations): Observations.
+        - observations (FrameObservation): Observations.
+        - flow_observations (FlowObservation): Flow observations.
         - stepi (int): Current step or iteration.
 
         - relative_mode (bool, optional): If True and stepi >= 1, it will compute the ground truth marker with respect
@@ -161,8 +163,8 @@ class WriteResults:
         None
         """
 
-        num_translations = 50
-        num_rotations = 50
+        num_translations = 25
+        num_rotations = 25
 
         trans_axes = ['x', 'y', 'z']
         rot_axes = ['x', 'y', 'z']
@@ -202,8 +204,8 @@ class WriteResults:
             print(f"Visualizing loss landscape for translation axis {trans_axes[trans_axis_idx]} "
                   f"and rotation axis {rot_axes[rot_axis_idx]}")
 
-            joint_losses: np.ndarray = self.compute_loss_landscape(observations.observed_flows,
-                                                                   observations.observed_flows_segmentations,
+            joint_losses: np.ndarray = self.compute_loss_landscape(flow_observations.observed_flow,
+                                                                   flow_observations.observed_flow_segmentation,
                                                                    observations.observed_image,
                                                                    observations.observed_segmentation, tracking6d,
                                                                    rotations_space, translations_space, trans_axis_idx,
@@ -244,7 +246,7 @@ class WriteResults:
                 iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
                 iteration_rotation_rad = quaternion_to_angle_axis(iteration_rotation_quaternion,
                                                                   order=QuaternionCoeffOrder.WXYZ)
-                iteration_rotation_deg = rad_to_deg(iteration_rotation_rad)[0, 0, rot_axis_idx]
+                iteration_rotation_deg = rad_to_deg(iteration_rotation_rad)[0, -1, rot_axis_idx]
 
                 if i == 0:
                     plt.scatter(iteration_translation, iteration_rotation_deg, color='white', marker='x', label='Start')
@@ -290,7 +292,8 @@ class WriteResults:
                         f'joint_loss_landscape_{stepi}_trans-{trans_axes[trans_axis_idx]}'
                         f'_rot-{rot_axes[rot_axis_idx]}.eps', format='eps')
 
-    def compute_loss_landscape(self, observed_flows, observed_flows_segmentations, observed_images,
+    @staticmethod
+    def compute_loss_landscape(observed_flows, observed_flows_segmentations, observed_images,
                                observed_segmentations, tracking6d, rotation_space, translation_space,
                                trans_axis_idx, rot_axis_idx, stepi):
 
@@ -314,11 +317,12 @@ class WriteResults:
                     tracking6d.frames_and_flow_frames_inference([stepi], [stepi - 1], encoder_type='deep_features')
 
                 encoder_result = encoder_result._replace(translations=sampled_translation, quaternions=sampled_rotation)
+                flow_arcs_indices = [(-1, -1)]
 
                 inference_result = infer_normalized_renderings(tracking6d.rendering, tracking6d.encoder.face_features,
-                                                               tracking6d.rendering, encoder_result,
-                                                               encoder_result_flow_frames, tracking6d.shape[-1],
-                                                               tracking6d.shape[-2])
+                                                               encoder_result, encoder_result_flow_frames,
+                                                               flow_arcs_indices,
+                                                               tracking6d.shape[-1], tracking6d.shape[-2])
                 renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
                 loss_function = tracking6d.loss_function
