@@ -120,7 +120,7 @@ class TrackerConfig:
     gt_texture: str = None
     gt_mesh_prototype: str = None
     gt_tracking_log: str = None
-    use_gt: bool = False
+    use_ground_truth_shape: bool = False
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic', 'FromFiles'
 
     # Optimization
@@ -230,7 +230,7 @@ class Tracking6D:
         num_channels = images_feat.shape[2]
         self.initialize_renderer_and_encoder(iface_features, ivertices, num_channels)
 
-        if self.config.use_gt and self.gt_translations is not None and self.gt_rotations is not None:
+        if self.config.use_ground_truth_shape and self.gt_translations is not None and self.gt_rotations is not None:
             self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
                                                           self.gt_rotations, self.gt_translations)
             # Re-render the images using the synthetic tracker
@@ -342,7 +342,7 @@ class Tracking6D:
             self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
 
         prot = self.config.shapes[0]
-        if self.config.use_gt:
+        if self.config.use_ground_truth_shape:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
             self.faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
@@ -390,7 +390,7 @@ class Tracking6D:
         self.all_keyframes = self.active_keyframes
 
     def initialize_flow_model(self):
-        if self.config.flow_model == 'RAFTPrinceton':
+        if self.config.flow_model == 'RAFT':
             flow_getter = FlowModelGetterRAFT
         elif self.config.flow_model == 'GMA':
             flow_getter = FlowModelGetterGMA
@@ -418,7 +418,7 @@ class Tracking6D:
         b0 = None
         for stepi in range(1, self.config.input_frames):
 
-            image_raw, segment = self.tracker.next(stepi if self.config.use_gt else files[stepi])
+            image_raw, segment = self.tracker.next(stepi if self.config.use_ground_truth_shape else files[stepi])
 
             image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
             if b0 is not None:
@@ -773,8 +773,7 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        if (self.config.visualize_loss_landscape and (frame_index in {0, 1, 2, 3} or frame_index % 18 == 0) and
-                self.config.use_gt):
+        if self.config.visualize_loss_landscape and (frame_index in {0, 1, 2, 3} or frame_index % 18 == 0):
             self.write_results.visualize_loss_landscape(observations, flow_observations, self, frame_index,
                                                         relative_mode=True)
 
