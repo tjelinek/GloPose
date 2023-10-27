@@ -133,7 +133,7 @@ class TrackerConfig:
 
     # Optical flow settings
     flow_model: str = 'MFT'  # 'RAFT' 'GMA' and 'MFT'
-    add_flow_arcs_strategy: int = 'all-previous'  # One of 'all-previous' and 'single-previous'
+    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous' and 'single-previous'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).
     segmentation_mask_erosion_iters: int = 0
@@ -171,8 +171,8 @@ class Tracking6D:
         self.rotational_params = None
         self.positional_params = None
         self.non_positional_params = None
-        self.loss_function = None
-        self.rgb_loss_function = None
+        self.loss_function: Optional[FMOLoss] = None
+        self.rgb_loss_function: Optional[FMOLoss] = None
         self.optimizer_translational_parameters = None
         self.optimizer_rotational_parameters = None
         self.optimizer_positional_parameters = None
@@ -682,8 +682,8 @@ class Tracking6D:
                                                                      patience=self.config.lr_scheduler_patience,
                                                                      verbose=False)
 
-        def lambda_schedule(epoch):
-            return 1 / (1 + np.exp(-0.25 * (epoch - self.config.optimize_non_positional_params_after)))
+        def lambda_schedule(epoch_):
+            return 1 / (1 + np.exp(-0.25 * (epoch_ - self.config.optimize_non_positional_params_after)))
 
         scheduler_non_positional_params = lr_scheduler.LambdaLR(self.optimizer_non_positional_parameters,
                                                                 lambda_schedule)
@@ -855,7 +855,8 @@ class Tracking6D:
                                                      observed_flow=observed_flows,
                                                      observed_flow_segmentation=observed_flows_segmentations,
                                                      rendered_flow_segmentation=rendered_flow_segmentation,
-                                                     observed_flow_occlusion=None, observed_flow_uncertainties=None,
+                                                     observed_flow_occlusion=torch.Tensor(),
+                                                     observed_flow_uncertainties=torch.Tensor(),
                                                      keyframes_encoder_result=encoder_result,
                                                      last_keyframes_encoder_result=self.last_encoder_result,
                                                      return_end_point_errors=False)
@@ -914,9 +915,9 @@ class Tracking6D:
             nonlocal iters_without_change
             nonlocal best_loss
 
-            infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                            'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            inf_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
+                                          'deep_features')
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = inf_result
             model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
 
             joint_loss = joint_loss.mean()
@@ -991,11 +992,6 @@ class Tracking6D:
         no_improvements = 0
         best_loss = math.inf
 
-        # observed_flows_clone = observed_flows.detach().clone()
-        # observed_flows_segmentations_clone = observed_flows_segmentations.detach().clone()
-        # observed_images_clone = observed_images.detach().clone()
-        # observed_segmentations_clone = observed_segmentations.detach().clone()
-
         infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                         'deep_features')
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
@@ -1003,11 +999,6 @@ class Tracking6D:
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
         self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
-
-        # loss_seq = []
-        # loss_seq_all = []
-        # parameters_newest = []
-        # best_translation = None
 
         while no_improvements < self.config.break_sgd_after_iters_with_no_change:
 
@@ -1140,7 +1131,8 @@ class Tracking6D:
                                             observed_flow=flow_observations.observed_flow,
                                             observed_flow_segmentation=flow_observations.observed_flow_segmentation,
                                             rendered_flow_segmentation=rendered_flow_segmentation,
-                                            observed_flow_occlusion=None, observed_flow_uncertainties=None,
+                                            observed_flow_occlusion=torch.Tensor(),
+                                            observed_flow_uncertainties=torch.Tensor(),
                                             keyframes_encoder_result=encoder_result,
                                             last_keyframes_encoder_result=self.last_encoder_result)
         losses_all, losses, joint_loss, per_pixel_error = loss_result
