@@ -31,7 +31,8 @@ from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
 from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, infer_normalized_renderings
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, infer_normalized_renderings, \
+    normalize_rendered_flows
 
 
 @dataclass
@@ -500,16 +501,16 @@ class Tracking6D:
             if self.config.write_results:
                 with torch.no_grad():
                     visualize_theoretical_flow(self, frame_result.theoretical_flow.detach().clone(),
-                                               all_frame_observations.observed_segmentation[0, -1, 1],
-                                               all_flow_observations.observed_flow_segmentation[0, -1, 0],
-                                               b0, all_flow_observations.observed_flow[:, -1],
+                                               all_frame_observations.observed_segmentation,
+                                               all_flow_observations.observed_flow_segmentation,
+                                               b0, all_flow_observations.observed_flow,
                                                self.all_keyframes.keyframes, stepi)
 
                     self.write_results.write_results(self, b0=b0,
                                                      bboxes=bboxes, our_losses=our_losses,
                                                      silh_losses=silh_losses, stepi=stepi,
                                                      encoder_result=encoder_result,
-                                                     ground_truth_segments=all_frame_observations.observed_segmentation,
+                                                     observed_segmentations=all_frame_observations.observed_segmentation,
                                                      images=all_frame_observations.observed_image,
                                                      images_feat=all_frame_observations.observed_image_features,
                                                      tex=tex,
@@ -577,7 +578,19 @@ class Tracking6D:
         occlusion = None
         uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
-            observed_flow = self.tracker.next_flow(flow_target_frame)
+            keyframes = [flow_target_frame]
+            flow_frames = [flow_target_frame - 1]
+            flow_arcs_indices = [(0, 0)]
+
+            encoder_result, enc_flow = self.frames_and_flow_frames_inference(keyframes, flow_frames,
+                                                                             encoder_type='gt_encoder')
+
+            observed_flow, _, _ = self.rendering.compute_theoretical_flow(encoder_result, enc_flow,
+                                                                          flow_arcs_indices)
+            observed_flow = observed_flow.detach()
+            observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
+                                                     self.shape[-1], self.shape[-2])[0]
+
         elif self.config.gt_flow_source == 'FromFiles':  # We have ground truth flow annotations
             # The annotations are assumed to be in the [0, 1] coordinate range
             observed_flow = torch.load(gt_flow_files[flow_target_frame])[0].to(self.device)  # Size([1, H, W, 2])
@@ -606,41 +619,16 @@ class Tracking6D:
 
         return observed_flow, occlusion, uncertainty
 
-    def get_rendered_image_features(self, lights, quaternion, texture_maps, translation, vertices):
-        feat_renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture_maps,
-                                           lights, True)
-        feat_renders_crop = feat_renders_crop[:, :, :, :-1]
-        feat_renders_crop = torch.cat((feat_renders_crop[:, :, :, :3], feat_renders_crop[:, :, :, -1:]), 3)
-        return feat_renders_crop
-
-    def get_rendered_image(self, bounding_box, lights, quaternion, texture, translation, vertices):
-        """
-
-        :param bounding_box: [y0, y1, x0, x1] location of the bounding box
-        :param lights:
-        :param quaternion: Rotation of the mesh
-        :param texture: Mesh texture
-        :param translation: Mesh translation
-        :param vertices: Mesh vertices
-        :return:
-            renders_cropped: [4, 272, 224] RGB-A rendering of the image
-            renders: [4, 300, 225] RGB-A rendering of the image, where the rendering is put inside the bounding box
-        """
-        renders_crop = self.rendering(translation, quaternion, vertices, self.encoder.face_features, texture, lights)
-        renders_crop = torch.cat((renders_crop[:, :, :, :3], renders_crop[:, :, :, -1:]), 3)
-        renders = self.write_image_into_bbox(bounding_box, renders_crop)
-        return renders, renders_crop
-
-    def write_image_into_bbox(self, bounding_box, renders_crop):
+    def write_tensor_into_bbox(self, bounding_box, image):
         """
 
         :param bounding_box: List specifying the bounding box starts, resp. end
-        :param renders_crop: Image of shape ..., C, H, W
+        :param image: Tensor of shape ..., C, H, W
         :return:
         """
-        renders = torch.zeros(renders_crop.shape[:-2] + self.shape[-2:]).to(self.device)
-        renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = renders_crop
-        return renders
+        image_with_margins = torch.zeros(image.shape[:-2] + self.shape[-2:]).to(image.device)
+        image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = image
+        return image_with_margins
 
     def apply(self, observations, flow_observations, keyframes, flow_frames, flow_arcs, frame_index):
 
@@ -843,9 +831,8 @@ class Tracking6D:
             inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                            encoder_result_flow_frames, flow_arcs_indices,
                                                            self.shape[-1], self.shape[-2])
-            renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
-
-            rendered_silhouettes = renders[0, :, :, -1:]
+            renders, rendered_silhouettes, theoretical_flow, \
+                rendered_flow_segmentation, occlusion_masks = inference_result
 
             loss_result = self.loss_function.forward(rendered_images=renders,
                                                      observed_images=observed_images,
@@ -1115,16 +1102,16 @@ class Tracking6D:
         inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
                                                        self.shape[-1], self.shape[-2])
-        renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
+        renders, rendered_silhouettes, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function
+            observed_images = observations.observed_image
         else:  # 'deep_features'
             loss_function = self.loss_function
+            observed_images = observations.observed_image_features
 
-        rendered_silhouettes = renders[0, :, :, -1:]
-
-        loss_result = loss_function.forward(rendered_images=renders, observed_images=observations.observed_image,
+        loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
                                             rendered_silhouettes=rendered_silhouettes,
                                             observed_silhouettes=observations.observed_segmentation,
                                             rendered_flow=theoretical_flow,

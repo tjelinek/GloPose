@@ -57,11 +57,18 @@ def erode_segment_mask(erosion_iterations, segment_masks):
 
 
 def write_video(array4d, path, fps=6):
+    """
+
+    :param array4d: Input Tensor of Shape (1, N, C, H, W)
+    :param path: Output path
+    :param fps: Frames per second
+    :return:
+    """
     array4d[array4d < 0] = 0
     array4d[array4d > 1] = 1
-    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), fps, (array4d.shape[1], array4d.shape[0]), True)
-    for ki in range(array4d.shape[3]):
-        out.write((array4d[:, :, [2, 1, 0], ki] * 255).astype(np.uint8))
+    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), fps, (array4d.shape[-1], array4d.shape[-2]), True)
+    for ki in range(array4d.shape[1]):
+        out.write((array4d[:, ki, [2, 1, 0]] * 255).astype(np.uint8))
     out.release()
 
 
@@ -460,16 +467,16 @@ def normalize_vertices(vertices):
 
 
 def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
-                                encoder_result_flow_frames, flow_arcs_indices, input_image_width,
-                                input_image_height):
-    renders = renderer(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
-                       encoder_face_features, encoder_result.texture_maps, encoder_result.lights)
-    flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                    flow_arcs_indices)
+                                encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height):
+    rendering, rendering_mask = renderer(encoder_result.translations, encoder_result.quaternions,
+                                         encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
+                                         encoder_result.lights)
+
+    flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
     theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
-    rendered_flow_segmentation = rendered_flow_segmentation[None]
-    # Renormalization compensating for the fact that we render into bounding box that is smaller than the
-    # actual image
-    theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height,
-                                                input_image_width, input_image_height)
-    return renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks
+
+    # Renormalization compensating for the fact that we render into bounding box that is smaller than the actual image
+    theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height, input_image_width,
+                                                input_image_height)
+
+    return rendering, rendering_mask, theoretical_flow, rendered_flow_segmentation, occlusion_masks

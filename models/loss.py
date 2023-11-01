@@ -21,7 +21,8 @@ class FMOLoss(nn.Module):
                 observed_flow_segmentation, rendered_flow_segmentation,
                 observed_flow_occlusion, observed_flow_uncertainties,
                 keyframes_encoder_result, last_keyframes_encoder_result,
-                return_end_point_errors=False):
+                return_end_point_errors=False,
+                custom_points_for_ransac=None):
         """
         Forward pass of the model.
 
@@ -54,10 +55,9 @@ class FMOLoss(nn.Module):
         losses = {}
         losses_all = {}
         if self.config.loss_rgb_weight > 0:
-            modelled_renders = torch.cat(
-                (rendered_images[:, :, :, :-1] * rendered_images[:, :, :, -1:], rendered_images[:, :, :, -1:]),
-                3).mean(2)
-            segments_our = (rendered_images[:, :, 0, -1:] > 0).to(rendered_images.dtype)
+            modelled_renders = (rendered_images * rendered_silhouettes)
+            segments_our = (rendered_silhouettes > 0).to(rendered_images.dtype)
+
             track_segm_loss, t_all = fmo_model_loss(observed_images, modelled_renders, segments_our, self.config)
             losses["model"] = self.config.loss_rgb_weight * track_segm_loss
             losses_all["track_segm_loss"] = t_all
@@ -66,8 +66,8 @@ class FMOLoss(nn.Module):
             losses_all["silh"] = []
             denom = rendered_images.shape[1]
             for frmi in range(rendered_images.shape[1]):
-                temp_loss = self.config.loss_iou_weight * fmo_loss(rendered_images[:, frmi],
-                                                                   observed_silhouettes[:, frmi, None])
+                temp_loss = self.config.loss_iou_weight * iou_loss(rendered_silhouettes[:, [frmi]],
+                                                                   observed_silhouettes[:, [frmi], [-1]])
                 losses_all["silh"].append(temp_loss.tolist()[0])
                 losses["silh"] = losses["silh"] + temp_loss / denom
         if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
@@ -103,8 +103,8 @@ class FMOLoss(nn.Module):
 
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
-            observed_flow_segmentation = observed_flow_segmentation[0, :, -1:]  # Shape (N, 1, H, W)
-            rendered_flow_segmentation = rendered_flow_segmentation[0]  # Shape (N, 1, H, W)
+            observed_flow_segmentation = observed_flow_segmentation[0, :, -1:].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
+            rendered_flow_segmentation = rendered_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
 
             # observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0)\
             #     .to(observed_flow_segmentation.dtype)
@@ -126,15 +126,22 @@ class FMOLoss(nn.Module):
                 flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, rendered_flow_segmentation)
                 rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
 
-            flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, H, W, 2)
+            flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, 2, H, W)
+            flow_from_tracking_clone = flow_from_tracking_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, H, W, 2)
 
             observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
-            observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)
+            observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, 2, H, W)
 
             if self.config.flow_sgd:
-                rendered_flow_segmentation = random_points_from_binary_mask(rendered_flow_segmentation[0],
-                                                                            self.config.flow_sgd_n_samples)[None]
-                image_area = self.config.flow_sgd_n_samples
+                if custom_points_for_ransac is not None:
+                    rendered_flow_segmentation[...] = False
+                    rendered_flow_segmentation[custom_points_for_ransac] = True
+                    image_area = custom_points_for_ransac[0].shape[0]
+                else:
+                    rendered_flow_segmentation = random_points_from_binary_mask(rendered_flow_segmentation[0],
+                                                                                self.config.flow_sgd_n_samples)[None]
+
+                    image_area = self.config.flow_sgd_n_samples
             else:
                 image_area = rendered_images.shape[-2:].numel()
 
@@ -233,15 +240,13 @@ def random_points_from_binary_mask(binary_mask, N):
     return binary_mask_new
 
 
-def fmo_loss(Yp, Y):
-    YM = Y[:, :, -1:, :, :]
-    YpM = Yp[:, :, -1:, :, :]
-    YMb = ((YM + YpM) > 0).type(YpM.dtype)
-    loss = iou_loss(YM, YpM)
-    return loss
-
-
 def iou_loss(YM, YpM):
+    """
+
+    :param YM: Segmentation of shape (1, N, 1, H, W)
+    :param YpM: Segmentation of shape (1, N, 1, H, W)
+    :return:
+    """
     A_inter_B = YM * YpM
     A_union_B = (YM + YpM - A_inter_B)
     iou = 1 - (torch.sum(A_inter_B, [2, 3, 4]) / torch.sum(A_union_B, [2, 3, 4])).mean(1)
@@ -271,17 +276,15 @@ def batch_loss(YpM, YM, YMb, do_mult=True, weights=None):
 
 
 def fmo_model_loss(input_batch, renders, segments, config):
-    Mask = segments[:, :, -1:]
-    if Mask is None:
-        Mask = renders[:, :, -1:] > 0.05
-    Mask = Mask.type(renders.dtype)
+    segments = segments.type(renders.dtype)
+
     model_loss = 0
     model_loss_all = []
     for frmi in range(input_batch.shape[1]):
         if config.features == 'deep':
-            temp_loss = cauchy_loss(renders[:, frmi, :-1], input_batch[:, frmi], Mask[:, frmi])
+            temp_loss = cauchy_loss(renders[:, frmi], input_batch[:, frmi], segments[:, frmi])
         else:
-            temp_loss = batch_loss(renders[:, frmi, :-1], input_batch[:, frmi], Mask[:, frmi])
+            temp_loss = batch_loss(renders[:, frmi], input_batch[:, frmi], segments[:, frmi])
         model_loss_all.append(temp_loss.tolist()[0])
         model_loss = model_loss + temp_loss / input_batch.shape[1]
     return model_loss, model_loss_all

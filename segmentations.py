@@ -178,25 +178,6 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         segments = segments.cuda()
         return image, segments
 
-    def next_flow(self, keyframe):
-        keyframes = [keyframe]
-        flow_frames = [keyframe - 1]
-        flow_arcs_indices = [(0, 0)]
-
-        encoder_result, enc_flow = self.tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames,
-                                                                                    encoder_type='gt_encoder')
-
-        observed_flows, _, _ = self.tracking6d.rendering.compute_theoretical_flow(encoder_result, enc_flow,
-                                                                                  flow_arcs_indices)
-        observed_flows = observed_flows.detach()
-        observed_flows = observed_flows.permute(0, 1, -1, -3, -2)
-        observed_flows = normalize_rendered_flows(observed_flows, self.tracking6d.rendering.width,
-                                                  self.tracking6d.rendering.height,
-                                                  self.tracking6d.shape[-1],
-                                                  self.tracking6d.shape[-2])[0]
-
-        return observed_flows
-
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
 

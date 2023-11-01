@@ -19,7 +19,8 @@ from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder, angle_axis_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
-from models.loss import fmo_loss
+from keyframe_buffer import FrameObservation, FlowObservation
+from models.loss import iou_loss
 from segmentations import create_mask_from_string, pad_image
 from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
     infer_normalized_renderings
@@ -48,7 +49,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
     Returns:
         None. The function saves multiple visualization images to the disk.
     """
-    flow_video_up = observed_flow.detach().clone()
+    flow_video_up = observed_flow.detach().cpu()
     flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * flow_video_up.shape[-1]
     flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * flow_video_up.shape[-2]
     flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().numpy()
@@ -58,12 +59,12 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
     # flow_image_small = transforms.Resize(image_small_dims)(flow_image)
     # segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
     # flow_image_segmented = flow_image_small.mul(segmentation_mask)
-    image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0]
-    image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0]
+    image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0].detach().cpu()
+    image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0].detach().cpu()
 
     flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up, None,
-                                                   gt_silhouette_current=segment_current_image,
-                                                   gt_silhouette_prev=segment_prev_image)
+                                                   gt_silhouette_current=segment_current_image.cpu(),
+                                                   gt_silhouette_prev=segment_prev_image.cpu())
     transform = transforms.ToPILImage()
     # image_pure_flow_segmented = transform(flow_image_segmented)
     image_new_pil = transform(image_new[0] / 255.0)
@@ -171,7 +172,7 @@ class WriteResults:
 
         for trans_axis_idx, rot_axis_idx in product(range(len(trans_axes)), range(len(rot_axes))):
 
-            if trans_axis_idx in [1, 2] or rot_axis_idx in [2]:
+            if trans_axis_idx in [1, 2] or rot_axis_idx in [0, 2]:
                 continue
 
             if relative_mode and stepi > 1:
@@ -206,7 +207,7 @@ class WriteResults:
 
             joint_losses: np.ndarray = self.compute_loss_landscape(flow_observations.observed_flow,
                                                                    flow_observations.observed_flow_segmentation,
-                                                                   observations.observed_image,
+                                                                   observations.observed_image_features,
                                                                    observations.observed_segmentation, tracking6d,
                                                                    rotations_space, translations_space, trans_axis_idx,
                                                                    rot_axis_idx, stepi)
@@ -293,9 +294,9 @@ class WriteResults:
                         f'_rot-{rot_axes[rot_axis_idx]}.eps', format='eps')
 
     @staticmethod
-    def compute_loss_landscape(observed_flows, observed_flows_segmentations, observed_images,
-                               observed_segmentations, tracking6d, rotation_space, translation_space,
-                               trans_axis_idx, rot_axis_idx, stepi):
+    def compute_loss_landscape(observed_flows, observed_flows_segmentations, observed_images_features,
+                               observed_segmentations, tracking6d, rotation_space, translation_space, trans_axis_idx,
+                               rot_axis_idx, stepi):
 
         joint_losses = np.zeros((translation_space.shape[0], rotation_space.shape[0]))
 
@@ -323,12 +324,11 @@ class WriteResults:
                                                                encoder_result, encoder_result_flow_frames,
                                                                flow_arcs_indices,
                                                                tracking6d.shape[-1], tracking6d.shape[-2])
-                renders, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
+                renders, rendered_silhouettes, theoretical_flow, \
+                    rendered_flow_segmentation, occlusion_masks = inference_result
 
                 loss_function = tracking6d.loss_function
-
-                rendered_silhouettes = renders[0, :, :, -1:]
-                loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
+                loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images_features,
                                                     rendered_silhouettes=rendered_silhouettes,
                                                     observed_silhouettes=observed_segmentations,
                                                     rendered_flow=theoretical_flow, observed_flow=observed_flows,
@@ -353,7 +353,7 @@ class WriteResults:
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
     def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
-                      ground_truth_segments, images, images_feat, tex, frame_losses):
+                      observed_segmentations, images, images_feat, tex, frame_losses):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -381,27 +381,28 @@ class WriteResults:
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
-            feat_renders_crop = tracking6d.get_rendered_image_features(detached_result.lights,
-                                                                       detached_result.quaternions,
-                                                                       detached_result.texture_maps,
-                                                                       detached_result.translations,
-                                                                       detached_result.vertices)
+            feat_renders, _ = tracking6d.rendering.forward(detached_result.translations, detached_result.quaternions,
+                                                           detached_result.vertices, tracking6d.encoder.face_features,
+                                                           detached_result.texture_maps, detached_result.lights)
 
-            renders, renders_crop = tracking6d.get_rendered_image(b0, detached_result.lights,
-                                                                  detached_result.quaternions,
-                                                                  tex,
-                                                                  detached_result.translations,
-                                                                  detached_result.vertices)
+            renders, rendered_silhouette = tracking6d.rendering.forward(detached_result.translations,
+                                                                        detached_result.quaternions,
+                                                                        detached_result.vertices,
+                                                                        tracking6d.encoder.face_features,
+                                                                        tex,
+                                                                        detached_result.lights)
 
-            rendered_silhouette = renders[:, :, 0, -1:]
+            renders_crop = renders[..., b0[0]:b0[1], b0[2]:b0[3]]
+            feat_renders_crop = feat_renders[..., b0[0]:b0[1], b0[2]:b0[3]]
+
             last_rendered_silhouette = rendered_silhouette[0, -1]
-            last_segment = ground_truth_segments[:, -1:]
+            last_segment = observed_segmentations[:, -1:]
             last_segment_mask = last_segment[:, 0, 1]
 
             self.render_silhouette_overlap(last_rendered_silhouette, last_segment_mask,
                                            stepi, tracking6d)
 
-            write_renders(feat_renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
+            write_renders(feat_renders, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
             write_renders(torch.cat(
                 (images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
@@ -422,16 +423,18 @@ class WriteResults:
             with open(tracking6d.write_folder / f"model_{stepi}.mtl", "w") as file:
                 file.writelines(lines)
 
-            write_video(renders[0, :, 0, :3].detach().cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
-            write_video(images[0, :, :3].cpu().numpy().transpose(2, 3, 1, 0),
-                        os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
-            write_video(
-                (images[0, :, :3] * ground_truth_segments[0, :, 1:2]).cpu().numpy().transpose(2, 3, 1, 0),
-                os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
+            renders_np = renders.detach().cpu().numpy()
+            observed_images_numpy = images.detach().cpu().numpy()
+            observed_segmentations_numpy = observed_segmentations[0, :, 1:2].cpu().numpy()
+            segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
+
+            write_video(renders_np, os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
+            write_video(observed_images_numpy, os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
+
+            write_video(segmented_images_numpy, os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = ground_truth_segments[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                seg = observed_segmentations[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
                 save_image(seg, os.path.join(tracking6d.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(tracking6d.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
@@ -453,25 +456,26 @@ class WriteResults:
                     gt_segm = last_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
-                elif tracking6d.config.use_gt:
+                elif tracking6d.config.use_ground_truth_shape:
                     gt_segm = last_segment[0, 0, -1]
                 elif stepi in bboxes:
                     img = imread(bboxes[stepi])
                     gt_segm = tracking6d.tracker.process_segm(img)[0].to(tracking6d.device)
                     gt_segm = pad_image(gt_segm)
                 if gt_segm is not None:
-                    self.baseline_iou[stepi - 1] = float((last_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
-                        ((last_segment[0, 0, -1] + gt_segm) > 0).sum() + 0.00001)
-                    self.our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
-                        ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 0.00001)
-            elif bboxes is not None:
-                bbox = tracking6d.config.image_downsample * torch.tensor(
-                    [bboxes[stepi] + [0, 0, bboxes[stepi][0], bboxes[stepi][1]]])
-                self.baseline_iou[stepi - 1] = bops.box_iou(bbox,
-                                                            torch.tensor([segment2bbox(last_segment[0, 0, -1])],
-                                                                         dtype=torch.float64))
-                self.our_iou[stepi - 1] = bops.box_iou(bbox, torch.tensor([segment2bbox(renders[0, -1, 0, 3])],
-                                                                          dtype=torch.float64))
+                    gt_segmentation_tensor = gt_segm[None, None, None] > 0
+
+                    # self.baseline_iou[stepi - 1] = float((last_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
+                    #     ((last_segment[0, 0, -1] + gt_segm) > 0).sum() + 1e-5)
+                    #
+                    # self.our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
+                    #     ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 1e-5)
+
+                    self.baseline_iou[stepi - 1] = 1 - iou_loss(last_segment[:, :, [-1]],
+                                                                gt_segmentation_tensor).detach().cpu()
+                    self.our_iou[stepi - 1] = 1 - iou_loss(last_rendered_silhouette[None, None],
+                                                           gt_segmentation_tensor).detach().cpu()
+
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
             np.savetxt(os.path.join(tracking6d.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
                        delimiter='\n')
@@ -484,24 +488,22 @@ class WriteResults:
             image_to_write = (image_to_write * 255).astype(np.uint8)
             self.all_input.write(image_to_write)
 
-            segmentation_to_write = (images[0, :, :3] * ground_truth_segments[0, :, 1:2])
+            segmentation_to_write = (images[0, :, :3] * observed_segmentations[0, :, 1:2])
             segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
             segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
             segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
             segmentation_to_write = (segmentation_to_write * 255).astype(np.uint8)
             self.all_segm.write(segmentation_to_write)
 
-            projection_to_write = renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy()
-            projection_to_write = projection_to_write.transpose(2, 3, 1, 0)
-            projection_to_write = projection_to_write[:, :, [2, 1, 0], -1]
-            projection_to_write = (projection_to_write * 255).astype(np.uint8)
-            self.all_proj.write(projection_to_write)
+            rendered_silhouette = renders[0, :, :3].detach().clamp(min=0, max=1).cpu().numpy()
+            rendered_silhouette = rendered_silhouette.transpose(2, 3, 1, 0)
+            rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
+            rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
+            self.all_proj.write(rendered_silhouette)
 
             if silh_losses[-1] > 0.3:
                 renders[0, -1, 0, 3] = last_segment[0, 0, -1]
                 renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
-            self.all_proj_filtered.write((renders[0, :, 0, :3].detach().clamp(min=0, max=1).cpu().numpy().transpose(
-                2, 3, 1, 0)[:, :, [2, 1, 0], -1] * 255).astype(np.uint8))
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
@@ -576,7 +578,7 @@ class WriteResults:
 
                 ious = torch.zeros(gt_object_mask.shape[1])
                 for frame_i in range(gt_object_mask.shape[1]):
-                    frame_iou = 1 - fmo_loss(predicted_mask[None, None, :, frame_i],
+                    frame_iou = 1 - iou_loss(predicted_mask[None, None, :, frame_i],
                                              gt_object_mask[None, None, :, frame_i])
                     ious[frame_i] = frame_iou
 
@@ -714,12 +716,12 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
 
     Args:
         tracking6d (Tracking6D): The Tracking6D instance.
-        theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (B, H, W, 2) w.r.t. the [-1, 1]
+        theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (1, B, 2, H, W) w.r.t. the [-1, 1]
                                          image coordinates.
-        current_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, H, W) in  [0, 1] range.
-        previous_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, H, W) in  [0, 1] range.
+        current_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
+        previous_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
         bounding_box (torch.Tensor: Bounding box of the observed object
-        observed_flow (torch.Tensor): Observed flow tensor with shape (B, 2, H, W) w.r.t. the [-1, 1] image
+        observed_flow (torch.Tensor): Observed flow tensor with shape (1, B, 2, H, W) w.r.t. the [-1, 1] image
                                       coordinates.
         opt_frames (list): List of optical flow frames.
         stepi (int): Step index.
@@ -739,16 +741,17 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
             else tracking6d.gt_texture
 
         # Render keyframe images
-        rendered_keyframe_images, _ = tracking6d.get_rendered_image(bounding_box, enc_result_prime.lights,
-                                                                    enc_result_prime.quaternions, tex_rgb,
-                                                                    enc_result_prime.translations,
-                                                                    enc_result_prime.vertices)
+        rendering_rgb, rendering_silhouette = tracking6d.rendering.forward(enc_result_prime.translations,
+                                                                           enc_result_prime.quaternions,
+                                                                           enc_result_prime.vertices,
+                                                                           tracking6d.encoder.face_features,
+                                                                           tex_rgb, enc_result_prime.lights)
+
+        rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 
         # Extract current and previous rendered images
-        current_rendered_image_rgba = rendered_keyframe_images[0, -1, ...]
-        previous_rendered_image_rgba = rendered_keyframe_images[0, -2, ...]
-        current_rendered_image_rgb = current_rendered_image_rgba[:, :3, ...]
-        previous_rendered_image_rgb = previous_rendered_image_rgba[:, :3, ...]
+        current_rendered_image_rgb = rendered_keyframe_images[0, -1]
+        previous_rendered_image_rgb = rendered_keyframe_images[0, -2]
 
         # Prepare file paths
         (tracking6d.write_folder / Path('flows')).mkdir(exist_ok=True, parents=True)
@@ -764,32 +767,34 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
                            Path(f"rendering_{stepi}_{stepi + 1}_2.png")
 
         # Convert tensors to NumPy arrays
-        previous_rendered_image_np = (previous_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        previous_rendered_image_np = (previous_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
         previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
-        current_rendered_image_np = (current_rendered_image_rgb[0] * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        current_rendered_image_np = (current_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
         current_rendered_image_np = current_rendered_image_np.astype('uint8')
 
         # Save rendered images
         imageio.imwrite(rendering_1_path, previous_rendered_image_np)
         # imageio.imwrite(rendering_2_path, current_rendered_image_np)
 
-        # Clone theoretical flow and adjust coordinates
-        adjusted_theoretical_flow = theoretical_flow.clone().detach()
-        adjusted_theoretical_flow[..., 0] *= adjusted_theoretical_flow.shape[-2]
-        adjusted_theoretical_flow[..., 1] *= adjusted_theoretical_flow.shape[-3]
+        # Adjust (0, 1) range to pixel range
+        theoretical_flow = theoretical_flow[0, -1].detach().clone().cpu()
+        theoretical_flow[..., 0] *= theoretical_flow.shape[-2]
+        theoretical_flow[..., 1] *= theoretical_flow.shape[-3]
 
-        # Prepare observed flow
-        adjusted_observed_flow = observed_flow.clone().permute(0, 2, 3, 1)
-        adjusted_observed_flow[..., 0] *= observed_flow.shape[-1]
-        adjusted_observed_flow[..., 1] *= observed_flow.shape[-2]
+        # Adjust (0, 1) range to pixel range
+        observed_flow = observed_flow[0, -1].detach().clone().cpu()
+        observed_flow[..., 0] *= observed_flow.shape[-1]
+        observed_flow[..., 1] *= observed_flow.shape[-2]
 
         # Obtain flow and image illustrations
-        flow_up = adjusted_theoretical_flow[:, -1].cpu()[0].permute(2, 0, 1)
-        theoretical_flow_up = tracking6d.write_image_into_bbox(bounding_box, flow_up)
-        observed_flow_up = tracking6d.write_image_into_bbox(bounding_box, adjusted_observed_flow[0].permute(2, 0, 1))
-        observed_flow_np = observed_flow_up.permute(1, 2, 0).cpu().numpy()
-        theoretical_flow_np = theoretical_flow_up.detach().cpu().numpy()
-        theoretical_flow_np = theoretical_flow_np.transpose(1, 2, 0)
+        theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
+        observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
+
+        observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
+        theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
+
+        current_image_segmentation = current_image_segmentation[0, 0, 0].detach().clone().cpu()
+        previous_image_segmentation = previous_image_segmentation[0, 0, 0].detach().clone().cpu()
 
         # Visualize flow and flow difference
         flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0], current_rendered_image_rgb[0],

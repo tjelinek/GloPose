@@ -79,8 +79,8 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
     :param image2: uint8 image with 0-255 as color in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
-    :param gt_silhouette_current: Silhouette of the ground truth in the current frame
-    :param gt_silhouette_prev: Silhouette of the ground truth in the previous frame
+    :param gt_silhouette_current: Tensor - silhouette of the ground truth in the current frame of shape [H, W]
+    :param gt_silhouette_prev: Tensor - silhouette of the ground truth in the previous frame of shape [H, W]
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
@@ -91,13 +91,13 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
     image2_pil = transform(image2)
 
     if gt_silhouette_prev is not None:
-        silh1_PIL = tensor_to_pil_with_alpha(gt_silhouette_prev.cpu(), alpha=0.25)
+        silh1_PIL = tensor_to_pil_with_alpha(gt_silhouette_prev, alpha=0.25)
         background1_PIL = Image.new('RGBA', image1_pil.size, (0, 0, 0, 0))
         background1_PIL.paste(silh1_PIL, (0, 0))
         background1_PIL.paste(image1_pil, (0, 0))
         image1_pil = background1_PIL
     if gt_silhouette_current is not None:
-        silh2_PIL = tensor_to_pil_with_alpha(gt_silhouette_current.cpu(), alpha=0.25)
+        silh2_PIL = tensor_to_pil_with_alpha(gt_silhouette_current, alpha=0.25)
         background2_PIL = Image.new('RGBA', image2_pil.size, (0, 0, 0, 0))
         background2_PIL.paste(silh2_PIL, (0, 0))
         background2_PIL.paste(image2_pil, (0, 0))
@@ -132,7 +132,7 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
                 shift_up_x = flow_up[y, x, 0]
                 shift_up_y = flow_up[y, x, 1]
 
-                # draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
+                draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
 
                 draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
                            fill='red')
@@ -142,7 +142,7 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
                 shift_up_prime_x = flow_up_prime[y, x, 0]
                 shift_up_prime_y = flow_up_prime[y, x, 1]
 
-                # draw2.line((x, y, x + shift_up_prime_x, y + shift_up_prime_y), fill='green')
+                draw2.line((x, y, x + shift_up_prime_x, y + shift_up_prime_y), fill='green')
 
                 draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
                             y + shift_up_prime_y + r), fill='green')

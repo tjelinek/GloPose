@@ -217,7 +217,7 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
     initial_rotation_quaternion = angle_axis_to_quaternion(initial_rotation_axis_angle, order=QuaternionCoeffOrder.WXYZ)
 
     prev_encoder_result = None
-    prev_ren_features = None
+    prev_rendering_rgb = None
 
     vertices = vertices.to(DEVICE)
     face_features = face_features.to(DEVICE)
@@ -253,13 +253,15 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
         if prev_encoder_result is None:
             prev_encoder_result = current_encoder_result
+        flow_arcs_indices = [(0, 0)]
 
         with torch.no_grad():
             log_rows.append([frame_i, rotation_x, rotation_y, rotation_z] + current_translation[0, 0, 0].tolist())
             rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
                                                                vertices)
 
-            optical_flow, _, _ = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result)
+            optical_flow, _, _ = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result,
+                                                                    flow_arcs_indices)
 
             if texture_maps is not None:
                 ren_features_and_mask = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
@@ -267,23 +269,21 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
                                                           unit_vertices=vertices, face_features=face_features,
                                                           texture_maps=texture_maps)
 
-                ren_features = ren_features_and_mask[0, 0, :, :3].permute(0, 2, 3, 1)
-                ren_silhouette = ren_features_and_mask[0, 0, :, 3]
+                rendering_rgb, rendering_silhouette = ren_features_and_mask
             else:
-                ren_features = rendering_result.ren_mesh_vertices_features
+                rendering_rgb = rendering_result.ren_mesh_vertices_features
                 ren_silhouette = rendering_result.ren_mask
 
-            if prev_ren_features is not None:
-                generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow.clone(), frame_i,
+            if prev_rendering_rgb is not None:
+                generate_optical_flow_illustration(rendering_rgb, prev_rendering_rgb, optical_flow.clone(), frame_i,
                                                    optical_flow_destination)
-                pass
 
-            save_images_and_flow(frame_i, ren_features, ren_silhouette,
+            save_images_and_flow(frame_i, rendering_rgb, ren_silhouette,
                                  optical_flow.detach().clone().cpu(), rendering_destination,
                                  segmentation_destination, optical_flow_destination)
 
-            del prev_ren_features
-            prev_ren_features = ren_features
+            del prev_rendering_rgb
+            prev_rendering_rgb = rendering_rgb
 
         prev_encoder_result = current_encoder_result
 
