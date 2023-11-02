@@ -22,7 +22,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation
 from models.loss import iou_loss
 from segmentations import create_mask_from_string, pad_image
-from utils import write_video, segment2bbox, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
+from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
     infer_normalized_renderings
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
