@@ -3,6 +3,8 @@ from collections import namedtuple
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
+from kornia.geometry.quaternion import Quaternion
+from kornia.geometry.liegroup import Se3, So3
 from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qnorm_vectorized
@@ -60,6 +62,13 @@ class Encoder(nn.Module):
         self.axis_angle_y = nn.Parameter(axis_angles[..., 1, None])
         self.axis_angle_z = nn.Parameter(axis_angles[..., 2, None])
 
+        se3_algebra_init = Se3(So3(Quaternion(qinit[0])), translation_init[0, 0]).log()
+        se3_algebra_offsets = Se3(So3(Quaternion(quaternion_offsets[0])), translation_offsets[0, 0]).log()
+
+        self.register_buffer('se3_algebra_init', se3_algebra_init)
+        self.register_buffer('se3_algebra_offsets', se3_algebra_offsets)
+        self.se3_algebra = nn.Parameter(torch.zeros(se3_algebra_init.shape))
+
         # Lights initialization
         if self.config.use_lights:
             lights = torch.zeros(1, 3, 9)
@@ -102,6 +111,10 @@ class Encoder(nn.Module):
         else:
             vertices = self.ivertices
 
+        se3 = self.get_composed_se3_at_frame_vectorized()
+        translation = se3.t[None, None].clone()
+        quaternion = se3.r.q.data[None].clone()
+
         translation = self.get_total_translation_at_frame_vectorized()
         quaternion = self.get_total_rotation_at_frame_vectorized()
         rotation = self.get_total_rotation_at_frame_vectorized_axis_angle()
@@ -117,6 +130,8 @@ class Encoder(nn.Module):
         quaternion = quaternion[:, :opt_frames[-1] + 1]
         rotation = rotation[:, :opt_frames[-1] + 1]
         translation = translation[:, :, :opt_frames[-1] + 1]
+        # translation = translation.detach()
+        # quaternion = quaternion.detach()
 
         if self.config.features == 'deep':
             texture_map = self.texture_map
@@ -127,6 +142,7 @@ class Encoder(nn.Module):
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
         quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
+        # quaternion = axis_angle_to_quaternion(rotation)
 
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
@@ -164,10 +180,14 @@ class Encoder(nn.Module):
         # The formula is initial_translation * translation_offsets * translation
         return self.initial_translation + self.translation_offsets + self.translation
 
+    def get_composed_se3_at_frame_vectorized(self):
+        return Se3.exp(self.se3_algebra_init) * Se3.exp(self.se3_algebra_offsets) * Se3.exp(self.se3_algebra)
+
     def compute_next_offset(self, stepi):
         self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
         self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
         self.initial_axis_angle[:, stepi] = self.initial_axis_angle[:, stepi - 1]
+        self.se3_algebra_init[stepi] = self.se3_algebra_init[stepi - 1]
 
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
@@ -177,6 +197,11 @@ class Encoder(nn.Module):
 
         axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
         self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
+
+        self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
+
+        self.se3_algebra_offsets[stepi] = (Se3.exp(self.se3_algebra_offsets[stepi]) *
+                                           Se3.exp(self.se3_algebra[stepi])).log()
 
     def forward_normalize(self):
         exp = 0
