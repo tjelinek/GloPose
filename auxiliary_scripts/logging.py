@@ -1,6 +1,6 @@
 from itertools import product
 
-from typing import Dict
+from typing import Dict, Iterable
 
 import os
 import math
@@ -283,7 +283,7 @@ class WriteResults:
             plt.clabel(contours, inline=True, fontsize=10)
 
             # 3) Visualize the gradient
-            gradient = np.gradient(joint_losses.T)
+            # gradient = np.gradient(joint_losses.T)
             # plt.quiver(translations_space, rotations_space, -gradient[1], gradient[0], color='white', width=0.003)
 
             plt.title('Joint Losses')
@@ -404,9 +404,9 @@ class WriteResults:
 
             write_renders(feat_renders, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
-            write_renders(torch.cat(
-                (images[:, :, None, :, b0[0]:b0[1], b0[2]:b0[3]], feat_renders_crop[:, :, :, -1:]), 3),
-                tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
+
+            # write_renders(torch.cat((images[..., b0[0]:b0[1], b0[2]:b0[3]], feat_renders[:, :, :, -1:]), 3),
+            #     tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
             write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
                            tracking6d.encoder.face_features[0].cpu().numpy(),
                            os.path.join(tracking6d.write_folder, f'mesh_{stepi}.obj'), "model_" + str(stepi) + ".mtl")
@@ -633,9 +633,9 @@ class WriteResults:
         # Create a joint legend
         handles, labels = [], []
         for ax in [ax1, ax2, ax3]:
-            h, l = ax.get_legend_handles_labels()
+            h, label = ax.get_legend_handles_labels()
             handles.extend(h)
-            labels.extend(l)
+            labels.extend(label)
 
             ax_min, ax_max = ax.get_ylim()
             ax_range = max(abs(ax_min), abs(ax_max))
@@ -703,7 +703,8 @@ class WriteResults:
         self.tracking_log.write("END of Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n\n\n")
 
-    def encoder_result_all_frames(self, tracking6d):
+    @staticmethod
+    def encoder_result_all_frames(tracking6d):
         keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
         encoder_result_prime = tracking6d.encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
@@ -763,14 +764,14 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
                                Path(f"flow_difference_{stepi}_{stepi + 1}.png")
         rendering_1_path = tracking6d.write_folder / Path('renderings') / \
                            Path(f"rendering_{stepi}_{stepi + 1}_1.png")
-        rendering_2_path = tracking6d.write_folder / Path('renderings') / \
-                           Path(f"rendering_{stepi}_{stepi + 1}_2.png")
+        # rendering_2_path = tracking6d.write_folder / Path('renderings') / \
+        #                    Path(f"rendering_{stepi}_{stepi + 1}_2.png")
 
         # Convert tensors to NumPy arrays
         previous_rendered_image_np = (previous_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
         previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
-        current_rendered_image_np = (current_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-        current_rendered_image_np = current_rendered_image_np.astype('uint8')
+        # current_rendered_image_np = (current_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
+        # current_rendered_image_np = current_rendered_image_np.astype('uint8')
 
         # Save rendered images
         imageio.imwrite(rendering_1_path, previous_rendered_image_np)
@@ -778,13 +779,13 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
 
         # Adjust (0, 1) range to pixel range
         theoretical_flow = theoretical_flow[0, -1].detach().clone().cpu()
-        theoretical_flow[..., 0] *= theoretical_flow.shape[-2]
-        theoretical_flow[..., 1] *= theoretical_flow.shape[-3]
+        theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
+        theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
 
         # Adjust (0, 1) range to pixel range
         observed_flow = observed_flow[0, -1].detach().clone().cpu()
-        observed_flow[..., 0] *= observed_flow.shape[-1]
-        observed_flow[..., 1] *= observed_flow.shape[-2]
+        observed_flow[0, ...] *= observed_flow.shape[-1]
+        observed_flow[1, ...] *= observed_flow.shape[-2]
 
         # Obtain flow and image illustrations
         theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
@@ -797,12 +798,12 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
         previous_image_segmentation = previous_image_segmentation[0, 0, 0].detach().clone().cpu()
 
         # Visualize flow and flow difference
-        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb[0], current_rendered_image_rgb[0],
+        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb, current_rendered_image_rgb,
                                                        None, theoretical_flow_np,
                                                        gt_silhouette_current=current_image_segmentation,
                                                        gt_silhouette_prev=previous_image_segmentation)
-        flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb[0],
-                                                                 current_rendered_image_rgb[0],
+        flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb,
+                                                                 current_rendered_image_rgb,
                                                                  observed_flow_np, theoretical_flow_np,
                                                                  gt_silhouette_current=current_image_segmentation,
                                                                  gt_silhouette_prev=previous_image_segmentation)
@@ -820,7 +821,7 @@ def load_gt_annotations_file(file_path):
 
     # Load the CSV file
     with open(file_path, 'r') as csvfile:
-        reader = csv.DictReader(csvfile)
+        reader: Iterable[Dict] = csv.DictReader(csvfile)
         for row in reader:
             # Append frame number
             frames.append(int(row['frame']))
