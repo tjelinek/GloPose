@@ -323,23 +323,12 @@ class FlowModelGetterMFT(FlowModelGetter):
 
     @staticmethod
     def get_flow_model():
-        sys.path.append('MFT')
-        from MFT.RAFT.core.raft import RAFT
+        # sys.path.append('MFTmaster.MFT')
+        sys.path.append('MFTmaster')
+        import MFTmaster
 
-        args = Namespace(model='MFT/RAFT/models/'
-                               'raft-things-sintel-kubric-splitted-occlusion-uncertainty-non-occluded-base-sintel.pth',
-                         model_name='MFT', path=None,
-                         mixed_precision=False, alternate_corr=False, small=False)
+        default_config = MFTmaster.configs.MFT_cfg.get_config()
 
-        raft_params = {
-            'occlusion_module': 'separate_with_uncertainty',
-            'restore_ckpt': 'MFT/RAFT/models',
-            'small': False,
-            'mixed_precision': False,
-        }
-        raft_params = FlowModelGetterMFT.AttrDict(**raft_params)
-
-        model = torch.nn.DataParallel(RAFT(raft_params))
-        model = FlowModelGetter.prepare_model(args, model)
+        model = MFTmaster.MFT.MFT.MFT(default_config)
 
         return model

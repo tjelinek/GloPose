@@ -78,7 +78,7 @@ class Encoder(nn.Module):
             self.lights = None
 
         # Vertices initialization
-        if self.config.predict_vertices:
+        if self.config.optimize_shape:
             self.vertices = nn.Parameter(torch.zeros(1, ivertices.shape[0], 3))
 
         # Face features and texture map
@@ -95,14 +95,14 @@ class Encoder(nn.Module):
 
     def set_grad_mesh(self, req_grad):
         self.texture_map.requires_grad = req_grad
-        if self.config.predict_vertices:
+        if self.config.optimize_shape:
             self.vertices.requires_grad = req_grad
         if self.config.use_lights:
             self.lights.requires_grad = req_grad
 
     def forward(self, opt_frames):
 
-        if self.config.predict_vertices:
+        if self.config.optimize_shape:
             vertices = self.ivertices + self.vertices
             if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)
@@ -153,7 +153,8 @@ class Encoder(nn.Module):
                                quaternion_difference=qdiff)
         return result
 
-    def compute_tdiff_qdiff(self, opt_frames, quaternion0, quaternion, translation):
+    @staticmethod
+    def compute_tdiff_qdiff(opt_frames, quaternion0, quaternion, translation):
         weights = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
         # Temporal distance between consecutive items in opt_frames, i.e. weight grows linearly with distance
         tdiff = weights * comp_tran_diff(translation[0, 0, opt_frames])
@@ -240,7 +241,7 @@ class Encoder(nn.Module):
 
         translation = torch.stack(translation_all, 2).contiguous()[:, :, :, 0]
         quaternion = torch.stack(quaternion_all, 1).contiguous()[:, :, 0]
-        if self.config.predict_vertices:
+        if self.config.optimize_shape:
             vertices = self.ivertices + self.vertices
             if self.config.mesh_normalize:
                 vertices = mesh_normalize(vertices)

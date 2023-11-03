@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from abc import abstractmethod, ABC
 
 import glob
@@ -83,8 +85,9 @@ class BaseTracker(ABC):
         return image, segments, self.perc
 
     @abstractmethod
-    def next(self, file):
+    def next(self, file) -> Tuple[torch.Tensor, torch.Tensor]:
         # Implement this method or replace with the actual logic
+        # Returns tensors of shape (1, 1, 3, H, W) for image and (1, 1, 1, H, W) for segmentation
         pass
 
     def process_segm(self, img):
@@ -144,8 +147,8 @@ class PrecomputedTracker(BaseTracker):
         image = imread(file) * 255
         image, segments = self.process(image, ind)
 
-        segments = pad_image(segments)
-        image = pad_image(image)
+        segments = pad_image(segments)[None]
+        image = pad_image(image)[None]
 
         return image, segments
 
@@ -157,6 +160,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.tracking6d = tracking6d
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
+        self.encoder_face_features = self.tracking6d.gt_encoder.face_features
         self.shape = (self.tracking6d.rendering.width, self.tracking6d.rendering.height, 3)
 
     def next(self, frame_id):
@@ -166,15 +170,16 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         encoder_result, _ = self.tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                              encoder_type='gt_encoder')
 
-        renders = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
-                                            encoder_result.vertices,
-                                            self.tracking6d.gt_encoder.face_features, self.tracking6d.gt_texture,
-                                            encoder_result.lights)
+        rendering_result = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
+                                                     encoder_result.vertices, self.encoder_face_features,
+                                                     encoder_result.texture_maps, encoder_result.lights)
 
-        image = renders[0, 0, :, :-1, ...].detach()
-        segment = renders[:, 0, 0, -1, ...].detach().cpu()
+        image, segment = rendering_result
+        image = image.detach()
+        segment = segment.detach()
         segment_np = segment.cpu().numpy()
-        segments = compute_segments_dist(segment_np, segment)
+
+        segments = compute_segments_dist(segment_np[0, 0], segment)[None]
         segments = segments.cuda()
         return image, segments
 

@@ -14,7 +14,7 @@ from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quat
 from pathlib import Path
 from torch.optim import lr_scheduler
 from torchvision.utils import save_image
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
@@ -59,11 +59,6 @@ class TrackerConfig:
     all_frames_keyframes: bool = False
     fmo_steps: int = 1
     stochastically_add_keyframes: bool = False
-
-    # Shape settings
-    shapes: List = list
-    init_shape: str = 'sphere'
-    predict_vertices: bool = None
 
     # Mesh settings
     mesh_size: int = None
@@ -118,11 +113,20 @@ class TrackerConfig:
     sequence: str = None
 
     # Ground truths
-    gt_texture: str = None
-    gt_mesh_prototype: str = None
-    gt_tracking_log: str = None
-    use_ground_truth_shape: bool = False
-    gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic', 'FromFiles'
+    initial_mesh_path: str = 'prototypes/sphere.obj'
+    gt_mesh_path: str = None
+    optimize_shape: bool = True
+
+    gt_texture_path: str = None
+    optimize_texture: bool = True
+
+    gt_track_path: str = None
+    optimize_pose: bool = True
+
+    generate_synthetic_observations_if_possible: bool = True
+
+    gt_flow_source: str = 'GenerateSynthetic'  # One of 'FlowNetwork', 'GenerateSynthetic', 'FromFiles'
+    flow_model: str = 'RAFT'  # 'RAFT' 'GMA' and 'MFT'
 
     # Optimization
     allow_break_sgd_after = 30
@@ -157,10 +161,11 @@ class Tracking6D:
         self.last_encoder_result_rgb = None
 
         # Rendering and mesh related
-        self.rendering = None
+        self.rendering: Optional[RenderingKaolin] = None
         self.faces = None
         self.gt_mesh_prototype = None
         self.gt_texture = None
+        self.gt_texture_features = None
 
         # Features
         self.feat = None
@@ -209,29 +214,18 @@ class Tracking6D:
         iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
         self.initialize_feature_extractor()
-
-        if self.config.gt_tracking_log is not None:
-            _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_tracking_log)
-            self.gt_rotations = gt_rotations.to(self.device)
-            self.gt_translations = gt_translations.to(self.device)
+        self.initialize_gt_texture()
+        self.initialize_gt_tracks()
+        self.initialize_tracker(bbox0)
 
         torch.backends.cudnn.benchmark = True
-        if type(bbox0) is dict:
-            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
-        else:
-            if self.config.tracker_type == 'csrt':
-                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
-            elif self.config.tracker_type == 'ostrack':
-                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
-            else:  # d3s
-                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
-
         images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         num_channels = images_feat.shape[2]
         self.initialize_renderer_and_encoder(iface_features, ivertices, num_channels)
 
-        if self.config.use_ground_truth_shape and self.gt_translations is not None and self.gt_rotations is not None:
+        if self.config.generate_synthetic_observations_if_possible and \
+                self.gt_translations is not None and self.gt_rotations is not None:
             self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
                                                           self.gt_rotations, self.gt_translations)
             # Re-render the images using the synthetic tracker
@@ -252,34 +246,78 @@ class Tracking6D:
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
 
+    def initialize_tracker(self, bbox0):
+        if type(bbox0) is dict:
+            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
+        else:
+            if self.config.tracker_type == 'csrt':
+                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
+            elif self.config.tracker_type == 'ostrack':
+                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
+            else:  # d3s
+                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
+
+    def initialize_gt_texture(self):
+        if self.config.gt_texture_path is not None:
+            texture_np = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture_path)))
+            self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
+        self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
+
+    def initialize_gt_tracks(self):
+        if self.config.gt_track_path is not None:
+            _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_track_path)
+            self.gt_rotations = gt_rotations.to(self.device)
+            self.gt_translations = gt_translations.to(self.device)
+
     def initialize_renderer_and_encoder(self, iface_features, ivertices, num_channels):
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
                                num_channels).to(self.device)
-        # Encoder for inferring the GT flow, and so on
+
+        if not self.config.optimize_texture and self.gt_texture is not None:
+            self.encoder.texture_map = self.gt_texture_features
+
+        def set_encoder_poses(encoder, rotations, translations):
+            rotation_quaternion = angle_axis_to_quaternion(rotations, order=QuaternionCoeffOrder.WXYZ)
+            encoder.quaternion_w[...] = rotation_quaternion[..., 0, None]
+            encoder.quaternion_x[...] = rotation_quaternion[..., 1, None]
+            encoder.quaternion_y[...] = rotation_quaternion[..., 2, None]
+            encoder.quaternion_z[...] = rotation_quaternion[..., 3, None]
+            encoder.axis_angle_x[...] = rotations[..., 0, None]
+            encoder.axis_angle_y[...] = rotations[..., 1, None]
+            encoder.axis_angle_z[...] = rotations[..., 2, None]
+
+            encoder.translation[...] = translations
+
+        self.encoder.train()
+
+        if not self.config.optimize_pose:
+            if self.gt_rotations is not None and self.gt_translations is not None:
+                set_encoder_poses(self.encoder, self.gt_rotations, self.gt_translations)
+
+                # Do not optimize the poses
+                for param in [self.encoder.quaternion_w, self.encoder.quaternion_x, self.encoder.quaternion_y,
+                              self.encoder.quaternion_z, self.encoder.translation]:
+                    param.detach_()
+            else:
+                raise ValueError("Required not to optimize pose even though no ground truth "
+                                 "rotations and translations are provided.")
+
+        #  Ground truth encoder for synthetic data generation
         self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features,
                                   self.shape[-1], self.shape[-2], 3).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
                 param.detach_()
-        if self.gt_rotations is not None:
-            rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
-            self.gt_encoder.quaternion_w[...] = rotation_quaternion[..., 0, None]
-            self.gt_encoder.quaternion_x[...] = rotation_quaternion[..., 1, None]
-            self.gt_encoder.quaternion_y[...] = rotation_quaternion[..., 2, None]
-            self.gt_encoder.quaternion_z[...] = rotation_quaternion[..., 3, None]
-            self.gt_encoder.axis_angle_x[...] = self.gt_rotations[..., 0, None]
-            self.gt_encoder.axis_angle_y[...] = self.gt_rotations[..., 1, None]
-            self.gt_encoder.axis_angle_z[...] = self.gt_rotations[..., 2, None]
-        if self.gt_translations is not None:
-            self.gt_encoder.translation[...] = self.gt_translations
-        self.encoder.train()
+
+        if self.gt_rotations is not None and self.gt_translations is not None:
+            set_encoder_poses(self.gt_encoder, self.gt_rotations, self.gt_translations)
 
     def get_initial_images(self, file0, bbox0, init_mask):
         if type(self.tracker) is SyntheticDataGeneratingTracker:
             file0 = 0
         images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
-        images, segments = images[None].to(self.device), segments[None].to(self.device)
+        images, segments = images.to(self.device), segments.to(self.device)
         images_feat = self.feat(images).detach()
         self.shape = segments.shape[-2:]
         observed_flows = torch.zeros(1, 0, 2, *segments.shape[-2:])
@@ -335,37 +373,33 @@ class Tracking6D:
             self.feat = lambda x: x
 
     def initialize_mesh(self):
-        if self.config.gt_texture is not None:
-            texture_np = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture)))
-            self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
+        if self.config.gt_mesh_path is not None:
+            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_path), with_materials=True)
 
-        if self.config.gt_mesh_prototype is not None:
-            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_prototype), with_materials=True)
-
-        prot = self.config.shapes[0]
-        if self.config.use_ground_truth_shape:
+        if not self.config.optimize_shape:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
             self.faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
-        elif self.config.init_shape:
-            mesh = load_obj(self.config.init_shape)
-            ivertices = mesh.vertices.numpy()
-            ivertices = ivertices - ivertices.mean(0)
-            ivertices = ivertices / ivertices.max()
-            self.faces = mesh.faces.numpy().copy()
+        elif self.config.initial_mesh_path is not None:
+            mesh = load_obj(self.config.initial_mesh_path)
+            ivertices = normalize_vertices(mesh.vertices).numpy()
+            self.faces = mesh.faces.numpy()
             iface_features = generate_face_features(ivertices, self.faces)
         else:
-            mesh = load_obj(os.path.join('./prototypes', prot + '.obj'))
-            ivertices = mesh.vertices.numpy()
-            self.faces = mesh.faces.numpy().copy()
+            mesh = load_obj(os.path.join('./prototypes/sphere.obj'))
+            ivertices = normalize_vertices(mesh.vertices).numpy()
+            self.faces = mesh.faces.numpy()
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
         return iface_features, ivertices
 
     def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
         config = copy.deepcopy(self.config)
         config.features = 'rgb'
-        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(
-            self.device)
+        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(self.device)
+
+        if not self.config.optimize_texture and self.gt_texture is not None:
+            self.rgb_encoder.texture_map = self.gt_texture.detach()
+
         rgb_parameters = [self.rgb_encoder.texture_map]
         self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
         self.rgb_encoder.train()
@@ -419,9 +453,14 @@ class Tracking6D:
         b0 = None
         for stepi in range(1, self.config.input_frames):
 
-            image_raw, segment = self.tracker.next(stepi if self.config.use_ground_truth_shape else files[stepi])
+            if type(self.tracker) is SyntheticDataGeneratingTracker:
+                next_tracker_frame = stepi  # Index of a frame
+            else:
+                next_tracker_frame = files[stepi]  # Name of file
+            image_raw, segment = self.tracker.next(next_tracker_frame)
 
-            image, segment = image_raw[None].to(self.device), segment[None].to(self.device)
+            image, segment = image_raw.to(self.device), segment.to(self.device)
+
             if b0 is not None:
                 segment_clean = segment * 0
                 segment_clean[:, :, :, b0[0]:b0[1], b0[2]:b0[3]] = segment[:, :, :, b0[0]:b0[1], b0[2]:b0[3]]
@@ -647,7 +686,8 @@ class Tracking6D:
         if self.config.write_results:
             save_image(observations.observed_image[0, :, :3], os.path.join(self.write_folder, 'im.png'),
                        nrow=self.config.max_keyframes + 1)
-            save_image(torch.cat((observations.observed_image[0, :, :3],
+
+            save_image(torch.cat((observations.observed_image[0],
                                   observations.observed_segmentation[0, :, [1]]), 1),
                        os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
             if self.config.weight_by_gradient:
@@ -1152,7 +1192,8 @@ class Tracking6D:
         dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
         self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
 
-    def frames_and_flow_frames_inference(self, keyframes, flow_frames, encoder_type='deep_features'):
+    def frames_and_flow_frames_inference(self, keyframes, flow_frames, encoder_type='deep_features') \
+            -> Tuple[EncoderResult, EncoderResult]:
         joined_frames = sorted(set(keyframes + flow_frames))
         not_optimized_frames = set(flow_frames) - set(keyframes)
         optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))

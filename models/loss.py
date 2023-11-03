@@ -70,7 +70,7 @@ class FMOLoss(nn.Module):
                                                                    observed_silhouettes[:, [frmi], [-1]])
                 losses_all["silh"].append(temp_loss.tolist()[0])
                 losses["silh"] = losses["silh"] + temp_loss / denom
-        if self.config.predict_vertices and self.config.loss_laplacian_weight > 0:
+        if self.config.optimize_shape and self.config.loss_laplacian_weight > 0:
             losses["lap"] = self.config.loss_laplacian_weight * self.lapl_loss(vertices)
 
         if self.config.loss_q_weight > 0:

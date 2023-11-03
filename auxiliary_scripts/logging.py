@@ -357,8 +357,6 @@ class WriteResults:
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
-        if tracking6d.gt_texture is not None:
-            tex = tracking6d.gt_texture
 
         with torch.no_grad():
 
@@ -395,12 +393,11 @@ class WriteResults:
             renders_crop = renders[..., b0[0]:b0[1], b0[2]:b0[3]]
             feat_renders_crop = feat_renders[..., b0[0]:b0[1], b0[2]:b0[3]]
 
-            last_rendered_silhouette = rendered_silhouette[0, -1]
             last_segment = observed_segmentations[:, -1:]
             last_segment_mask = last_segment[:, 0, 1]
 
-            self.render_silhouette_overlap(last_rendered_silhouette, last_segment_mask,
-                                           stepi, tracking6d)
+            self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
+                                           observed_segmentations[:, [-1], [-1]], stepi, tracking6d)
 
             write_renders(feat_renders, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
@@ -451,30 +448,23 @@ class WriteResults:
 
             if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
                 gt_segm = None
-                if (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
+                if tracking6d.config.gt_track_path and tracking6d.config.generate_synthetic_observations_if_possible:
+                    gt_segm = last_segment[0, 0, -1]
+                elif (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
                     m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
                     gt_segm = last_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
-                elif tracking6d.config.use_ground_truth_shape:
-                    gt_segm = last_segment[0, 0, -1]
                 elif stepi in bboxes:
                     img = imread(bboxes[stepi])
                     gt_segm = tracking6d.tracker.process_segm(img)[0].to(tracking6d.device)
                     gt_segm = pad_image(gt_segm)
                 if gt_segm is not None:
-                    gt_segmentation_tensor = gt_segm[None, None, None] > 0
-
-                    # self.baseline_iou[stepi - 1] = float((last_segment[0, 0, -1] * gt_segm > 0).sum()) / float(
-                    #     ((last_segment[0, 0, -1] + gt_segm) > 0).sum() + 1e-5)
-                    #
-                    # self.our_iou[stepi - 1] = float((renders[0, -1, 0, 3] * gt_segm > 0).sum()) / float(
-                    #     ((renders[0, -1, 0, 3] + gt_segm) > 0).sum() + 1e-5)
-
-                    self.baseline_iou[stepi - 1] = 1 - iou_loss(last_segment[:, :, [-1]],
-                                                                gt_segmentation_tensor).detach().cpu()
-                    self.our_iou[stepi - 1] = 1 - iou_loss(last_rendered_silhouette[None, None],
-                                                           gt_segmentation_tensor).detach().cpu()
+                    segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
+                    self.baseline_iou[stepi - 1] = 1 - iou_loss(segmentations_discrete,
+                                                                observed_segmentations[:, -1:, [-1]]).detach().cpu()
+                    self.our_iou[stepi - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
+                                                           observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
             np.savetxt(os.path.join(tracking6d.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
@@ -738,8 +728,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
         enc_result_prime, _ = tracking6d.frames_and_flow_frames_inference(opt_frames_prime, opt_frames_prime)
 
         # Get texture map
-        tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map) if tracking6d.gt_texture is None \
-            else tracking6d.gt_texture
+        tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
 
         # Render keyframe images
         rendering_rgb, rendering_silhouette = tracking6d.rendering.forward(enc_result_prime.translations,
