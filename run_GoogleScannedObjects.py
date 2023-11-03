@@ -17,7 +17,7 @@ sys.path.append('OSTrack/S2DNet')
 
 
 def main():
-    dataset = 'GoogleScannedObjects'
+    dataset = 'GoogleScannedObjects_default_pose'
     sequences = [
         'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
         'Twinlab_Nitric_Fuel',
@@ -38,13 +38,15 @@ def main():
         args = parse_args(sequence, dataset)
 
         experiment_name = args.experiment
+
         config = load_config(args.config)
-        config["image_downsample"] = args.perc
-        config["tran_init"] = 0
-        config["gt_texture"] = gt_texture_path
-        config["gt_mesh_prototype"] = gt_mesh_path
-        config["gt_tracking_log"] = gt_tracking_path
-        config["rot_init"] = [0, 0, 0]
+        config.image_downsample = args.perc
+        config.tran_init = 0
+        config.gt_texture_path = gt_texture_path
+        config.gt_mesh_path = gt_mesh_path
+        config.gt_track_path = gt_tracking_path
+        config.rot_init = [0, 0, 0]
+        config.sequence = args.sequence
         # config['rot_init'] = [-math.pi / 2.0, 0, 0]
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.dataset, args.sequence)
@@ -54,7 +56,6 @@ def main():
         os.makedirs(write_folder)
         os.makedirs(os.path.join(write_folder, 'imgs'))
         shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
-        config["sequence"] = args.sequence
 
         renderings_folder = 'renderings'
         segmentations_folder = 'segmentations'

@@ -30,18 +30,13 @@ def main():
 
 
     for sequence in sequences:
-        gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
-        gt_texture_path = None
-        gt_mesh_path = None
-
         args = parse_args(sequence, dataset, folder_name)
 
         experiment_name = args.experiment
         config = load_config(args.config)
-        config["image_downsample"] = args.perc
-        config["tran_init"] = 2.5
-        config["gt_texture"] = gt_texture_path
-        config["gt_mesh_prototype"] = gt_mesh_path
+        config.image_downsample = 0.25
+        config.tran_init = 0
+        config.sequence = args.sequence
 
         write_folder = os.path.join(tmp_folder, experiment_name, args.folder_name, args.sequence)
         if os.path.exists(write_folder):
@@ -49,7 +44,6 @@ def main():
         os.makedirs(write_folder)
         os.makedirs(os.path.join(write_folder, 'imgs'))
         shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
-        config["sequence"] = args.sequence
 
         renderings_folder = 'original'
         segmentations_folder = 'masks_U2Net'

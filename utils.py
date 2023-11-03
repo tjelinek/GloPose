@@ -11,6 +11,7 @@ from typing import Tuple
 
 from main_settings import tmp_folder
 from models.rendering import RenderingKaolin
+from tracker_config import TrackerConfig
 
 
 def segment2bbox(segment):
@@ -79,10 +80,11 @@ def calciou_masks(mask1, mask2):
     return iou
 
 
-def load_config(config_name):
+def load_config(config_name) -> TrackerConfig:
     with open(config_name) as file:
         config = yaml.safe_load(file)
-    return config
+    tracker_config = TrackerConfig(**config)
+    return tracker_config
 
 
 def fmo_detect(I, B):
