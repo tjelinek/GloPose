@@ -1,12 +1,11 @@
+import os
+
 import torch
 from torch.nn import functional as F
 from torchvision.utils import save_image
 from skimage.measure import label, regionprops
-import os
 import cv2
 import numpy as np
-from main_settings import *
-import matplotlib.pyplot as plt
 from PIL import Image
 
 
@@ -22,7 +21,7 @@ def sync_directions_rgba(est_hs):
                 tsr0 = est_hs[frmi - 1]
 
         if torch.mean((tsr0[-1] - tsr[-1]) ** 2) < torch.mean((tsr0[-1] - tsr[0]) ** 2):
-            ## reverse time direction for better alignment
+            # reverse time direction for better alignment
             est_hs[frmi] = torch.flip(est_hs[frmi], [0])
     return est_hs
 
@@ -134,7 +133,6 @@ def write_latent(rendering, latent, device, folder, steps, frmi=0, videoname=Non
 
 
 def write_gt(gt_paths, folder, bgr_clr=1, videoname='output_gt.avi'):
-    write_video = True
     out = None
     renders = []
     n_frms = len(gt_paths)
@@ -161,7 +159,6 @@ def write_gt(gt_paths, folder, bgr_clr=1, videoname='output_gt.avi'):
 
 
 def write_gt_masks(gt_paths, folder, bgr_clr=1, videoname='output_masks_gt.avi'):
-    write_video = True
     out = None
     renders = []
     n_frms = len(gt_paths)
