@@ -5,12 +5,14 @@ import time
 import argparse
 from pathlib import Path
 
+from tracker_config import TrackerConfig
+
 sys.path.append('OSTrack/S2DNet')
 
 from tracking6d import Tracking6D
 
 
-def run_tracking_on_sequence(args, config, files, segms, write_folder, optical_flows=None):
+def run_tracking_on_sequence(args, config: TrackerConfig, files, segms, write_folder, optical_flows=None):
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
     print("Running tracking on dataset:", write_folder_path.parent.name)
@@ -23,9 +25,9 @@ def run_tracking_on_sequence(args, config, files, segms, write_folder, optical_f
     segms = segms[args.start:args.length:args.skip]
     if optical_flows is not None:
         optical_flows = optical_flows[args.start:args.length:args.skip]
-    config["input_frames"] = len(files)
-    if config["inc_step"] == 0:
-        config["inc_step"] = len(files)
+    config.input_frames = len(files)
+    if config.inc_step == 0:
+        config.inc_step = len(files)
     inds = [os.path.splitext(os.path.basename(temp))[0] for temp in segms]
     baseline_dict = dict(zip(inds, segms))
     torch.cuda.empty_cache()
