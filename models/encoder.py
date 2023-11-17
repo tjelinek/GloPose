@@ -55,7 +55,6 @@ class Encoder(nn.Module):
         self.quaternion_x = nn.Parameter(quat[..., 1, None])
         self.quaternion_y = nn.Parameter(quat[..., 2, None])
         self.quaternion_z = nn.Parameter(quat[..., 3, None])
-        # self.quaternion = nn.Parameter(quat)
 
         axis_angles = torch.zeros(1, config.input_frames, 3)
         self.axis_angle_x = nn.Parameter(axis_angles[..., 0, None])
@@ -141,7 +140,7 @@ class Encoder(nn.Module):
         # Computes differences of consecutive translations and rotations
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
 
-        quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
+        # quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
         # quaternion = axis_angle_to_quaternion(rotation)
 
         result = EncoderResult(translations=translation,
