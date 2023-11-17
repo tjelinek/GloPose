@@ -305,7 +305,7 @@ class FlowModelGetterGMA(FlowModelGetter):
         sys.path.append('GMA')
         from GMA.core.network import RAFTGMA
 
-        args = Namespace(model='checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
+        args = Namespace(model='GMA/checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
                          position_only=False,
                          position_and_content=False, mixed_precision=True)
 
