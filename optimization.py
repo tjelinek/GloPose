@@ -24,27 +24,22 @@ import torch
 
 
 def jacobian_approx_t_custom(p, f):
-    # https://github.com/hahnec/torchimize
     """
-    Numerical approximation for the multivariate Jacobian
+    Efficient Jacobian computation using functorch vmap
+
     :param p: initial value(s)
     :param f: function handle
-    :return: jacobian
+    :return: Value of Jacobian f(p)
     """
 
-    # time_start = time.process_time()
-    # try:
-    #     jac = torch.autograd.functional.jacobian(f, p, vectorize=True)  # create_graph=True
-    #     print(f"Vectorized Jacobian time {time.process_time() - time_start}")
-    # except RuntimeError:
-    #     print(f"Vectorized Jacobian time {time.process_time() - time_start}")
-    # time_start = time.process_time()
-    # fun = f
-    jac = torch.autograd.functional.jacobian(f, p, strict=True, vectorize=False)
-    # jac = torch.func.jacfwd(f)(p)
-    # jac = torch.func.jacrev(f)(p)
-    # breakpoint()
-    # print(f"Non-vectorized Jacobian time {time.process_time() - time_start}")
+    p.requires_grad_(True)
+    y = f(p)
+    I_N = torch.eye(y.shape[0]).cuda()
+
+    def vjp(y_i):
+        return torch.autograd.grad(y, p, y_i, retain_graph=True)
+
+    jac = torch.vmap(vjp, in_dims=0)(I_N)[0]
 
     return jac
 
