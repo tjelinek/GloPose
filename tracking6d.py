@@ -740,10 +740,8 @@ class Tracking6D:
                                               self.shape[-2])
 
         fun = flow_loss_model.forward
-        jac_f = lambda p: torch.autograd.functional.jacobian(fun, p, strict=True, vectorize=False)
-
-        coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(),
-                                           jac_function=jac_f, max_iter=self.config.levenberg_marquardt_max_ter)
+        coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=None,
+                                           max_iter=self.config.levenberg_marquardt_max_ter)
 
         for epoch in range(len(coefficients_list)):
             trans_quats = coefficients_list[epoch]
