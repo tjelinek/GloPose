@@ -262,9 +262,10 @@ class RenderingKaolin(nn.Module):
 
             theoretical_flows.append(theoretical_flow)
 
-        theoretical_flow = torch.stack(theoretical_flows, 1)[0]  # torch.Size([1, N, H, W, 2])
+        theoretical_flows = torch.cat(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
+        theoretical_flows = theoretical_flows.permute(0, 1, 4, 2, 3)
 
-        return theoretical_flow
+        return theoretical_flows
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
