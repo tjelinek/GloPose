@@ -1,29 +1,11 @@
-import time
+import torch
+import numpy as np
+import pyceres as ceres
 
-from torchimize.functions.jacobian import jacobian_approx_t
 from typing import Callable, Union, Tuple, List
 
-import torch
 
-
-# __author__ = "Christopher Hahne"
-# __email__ = "inbox@christopherhahne.de"
-# __license__ = """
-#     Copyright (c) 2022 Christopher Hahne <inbox@christopherhahne.de>
-#     This program is free software: you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation, either version 3 of the License, or
-#     (at your option) any later version.
-#     This program is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
-#     You should have received a copy of the GNU General Public License
-#     along with this program. If not, see <https://www.gnu.org/licenses/>.
-# """
-
-
-def jacobian_approx_t_custom(p, f):
+def compute_jacobian_using_vmap(p: torch.Tensor, f: Callable) -> torch.Tensor:
     """
     Efficient Jacobian computation using functorch vmap
 
@@ -44,6 +26,69 @@ def jacobian_approx_t_custom(p, f):
     return jac
 
 
+def compute_jacobian(p: torch.Tensor, f: Callable) -> torch.Tensor:
+    jac = torch.autograd.functional.jacobian(f, p, strict=True, vectorize=False)
+    return jac
+
+
+class EndPointErrorCostFunction(ceres.CostFunction):
+
+    def __init__(self, cost_function: Callable, num_residuals: int, num_optimized_parameters: int):
+        super().__init__()
+
+        self.num_residuals: int = num_residuals
+        self.num_optimized_parameters: int = num_optimized_parameters
+        self.cost_function: Callable = cost_function
+
+        self.set_num_residuals(num_residuals)
+        self.set_parameter_block_sizes([num_optimized_parameters])
+
+        self.p_list = []
+
+    def Evaluate(self, parameters, residuals, jacobians):
+        parameters_tensor = torch.from_numpy(parameters[0]).to(torch.float).cuda()
+
+        self.p_list.append(parameters_tensor.clone())
+
+        function_eval = self.cost_function(parameters_tensor)
+        function_eval_np = function_eval.numpy(force=True)
+        residuals[:] = function_eval_np[:]
+
+        if jacobians is not None:
+            jacobian = compute_jacobian_using_vmap(parameters_tensor, self.cost_function).flatten()
+            jacobian_np_flat = jacobian.detach().cpu()
+            jacobians[0][:] = jacobian_np_flat[:]
+
+        torch.cuda.synchronize()
+
+        return True
+
+
+def levenberg_marquardt_ceres(p: torch.Tensor, cost_function: Callable, num_residuals: int) -> List[torch.Tensor]:
+    options = ceres.SolverOptions()
+    options.trust_region_strategy_type = ceres.TrustRegionStrategyType.LEVENBERG_MARQUARDT
+    options.max_num_iterations = 10
+    options.minimizer_progress_to_stdout = True
+
+    problem = ceres.Problem()
+
+    parameter_block_np = [p.numpy(force=True).astype(np.float64)]
+
+    num_optimized_parameters = p.shape[0]
+    epe_cost_function = EndPointErrorCostFunction(cost_function, num_residuals, num_optimized_parameters)
+    loss = ceres.TrivialLoss()
+    problem.add_residual_block(epe_cost_function, loss, parameter_block_np)
+
+    summary = ceres.SolverSummary()
+    ceres.solve(options, problem, summary)
+    print(f"Ceres duration: {summary.total_time_in_seconds}")
+
+    p_list = epe_cost_function.p_list
+    p_list.append(torch.from_numpy(parameter_block_np[0]).cuda().to(p_list[0].dtype))
+
+    return p_list
+
+
 def lsq_lma_custom(
         p: torch.Tensor,
         function: Callable,
@@ -58,10 +103,25 @@ def lsq_lma_custom(
         rho2: float = .75,
         bet: float = 2,
         gam: float = 3,
-        max_iter: int = 25,
-) -> List[torch.Tensor]:
+        max_iter: int = 25) -> List[torch.Tensor]:
     """
-    # https://github.com/hahnec/torchimize
+    __author__ = "Christopher Hahne"
+    __email__ = "inbox@christopherhahne.de"
+    __license__ =
+        Copyright (c) 2022 Christopher Hahne <inbox@christopherhahne.de>
+        This program is free software: you can redistribute it and/or modify
+        it under the terms of the GNU General Public License as published by
+        the Free Software Foundation, either version 3 of the License, or
+        (at your option) any later version.
+        This program is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        GNU General Public License for more details.
+        You should have received a copy of the GNU General Public License
+        along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+    https://github.com/hahnec/torchimize
+
     Levenberg-Marquardt implementation for least-squares fitting of non-linear functions
 
     :param p: initial value(s)
@@ -88,18 +148,14 @@ def lsq_lma_custom(
         fun = function
 
     if jac_function is None:
-        # use numerical Jacobian if analytical is not provided
-        jac_fun = lambda p: jacobian_approx_t_custom(p, f=fun)[:, 0, 0, :]
+        jac_fun = lambda p: compute_jacobian(p, f=fun)
     else:
         jac_fun = lambda p: jac_function(p, *args)
 
-    # print("Before function", int(torch.cuda.memory_allocated() / 1024))
-    # breakpoint()
     f = fun(p)
-    # print("Before Jacobian", int(torch.cuda.memory_allocated() / 1024))
+    import time
+    global_start_time = time.time()
     jac = jac_fun(p)
-    # print("After  Jacobian", int(torch.cuda.memory_allocated() / 1024))
-    # breakpoint()
     g = torch.matmul(jac.T, f)
     H = torch.matmul(jac.T, jac)
     u = tau * torch.max(torch.diag(H))
