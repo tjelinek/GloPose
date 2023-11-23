@@ -1,17 +1,17 @@
 import kaolin
 import torch
-import types
 import warnings
 from pathlib import Path
 
+from dataset_generators import generator_utils
 from dataset_generators.generator_utils import setup_renderer, \
-    generate_rotating_and_translating_textured_object, render_object_poses, generate_rotations_y, generate_rotations_xy, \
-    generate_zero_rotations, generate_sinusoidal_translations, generate_circular_translation, \
-    generate_translation_that_is_off, generate_rotations_x
+    generate_rotating_and_translating_textured_object, render_object_poses
 from main_settings import dataset_folder
 from utils import load_config
 
 warnings.filterwarnings("ignore")
+
+RESOLUTION = 800
 
 
 def generate_8_colored_sphere(config, rendering_destination, segmentation_destination, optical_flow_destination,
@@ -32,18 +32,18 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
         [255, 255, 0],  # yellow
         [0, 255, 255],  # cyan
         [255, 0, 255],  # magenta
-        [255, 165, 0],  # orange
+        [255, 255, 0],  # orange
         [255, 255, 255],  # white
     ]
 
     vertices_features = torch.zeros(mesh.vertices.shape[0], 3)
 
     for i, vertex in zip(range(len(mesh.vertices)), mesh.vertices):
-        color_code = [vertex[0] > 0, vertex[1] > 0, vertex[2] > 0]
+        color_code = [vertex[0] >= 0, vertex[1] >= 0, vertex[2] >= 0]
         vertices_features[i] = torch.tensor(colors[color_code[0] + 2 * color_code[1] + 4 * color_code[2]])
 
-    width = 1000
-    height = 1000
+    width = RESOLUTION
+    height = RESOLUTION
     faces = mesh.faces
 
     rendering = setup_renderer(config, faces, height, width, DEVICE)
@@ -59,8 +59,8 @@ def generate_8_colored_sphere(config, rendering_destination, segmentation_destin
 def generate_6_colored_cube(config, rendering_destination, segmentation_destination, optical_flow_destination,
                             gt_tracking_log_file, rotations):
     DEVICE = 'cuda'
-    width = 1000
-    height = 1000
+    width = RESOLUTION
+    height = RESOLUTION
 
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
@@ -115,8 +115,8 @@ def generate_textured_sphere(config, rendering_destination: Path, segmentation_d
     prototype_path = Path('./prototypes/sphere.obj')
     tex_path = Path('./prototypes/tex.png')
 
-    width = 1000
-    height = 1000
+    width = RESOLUTION
+    height = RESOLUTION
 
     generate_rotating_and_translating_textured_object(config, prototype_path, tex_path, rendering_destination,
                                                       segmentation_destination, optical_flow_destination,
@@ -170,26 +170,26 @@ def generate_rotating_objects():
 def generate_translating_sphere():
     global translations
     steps = 72
-    translations = generate_sinusoidal_translations(steps=steps)
+    translations = generator_utils.generate_sinusoidal_translations(steps=steps)
     generate_translations_for_obj('Translating_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
-                                  rots=generate_zero_rotations(steps=steps))
-    translations = generate_circular_translation(steps=steps)
+                                  rots=generator_utils.generate_zero_rotations(steps=steps))
+    translations = generator_utils.generate_circular_translation(steps=steps)
     generate_translations_for_obj('Circulating_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
-                                  rots=generate_zero_rotations(steps=steps))
-    translations = generate_translation_that_is_off(steps=steps)
+                                  rots=generator_utils.generate_zero_rotations(steps=steps))
+    translations = generator_utils.generate_translation_that_is_off(steps=steps)
     generate_translations_for_obj('Off_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
-                                  rots=generate_zero_rotations(steps=steps))
-    translations = generate_translation_that_is_off(steps=steps)
+                                  rots=generator_utils.generate_zero_rotations(steps=steps))
+    translations = generator_utils.generate_translation_that_is_off(steps=steps)
     generate_translations_for_obj('Off_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
-                                  rots=generate_zero_rotations(steps=steps))
-    translations = generate_translation_that_is_off(steps=73)
+                                  rots=generator_utils.generate_zero_rotations(steps=steps))
+    translations = generator_utils.generate_translation_that_is_off(steps=73)
     generate_translations_for_obj('Off_Rotating_Textured_Sphere', synthetic_dataset_folder, rendering_dir,
                                   segmentation_dir, optical_flow_dir, gt_tracking_log_dir, steps, translations,
-                                  rots=generate_rotations_x(step=5))
+                                  rots=generator_utils.generate_rotations_x(step=5))
 
 
 def generate_rotating_translating_spheres():
@@ -211,9 +211,9 @@ def generate_rotating_translating_spheres():
             # Defining rotating spheres
             objects = [
                 (f'Rotating_Translating_Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere,
-                 generate_sinusoidal_translations(steps=steps)),
+                 generator_utils.generate_sinusoidal_translations(steps=steps)),
                 (f'Rotating_Contra_Translating_Textured_Sphere_{rot_mag}_{suffix}', generate_textured_sphere,
-                 [-it for it in generate_sinusoidal_translations(steps=steps)]),
+                 [-it for it in generator_utils.generate_sinusoidal_translations(steps=steps)]),
                 # Add any other objects if necessary
             ]
 
@@ -233,7 +233,6 @@ def generate_rotating_translating_spheres():
 
 if __name__ == '__main__':
     _config = load_config('./configs/config_generator.yaml')
-    _config = types.SimpleNamespace(**_config)
 
     synthetic_dataset_folder = dataset_folder / Path('SyntheticObjects')
     rendering_dir = Path('renderings')
