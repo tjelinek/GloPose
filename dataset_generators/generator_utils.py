@@ -33,16 +33,18 @@ def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, render
     Returns:
         None
     """
-    ren_features_np = ren_features.cpu().numpy()[0].astype('uint8')
+    ren_features_np = ren_features.numpy(force=True)[0, 0].astype('uint8')
+    ren_features_np = ren_features_np.transpose(1, 2, 0)
+    ren_mask_np = ren_mask.numpy(force=True).astype('uint8')[0, 0] * 255
+    ren_mask_np = np.tile(ren_mask_np, (3, 1, 1)).transpose((1, 2, 0))
+
     i_str = format(image_idx, '03d')
     rendering_file_name = rendering_destination / (i_str + '.png')
     segmentation_file_name = segmentation_destination / (i_str + '.png')
     optical_flow_file_name = optical_flow_destination / (i_str + '.pt')
-    ren_mask_np = ren_mask.cpu().numpy().astype('uint8')[0] * 255
-    ren_mask_np_rep = np.tile(ren_mask_np, (3, 1, 1)).transpose((1, 2, 0))
-    # flow_image = flow_viz.flow_to_image(optical_flow)
+
     torch.save(optical_flow, optical_flow_file_name)
-    imageio.imwrite(segmentation_file_name, ren_mask_np_rep)
+    imageio.imwrite(segmentation_file_name, ren_mask_np)
     imageio.imwrite(rendering_file_name, ren_features_np)
 
 
@@ -269,10 +271,10 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
                                                           unit_vertices=vertices, face_features=face_features,
                                                           texture_maps=texture_maps)
 
-                rendering_rgb, rendering_silhouette = ren_features_and_mask
+                rendering_rgb, ren_silhouette = ren_features_and_mask
             else:
-                rendering_rgb = rendering_result.ren_mesh_vertices_features
-                ren_silhouette = rendering_result.ren_mask
+                rendering_rgb = rendering_result.ren_mesh_vertices_features.permute(0, -1, 1, 2)[None]
+                ren_silhouette = rendering_result.ren_mask[None, None]
 
             if prev_rendering_rgb is not None:
                 generate_optical_flow_illustration(rendering_rgb, prev_rendering_rgb, optical_flow.clone(), frame_i,
@@ -295,12 +297,14 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, rotati
 
 
 def generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i, save_destination):
-    prev_ren_features_ = prev_ren_features[0].to(torch.uint8).permute(2, 0, 1).detach()  # Shape [C, H, W]
-    ren_features_ = ren_features[0].to(torch.uint8).permute(2, 0, 1).detach()  # Shape [C, H, W]
-    optical_flow_ = optical_flow[0, 0]
+    prev_ren_features_ = prev_ren_features.squeeze().to(torch.uint8).detach()  # Shape [C, H, W]
+    ren_features_ = ren_features.squeeze().to(torch.uint8).detach()  # Shape [C, H, W]
+
+    optical_flow_ = optical_flow.squeeze().permute(1, 2, 0)
     optical_flow_[..., 0] = optical_flow_[..., 0] * optical_flow_.shape[-2]
     optical_flow_[..., 1] = optical_flow_[..., 1] * optical_flow_.shape[-3]
-    optical_flow_ = optical_flow_.detach().cpu().numpy()
+    optical_flow_ = optical_flow_.numpy(force=True)
+
     flow_illustration = visualize_flow_with_images(prev_ren_features_, ren_features_, optical_flow_)
     del optical_flow_
     optical_flow_illustration_destination = \
