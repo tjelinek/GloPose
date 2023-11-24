@@ -7,6 +7,7 @@ from kornia.geometry import quaternion_to_rotation_matrix
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 
+from dataset_generators.scenarios import generate_rotations_y
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils import deg_to_rad, qnorm, qmult, normalize_vertices
@@ -76,118 +77,16 @@ def setup_renderer(config, faces, height, width, device):
     return rendering
 
 
-def generate_zero_rotations(steps=72):
-    rotations_x = np.zeros(steps)
-    rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_x(step=10.0):
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_y(step=10.0):
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_x = np.zeros(rotations_y.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_z(step=10.0):
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
-    rotations_x = np.zeros(rotations_z.shape)
-    rotations_y = np.zeros(rotations_x.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_xy(step=10.0):
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_xz(step=10.0):
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_yz(step=10.0):
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
-    rotations_x = np.zeros(rotations_y.shape)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_rotations_xyz(step=10.0):
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
-
-    return list(zip(rotations_x, rotations_y, rotations_z))
-
-
-def generate_sinusoidal_translations(steps=72):
-    step = (steps - 1) / 360.0
-    x = np.linspace(0, (steps - 1) * step, steps)
-    translations_x = np.sin(x) * 0.5
-    translations_y = np.zeros(translations_x.shape)
-    translations_z = np.zeros(translations_x.shape)
-
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    result = [torch.Tensor(t) for t in result_tuples]
-    return result
-
-
-def generate_circular_translation(steps=72):
-    step = (steps - 1) / 360.0
-    x = np.linspace(0, (steps - 1) * step, steps)
-    translations_x = np.cos(x) * 0.5
-    translations_y = np.sin(x) * 0.5
-    translations_z = np.zeros(translations_x.shape)
-
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    result = [torch.Tensor(t) for t in result_tuples]
-    return result
-
-
-def generate_translation_that_is_off(steps=72):
-    step = (steps - 1) / 360.0
-    x = np.linspace(0, (steps - 1) * step, steps) * 0
-    translations_x = np.cos(x)
-    translations_y = np.sin(x)
-    translations_z = np.zeros(translations_x.shape)
-
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    result = [torch.Tensor(t) for t in result_tuples]
-    return result
-
-
-def generate_rotating_and_translating_textured_object(config, prototype_path, texture_path: Path,
+def generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path: Path,
                                                       rendering_destination: Path, segmentation_destination: Path,
-                                                      optical_flow_destination, gt_tracking_log_file, width, height,
-                                                      DEVICE='cuda', rotations=None, translations=None,
-                                                      initial_rotation_axis_angle=None, initial_translation=None):
+                                                      optical_flow_destination, gt_tracking_log_file, width, height):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
     gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
     tex = imageio.imread(str(texture_path))
-    texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].to(DEVICE)
+    texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].cuda()
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
     vertices = mesh.vertices[None]
 
@@ -196,50 +95,44 @@ def generate_rotating_and_translating_textured_object(config, prototype_path, te
     faces = mesh.faces
     face_features = mesh.uvs[mesh.face_uvs_idx][None]
 
-    rendering = setup_renderer(config, faces, width, height, DEVICE)
+    rendering = setup_renderer(config, faces, width, height, 'cuda')
 
-    if rotations is None:
-        rotations = generate_rotations_y(5.0)
-
-    render_object_poses(rendering, vertices, face_features, texture_maps, rotations, translations,
-                        optical_flow_destination, rendering_destination, segmentation_destination, gt_tracking_log_file,
-                        DEVICE, initial_rotation_axis_angle, initial_translation)
+    render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
+                        rendering_destination, segmentation_destination, gt_tracking_log_file)
 
 
-def render_object_poses(rendering, vertices, face_features, texture_maps, rotations, translations,
-                        optical_flow_destination, rendering_destination, segmentation_destination, gt_tracking_log_file,
-                        DEVICE, initial_rotation_axis_angle, initial_translation):
+def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
+                        rendering_destination, segmentation_destination, gt_tracking_log_file):
     # The initial rotations are expected to be in radians
 
-    if initial_rotation_axis_angle is None:
-        initial_rotation_axis_angle = torch.Tensor([0, 0, 0]).to(DEVICE)
-    if initial_translation is None:
-        initial_translation = torch.Tensor([0, 0, 0]).to(DEVICE)
+    initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
 
+    initial_rotation_axis_angle = torch.from_numpy(movement_scenario.initial_rotation).cuda().to(torch.float32)
     initial_rotation_quaternion = angle_axis_to_quaternion(initial_rotation_axis_angle, order=QuaternionCoeffOrder.WXYZ)
 
     prev_encoder_result = None
     prev_rendering_rgb = None
 
-    vertices = vertices.to(DEVICE)
-    face_features = face_features.to(DEVICE)
+    vertices = vertices.cuda().to(torch.float32)
+    face_features = face_features.cuda().to(torch.float32)
 
-    if translations is None:
-        translations = [torch.Tensor([0.0, 0.0, 0.0])] * len(rotations)
-    quaternions = torch.zeros(1, len(rotations), 4).to(DEVICE)
+    quaternions = torch.zeros(1, len(movement_scenario.rotations), 4).cuda()
     quaternions[:, :, 0] = 1.0
 
-    translations = torch.stack(translations)[None][None].to(DEVICE)
+    translations_tensors = [torch.from_numpy(arr).to(torch.float32) for arr in movement_scenario.translations]
+    translations = torch.stack(translations_tensors)[None][None].cuda()
     translations[..., :] += initial_translation
 
     log_rows = []
 
-    for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(rotations):
-        axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x), deg_to_rad(rotation_y), deg_to_rad(rotation_z)])
+    for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(movement_scenario.rotations):
+        axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x),
+                                          deg_to_rad(rotation_y),
+                                          deg_to_rad(rotation_z)]).to(torch.float32)
         rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
                                                               order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
         composed_rotation_quaternion_tensor = qmult(qnorm(initial_rotation_quaternion[None]),
-                                                    qnorm(rotation_quaternion_tensor[None]))[0].to(DEVICE)
+                                                    qnorm(rotation_quaternion_tensor[None]))[0].cuda()
         quaternions[0, frame_i] = composed_rotation_quaternion_tensor
 
         rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
