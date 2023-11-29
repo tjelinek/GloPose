@@ -7,7 +7,7 @@ import numpy as np
 @dataclass
 class MovementScenario:
     steps: int = 0
-    initial_rotation: np.ndarray = np.array([0.0, 0.0, 0.0])
+    initial_rotation: np.ndarray = np.array([0.01, 0.01, 0.01])
     initial_translation: np.ndarray = np.array([0.0, 0.0, 0.0])
     rotations: List[np.ndarray] = None
     translations: List[np.ndarray] = None

@@ -1,5 +1,6 @@
-import imageio
+import imageio.v3 as iio
 import kaolin
+import torchvision
 import numpy as np
 import torch
 import csv
@@ -7,7 +8,6 @@ from kornia.geometry import quaternion_to_rotation_matrix
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 
-from dataset_generators.scenarios import generate_rotations_y
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils import deg_to_rad, qnorm, qmult, normalize_vertices
@@ -15,7 +15,7 @@ from flow import visualize_flow_with_images
 
 
 def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, rendering_destination,
-                         segmentation_destination, optical_flow_destination):
+                         segmentation_destination, optical_flow_destination, background_image):
     """
     Generate and save rendering and segmentation images.
 
@@ -30,14 +30,18 @@ def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, render
         segmentation_destination (Path): The destination directory where the mask image will be saved.
         optical_flow (Tensor): Saved theoretical optical flow Tensor
         optical_flow_destination (Path): The destination directory where the optical flow Tensor will be saved.
+        background_image (torch.Tensor): Background image.
 
     Returns:
         None
     """
+    ren_mask_repeated = ren_mask.repeat(1, 1, 3, 1, 1)
+    ren_features[ren_mask_repeated < 1] = background_image[ren_mask_repeated < 1]
+
     ren_features_np = ren_features.numpy(force=True)[0, 0].astype('uint8')
     ren_features_np = ren_features_np.transpose(1, 2, 0)
-    ren_mask_np = ren_mask.numpy(force=True).astype('uint8')[0, 0] * 255
-    ren_mask_np = np.tile(ren_mask_np, (3, 1, 1)).transpose((1, 2, 0))
+    ren_mask_np = ren_mask_repeated.numpy(force=True).astype('uint8')[0, 0] * 255
+    ren_mask_np = ren_mask_np.transpose((1, 2, 0))
 
     i_str = format(image_idx, '03d')
     rendering_file_name = rendering_destination / (i_str + '.png')
@@ -45,8 +49,8 @@ def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, render
     optical_flow_file_name = optical_flow_destination / (i_str + '.pt')
 
     torch.save(optical_flow, optical_flow_file_name)
-    imageio.imwrite(segmentation_file_name, ren_mask_np)
-    imageio.imwrite(rendering_file_name, ren_features_np)
+    iio.imwrite(segmentation_file_name, ren_mask_np)
+    iio.imwrite(rendering_file_name, ren_features_np)
 
 
 def setup_renderer(config, faces, height, width, device):
@@ -79,13 +83,14 @@ def setup_renderer(config, faces, height, width, device):
 
 def generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path: Path,
                                                       rendering_destination: Path, segmentation_destination: Path,
-                                                      optical_flow_destination, gt_tracking_log_file, width, height):
+                                                      optical_flow_destination, gt_tracking_log_file, width, height,
+                                                      background_image_path: str = None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_destination.mkdir(parents=True, exist_ok=True)
     gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    tex = imageio.imread(str(texture_path))
+    tex = iio.imread(str(texture_path))
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].cuda()
     heterogeneous_mesh_handler = kaolin.io.utils.heterogeneous_mesh_handler_naive_homogenize
     mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True,
@@ -99,12 +104,24 @@ def generate_rotating_and_translating_textured_object(config, movement_scenario,
 
     rendering = setup_renderer(config, faces, width, height, 'cuda')
 
+    if background_image_path is not None:
+        image = iio.imread(background_image_path)
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToPILImage(),
+            torchvision.transforms.Resize((height, width)),
+            torchvision.transforms.ToTensor()
+        ])
+        background_image = transform(image)[None, None].cuda() * 255.0
+    else:
+        background_image = torch.zeros(1, 1, 3, height, width).cuda()
+
     render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file)
+                        rendering_destination, segmentation_destination, gt_tracking_log_file, background_image)
 
 
 def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file):
+                        rendering_destination, segmentation_destination, gt_tracking_log_file,
+                        background_image):
     # The initial rotations are expected to be in radians
 
     initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
@@ -175,9 +192,9 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
                 generate_optical_flow_illustration(rendering_rgb, prev_rendering_rgb, optical_flow.clone(), frame_i,
                                                    optical_flow_destination)
 
-            save_images_and_flow(frame_i, rendering_rgb, ren_silhouette,
-                                 optical_flow.detach().clone().cpu(), rendering_destination,
-                                 segmentation_destination, optical_flow_destination)
+            save_images_and_flow(frame_i, rendering_rgb, ren_silhouette, optical_flow.detach().cpu(),
+                                 rendering_destination, segmentation_destination, optical_flow_destination,
+                                 background_image)
 
             del prev_rendering_rgb
             prev_rendering_rgb = rendering_rgb
@@ -207,4 +224,4 @@ def generate_optical_flow_illustration(ren_features, prev_ren_features, optical_
                                    "_illustration" + save_destination.suffix)
     optical_flow_illustration_destination.mkdir(exist_ok=True, parents=True)
     file_name = optical_flow_illustration_destination / f"flow_{frame_i}.png"
-    imageio.imwrite(file_name, flow_illustration)
+    iio.imwrite(file_name, flow_illustration)
