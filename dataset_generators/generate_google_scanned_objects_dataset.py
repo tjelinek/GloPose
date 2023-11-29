@@ -1,22 +1,19 @@
-from collections import namedtuple
-
-import torch
+import numpy as np
 import warnings
-import types
 import os
 import shutil
 from pathlib import Path
 
+from dataclasses import replace
 from dataset_generators.generator_utils import generate_rotating_and_translating_textured_object
-from dataset_generators.scenarios import generate_rotations_x, generate_rotations_z
-from utils import load_config, deg_to_rad
+from dataset_generators.scenarios import generate_rotations_z
+from utils import load_config
 from main_settings import dataset_folder
 
 warnings.filterwarnings("ignore")
 
 
-def dataset_from_google_research(config, dataset_path: Path, rotations, initial_rotation_axis_angle,
-                                 initial_translation):
+def dataset_from_google_research(config, dataset_path: Path, movement_scenario):
     models_path = dataset_path / 'models'
     for file in os.listdir(models_path):
         d = models_path / file
@@ -31,7 +28,8 @@ def dataset_from_google_research(config, dataset_path: Path, rotations, initial_
 
             segmentation_destination = dataset_path / Path('segmentations') / file
             rendering_destination = dataset_path / Path('renderings') / file
-            optical_flow_destination = dataset_path / Path('optical_flow') / file
+            optical_flow_relative_destination = dataset_path / Path('optical_flow_relative') / file
+            optical_flow_absolute_destination = dataset_path / Path('optical_flow_absolute') / file
             gt_tracking_log_file = dataset_path / Path('gt_tracking_log') / file / Path('gt_tracking_log.csv')
 
             width = 1000
@@ -39,32 +37,20 @@ def dataset_from_google_research(config, dataset_path: Path, rotations, initial_
 
             generate_rotating_and_translating_textured_object(config, movement_scenario, mesh_path, texture_path,
                                                               rendering_destination, segmentation_destination,
-                                                              optical_flow_destination, gt_tracking_log_file, width,
-                                                              height)
+                                                              optical_flow_relative_destination,
+                                                              optical_flow_absolute_destination, gt_tracking_log_file,
+                                                              width, height)
 
 
 if __name__ == '__main__':
     config = load_config('configs/config_deep.yaml')
-    config = types.SimpleNamespace(**config)
-
-    GeneratorConfig = namedtuple('GeneratorConfig',
-                                 ['initial_rotation_axis_angle', 'initial_translation', 'rotations',
-                                  'name'])
 
     configurations = {
-        'GoogleScannedObjects':
-            GeneratorConfig(initial_rotation_axis_angle=deg_to_rad(torch.Tensor([-90, 0, 0]).to('cuda')),
-                            initial_translation=torch.Tensor([0, 0, 0]).to('cuda'),
-                            rotations=generate_rotations_z(5.0), name='GoogleScannedObjects'),
-        'GoogleScannedObjects_default_pose':
-            GeneratorConfig(initial_rotation_axis_angle=deg_to_rad(torch.Tensor([0, 0, 0]).to('cuda')),
-                            initial_translation=torch.Tensor([0, 0, 0]).to('cuda'),
-                            rotations=generate_rotations_x(5.0), name='GoogleScannedObjects_default_pose'),
+        'GoogleScannedObjects': replace(generate_rotations_z(5.0), initial_rotation=np.ndarray([-90.0, 0.0, 0.0])),
+        'GoogleScannedObjects_default_pose': generate_rotations_z(5.0),
     }
 
-    for gen_cfg_name, gen_cfg in configurations.items():
+    for gen_cfg_name, movement_scenario in configurations.items():
         generated_data_folder = dataset_folder / Path(gen_cfg_name)
 
-        dataset_from_google_research(config, generated_data_folder, gen_cfg.rotations,
-                                     gen_cfg.initial_rotation_axis_angle,
-                                     gen_cfg.initial_translation)
+        dataset_from_google_research(config, generated_data_folder, movement_scenario)
