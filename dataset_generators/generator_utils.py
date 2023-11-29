@@ -14,8 +14,8 @@ from utils import deg_to_rad, qnorm, qmult, normalize_vertices
 from flow import visualize_flow_with_images
 
 
-def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, rendering_destination,
-                         segmentation_destination, optical_flow_destination, background_image):
+def save_renderings(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination,
+                    background_image):
     """
     Generate and save rendering and segmentation images.
 
@@ -28,8 +28,6 @@ def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, render
         ren_mask (torch.Tensor): A tensor representing the mask of the rendered object.
         rendering_destination (Path): The destination directory where the rendered image will be saved.
         segmentation_destination (Path): The destination directory where the mask image will be saved.
-        optical_flow (Tensor): Saved theoretical optical flow Tensor
-        optical_flow_destination (Path): The destination directory where the optical flow Tensor will be saved.
         background_image (torch.Tensor): Background image.
 
     Returns:
@@ -46,11 +44,15 @@ def save_images_and_flow(image_idx, ren_features, ren_mask, optical_flow, render
     i_str = format(image_idx, '03d')
     rendering_file_name = rendering_destination / (i_str + '.png')
     segmentation_file_name = segmentation_destination / (i_str + '.png')
-    optical_flow_file_name = optical_flow_destination / (i_str + '.pt')
 
-    torch.save(optical_flow, optical_flow_file_name)
     iio.imwrite(segmentation_file_name, ren_mask_np)
     iio.imwrite(rendering_file_name, ren_features_np)
+
+
+def save_optical_flow(image_idx, optical_flow, optical_flow_destination):
+    i_str = format(image_idx, '03d')
+    optical_flow_file_name = optical_flow_destination / (i_str + '.pt')
+    torch.save(optical_flow, optical_flow_file_name)
 
 
 def setup_renderer(config, faces, height, width, device):
@@ -83,11 +85,13 @@ def setup_renderer(config, faces, height, width, device):
 
 def generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path: Path,
                                                       rendering_destination: Path, segmentation_destination: Path,
-                                                      optical_flow_destination, gt_tracking_log_file, width, height,
-                                                      background_image_path: str = None):
+                                                      optical_flow_relative_destination,
+                                                      optical_flow_absolute_destination, gt_tracking_log_file, width,
+                                                      height, background_image_path: str = None):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
-    optical_flow_destination.mkdir(parents=True, exist_ok=True)
+    optical_flow_relative_destination.mkdir(parents=True, exist_ok=True)
+    optical_flow_absolute_destination.mkdir(parents=True, exist_ok=True)
     gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
 
     tex = iio.imread(str(texture_path))
@@ -115,13 +119,14 @@ def generate_rotating_and_translating_textured_object(config, movement_scenario,
     else:
         background_image = torch.zeros(1, 1, 3, height, width).cuda()
 
-    render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file, background_image)
+    render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario,
+                        optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
+                        segmentation_destination, gt_tracking_log_file, background_image)
 
 
-def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario, optical_flow_destination,
-                        rendering_destination, segmentation_destination, gt_tracking_log_file,
-                        background_image):
+def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario,
+                        optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
+                        segmentation_destination, gt_tracking_log_file, background_image):
     # The initial rotations are expected to be in radians
 
     initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
@@ -131,6 +136,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
 
     prev_encoder_result = None
     prev_rendering_rgb = None
+    first_rendering_rgb = None
+    first_encoder_result = None
 
     vertices = vertices.cuda().to(torch.float32)
     face_features = face_features.cuda().to(torch.float32)
@@ -167,6 +174,9 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
 
         if prev_encoder_result is None:
             prev_encoder_result = current_encoder_result
+        if first_encoder_result is None:
+            first_encoder_result = current_encoder_result
+
         flow_arcs_indices = [(0, 0)]
 
         with torch.no_grad():
@@ -174,8 +184,12 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
             rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
                                                                vertices)
 
-            optical_flow, _, _ = rendering.compute_theoretical_flow(current_encoder_result, prev_encoder_result,
-                                                                    flow_arcs_indices)
+            optical_flow_relative, _, _ = rendering.compute_theoretical_flow(current_encoder_result,
+                                                                             prev_encoder_result,
+                                                                             flow_arcs_indices)
+
+            optical_flow_absolute, _, _ = rendering.compute_theoretical_flow(current_encoder_result,
+                                                                             first_encoder_result, flow_arcs_indices)
 
             if texture_maps is not None:
                 ren_features_and_mask = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
@@ -188,13 +202,20 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
                 rendering_rgb = rendering_result.ren_mesh_vertices_features.permute(0, -1, 1, 2)[None]
                 ren_silhouette = rendering_result.ren_mask[None, None]
 
-            if prev_rendering_rgb is not None:
-                generate_optical_flow_illustration(rendering_rgb, prev_rendering_rgb, optical_flow.clone(), frame_i,
-                                                   optical_flow_destination)
+            if first_rendering_rgb is None:
+                first_rendering_rgb = rendering_rgb.clone()
 
-            save_images_and_flow(frame_i, rendering_rgb, ren_silhouette, optical_flow.detach().cpu(),
-                                 rendering_destination, segmentation_destination, optical_flow_destination,
-                                 background_image)
+            if prev_rendering_rgb is not None:
+                generate_optical_flow_illustration(rendering_rgb, prev_rendering_rgb, optical_flow_relative.clone(),
+                                                   frame_i, optical_flow_relative_destination)
+                generate_optical_flow_illustration(rendering_rgb, first_rendering_rgb, optical_flow_absolute.clone(),
+                                                   frame_i, optical_flow_absolute_destination)
+
+            save_renderings(frame_i, rendering_rgb, ren_silhouette, rendering_destination, segmentation_destination,
+                            background_image)
+
+            save_optical_flow(frame_i, optical_flow_relative, optical_flow_relative_destination)
+            save_optical_flow(frame_i, optical_flow_absolute, optical_flow_absolute_destination)
 
             del prev_rendering_rgb
             prev_rendering_rgb = rendering_rgb

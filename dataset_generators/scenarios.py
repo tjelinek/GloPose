@@ -26,6 +26,11 @@ class MovementScenario:
         self.steps = len(self.translations)
 
 
+def get_full_rotation(step):
+    eps = 1e-10
+    return np.arange(0.0, 1 * 360.0 + eps, step)
+
+
 def generate_zero_rotations(steps=72) -> MovementScenario:
     rotations_x = np.zeros(steps)
     rotations_y = np.zeros(rotations_x.shape)
@@ -37,7 +42,7 @@ def generate_zero_rotations(steps=72) -> MovementScenario:
 
 
 def generate_rotations_x(step=10.0) -> MovementScenario:
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
+    rotations_x = get_full_rotation(step)
     rotations_y = np.zeros(rotations_x.shape)
     rotations_z = np.zeros(rotations_x.shape)
 
@@ -47,7 +52,7 @@ def generate_rotations_x(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_y(step=10.0) -> MovementScenario:
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
+    rotations_y = get_full_rotation(step)
     rotations_x = np.zeros(rotations_y.shape)
     rotations_z = np.zeros(rotations_x.shape)
 
@@ -57,7 +62,7 @@ def generate_rotations_y(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_z(step=10.0) -> MovementScenario:
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
+    rotations_z = get_full_rotation(step)
     rotations_x = np.zeros(rotations_z.shape)
     rotations_y = np.zeros(rotations_x.shape)
 
@@ -67,8 +72,8 @@ def generate_rotations_z(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_xy(step=10.0) -> MovementScenario:
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
+    rotations_x = get_full_rotation(step)
+    rotations_y = get_full_rotation(step)
     rotations_z = np.zeros(rotations_x.shape)
 
     scenario = MovementScenario(
@@ -77,9 +82,9 @@ def generate_rotations_xy(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_xz(step=10.0) -> MovementScenario:
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
+    rotations_x = get_full_rotation(step)
     rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
+    rotations_z = get_full_rotation(step)
 
     scenario = MovementScenario(
         rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
@@ -87,9 +92,9 @@ def generate_rotations_xz(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_yz(step=10.0) -> MovementScenario:
-    rotations_x = np.zeros(np.arange(0.0, 1 * 360.0, step).shape)
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
+    rotations_x = np.zeros(get_full_rotation(step).shape)
+    rotations_y = get_full_rotation(step)
+    rotations_z = get_full_rotation(step)
 
     scenario = MovementScenario(
         rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
@@ -97,9 +102,9 @@ def generate_rotations_yz(step=10.0) -> MovementScenario:
 
 
 def generate_rotations_xyz(step=10.0) -> MovementScenario:
-    rotations_x = np.arange(0.0, 1 * 360.0, step)
-    rotations_y = np.arange(0.0, 1 * 360.0, step)
-    rotations_z = np.arange(0.0, 1 * 360.0, step)
+    rotations_x = get_full_rotation(step)
+    rotations_y = get_full_rotation(step)
+    rotations_z = get_full_rotation(step)
 
     scenario = MovementScenario(
         rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
