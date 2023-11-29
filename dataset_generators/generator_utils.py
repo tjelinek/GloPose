@@ -87,7 +87,9 @@ def generate_rotating_and_translating_textured_object(config, movement_scenario,
 
     tex = imageio.imread(str(texture_path))
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].cuda()
-    mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True)
+    heterogeneous_mesh_handler = kaolin.io.utils.heterogeneous_mesh_handler_naive_homogenize
+    mesh = kaolin.io.obj.import_mesh(str(prototype_path), with_materials=True,
+                                     heterogeneous_mesh_handler=heterogeneous_mesh_handler)
     vertices = mesh.vertices[None]
 
     vertices = normalize_vertices(vertices)
