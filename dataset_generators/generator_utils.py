@@ -131,7 +131,8 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
 
     initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
 
-    initial_rotation_axis_angle = torch.from_numpy(movement_scenario.initial_rotation).cuda().to(torch.float32)
+    initial_rotation_axis_angle = torch.from_numpy(deg_to_rad(movement_scenario.initial_rotation))
+    initial_rotation_axis_angle = initial_rotation_axis_angle.cuda().to(torch.float32)
     initial_rotation_quaternion = angle_axis_to_quaternion(initial_rotation_axis_angle, order=QuaternionCoeffOrder.WXYZ)
 
     prev_encoder_result = None
