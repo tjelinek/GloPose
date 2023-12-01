@@ -1,16 +1,16 @@
-import kaolin
 import torch
 import warnings
 from pathlib import Path
 
 import dataset_generators.scenarios
-from dataset_generators.scenarios import MovementScenario
-from dataset_generators.generator_utils import setup_renderer, \
-    generate_rotating_and_translating_textured_object, render_object_poses
+import dataset_generators.scenarios
+from dataset_generators.generator_utils import prepare_scenarios_for_kubric, \
+    generate_rotating_and_translating_textured_object
 from main_settings import dataset_folder
 from utils import load_config
 
 warnings.filterwarnings("ignore")
+
 
 def get_cube_vertices_and_faces():
     vertices = torch.tensor([
@@ -139,17 +139,28 @@ def generate_object_using_function(movement_scenario, background_image_path, obj
     width = 800
     height = 800
 
-    generate_rotating_and_translating_textured_object(_config, movement_scenario, prototype_path, texture_path,
-                                                      rendering_path, segmentation_path,
-                                                      optical_flow_relative_path, optical_flow_absolute_path,
-                                                      gt_tracking_log_file, width, height,
-                                                      background_image_path=background_image_path)
+    if rendering_method == 'DIB-R':
+        generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path,
+                                                          rendering_path, segmentation_path,
+                                                          optical_flow_relative_path, optical_flow_absolute_path,
+                                                          gt_tracking_log_file, width, height,
+                                                          background_image_path=background_image_path)
+
+    elif rendering_method == 'kubric':
+        prepare_scenarios_for_kubric(config, movement_scenario, prototype_path, texture_path,
+                                     rendering_path, segmentation_path,
+                                     optical_flow_relative_path, optical_flow_absolute_path,
+                                     gt_tracking_log_file, width, height,
+                                     background_image_path=background_image_path)
+    else:
+        raise ValueError("\'rendering_method\' must be either \'kubric\' or \'DIB-R\'")
 
 
 if __name__ == '__main__':
-    _config = load_config('./configs/config_generator.yaml')
+    config = load_config('./configs/config_generator.yaml')
 
-    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshop')
+    rendering_method = 'kubric'  # 'kubric' or 'DIB-R'
+    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshopTest')
     rendering_dir = Path('renderings')
     segmentation_dir = Path('segmentations')
     optical_flow_relative_dir = Path('optical_flow_relative')

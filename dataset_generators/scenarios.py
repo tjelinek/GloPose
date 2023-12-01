@@ -1,13 +1,18 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+
+import torch
+from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from typing import List
 
 import numpy as np
+
+from utils import deg_to_rad
 
 
 @dataclass
 class MovementScenario:
     steps: int = 0
-    initial_rotation: np.ndarray = np.array([0.01, 0.01, 0.01])
+    initial_rotation: np.ndarray = np.array([0.00, 0.00, 0.00])
     initial_translation: np.ndarray = np.array([0.0, 0.0, 0.0])
     rotations: List[np.ndarray] = None
     translations: List[np.ndarray] = None
@@ -24,6 +29,25 @@ class MovementScenario:
             self.translations = [np.array([0.0, 0.0, 0.0])] * len(self.rotations)
 
         self.steps = len(self.translations)
+
+    @property
+    def rotation_quaternions(self) -> List[np.ndarray]:
+        quaternions = []
+
+        for rot_deg in self.rotations:
+            rotations_radians = deg_to_rad(rot_deg)
+            rotation_quaternion = angle_axis_to_quaternion(torch.from_numpy(rotations_radians),
+                                                           order=QuaternionCoeffOrder.WXYZ).numpy()
+            quaternions.append(rotation_quaternion)
+
+        return quaternions
+
+    def get_dict(self):
+        scenario_dict = asdict(self)
+
+        scenario_dict['rotation_quaternions'] = self.rotation_quaternions
+
+        return scenario_dict
 
 
 def get_full_rotation(step):

@@ -1,13 +1,17 @@
+from dataclasses import asdict
+
 import imageio.v3 as iio
 import kaolin
 import torchvision
 import numpy as np
 import torch
 import csv
+import pickle
 from kornia.geometry import quaternion_to_rotation_matrix
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 
+from dataset_generators.scenarios import MovementScenario
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils import deg_to_rad, qnorm, qmult, normalize_vertices
@@ -83,16 +87,24 @@ def setup_renderer(config, faces, height, width, device):
     return rendering
 
 
-def generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path: Path,
-                                                      rendering_destination: Path, segmentation_destination: Path,
-                                                      optical_flow_relative_destination,
-                                                      optical_flow_absolute_destination, gt_tracking_log_file, width,
-                                                      height, background_image_path: str = None):
+def prepare(gt_tracking_log_file, optical_flow_absolute_destination, optical_flow_relative_destination,
+            rendering_destination, segmentation_destination, movement_scenario):
     rendering_destination.mkdir(parents=True, exist_ok=True)
     segmentation_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_relative_destination.mkdir(parents=True, exist_ok=True)
     optical_flow_absolute_destination.mkdir(parents=True, exist_ok=True)
     gt_tracking_log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    create_tracking_log(movement_scenario, gt_tracking_log_file)
+
+
+def generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path: Path,
+                                                      rendering_destination: Path, segmentation_destination: Path,
+                                                      optical_flow_relative_destination,
+                                                      optical_flow_absolute_destination, gt_tracking_log_file, width,
+                                                      height, background_image_path: str = None):
+    prepare(gt_tracking_log_file, optical_flow_absolute_destination, optical_flow_relative_destination,
+            rendering_destination, segmentation_destination, movement_scenario)
 
     tex = iio.imread(str(texture_path))
     texture_maps = torch.Tensor(tex).permute(2, 0, 1)[None].cuda()
@@ -121,12 +133,78 @@ def generate_rotating_and_translating_textured_object(config, movement_scenario,
 
     render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario,
                         optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
-                        segmentation_destination, gt_tracking_log_file, background_image)
+                        segmentation_destination, background_image)
 
 
-def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario,
+def prepare_scenarios_for_kubric(config, movement_scenario: MovementScenario, prototype_path, texture_path: Path,
+                                 rendering_destination: Path, segmentation_destination: Path,
+                                 optical_flow_relative_destination: Path,
+                                 optical_flow_absolute_destination: Path, gt_tracking_log_file: Path, width: int,
+                                 height, background_image_path: str = None):
+    prepare(gt_tracking_log_file, optical_flow_absolute_destination, optical_flow_relative_destination,
+            rendering_destination, segmentation_destination, movement_scenario)
+
+    scenario_name = segmentation_destination.parent.stem
+    scenario_path = segmentation_destination.parent.parent / (scenario_name + '.pkl')
+
+    datagrid_path = Path('/mnt/personal/jelint19/data')
+    optical_flow_absolute_destination = Path('/datagrid') / optical_flow_absolute_destination.relative_to(datagrid_path)
+    optical_flow_relative_destination = Path('/datagrid') / optical_flow_relative_destination.relative_to(datagrid_path)
+    rendering_destination = Path('/datagrid') / rendering_destination.relative_to(datagrid_path)
+    segmentation_destination = Path('/datagrid') / segmentation_destination.relative_to(datagrid_path)
+
+    texture_path = Path('/') / texture_path
+    prototype_path = Path('/') / prototype_path
+
+    scenario = {
+        'gt_tracking_log_file': gt_tracking_log_file,
+        'optical_flow_absolute_destination': optical_flow_absolute_destination,
+        'optical_flow_relative_destination': optical_flow_relative_destination,
+        'rendering_destination': rendering_destination,
+        'segmentation_destination': segmentation_destination,
+        'rendering_width': width,
+        'rendering_height': height,
+        'background_image_path': background_image_path,
+        'texture_path': texture_path,
+        'prototype_path': prototype_path,
+        'movement_scenario': movement_scenario.get_dict(),
+        'config': asdict(config),
+        'scenario_name': scenario_name
+    }
+
+    with open(scenario_path, 'wb') as file:
+        pickle.dump(scenario, file)
+
+
+def create_tracking_log(movement_scenario: MovementScenario, gt_tracking_log_file: Path):
+    initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
+    translations_tensors = [torch.from_numpy(arr).to(torch.float32) for arr in movement_scenario.translations]
+    translations = torch.stack(translations_tensors)[None][None].cuda()
+    translations[..., :] += initial_translation
+
+    initial_rotation_x, initial_rotation_y, initial_rotation_z = movement_scenario.initial_rotation
+
+    log_rows = []
+
+    for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(movement_scenario.rotations):
+        rotation_x += initial_rotation_x
+        rotation_y += initial_rotation_y
+        rotation_z += initial_rotation_z
+
+        current_translation = translations[:, :, frame_i, :][None]
+
+        log_rows.append([frame_i, rotation_x, rotation_y, rotation_z] + current_translation[0, 0, 0].tolist())
+
+    with open(gt_tracking_log_file, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["frame", "rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"])
+        for row in log_rows:
+            writer.writerow(row)
+
+
+def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario: MovementScenario,
                         optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
-                        segmentation_destination, gt_tracking_log_file, background_image):
+                        segmentation_destination, background_image):
     # The initial rotations are expected to be in radians
 
     initial_translation = torch.from_numpy(movement_scenario.initial_translation).cuda().to(torch.float32)
@@ -150,14 +228,9 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
     translations = torch.stack(translations_tensors)[None][None].cuda()
     translations[..., :] += initial_translation
 
-    log_rows = []
+    for frame_i, rotation_quaternion in enumerate(movement_scenario.rotation_quaternions):
+        rotation_quaternion_tensor = torch.from_numpy(rotation_quaternion).to(torch.float32)
 
-    for frame_i, (rotation_x, rotation_y, rotation_z) in enumerate(movement_scenario.rotations):
-        axis_angle_tensor = torch.Tensor([deg_to_rad(rotation_x),
-                                          deg_to_rad(rotation_y),
-                                          deg_to_rad(rotation_z)]).to(torch.float32)
-        rotation_quaternion_tensor = angle_axis_to_quaternion(axis_angle_tensor,
-                                                              order=QuaternionCoeffOrder.WXYZ)  # Shape (4)
         composed_rotation_quaternion_tensor = qmult(qnorm(initial_rotation_quaternion[None]),
                                                     qnorm(rotation_quaternion_tensor[None]))[0].cuda()
         quaternions[0, frame_i] = composed_rotation_quaternion_tensor
@@ -181,7 +254,6 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
         flow_arcs_indices = [(0, 0)]
 
         with torch.no_grad():
-            log_rows.append([frame_i, rotation_x, rotation_y, rotation_z] + current_translation[0, 0, 0].tolist())
             rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
                                                                vertices)
 
@@ -222,12 +294,6 @@ def render_object_poses(rendering, vertices, face_features, texture_maps, moveme
             prev_rendering_rgb = rendering_rgb
 
         prev_encoder_result = current_encoder_result
-
-    with open(gt_tracking_log_file, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["frame", "rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"])
-        for row in log_rows:
-            writer.writerow(row)
 
 
 def generate_optical_flow_illustration(ren_features, prev_ren_features, optical_flow, frame_i, save_destination):

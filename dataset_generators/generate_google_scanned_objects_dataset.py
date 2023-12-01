@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from dataclasses import replace
-from dataset_generators.generator_utils import generate_rotating_and_translating_textured_object
+from dataset_generators.generator_utils import generate_object_using_kubric
 from dataset_generators.scenarios import generate_rotations_z
 from utils import load_config
 from main_settings import dataset_folder
@@ -35,11 +35,11 @@ def dataset_from_google_research(config, dataset_path: Path, movement_scenario):
             width = 1000
             height = 1000
 
-            generate_rotating_and_translating_textured_object(config, movement_scenario, mesh_path, texture_path,
-                                                              rendering_destination, segmentation_destination,
-                                                              optical_flow_relative_destination,
-                                                              optical_flow_absolute_destination, gt_tracking_log_file,
-                                                              width, height)
+            generate_object_using_kubric(config, movement_scenario, mesh_path, texture_path,
+                                         rendering_destination, segmentation_destination,
+                                         optical_flow_relative_destination,
+                                         optical_flow_absolute_destination, gt_tracking_log_file,
+                                         width, height)
 
 
 if __name__ == '__main__':
