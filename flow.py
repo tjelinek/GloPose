@@ -71,7 +71,7 @@ def tensor_to_pil_with_alpha(tensor, alpha=0.2):
     return img
 
 
-def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime,
+def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None,
                                gt_silhouette_current=None, gt_silhouette_prev=None):
     """
 
