@@ -1,3 +1,6 @@
+import argparse
+import numpy
+
 import pickle
 import logging
 
@@ -34,11 +37,11 @@ def triangle_cycle_indexing(x, N):
 
 def render_objects_using_kubric(FLAGS, scenario_cfg):
     # --- Common setups & resources
+    BACKGROUND_OFFSET = 5
+
     scene, rng_main, output_dir, scratch_dir = kb.setup(FLAGS)
     output_dir = Path('/datagrid') / scenario_cfg['scenario_name']
     output_dir.mkdir(exist_ok=True, parents=True)
-
-    scene.gravity = (0., 0., FLAGS.gravity_z)
 
     motion_blur = rng_main.uniform(FLAGS.min_motion_blur, FLAGS.max_motion_blur)
     if motion_blur > 0.0:
@@ -56,6 +59,7 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
 
     logging.info("Choosing one of the %d training backgrounds...", len(train_backgrounds))
     hdri_id = rng_background.choice(train_backgrounds)
+    hdri_id = 'urban_courtyard'
 
     background_hdri = hdri_source.create(asset_id=hdri_id)
     # assert isinstance(background_hdri, kb.Texture)
@@ -63,31 +67,27 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     scene.metadata["background"] = hdri_id
     renderer._set_ambient_light_hdri(background_hdri.filename)
 
-    # Dome
-    dome = kubasic.create(asset_id="dome", name="dome",
-                          friction=1.0,
-                          restitution=0.0,
-                          static=True, background=True)
-    assert isinstance(dome, kb.FileBasedObject)
-    scene += dome
-    dome_blender = dome.linked_objects[renderer]
-    texture_node = dome_blender.data.materials[0].node_tree.nodes["Image Texture"]
-    texture_node.image = bpy.data.images.load(background_hdri.filename)
+    if scenario_cfg['background_image_path'] is not None:
+        dome = kubasic.create(asset_id="dome", name="dome",
+                              friction=1.0,
+                              restitution=0.0,
+                              static=True, background=True)
+
+        assert isinstance(dome, kb.FileBasedObject)
+
+        scene += dome
+
+        dome_blender = dome.linked_objects[renderer]
+        dome_blender.cycles.is_shadow_catcher = False
+        texture_node = dome_blender.data.materials[0].node_tree.nodes["Image Texture"]
+        texture_node.image = bpy.data.images.load(background_hdri.filename)
 
     # Camera
-    seed_camera = FLAGS.seed if FLAGS.seed else rng_main.randint(0, 2147483647)
-    rng_camera = np.random.RandomState(seed=seed_camera)
     logging.info("Setting up the Camera...")
 
     scene.camera = kb.PerspectiveCamera(focal_length=FLAGS.focal_length, sensor_width=FLAGS.sensor_width)
-    scene.camera.position = (float(scenario_cfg['config']['camera_distance']),
-                             float(scenario_cfg['config']['camera_distance']),
-                             float(scenario_cfg['config']['camera_distance']))
-    # scene.camera.look_at((0, 0, 0))
-    # scene.camera.look_at((0., 1., 0.))
-    # scene.camera.position = kb.sample_point_in_half_sphere_shell(inner_radius=7., outer_radius=9., offset=0.1, rng=rng_camera)
+    scene.camera.position = (0., 0., float(scenario_cfg['config']['camera_distance'] + BACKGROUND_OFFSET))
     scene.camera.look_at((0, 0, 0))
-    # breakpoint()
 
     obj = kb.FileBasedObject(
         asset_id=scenario_cfg['scenario_name'],
@@ -98,9 +98,14 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     scene += obj
 
     # repeater
-    for frame_id in range(scenario_cfg['movement_scenario']['steps']):
-        obj.position = tuple(scenario_cfg['movement_scenario']['translations'][frame_id])
-        obj.quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id])
+    for frame_id in range(scenario_cfg['movement_scenario']['steps'] // 10):
+        object_pos = tuple(scenario_cfg['movement_scenario']['translations'][frame_id * 10] +
+                           scenario_cfg['movement_scenario']['initial_translation'] +
+                           numpy.asarray([0., 0., BACKGROUND_OFFSET]))
+        obj.position = object_pos
+
+        # TODO handle initial quaternion composition
+        obj.quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id * 10])
         obj.keyframe_insert("position", frame_id)
         obj.keyframe_insert("quaternion", frame_id)
 
@@ -146,7 +151,7 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     shutil.rmtree(scratch_dir)
 
 
-def get_generator_flags():
+def get_generator_flags(config):
     parser = kb.ArgumentParser()
     parser.add_argument("--objects_split", choices=["train", "test"],
                         default="train")
@@ -192,6 +197,8 @@ def get_generator_flags():
                         resolution=256)
     FLAGS = parser.parse_args()
 
+    FLAGS.frame_end = 3
+
     return FLAGS
 
 
@@ -204,11 +211,9 @@ if __name__ == '__main__':
             # Load the object from the file using pickle.load
             loaded_config = pickle.load(file)
 
-            if 'translation' in loaded_config['scenario_name']:
+            if 'translation' not in loaded_config['scenario_name'] \
+                    or 'background' not in loaded_config['scenario_name']:
                 continue
-            flags = get_generator_flags()
+            flags = get_generator_flags(loaded_config)
 
             render_objects_using_kubric(flags, loaded_config)
-
-        breakpoint()
-        exit()
