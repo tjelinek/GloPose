@@ -37,7 +37,7 @@ def triangle_cycle_indexing(x, N):
 
 def render_objects_using_kubric(FLAGS, scenario_cfg):
     # --- Common setups & resources
-    BACKGROUND_OFFSET = 5
+    BACKGROUND_OFFSET = 15
 
     scene, rng_main, output_dir, scratch_dir = kb.setup(FLAGS)
     output_dir = Path('/datagrid') / scenario_cfg['scenario_name']
@@ -57,9 +57,8 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     seed_background = FLAGS.seed if FLAGS.seed else rng_main.randint(0, 2147483647)
     rng_background = np.random.RandomState(seed=seed_background)
 
-    logging.info("Choosing one of the %d training backgrounds...", len(train_backgrounds))
     hdri_id = rng_background.choice(train_backgrounds)
-    hdri_id = 'urban_courtyard'
+    hdri_id = 'stuttgart_suburbs'
 
     background_hdri = hdri_source.create(asset_id=hdri_id)
     # assert isinstance(background_hdri, kb.Texture)
@@ -68,25 +67,13 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     renderer._set_ambient_light_hdri(background_hdri.filename)
 
     if scenario_cfg['background_image_path'] is not None:
-        dome = kubasic.create(asset_id="dome", name="dome",
-                              friction=1.0,
-                              restitution=0.0,
-                              static=True, background=True)
-
-        assert isinstance(dome, kb.FileBasedObject)
-
-        scene += dome
-
-        dome_blender = dome.linked_objects[renderer]
-        dome_blender.cycles.is_shadow_catcher = False
-        texture_node = dome_blender.data.materials[0].node_tree.nodes["Image Texture"]
-        texture_node.image = bpy.data.images.load(background_hdri.filename)
+        renderer.bg_hdri_node = renderer._set_background_hdri(background_hdri.filename)
 
     # Camera
     logging.info("Setting up the Camera...")
 
     scene.camera = kb.PerspectiveCamera(focal_length=FLAGS.focal_length, sensor_width=FLAGS.sensor_width)
-    scene.camera.position = (0., 0., float(scenario_cfg['config']['camera_distance'] + BACKGROUND_OFFSET))
+    scene.camera.position = (0., float(scenario_cfg['config']['camera_distance'] + BACKGROUND_OFFSET), 0.)
     scene.camera.look_at((0, 0, 0))
 
     obj = kb.FileBasedObject(
@@ -102,10 +89,13 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
         object_pos = tuple(scenario_cfg['movement_scenario']['translations'][frame_id * 10] +
                            scenario_cfg['movement_scenario']['initial_translation'] +
                            numpy.asarray([0., 0., BACKGROUND_OFFSET]))
+        object_pos = (object_pos[0], object_pos[2], object_pos[1])
         obj.position = object_pos
 
         # TODO handle initial quaternion composition
-        obj.quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id * 10])
+        quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id * 10])
+        quaternion = (quaternion[0], quaternion[1], quaternion[3], quaternion[2])
+        obj.quaternion = quaternion
         obj.keyframe_insert("position", frame_id)
         obj.keyframe_insert("quaternion", frame_id)
 
@@ -194,26 +184,37 @@ def get_generator_flags(config):
     parser.add_argument("--samples_per_pixel", type=int, default=64,
                         help="renderer setting - samples per pixel")
     parser.set_defaults(save_state=False, frame_end=3, frame_rate=12,
-                        resolution=256)
+                        resolution=800)
     FLAGS = parser.parse_args()
 
-    FLAGS.frame_end = 3
+    FLAGS.frame_end = 180
 
     return FLAGS
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Process .pkl files')
+    parser.add_argument('pkl_file', nargs='?', type=str, help='Path to the .pkl file (optional)')
+
+    args = parser.parse_args()
+    pkl_file = args.pkl_file
+
     datagrid_path = Path('/datagrid')
-    pkl_files = datagrid_path.glob('*.pkl')
 
-    for scenario_config_parh in pkl_files:
-        with open(scenario_config_parh, 'rb') as file:
-            # Load the object from the file using pickle.load
+    if pkl_file:
+        # Process the specified .pkl file
+        with open(datagrid_path / pkl_file, 'rb') as file:
             loaded_config = pickle.load(file)
-
-            if 'translation' not in loaded_config['scenario_name'] \
-                    or 'background' not in loaded_config['scenario_name']:
-                continue
             flags = get_generator_flags(loaded_config)
-
             render_objects_using_kubric(flags, loaded_config)
+    else:
+        # Loop over all .pkl files in the directory
+        pkl_files = datagrid_path.glob('*.pkl')
+        for scenario_config_path in pkl_files:
+            with open(scenario_config_path, 'rb') as file:
+                loaded_config = pickle.load(file)
+                if 'translation' not in loaded_config['scenario_name'] \
+                        or 'background' not in loaded_config['scenario_name']:
+                    continue
+                flags = get_generator_flags(loaded_config)
+                render_objects_using_kubric(flags, loaded_config)
