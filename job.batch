@@ -55,6 +55,6 @@ mkdir -p "${outputfolder}"
 
 
 python run_SyntheticObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/SyntheticObjects.log" 2>&1 &
-python run_GoogleScannedObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/GoogleScannedObjects.log" 2>&1 &
-python run_360.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/360.log" 2>&1
+#python run_GoogleScannedObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/GoogleScannedObjects.log" 2>&1 &
+#python run_360.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/360.log" 2>&1
 wait

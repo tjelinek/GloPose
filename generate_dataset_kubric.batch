@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#SBATCH --time=18:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=32G
+#SBATCH --partition=cpu
+#SBATCH --job-name=GenerateDataset
+#SBATCH --err=/mnt/personal/jelint19/GenerateDataset.err
+#SBATCH --out=/mnt/personal/jelint19/GenerateDataset.out
+
+PKL_FILE="$1"
+
+singularity run  --bind "$PWD/../../kubric:/kubric" \
+            --bind "/mnt/personal/jelint19/data/SyntheticObjectsWorkshopKubric/:/datagrid" \
+            --bind "/mnt/personal/jelint19/tmp:/tmp" \
+            --bind "/home/jelint19/projects/FlowTracker/prototypes:/prototypes" \
+             docker://kubricdockerhub/kubruntu python3 dataset_generators/render_object_using_kubric.py --pkl_file="$PKL_FILE"
