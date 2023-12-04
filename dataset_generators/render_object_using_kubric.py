@@ -37,7 +37,8 @@ def triangle_cycle_indexing(x, N):
 
 def render_objects_using_kubric(FLAGS, scenario_cfg):
     # --- Common setups & resources
-    BACKGROUND_OFFSET = 15
+    BACKGROUND_OFFSET = 0
+    FLAGS.frame_end = scenario_cfg['movement_scenario']['steps']
 
     scene, rng_main, output_dir, scratch_dir = kb.setup(FLAGS)
     output_dir = Path('/datagrid') / scenario_cfg['scenario_name']
@@ -85,15 +86,15 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     scene += obj
 
     # repeater
-    for frame_id in range(scenario_cfg['movement_scenario']['steps'] // 10):
-        object_pos = tuple(scenario_cfg['movement_scenario']['translations'][frame_id * 10] +
+    for frame_id in range(scenario_cfg['movement_scenario']['steps']):
+        object_pos = tuple(scenario_cfg['movement_scenario']['translations'][frame_id] +
                            scenario_cfg['movement_scenario']['initial_translation'] +
                            numpy.asarray([0., 0., BACKGROUND_OFFSET]))
         object_pos = (object_pos[0], object_pos[2], object_pos[1])
         obj.position = object_pos
 
         # TODO handle initial quaternion composition
-        quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id * 10])
+        quaternion = tuple(scenario_cfg['movement_scenario']['rotation_quaternions'][frame_id])
         quaternion = (quaternion[0], quaternion[1], quaternion[3], quaternion[2])
         obj.quaternion = quaternion
         obj.keyframe_insert("position", frame_id)
@@ -141,7 +142,7 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     shutil.rmtree(scratch_dir)
 
 
-def get_generator_flags(config):
+def get_generator_flags():
     parser = kb.ArgumentParser()
     parser.add_argument("--objects_split", choices=["train", "test"],
                         default="train")
@@ -185,6 +186,7 @@ def get_generator_flags(config):
                         help="renderer setting - samples per pixel")
     parser.set_defaults(save_state=False, frame_end=3, frame_rate=12,
                         resolution=800)
+    parser.add_argument('--pkl_file', nargs='?', type=str, help='Path to the .pkl file (optional)')
     FLAGS = parser.parse_args()
 
     FLAGS.frame_end = 180
@@ -193,19 +195,16 @@ def get_generator_flags(config):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process .pkl files')
-    parser.add_argument('pkl_file', nargs='?', type=str, help='Path to the .pkl file (optional)')
-
-    args = parser.parse_args()
-    pkl_file = args.pkl_file
+    flags = get_generator_flags()
+    pkl_file = flags.pkl_file
 
     datagrid_path = Path('/datagrid')
 
     if pkl_file:
+        print("Opening .pkl file")
         # Process the specified .pkl file
         with open(datagrid_path / pkl_file, 'rb') as file:
             loaded_config = pickle.load(file)
-            flags = get_generator_flags(loaded_config)
             render_objects_using_kubric(flags, loaded_config)
     else:
         # Loop over all .pkl files in the directory
@@ -216,5 +215,4 @@ if __name__ == '__main__':
                 if 'translation' not in loaded_config['scenario_name'] \
                         or 'background' not in loaded_config['scenario_name']:
                     continue
-                flags = get_generator_flags(loaded_config)
                 render_objects_using_kubric(flags, loaded_config)
