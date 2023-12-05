@@ -38,7 +38,7 @@ def save_renderings(image_idx, ren_features, ren_mask, rendering_destination, se
         None
     """
     ren_mask_repeated = ren_mask.repeat(1, 1, 3, 1, 1)
-    ren_features[ren_mask_repeated < 1] = background_image[ren_mask_repeated < 1]
+    ren_features = ren_features * ren_mask_repeated + background_image * (1 - ren_mask_repeated)
 
     ren_features_np = ren_features.numpy(force=True)[0, 0].astype('uint8')
     ren_features_np = ren_features_np.transpose(1, 2, 0)

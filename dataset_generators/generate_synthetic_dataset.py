@@ -159,8 +159,8 @@ def generate_object_using_function(movement_scenario, background_image_path, obj
 if __name__ == '__main__':
     config = load_config('./configs/config_generator.yaml')
 
-    rendering_method = 'kubric'  # 'kubric' or 'DIB-R'
-    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshopTest')
+    rendering_method = 'DIB-R'  # 'kubric' or 'DIB-R'
+    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshopDIB-R')
     rendering_dir = Path('renderings')
     segmentation_dir = Path('segmentations')
     optical_flow_relative_dir = Path('optical_flow_relative')
