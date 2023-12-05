@@ -1,0 +1,20 @@
+#!/bin/bash
+
+ml TensorFlow/2.13.0-foss-2022a-CUDA-11.7.0 OpenCV/4.6.0-foss-2022a-CUDA-11.7.0-contrib Pillow/9.4.0-GCCcore-11.3.0 TensorFlow-Datasets/4.8.3-foss-2022a-CUDA-11.7.0
+
+
+# Specify the directory containing the folders to process
+base_directory="/mnt/personal/jelint19/data/SyntheticObjectsWorkshopKubric/"
+
+
+# Loop through all folders in the specified directory
+for folder in "$base_directory"/*; do
+    if [ -d "$folder" ]; then
+        # Check if the item is a directory
+        echo "Computing multiflow for $folder"
+        # Run your Python script on each folder
+
+#        python -m dataset_generators.multiflow_from_kubric --folder "$folder"
+        sbatch generate_dataset_compute_multiflow.batch "$folder"
+    fi
+done

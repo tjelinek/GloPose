@@ -17,3 +17,11 @@ singularity run  --bind "$PWD/../../kubric:/kubric" \
             --bind "/mnt/personal/jelint19/tmp:/tmp" \
             --bind "/home/jelint19/projects/FlowTracker/prototypes:/prototypes" \
              docker://kubricdockerhub/kubruntu python3 dataset_generators/render_object_using_kubric.py --pkl_file="$PKL_FILE"
+
+
+
+#singularity run  --bind "$PWD/../../kubric:/kubric" \
+#            --bind "/mnt/personal/jelint19/data/SyntheticObjectsWorkshopTest/:/datagrid" \
+#            --bind "/mnt/personal/jelint19/tmp:/tmp" \
+#            --bind "/home/jelint19/projects/FlowTracker/prototypes:/prototypes" \
+#             docker://kubricdockerhub/kubruntu python3 dataset_generators/render_object_using_kubric.py --pkl_file="Textured_Sphere_2_z.pkl"

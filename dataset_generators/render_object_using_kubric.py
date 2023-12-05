@@ -44,6 +44,8 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
     output_dir = Path('/datagrid') / scenario_cfg['scenario_name']
     output_dir.mkdir(exist_ok=True, parents=True)
 
+    simulator = PyBullet(scene, scratch_dir)
+
     motion_blur = rng_main.uniform(FLAGS.min_motion_blur, FLAGS.max_motion_blur)
     if motion_blur > 0.0:
         logging.info(f"Using motion blur strength {motion_blur}")
@@ -106,6 +108,11 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
                      output_dir / "scene.blend")
         renderer.save_state(output_dir / "scene.blend")
 
+    # Run dynamic objects simulation
+    logging.info("Running the simulation ...")
+    animation, collisions = simulator.run(frame_start=0,
+                                          frame_end=scene.frame_end + 1)
+
     logging.info("Rendering the scene ...")
     data_stack = renderer.render()
 
@@ -136,6 +143,10 @@ def render_objects_using_kubric(FLAGS, scenario_cfg):
         "metadata": kb.get_scene_metadata(scene),
         "camera": kb.get_camera_info(scene.camera),
         "instances": kb.get_instance_info(scene, visible_foreground_assets),
+    })
+    kb.write_json(filename=output_dir / "events.json", data={
+        "collisions": kb.process_collisions(
+            collisions, scene, assets_subset=visible_foreground_assets),
     })
 
     kb.done()

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#SBATCH --time=18:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G
+#SBATCH --partition=gpu
+#SBATCH --job-name=GenerateDataset
+#SBATCH --err=/mnt/personal/jelint19/GenerateDataset.err
+#SBATCH --out=/mnt/personal/jelint19/GenerateDataset.out
+
+ml TensorFlow/2.13.0-foss-2022a-CUDA-11.7.0 OpenCV/4.6.0-foss-2022a-CUDA-11.7.0-contrib Pillow/9.4.0-GCCcore-11.3.0 TensorFlow-Datasets/4.8.3-foss-2022a-CUDA-11.7.0
+
+
+folder="$1"
+
+python -m dataset_generators.multiflow_from_kubric --folder "$folder"
