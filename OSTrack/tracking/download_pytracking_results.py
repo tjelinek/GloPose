@@ -9,6 +9,8 @@ import _init_paths
 
 from lib.test.evaluation.environment import env_settings
 
+import runtime_utils
+
 pytracking_results_link_dict = {
     "dimp": {
         "prdimp50_003.zip": "1p13j3iwcOCubBi3ms0hLwqnP6-x0J8Mc",
@@ -163,7 +165,7 @@ def main():
                         help='Temporary path used for downloading the Zip files.')
     parser.add_argument('--download', type=bool, default=True,
                         help='Whether to download results or unpack existing downloaded files.')
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     download_path = args.temp_download_path
     if download_path is None:

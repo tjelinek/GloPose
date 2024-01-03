@@ -2,6 +2,8 @@ import os
 import sys
 import argparse
 
+import runtime_utils
+
 prj_path = os.path.join(os.path.dirname(__file__), '..')
 if prj_path not in sys.path:
     sys.path.append(prj_path)
@@ -45,7 +47,7 @@ def main():
     parser.add_argument('--threads', type=int, default=0, help='Number of threads.')
     parser.add_argument('--num_gpus', type=int, default=8)
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     try:
         seq_name = int(args.sequence)

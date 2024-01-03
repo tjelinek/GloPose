@@ -2,6 +2,8 @@ import os
 import argparse
 import random
 
+import runtime_utils
+
 
 def parse_args():
     """
@@ -30,7 +32,7 @@ def parse_args():
     parser.add_argument('--ip', type=str, default='127.0.0.1', help='IP of the current rank 0.')
     parser.add_argument('--port', type=int, default='20000', help='Port of the current rank 0.')
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     return args
 

@@ -5,6 +5,8 @@ import argparse
 import _init_paths
 from lib.test.evaluation.environment import env_settings
 
+import runtime_utils
+
 
 def transform_trackingnet(tracker_name, cfg_name):
     env = env_settings()
@@ -35,5 +37,5 @@ if __name__ == "__main__":
     parser.add_argument('--tracker_name', type=str, help='Name of tracking method.')
     parser.add_argument('--cfg_name', type=str, help='Name of config file.')
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
     transform_trackingnet(args.tracker_name, args.cfg_name)

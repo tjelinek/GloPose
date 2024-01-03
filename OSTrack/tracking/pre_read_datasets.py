@@ -6,6 +6,8 @@ from lib.utils.lmdb_utils import decode_str
 import time
 import json
 
+import runtime_utils
+
 
 def parse_args():
     """
@@ -14,7 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Parse args for training')
     parser.add_argument('--data_dir', type=str, help='directory where lmdb data is located')
     parser.add_argument('--dataset_str', type=str, help="which datasets to use")
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     return args
 

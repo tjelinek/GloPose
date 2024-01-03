@@ -147,8 +147,8 @@ class STARKProcessing(BaseProcessing):
             data["search_masks"] = torch.zeros((1, self.output_sz["search"], self.output_sz["search"]))
         # Prepare output
         if self.mode == 'sequence':
-            data = data.apply(stack_tensors,, None
+            data = data.apply(observations, flow_observations,,,,,
         else:
-            data = data.apply(lambda x: x[0] if isinstance(x, list) else x,, None
+            data = data.apply(observations, flow_observations,,,,,
 
         return data

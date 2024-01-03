@@ -1,6 +1,8 @@
 import os
 import sys
 
+import runtime_utils
+
 prj_path = os.path.join(os.path.dirname(__file__), '..')
 if prj_path not in sys.path:
     sys.path.append(prj_path)
@@ -23,7 +25,7 @@ def parse_args():
     parser.add_argument('--script', type=str, default='ostrack', choices=['ostrack'],
                         help='training script name')
     parser.add_argument('--config', type=str, default='vitb_256_mae_ce_32x4_ep300', help='yaml configure file name')
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     return args
 

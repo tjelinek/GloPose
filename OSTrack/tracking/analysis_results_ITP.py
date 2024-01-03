@@ -3,6 +3,8 @@ import argparse
 from lib.test.analysis.plot_results import print_results
 from lib.test.evaluation import get_dataset, trackerlist
 
+import runtime_utils
+
 
 def parse_args():
     """
@@ -13,7 +15,7 @@ def parse_args():
     parser.add_argument('--script', type=str, help='training script name')
     parser.add_argument('--config', type=str, default='baseline', help='yaml configure file name')
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     return args
 

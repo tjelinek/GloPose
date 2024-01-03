@@ -8,6 +8,9 @@ import torch.distributed as dist
 
 import random
 import numpy as np
+
+import runtime_utils
+
 torch.backends.cudnn.benchmark = False
 
 import _init_paths
@@ -92,7 +95,7 @@ def main():
     parser.add_argument('--script_teacher', type=str, help='teacher script name')
     parser.add_argument('--config_teacher', type=str, help='teacher yaml configure file name')
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
     if args.local_rank != -1:
         dist.init_process_group(backend='nccl')
         torch.cuda.set_device(args.local_rank)

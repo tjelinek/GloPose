@@ -2,6 +2,8 @@ import os
 import sys
 import argparse
 
+import runtime_utils
+
 prj_path = os.path.join(os.path.dirname(__file__), '..')
 if prj_path not in sys.path:
     sys.path.append(prj_path)
@@ -30,7 +32,7 @@ def main():
     parser.add_argument('--save_results', dest='save_results', action='store_true', help='Save bounding boxes')
     parser.set_defaults(save_results=False)
 
-    args = parser.parse_args()
+    args = runtime_utils.parse_args()
 
     run_video(args.tracker_name, args.tracker_param, args.videofile, args.optional_box, args.debug, args.save_results)
 
