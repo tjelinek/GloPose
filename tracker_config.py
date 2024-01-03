@@ -14,6 +14,7 @@ class TrackerConfig:
     features: str = 'deep'
     verbose: bool = True
     write_results: bool = True
+    write_intermediate: bool = False
     visualize_loss_landscape: bool = True
     render_just_bounding_box: bool = False
     training_print_status_frequency = 1
