@@ -14,7 +14,7 @@ EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'ver
 
 
 class Encoder(nn.Module):
-    def __init__(self, config, ivertices, faces, face_features, width, height, n_feat):
+    def __init__(self, config, ivertices, faces, face_features, width, height, n_feat, texture_maps_init=None):
         super(Encoder, self).__init__()
         self.config = config
 
@@ -82,7 +82,10 @@ class Encoder(nn.Module):
 
         # Face features and texture map
         self.register_buffer('face_features', torch.from_numpy(face_features).unsqueeze(0).type(self.translation.dtype))
-        self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.texture_size, self.config.texture_size))
+        if texture_maps_init is None:
+            self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.texture_size, self.config.texture_size))
+        else:
+            self.texture_map = nn.Parameter(texture_maps_init.clone())
 
         # Normalize and register ivertices
         ivertices = torch.from_numpy(ivertices).unsqueeze(0).type(self.translation.dtype)
