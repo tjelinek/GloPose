@@ -474,7 +474,7 @@ class Tracking6D:
                                    self.write_folder, frame_result.per_pixel_flow_error)
 
             if 0 in self.all_keyframes.keyframes:
-                keep_keyframes = np.ones(len(active_buffer_indices), dtype=np.bool)
+                keep_keyframes = np.ones(len(active_buffer_indices), dtype='bool')
             else:
                 keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
                 keep_keyframes = keep_keyframes[active_buffer_indices]
