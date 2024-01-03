@@ -31,6 +31,28 @@ def compute_jacobian(p: torch.Tensor, f: Callable) -> torch.Tensor:
     return jac
 
 
+def compute_hessian_using_vmap(p: torch.Tensor, f: Callable) -> torch.Tensor:
+    """
+    Efficient Hessian computation using functorch vmap
+
+    :param p: initial value(s)
+    :param f: function handle
+    :return: Hessian matrix of f(p)
+    """
+
+    p.requires_grad_(True)
+    y = f(p)
+    grad_y = torch.autograd.grad(y, p, create_graph=True)[0]
+    n = p.shape[0]
+
+    def vjp(g_i):
+        return torch.autograd.grad(grad_y, p, g_i, retain_graph=True)
+
+    hessian = torch.vmap(vjp, in_dims=0)(torch.eye(n).cuda())
+
+    return hessian
+
+
 class EndPointErrorCostFunction(ceres.CostFunction):
 
     def __init__(self, cost_function: Callable, num_residuals: int, num_optimized_parameters: int):
@@ -148,7 +170,7 @@ def lsq_lma_custom(
         fun = function
 
     if jac_function is None:
-        jac_fun = lambda p: compute_jacobian(p, f=fun)
+        jac_fun = lambda p: compute_jacobian_using_vmap(p, f=fun)
     else:
         jac_fun = lambda p: jac_function(p, *args)
 
@@ -194,4 +216,5 @@ def lsq_lma_custom(
         if gcon or pcon or fcon:
             break
 
+    print(f"Whole Levenberg-Marquardt Duration {time.time() - global_start_time}")
     return p_list
