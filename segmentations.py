@@ -161,6 +161,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
         self.encoder_face_features = self.tracking6d.gt_encoder.face_features
+        self.gt_texture = self.tracking6d.gt_texture
         self.shape = (self.tracking6d.rendering.width, self.tracking6d.rendering.height, 3)
 
     def next(self, frame_id):
@@ -172,7 +173,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
         rendering_result = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
                                                      encoder_result.vertices, self.encoder_face_features,
-                                                     encoder_result.texture_maps, encoder_result.lights)
+                                                     self.gt_texture, encoder_result.lights)
 
         image, segment = rendering_result
         image = image.detach()
