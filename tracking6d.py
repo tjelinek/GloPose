@@ -282,10 +282,14 @@ class Tracking6D:
     def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
         config = copy.deepcopy(self.config)
         config.features = 'rgb'
-        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2], 3).to(self.device)
 
+        texture_map_init = None
         if not self.config.optimize_texture and self.gt_texture is not None:
-            self.rgb_encoder.texture_map = self.gt_texture.detach()
+            texture_map_init = self.gt_texture.detach()
+
+        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2],
+                                   3, texture_map_init).to(self.device)
+
 
         rgb_parameters = [self.rgb_encoder.texture_map]
         self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
@@ -1131,7 +1135,7 @@ class Tracking6D:
         return encoder_result, encoder_result_flow_frames
 
     def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
-                  flow_observations: FlowObservation):
+                  flow_observations: FlowObservation, frame_losses):
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -1139,11 +1143,15 @@ class Tracking6D:
         model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
 
+        print("Texture optimization")
         for epoch in range(self.config.rgb_iters):
             infer_result = self.infer_model(observations, flow_observations, keyframes=keyframes,
                                             flow_frames=flow_frames, flow_arcs=flow_arcs, encoder_type='rgb')
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+
+            self.log_inference_results(self.best_model["value"], epoch, frame_losses,
+                                       joint_loss, losses, encoder_result)
 
             joint_loss = joint_loss.mean()
             self.rgb_optimizer.zero_grad()
