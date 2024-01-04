@@ -1,8 +1,7 @@
 import torch
 
 from models.encoder import Encoder
-from models.rendering import RenderingKaolin
-from utils import infer_normalized_renderings
+from models.rendering import RenderingKaolin, infer_normalized_renderings
 
 
 class LossFunctionWrapper(torch.nn.Module):

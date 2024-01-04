@@ -11,6 +11,7 @@ from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import prepare_vertices
+from utils import normalize_rendered_flows
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
                                                    'ren_mask', 'ren_mesh_vertices_features',
@@ -334,6 +335,29 @@ class RenderingKaolin(nn.Module):
                 tex[0, 2, xc[ki], yc[ki]] = tex[0, 2, xc[ki], yc[ki]] + cb[ki]
         tex_final = tex / cnt[None, None]
         return tex_final
+
+
+def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
+                                encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height):
+    rendering, rendering_mask = renderer(encoder_result.translations, encoder_result.quaternions,
+                                         encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
+                                         encoder_result.lights)
+
+    start_cuda_mem = int(torch.cuda.memory_allocated() / (1024 * 1024))
+    flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
+    theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
+    end_cuda_mem = int(torch.cuda.memory_allocated() / (1024 * 1024))
+    new_tensors_sizes = (theoretical_flow.element_size() * theoretical_flow.numel() +
+                         rendered_flow_segmentation.element_size() * rendered_flow_segmentation.numel() +
+                         occlusion_masks.element_size() * occlusion_masks.numel()) / (1024 * 1024)
+    # print(f"------ Flow objects sizes {new_tensors_sizes}")
+    # print(f"------ Computing flow start mem {start_cuda_mem}, end mem {end_cuda_mem}")
+
+    # Renormalization compensating for the fact that we render into bounding box that is smaller than the actual image
+    theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height, input_image_width,
+                                                input_image_height)
+
+    return rendering, rendering_mask, theoretical_flow, rendered_flow_segmentation, occlusion_masks
 
 
 def generate_rotation(rotation_current, my_rot, steps=3):

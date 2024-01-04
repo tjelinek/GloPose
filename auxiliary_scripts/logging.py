@@ -22,8 +22,8 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation
 from models.loss import iou_loss
 from segmentations import create_mask_from_string, pad_image
-from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg, \
-    infer_normalized_renderings
+from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
+from models.rendering import infer_normalized_renderings
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -50,9 +50,9 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
         None. The function saves multiple visualization images to the disk.
     """
     flow_video_up = observed_flow.detach().cpu()
-    flow_video_up[:, 0, ...] = flow_video_up[:, 0, ...] * flow_video_up.shape[-1]
-    flow_video_up[:, 1, ...] = flow_video_up[:, 1, ...] * flow_video_up.shape[-2]
-    flow_video_up = flow_video_up[0].permute(1, 2, 0).cpu().numpy()
+    flow_video_up[:, :, 0, ...] = flow_video_up[:, :, 0, ...] * flow_video_up.shape[-1]
+    flow_video_up[:, :, 1, ...] = flow_video_up[:, :, 1, ...] * flow_video_up.shape[-2]
+    flow_video_up = flow_video_up[0, 0].permute(1, 2, 0).cpu().numpy()
 
     # flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
     # image_small_dims = image.shape[-2], image.shape[-1]

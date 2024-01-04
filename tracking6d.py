@@ -18,8 +18,7 @@ from typing import Optional, Tuple
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
 from flow import get_flow_from_images, get_flow_from_images_mft, FlowModelGetterRAFT, FlowModelGetter, \
-    FlowModelGetterGMA, FlowModelGetterMFT
-from helpers.torch_helpers import write_renders
+    FlowModelGetterGMA, FlowModelGetterMFT, tensor_image_to_mft_format
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -27,12 +26,11 @@ from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
-from models.rendering import RenderingKaolin
+from models.rendering import RenderingKaolin, infer_normalized_renderings
 from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, infer_normalized_renderings, \
-    normalize_rendered_flows
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
 
 
 class Tracking6D:
@@ -75,7 +73,8 @@ class Tracking6D:
 
         # Network related
         self.net = None
-        self.model_flow = None
+        self.short_flow_model = None
+        self.long_flow_model = None
 
         # Ground truth related
         self.gt_rotations = None
@@ -319,15 +318,19 @@ class Tracking6D:
         self.all_keyframes = self.active_keyframes
 
     def initialize_flow_model(self):
-        if self.config.flow_model == 'RAFT':
+        if self.config.short_flow_model == 'RAFT':
             flow_getter = FlowModelGetterRAFT
-        elif self.config.flow_model == 'GMA':
+        elif self.config.short_flow_model == 'GMA':
             flow_getter = FlowModelGetterGMA
-        elif self.config.flow_model == 'MFT':
-            flow_getter = FlowModelGetterMFT
         else:
             flow_getter = FlowModelGetter
-        self.model_flow = flow_getter.get_flow_model()
+
+        if self.config.long_flow_model == 'MFT':
+            self.long_flow_model = FlowModelGetterMFT.get_flow_model()
+        else:
+            assert self.config.long_flow_model is None
+
+        self.short_flow_model = flow_getter.get_flow_model()
 
     def run_tracking(self, files, bboxes, gt_flows=None):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
@@ -382,11 +385,25 @@ class Tracking6D:
                 for flow_arc in flow_arcs:
                     flow_source_frame, flow_target_frame = flow_arc
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(resize_transform, gt_flows,
-                                                                                 flow_source_frame,
-                                                                                 flow_target_frame)
+                                                                                 flow_source_frame, flow_target_frame)
 
-                    self.active_keyframes.add_new_flow(observed_flow[None], segment[0][None, :, -1:], occlusions[None],
-                                                       uncertainties[None], flow_source_frame, flow_target_frame)
+                    self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
+                                                       uncertainties, flow_source_frame, flow_target_frame)
+
+                if self.long_flow_model is not None:
+                    long_flow_arc = (0, stepi)
+                    flow_source_frame, flow_target_frame = long_flow_arc
+
+                    already_present = long_flow_arc in flow_arcs
+
+                    flow_arcs |= {(flow_source_frame, flow_target_frame)}
+
+                    observed_flow, occlusions, uncertainties = self.next_gt_flow(resize_transform, gt_flows,
+                                                                                 flow_source_frame, flow_target_frame,
+                                                                                 mode='long')
+                    if not already_present:
+                        self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
+                                                           uncertainties, flow_source_frame, flow_target_frame)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
@@ -426,8 +443,6 @@ class Tracking6D:
 
             tex = None
             if self.config.features == 'deep':
-                self.rgb_apply(self.all_keyframes.keyframes, self.all_keyframes.flow_frames,
-                               flow_arcs, all_frame_observations, all_flow_observations)
                 self.rgb_apply(self.all_keyframes.keyframes, self.all_keyframes.flow_frames, flow_arcs,
                                all_frame_observations, all_flow_observations, frame_result.frame_losses)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
@@ -508,7 +523,7 @@ class Tracking6D:
 
         return self.best_model
 
-    def next_gt_flow(self, resize_transform, gt_flow_files, flow_source_frame, flow_target_frame):
+    def next_gt_flow(self, resize_transform, gt_flow_files, flow_source_frame, flow_target_frame, mode='short'):
         occlusion = None
         uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
@@ -526,30 +541,41 @@ class Tracking6D:
                                                      self.shape[-1], self.shape[-2])[0]
 
         elif self.config.gt_flow_source == 'FromFiles':  # We have ground truth flow annotations
+            assert mode == 'short'
+
             # The annotations are assumed to be in the [0, 1] coordinate range
             observed_flow = torch.load(gt_flow_files[flow_target_frame])[0].to(self.device)  # Size([1, H, W, 2])
             observed_flow = observed_flow.permute(0, 3, 1, 2)
-            observed_flow = resize_transform(observed_flow)
+            observed_flow = resize_transform(observed_flow)[None]
         else:
+
             last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
             last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
 
             image_new_x255 = (last_keyframe_observations.observed_image[:, -1, :, :, :]).float() * 255
             image_prev_x255 = (last_flowframe_observations.observed_image[:, -1, :, :, :]).float() * 255
 
-            if self.config.flow_model != 'MFT':
-                _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.model_flow)
-            else:
-                observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_prev_x255, image_new_x255,
-                                                                                 self.model_flow)
+            if mode == 'long':
+                image_new_x255_mft = tensor_image_to_mft_format(image_new_x255)
+                image_prev_x255_mft = tensor_image_to_mft_format(image_prev_x255)
 
-            observed_flow[:, 0, ...] = observed_flow[:, 0, ...] / observed_flow.shape[-2]
-            observed_flow[:, 1, ...] = observed_flow[:, 1, ...] / observed_flow.shape[-1]
+                if max(self.all_keyframes.keyframes) == 1:
+                    self.long_flow_model.init(image_prev_x255_mft)
+                assert flow_source_frame == 0 and flow_target_frame == max(self.all_keyframes.keyframes)
+                observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
+                                                                                 self.long_flow_model)
+            elif mode == 'short':
+                _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.short_flow_model)
+            else:
+                raise ValueError("Unknown mode")
+
+            observed_flow[:, :, 0, ...] = observed_flow[:, :, 0, ...] / observed_flow.shape[-2]
+            observed_flow[:, :, 1, ...] = observed_flow[:, :, 1, ...] / observed_flow.shape[-1]
 
         if occlusion is None:
-            occlusion = torch.zeros(1, 1, *observed_flow.shape[2:]).to(observed_flow.device)
+            occlusion = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
         if uncertainty is None:
-            uncertainty = torch.zeros(1, 1, *observed_flow.shape[2:]).to(observed_flow.device)
+            uncertainty = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
 
         return observed_flow, occlusion, uncertainty
 
@@ -1159,7 +1185,7 @@ class Tracking6D:
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            if epoch % 10 == 0:
+            if epoch % self.config.training_print_status_frequency == 0:
                 self.log_inference_results(self.best_model["value"], epoch, frame_losses,
                                            joint_loss, losses, encoder_result)
 

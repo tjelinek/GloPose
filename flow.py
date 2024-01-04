@@ -1,3 +1,4 @@
+import contextlib
 import glob
 import os
 import sys
@@ -199,24 +200,27 @@ def get_flow_from_images(image1, image2, model):
 
     flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
 
-    flow_low = padder.unpad(flow_low)
-    flow_up = padder.unpad(flow_up)
+    flow_low = padder.unpad(flow_low)[None]
+    flow_up = padder.unpad(flow_up)[None]
 
     return flow_low, flow_up
 
 
-def get_flow_from_images_mft(image1, image2, model):
-    padder = InputPadder(image1.shape)
+def get_flow_from_images_mft(last_image, model):
+    from MFT_tracker.MFT.MFT import MFT as MFTTracker
+    tracker: MFTTracker = model
 
-    image1, image2 = padder.pad(image1, image2)
+    all_predictions = tracker.track(last_image)
 
-    all_predictions = model(image1, image2, iters=12, test_mode=True)
+    flow = all_predictions.result.flow.cuda()[None, None]
+    occlusion = all_predictions.result.occlusion.cuda()[None, None]
+    sigma = all_predictions.result.sigma.cuda()[None, None]
 
-    flow = padder.unpad(all_predictions['flow'])
-    occlusion = padder.unpad(all_predictions['occlusion'].softmax(dim=1)[:, 1:2, :, :])
-    uncertainty = padder.unpad(all_predictions['uncertainty'])
+    return flow, occlusion, sigma
 
-    return flow, occlusion, uncertainty
+
+def tensor_image_to_mft_format(image_tensor):
+    return image_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
 
 
 def get_flow_from_images_raft(image1, image2, model):
@@ -314,6 +318,15 @@ class FlowModelGetterGMA(FlowModelGetter):
 
         return model
 
+@contextlib.contextmanager
+def temporary_change_directory(new_directory):
+    original_directory = os.getcwd()
+    try:
+        os.chdir(new_directory)
+        yield
+    finally:
+        os.chdir(original_directory)
+
 
 class FlowModelGetterMFT(FlowModelGetter):
     class AttrDict(dict):
@@ -323,12 +336,12 @@ class FlowModelGetterMFT(FlowModelGetter):
 
     @staticmethod
     def get_flow_model():
-        # sys.path.append('MFTmaster.MFT')
-        sys.path.append('MFTmaster')
-        import MFTmaster
+        sys.path.append('MFT_tracker')
+        from MFT_tracker.MFT.MFT import MFT as MFTTracker
+        from MFT_tracker.configs import MFT_cfg
 
-        default_config = MFTmaster.configs.MFT_cfg.get_config()
-
-        model = MFTmaster.MFT.MFT.MFT(default_config)
+        with temporary_change_directory("MFT_tracker"):
+            default_config = MFT_cfg.get_config()
+            model = MFTTracker(default_config)
 
         return model

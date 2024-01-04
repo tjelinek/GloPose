@@ -93,7 +93,8 @@ class TrackerConfig:
     generate_synthetic_observations_if_possible: bool = True
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic', 'FromFiles'
-    flow_model: str = 'GMA'  # 'RAFT' 'GMA' and 'MFT'
+    short_flow_model: str = 'GMA'  # 'RAFT' 'GMA'
+    long_flow_model: str = 'MFT'   # 'MFT' or None
 
     # Optimization
     allow_break_sgd_after = 30
@@ -104,7 +105,7 @@ class TrackerConfig:
     lr_scheduler_patience = 5
 
     # Optical flow settings
-    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous' and 'single-previous'
+    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).
     segmentation_mask_erosion_iters: int = 0
