@@ -200,6 +200,9 @@ class Tracking6D:
         if self.gt_rotations is not None and self.gt_translations is not None:
             set_encoder_poses(self.gt_encoder, self.gt_rotations, self.gt_translations)
 
+        if self.gt_texture is not None:
+            self.gt_encoder.gt_texture = self.gt_texture
+
     def get_initial_images(self, file0, bbox0, init_mask):
         if type(self.tracker) is SyntheticDataGeneratingTracker:
             file0 = 0
@@ -359,7 +362,6 @@ class Tracking6D:
                 segment = segment_clean
 
             image_feat = self.feat(image).detach()
-
             self.active_keyframes.add_new_keyframe(image, image_feat, segment, stepi)
 
             start = time.time()
@@ -426,6 +428,8 @@ class Tracking6D:
             if self.config.features == 'deep':
                 self.rgb_apply(self.all_keyframes.keyframes, self.all_keyframes.flow_frames,
                                flow_arcs, all_frame_observations, all_flow_observations)
+                self.rgb_apply(self.all_keyframes.keyframes, self.all_keyframes.flow_frames, flow_arcs,
+                               all_frame_observations, all_flow_observations, frame_result.frame_losses)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
@@ -680,11 +684,16 @@ class Tracking6D:
                     break
             if epoch < self.config.iterations - 1:
                 joint_loss = joint_loss.mean()
-                # self.optimizer_all_parameters.zero_grad()
+                self.optimizer_all_parameters.zero_grad()
+
+                self.optimizer_positional_parameters.zero_grad()
+                self.optimizer_rotational_parameters.zero_grad()
+                self.optimizer_translational_parameters.zero_grad()
+                self.optimizer_non_positional_parameters.zero_grad()
 
                 joint_loss.backward()
 
-                # self.optimizer_all_parameters.step()
+                self.optimizer_all_parameters.step()
 
                 if self.config.use_lr_scheduler:
                     scheduler_positional_params.step(joint_loss)
@@ -1150,8 +1159,9 @@ class Tracking6D:
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
 
-            self.log_inference_results(self.best_model["value"], epoch, frame_losses,
-                                       joint_loss, losses, encoder_result)
+            if epoch % 10 == 0:
+                self.log_inference_results(self.best_model["value"], epoch, frame_losses,
+                                           joint_loss, losses, encoder_result)
 
             joint_loss = joint_loss.mean()
             self.rgb_optimizer.zero_grad()
