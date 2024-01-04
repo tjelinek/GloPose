@@ -320,17 +320,20 @@ class WriteResults:
                                                                encoder_result, encoder_result_flow_frames,
                                                                flow_arcs_indices,
                                                                tracking6d.shape[-1], tracking6d.shape[-2])
-                renders, rendered_silhouettes, theoretical_flow, \
-                    rendered_flow_segmentation, occlusion_masks = inference_result
+                renders, rendered_silhouettes, rendered_flow_result = inference_result
 
-                loss_function = tracking6d.loss_function
-                loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images_features,
+                loss_function: FMOLoss = tracking6d.loss_function
+                loss_result = loss_function.forward(rendered_images=renders,
+                                                    observed_images=observations.observed_image_features,
                                                     rendered_silhouettes=rendered_silhouettes,
-                                                    observed_silhouettes=observed_segmentations,
-                                                    rendered_flow=theoretical_flow, observed_flow=observed_flows,
-                                                    observed_flow_segmentation=observed_flows_segmentations,
-                                                    rendered_flow_segmentation=rendered_flow_segmentation,
-                                                    observed_flow_occlusion=None, observed_flow_uncertainties=None,
+                                                    observed_silhouettes=observations.observed_segmentation,
+                                                    rendered_flow=rendered_flow_result.theoretical_flow,
+                                                    observed_flow=flow_observations.observed_flow,
+                                                    observed_flow_segmentation=flow_observations.observed_flow_segmentation,
+                                                    rendered_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
+                                                    observed_flow_occlusion=flow_observations.observed_flow_occlusion,
+                                                    rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
+                                                    observed_flow_uncertainties=flow_observations.observed_flow_uncertainty,
                                                     keyframes_encoder_result=encoder_result,
                                                     last_keyframes_encoder_result=encoder_result)
 
@@ -739,27 +742,27 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
         previous_rendered_image_rgb = rendered_keyframe_images[0, -2]
 
         # Prepare file paths
-        (tracking6d.write_folder / Path('flows')).mkdir(exist_ok=True, parents=True)
-        (tracking6d.write_folder / Path('renderings')).mkdir(exist_ok=True, parents=True)
+        theoretical_flow_paths = tracking6d.write_folder / Path('flows')
+        renderings_path = tracking6d.write_folder / Path('renderings')
+        occlusion_maps_path = tracking6d.write_folder / Path('occlusions')
 
-        theoretical_flow_path = tracking6d.write_folder / Path('flows') / \
-                                Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
-        flow_difference_path = tracking6d.write_folder / Path('flows') / \
-                               Path(f"flow_difference_{stepi}_{stepi + 1}.png")
-        rendering_1_path = tracking6d.write_folder / Path('renderings') / \
-                           Path(f"rendering_{stepi}_{stepi + 1}_1.png")
-        # rendering_2_path = tracking6d.write_folder / Path('renderings') / \
-        #                    Path(f"rendering_{stepi}_{stepi + 1}_2.png")
+        theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
+        renderings_path.mkdir(exist_ok=True, parents=True)
+        occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+
+        theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
+        flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
+        rendering_1_path = renderings_path / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
+        occlusion_path = occlusion_maps_path / Path(f"occlusion_{stepi}_{stepi + 1}.png")
+
+        visualize_occlusions(occlusion_path, previous_rendered_image_rgb, rendered_flow_result, alpha=0.5)
 
         # Convert tensors to NumPy arrays
         previous_rendered_image_np = (previous_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
         previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
-        # current_rendered_image_np = (current_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-        # current_rendered_image_np = current_rendered_image_np.astype('uint8')
 
         # Save rendered images
         imageio.imwrite(rendering_1_path, previous_rendered_image_np)
-        # imageio.imwrite(rendering_2_path, current_rendered_image_np)
 
         # Adjust (0, 1) range to pixel range
         theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
@@ -780,6 +783,7 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
 
         current_image_segmentation = current_image_segmentation[0, 0, 0].detach().clone().cpu()
         previous_image_segmentation = previous_image_segmentation[0, 0, 0].detach().clone().cpu()
+        rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
 
         # Visualize flow and flow difference
         flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb, current_rendered_image_rgb, None,
@@ -788,6 +792,8 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
                                                        gt_silhouette_prev=previous_image_segmentation,
                                                        flow_occlusion_mask=rendered_flow_result.rendered_flow_occlusion)
         
+                                                       flow_occlusion_mask=rendered_flow_occlusion_mask)
+
         flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb,
                                                                  current_rendered_image_rgb,
                                                                  observed_flow_np, theoretical_flow_np,
@@ -797,6 +803,14 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
         # Save flow illustrations
         imageio.imwrite(theoretical_flow_path, flow_illustration)
         imageio.imwrite(flow_difference_path, flow_difference_illustration)
+
+
+def visualize_occlusions(occlusion_path, previous_rendered_image_rgb, rendered_flow_result, alpha):
+    occlusion_mask = rendered_flow_result.rendered_flow_occlusion[:, -1:].detach().clone().repeat(1, 1, 3, 1, 1)
+    blended_image = alpha * occlusion_mask + (1 - alpha) * previous_rendered_image_rgb
+    blended_image_np = blended_image.squeeze().cpu().numpy()
+    blended_image_np = (blended_image_np * 255).astype(np.uint8).transpose(1, 2, 0)
+    imageio.imwrite(occlusion_path, blended_image_np)
 
 
 def load_gt_annotations_file(file_path):

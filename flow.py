@@ -63,7 +63,7 @@ def tensor_to_pil_with_alpha(tensor, alpha=0.2):
 
     # Create an RGBA image with the given alpha value for the segmentation
     rgba_array = np.zeros((array.shape[0], array.shape[1], 4), dtype=np.uint8)
-    rgba_array[..., :1] = array[:, :, None]  # Assign the tensor values to red and green channels
+    rgba_array[..., :3] = array[:, :, None]  # Assign the tensor values to red and green channels
     rgba_array[..., 3] = (array > 0) * alpha * 256.0  # Create alpha channel based on tensor values
 
     # Convert to PIL image
@@ -76,12 +76,13 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_s
                                gt_silhouette_prev=None, flow_occlusion_mask=None):
     """
 
-    :param image1: uint8 image with 0-255 as color in [C, H, W] format
-    :param image2: uint8 image with 0-255 as color in [C, H, W] format
+    :param image1: uint8 image with [0-1] color range in [C, H, W] format
+    :param image2: uint8 image with [0-1] color range in [C, H, W] format
     :param flow_up: np.ndarray [H, W, 2] flow
     :param flow_up_prime: np.ndarray [H, W, 2] flow
     :param gt_silhouette_current: Tensor - silhouette of the ground truth in the current frame of shape [H, W]
     :param gt_silhouette_prev: Tensor - silhouette of the ground truth in the previous frame of shape [H, W]
+    :param flow_occlusion_mask: Tensor - indicating flow occlusion in format [H, W]
     :return:
     """
     width, height = image1.shape[-1], image1.shape[-2]
@@ -103,6 +104,11 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_s
         background2_PIL.paste(silh2_PIL, (0, 0))
         background2_PIL.paste(image2_pil, (0, 0))
         image2_pil = background2_PIL
+        occlusion_blend = int(255 * 0.25)
+        occlusion_mask_pil = tensor_to_pil_with_alpha((flow_occlusion_mask + 1), alpha=1.).convert("L")
+        silver_image = Image.new('RGBA', image1_pil.size, (255, 255, 255, occlusion_blend))
+        image1_pil.paste(silver_image, (0, 0), mask=occlusion_mask_pil)
+
 
     flow_pil = None
     if flow_up is not None:
