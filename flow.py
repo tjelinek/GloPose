@@ -72,8 +72,8 @@ def tensor_to_pil_with_alpha(tensor, alpha=0.2):
     return img
 
 
-def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None,
-                               gt_silhouette_current=None, gt_silhouette_prev=None):
+def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_silhouette_current=None,
+                               gt_silhouette_prev=None, flow_occlusion_mask=None):
     """
 
     :param image1: uint8 image with 0-255 as color in [C, H, W] format

@@ -18,6 +18,9 @@ MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertice
                                                    'ren_mesh_vertices_coords',
                                                    'ren_mesh_vertices_image_coords'])
 
+RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rendered_flow_segmentation',
+                                                       'rendered_flow_occlusion'])
+
 
 class RenderingKaolin(nn.Module):
     def __init__(self, config, faces, width, height):
@@ -91,7 +94,7 @@ class RenderingKaolin(nn.Module):
 
         return all_renderings, all_renderings_masks
 
-    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames, flow_arcs_indices):
+    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames, flow_arcs_indices) -> RenderedFlowResult:
         """
         Computes the theoretical flow between consecutive frames.
 
@@ -176,7 +179,7 @@ class RenderingKaolin(nn.Module):
         flow_render_mask = torch.stack(rendering_masks, 1).contiguous()  # torch.Size([1, N, 1, H, W])
         occlusion_mask = torch.stack(occlusion_masks, 1).contiguous()  # torch.Size([1, N, 1, H, W])
 
-        return theoretical_flow, flow_render_mask, occlusion_mask
+        return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
 
     def rendered_world_mesh_coordinates(self, encoder_result):
         rendered_camera_coordinates = []
@@ -338,7 +341,8 @@ class RenderingKaolin(nn.Module):
 
 
 def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
-                                encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height):
+                                encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height) \
+        -> Tuple[torch.Tensor, torch.Tensor, RenderedFlowResult]:
     rendering, rendering_mask = renderer(encoder_result.translations, encoder_result.quaternions,
                                          encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
                                          encoder_result.lights)
@@ -354,10 +358,11 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
     # print(f"------ Computing flow start mem {start_cuda_mem}, end mem {end_cuda_mem}")
 
     # Renormalization compensating for the fact that we render into bounding box that is smaller than the actual image
-    theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height, input_image_width,
-                                                input_image_height)
+    normalized_theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height,
+                                                           input_image_width, input_image_height)
+    flow_result = flow_result._replace(theoretical_flow=normalized_theoretical_flow)
 
-    return rendering, rendering_mask, theoretical_flow, rendered_flow_segmentation, occlusion_masks
+    return rendering, rendering_mask, flow_result
 
 
 def generate_rotation(rotation_current, my_rot, steps=3):

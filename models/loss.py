@@ -19,7 +19,8 @@ class FMOLoss(nn.Module):
                 rendered_silhouettes, observed_silhouettes,
                 rendered_flow, observed_flow,
                 observed_flow_segmentation, rendered_flow_segmentation,
-                observed_flow_occlusion, observed_flow_uncertainties,
+                observed_flow_occlusion, rendered_flow_occlusion,
+                observed_flow_uncertainties,
                 keyframes_encoder_result, last_keyframes_encoder_result,
                 return_end_point_errors=False,
                 custom_points_for_ransac=None):
@@ -36,12 +37,14 @@ class FMOLoss(nn.Module):
             observed_flow_segmentation (torch.Tensor): Flow masks for observed flow.
             rendered_flow_segmentation (torch.Tensor): Flow masks for rendered flow.
             observed_flow_occlusion (torch.Tensor): Occlusion mask in range [0, 1], where 1 indicates occlusion.
+            rendered_flow_occlusion (torch.Tensor): Occlusion mask in range [0, 1], where 1 indicates occlusion.
             observed_flow_uncertainties (torch.Tensor): Flow values uncertainties in range [0, 1], where 1 indicated
                                                         being not certain about the true value.
             keyframes_encoder_result (EncoderResult): Encoder result for the current frame.
             last_keyframes_encoder_result (EncoderResult): Encoder result for the previous frame.
             return_end_point_errors (bool): Indicates whether to return concatenated end point errors for two
                                             consecutive flow frames rather than the mean of the end point errors.
+            custom_points_for_ransac (list): List of custom points for opt. flow loss computation
 
         Returns:
             tuple: A tuple containing losses_all, losses, and total loss.

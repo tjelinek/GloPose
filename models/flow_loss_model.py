@@ -1,6 +1,7 @@
 import torch
 
 from models.encoder import Encoder
+from models.loss import FMOLoss
 from models.rendering import RenderingKaolin, infer_normalized_renderings
 
 
@@ -15,7 +16,7 @@ class LossFunctionWrapper(torch.nn.Module):
         self.rendering: RenderingKaolin = rendering
         self.encoder: Encoder = encoder
         self.flow_arcs_indices = flow_arcs_indices
-        self.loss_function = loss_function
+        self.loss_function: FMOLoss = loss_function
         self.observed_images = observed_images
         self.observed_segmentations = observed_segmentations
         self.observed_flows = observed_flows
@@ -36,8 +37,7 @@ class LossFunctionWrapper(torch.nn.Module):
                                                        self.original_height)
 
         # TODO delete this, use solely renderings
-        self.renders, self.rendered_silhouettes, self.theoretical_flow, \
-            self.rendered_flow_segmentation, self.occlusion_masks = inference_result
+        self.renders, self.rendered_silhouettes, self.rendered_flow_result = inference_result
 
     def forward(self, trans_quats):
         trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
@@ -94,7 +94,9 @@ class LossFunctionWrapper(torch.nn.Module):
                                                  observed_flow=self.observed_flows,
                                                  observed_flow_segmentation=self.observed_flows_segmentations,
                                                  rendered_flow_segmentation=self.rendered_flow_segmentation,
-                                                 observed_flow_occlusion=None, observed_flow_uncertainties=None,
+                                                 observed_flow_occlusion=None,
+                                                 rendered_flow_occlusion=None,
+                                                 observed_flow_uncertainties=None,
                                                  keyframes_encoder_result=encoder_result,
                                                  last_keyframes_encoder_result=None,
                                                  return_end_point_errors=True)

@@ -20,10 +20,10 @@ from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoef
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from keyframe_buffer import FrameObservation, FlowObservation
-from models.loss import iou_loss
+from models.loss import iou_loss, FMOLoss
 from segmentations import create_mask_from_string, pad_image
 from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
-from models.rendering import infer_normalized_renderings
+from models.rendering import infer_normalized_renderings, RenderingKaolin, RenderedFlowResult
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult
@@ -205,10 +205,7 @@ class WriteResults:
             print(f"Visualizing loss landscape for translation axis {trans_axes[trans_axis_idx]} "
                   f"and rotation axis {rot_axes[rot_axis_idx]}")
 
-            joint_losses: np.ndarray = self.compute_loss_landscape(flow_observations.observed_flow,
-                                                                   flow_observations.observed_flow_segmentation,
-                                                                   observations.observed_image_features,
-                                                                   observations.observed_segmentation, tracking6d,
+            joint_losses: np.ndarray = self.compute_loss_landscape(flow_observations, observations, tracking6d,
                                                                    rotations_space, translations_space, trans_axis_idx,
                                                                    rot_axis_idx, stepi)
 
@@ -294,9 +291,8 @@ class WriteResults:
                         f'_rot-{rot_axes[rot_axis_idx]}.eps', format='eps')
 
     @staticmethod
-    def compute_loss_landscape(observed_flows, observed_flows_segmentations, observed_images_features,
-                               observed_segmentations, tracking6d, rotation_space, translation_space, trans_axis_idx,
-                               rot_axis_idx, stepi):
+    def compute_loss_landscape(flow_observations: FlowObservation, observations: FrameObservation, tracking6d,
+                               rotation_space, translation_space, trans_axis_idx, rot_axis_idx, stepi):
 
         joint_losses = np.zeros((translation_space.shape[0], rotation_space.shape[0]))
 
@@ -379,16 +375,16 @@ class WriteResults:
 
             if tracking6d.config.features == 'rgb':
                 tex = detached_result.texture_maps
-            feat_renders, _ = tracking6d.rendering.forward(detached_result.translations, detached_result.quaternions,
-                                                           detached_result.vertices, tracking6d.encoder.face_features,
-                                                           detached_result.texture_maps, detached_result.lights)
 
-            renders, rendered_silhouette = tracking6d.rendering.forward(detached_result.translations,
-                                                                        detached_result.quaternions,
-                                                                        detached_result.vertices,
-                                                                        tracking6d.encoder.face_features,
-                                                                        tex,
-                                                                        detached_result.lights)
+            rendering: RenderingKaolin = tracking6d.rendering
+
+            feat_renders, _ = rendering.forward(detached_result.translations, detached_result.quaternions,
+                                                detached_result.vertices, tracking6d.encoder.face_features,
+                                                detached_result.texture_maps, detached_result.lights)
+
+            renders, rendered_silhouette = rendering.forward(detached_result.translations, detached_result.quaternions,
+                                                             detached_result.vertices, tracking6d.encoder.face_features,
+                                                             tex, detached_result.lights)
 
             renders_crop = renders[..., b0[0]:b0[1], b0[2]:b0[3]]
             feat_renders_crop = feat_renders[..., b0[0]:b0[1], b0[2]:b0[3]]
@@ -700,18 +696,17 @@ class WriteResults:
         return encoder_result_prime, keyframes_prime
 
 
-def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segmentation, previous_image_segmentation,
-                               bounding_box, observed_flow, opt_frames, stepi):
+def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowResult, current_image_segmentation,
+                               previous_image_segmentation, bounding_box, observed_flow, opt_frames, stepi):
     """
     Visualizes the theoretical flow and related images for a given step.
 
     Args:
         tracking6d (Tracking6D): The Tracking6D instance.
-        theoretical_flow (torch.Tensor): Theoretical flow tensor with shape (1, B, 2, H, W) w.r.t. the [-1, 1]
-                                         image coordinates.
+        rendered_flow_result (RenderedFlowResult): Rendered flow result as defined in RenderingKaolin
         current_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
         previous_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
-        bounding_box (torch.Tensor: Bounding box of the observed object
+        bounding_box (torch.Tensor): Bounding box of the observed object
         observed_flow (torch.Tensor): Observed flow tensor with shape (1, B, 2, H, W) w.r.t. the [-1, 1] image
                                       coordinates.
         opt_frames (list): List of optical flow frames.
@@ -731,11 +726,11 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
         tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
 
         # Render keyframe images
-        rendering_rgb, rendering_silhouette = tracking6d.rendering.forward(enc_result_prime.translations,
-                                                                           enc_result_prime.quaternions,
-                                                                           enc_result_prime.vertices,
-                                                                           tracking6d.encoder.face_features,
-                                                                           tex_rgb, enc_result_prime.lights)
+        rendering: RenderingKaolin = tracking6d.rendering
+        rendering_rgb, rendering_silhouette = rendering.forward(enc_result_prime.translations,
+                                                                enc_result_prime.quaternions, enc_result_prime.vertices,
+                                                                tracking6d.encoder.face_features, tex_rgb,
+                                                                enc_result_prime.lights)
 
         rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 
@@ -767,7 +762,7 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
         # imageio.imwrite(rendering_2_path, current_rendered_image_np)
 
         # Adjust (0, 1) range to pixel range
-        theoretical_flow = theoretical_flow[0, -1].detach().clone().cpu()
+        theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
         theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
         theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
 
@@ -787,10 +782,12 @@ def visualize_theoretical_flow(tracking6d, theoretical_flow, current_image_segme
         previous_image_segmentation = previous_image_segmentation[0, 0, 0].detach().clone().cpu()
 
         # Visualize flow and flow difference
-        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb, current_rendered_image_rgb,
-                                                       None, theoretical_flow_np,
+        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb, current_rendered_image_rgb, None,
+                                                       theoretical_flow_np,
                                                        gt_silhouette_current=current_image_segmentation,
-                                                       gt_silhouette_prev=previous_image_segmentation)
+                                                       gt_silhouette_prev=previous_image_segmentation,
+                                                       flow_occlusion_mask=rendered_flow_result.rendered_flow_occlusion)
+        
         flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb,
                                                                  current_rendered_image_rgb,
                                                                  observed_flow_np, theoretical_flow_np,

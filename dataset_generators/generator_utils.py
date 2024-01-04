@@ -202,7 +202,7 @@ def create_tracking_log(movement_scenario: MovementScenario, gt_tracking_log_fil
             writer.writerow(row)
 
 
-def render_object_poses(rendering, vertices, face_features, texture_maps, movement_scenario: MovementScenario,
+def render_object_poses(rendering: RenderingKaolin, vertices, face_features, texture_maps, movement_scenario: MovementScenario,
                         optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
                         segmentation_destination, background_image):
     # The initial rotations are expected to be in radians
