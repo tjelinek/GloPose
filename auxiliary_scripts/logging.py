@@ -743,10 +743,6 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
             renderings_path.mkdir(exist_ok=True, parents=True)
             occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
-        theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
-        flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
-        rendering_1_path = renderings_path / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
-        occlusion_path = occlusion_maps_path / Path(f"occlusion_{stepi}_{stepi + 1}.png")
             theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
             flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
             rendering_1_path = renderings_path / Path(f"rendering_{source_frame}_{target_frame}_1.png")
@@ -772,35 +768,37 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
             observed_flow[0, ...] *= observed_flow.shape[-1]
             observed_flow[1, ...] *= observed_flow.shape[-2]
 
-        # Obtain flow and image illustrations
-        theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
-        observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
+            # Obtain flow and image illustrations
+            theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
+            observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
 
-        observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
-        theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
+            observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
+            theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
 
-        current_image_segmentation = current_image_segmentation[0, 0, 0].detach().clone().cpu()
-        previous_image_segmentation = previous_image_segmentation[0, 0, 0].detach().clone().cpu()
-        rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
+            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
+            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
 
-        # Visualize flow and flow difference
-        flow_illustration = visualize_flow_with_images(previous_rendered_image_rgb, current_rendered_image_rgb, None,
-                                                       theoretical_flow_np,
-                                                       gt_silhouette_current=current_image_segmentation,
-                                                       gt_silhouette_prev=previous_image_segmentation,
-                                                       flow_occlusion_mask=rendered_flow_result.rendered_flow_occlusion)
-        
-                                                       flow_occlusion_mask=rendered_flow_occlusion_mask)
+            target_image_segmentation = target_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
+            source_image_segmentation = source_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
 
-        flow_difference_illustration = compare_flows_with_images(previous_rendered_image_rgb,
-                                                                 current_rendered_image_rgb,
-                                                                 observed_flow_np, theoretical_flow_np,
-                                                                 gt_silhouette_current=current_image_segmentation,
-                                                                 gt_silhouette_prev=previous_image_segmentation)
+            rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
 
-        # Save flow illustrations
-        imageio.imwrite(theoretical_flow_path, flow_illustration)
-        imageio.imwrite(flow_difference_path, flow_difference_illustration)
+            # Visualize flow and flow difference
+            flow_illustration = visualize_flow_with_images(source_rendered_image_rgb, target_rendered_image_rgb,
+                                                           flow_up=None, flow_up_prime=theoretical_flow_np,
+                                                           gt_silhouette_current=target_image_segmentation,
+                                                           gt_silhouette_prev=source_image_segmentation,
+                                                           flow_occlusion_mask=rendered_flow_occlusion_mask)
+
+            flow_difference_illustration = compare_flows_with_images(source_rendered_image_rgb,
+                                                                     target_rendered_image_rgb,
+                                                                     observed_flow_np, theoretical_flow_np,
+                                                                     gt_silhouette_current=target_image_segmentation,
+                                                                     gt_silhouette_prev=source_image_segmentation)
+
+            # Save flow illustrations
+            imageio.imwrite(theoretical_flow_path, flow_illustration)
+            imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
 
 def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_result, alpha):
