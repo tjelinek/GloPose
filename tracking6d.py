@@ -458,10 +458,9 @@ class Tracking6D:
 
             if self.config.write_results:
                 with torch.no_grad():
-                    visualize_theoretical_flow(self, frame_result.flow_render_result,
-                                               all_frame_observations.observed_segmentation,
-                                               all_flow_observations.observed_flow_segmentation, b0,
-                                               all_flow_observations.observed_flow, self.all_keyframes.keyframes, stepi)
+                    new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
+                    visualize_theoretical_flow(self, frame_result.flow_render_result, bounding_box=b0,
+                                               keyframe_buffer=self.active_keyframes, new_flow_arcs=new_flow_arcs)
 
                     self.write_results.write_results(self, b0=b0,
                                                      bboxes=bboxes, our_losses=our_losses,
@@ -492,13 +491,8 @@ class Tracking6D:
                     last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(last_keyframe)
                     last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(last_flowframe)
 
-                    image_new_x255 = (last_keyframe_observations.observed_image[:, -1, :, :, :]).float() * 255
-                    image_prev_x255 = (last_flowframe_observations.observed_image[:, -1, :, :, :]).float() * 255
-
-                    visualize_flow(observed_flow.detach().clone(), image, image_new_x255, image_prev_x255,
-                                   all_frame_observations.observed_segmentation[0, -1, 1],
-                                   all_flow_observations.observed_flow_segmentation[0, -1, 0], stepi,
-                                   self.write_folder, frame_result.per_pixel_flow_error)
+                    visualize_flow(self.active_keyframes, flow_arcs, self.write_folder,
+                                   frame_result.per_pixel_flow_error)
 
             if 0 in self.all_keyframes.keyframes:
                 keep_keyframes = np.ones(len(active_buffer_indices), dtype='bool')

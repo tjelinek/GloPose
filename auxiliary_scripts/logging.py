@@ -30,72 +30,64 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
-def visualize_flow(observed_flow, image, image_new, image_prev, segment_target_image, segment_prev_image, stepi,
-                   output_dir, per_pixel_flow_error):
-    """
-    Visualize optical flow between two images and save the results as image files.
+def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_pixel_flow_error):
 
-    Args:
-        observed_flow (torch.Tensor): Optical flow w.r.t. the image coordinate system [-1, 1]. Tensor must be detached.
-        image (torch.Tensor): Original image tensor.
-        image_new (torch.Tensor): New (second) image tensor.
-        image_prev (torch.Tensor): Previous (first) image tensor.
-        segment_target_image (torch.Tensor): Segmentation mask tensor.
-        segment_prev_image (torch.Tensor): Segmentation mask tensor.
-        stepi (int): Index of the current step in the frame sequence.
-        output_dir (Path): Flow output directory
-        per_pixel_flow_error: Error mask
+    for flow_arcs in flow_arcs:
 
-    Returns:
-        None. The function saves multiple visualization images to the disk.
-    """
-    flow_video_up = observed_flow.detach().cpu()
-    flow_video_up[:, :, 0, ...] = flow_video_up[:, :, 0, ...] * flow_video_up.shape[-1]
-    flow_video_up[:, :, 1, ...] = flow_video_up[:, :, 1, ...] * flow_video_up.shape[-2]
-    flow_video_up = flow_video_up[0, 0].permute(1, 2, 0).cpu().numpy()
+        source_frame = flow_arcs[0]
+        target_frame = flow_arcs[1]
 
-    # flow_image = transforms.ToTensor()(flow_viz.flow_to_image(flow_video_up))
-    # image_small_dims = image.shape[-2], image.shape[-1]
-    # flow_image_small = transforms.Resize(image_small_dims)(flow_image)
-    # segmentation_mask = segment[0, 0, -1, :, :].to(torch.bool).unsqueeze(0).repeat(3, 1, 1).cpu().detach()
-    # flow_image_segmented = flow_image_small.mul(segmentation_mask)
-    image_prev_reformatted: torch.Tensor = image_prev.to(torch.uint8)[0].detach().cpu()
-    image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0].detach().cpu()
+        flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
+        source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
+        target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
 
-    flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up, None,
-                                                   gt_silhouette_current=segment_target_image.cpu(),
-                                                   gt_silhouette_prev=segment_prev_image.cpu())
-    transform = transforms.ToPILImage()
-    # image_pure_flow_segmented = transform(flow_image_segmented)
-    image_new_pil = transform(image_new[0] / 255.0)
-    # image_old_pil = transform(image_prev[0] / 255.0)
-    (output_dir / Path('flows')).mkdir(exist_ok=True, parents=True)
-    (output_dir / Path('gt_imgs')).mkdir(exist_ok=True, parents=True)
+        observed_flow = flow_observation.observed_flow.cpu()
+        observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
+        source_frame_image = source_frame_observation.observed_image.cpu()
+        source_frame_segment = source_frame_observation.observed_segmentation.cpu()
+        target_frame_image = target_frame_observation.observed_image.cpu()
+        target_frame_segment = target_frame_observation.observed_segmentation.cpu()
 
-    # Define output file paths
-    # prev_image_path = output_dir / Path('gt_imgs') / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_1.png')
-    new_image_path = output_dir / Path('gt_imgs') / Path('gt_img_' + str(stepi) + '_' + str(stepi + 1) + '_2.png')
-    # flow_segm_path = output_dir / Path('flow_segmented_' + str(stepi) + '_' + str(stepi + 1) + '.png')
-    flow_image_path = output_dir / Path('flows') / Path('flow_' + str(stepi) + '_' + str(stepi + 1) + '.png')
+        observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
+        observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
+        observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
 
-    # Save the images to disk
-    # imageio.imwrite(flow_segm_path, image_pure_flow_segmented)
-    imageio.imwrite(new_image_path, image_new_pil)
-    # imageio.imwrite(prev_image_path, image_old_pil)
-    imageio.imwrite(flow_image_path, flow_illustration)
+        source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
+        target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
 
-    # PER PIXEL FLOW ERROR VISUALIZATION
-    per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
+        source_frame_segment_squeezed = source_frame_segment.squeeze()[0]
+        target_frame_segment_squeezed = target_frame_segment.squeeze()[0]
 
-    # Normalize values for visualization (optional)
-    per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
-                                  (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
+        flow_illustration = visualize_flow_with_images(source_image_discrete, target_image_discrete,
+                                                       observed_flow_reordered, None,
+                                                       gt_silhouette_current=source_frame_segment_squeezed,
+                                                       gt_silhouette_prev=target_frame_segment_squeezed)
+        (output_dir / Path('flows')).mkdir(exist_ok=True, parents=True)
+        (output_dir / Path('gt_imgs')).mkdir(exist_ok=True, parents=True)
 
-    # Convert to uint8 and save using imageio
-    output_loss_viz = output_dir / Path('losses')
-    output_loss_viz.mkdir(parents=True, exist_ok=True)
-    output_filename = output_loss_viz / f'end_point_error_frame_{stepi}.png'
-    imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
+        # Define output file paths
+        new_image_path = output_dir / Path('gt_imgs') / Path(f'gt_img_{source_frame}_{target_frame}.png')
+        flow_image_path = output_dir / Path('flows') / Path(f'flow_{source_frame}_{target_frame}.png')
+
+        transform = transforms.ToPILImage()
+        target_image_PIL = transform(target_image_discrete)
+
+        # Save the images to disk
+        imageio.imwrite(new_image_path, target_image_PIL)
+        imageio.imwrite(flow_image_path, flow_illustration)
+
+        # PER PIXEL FLOW ERROR VISUALIZATION
+        per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
+
+        # Normalize values for visualization (optional)
+        per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
+                                      (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
+
+        # Convert to uint8 and save using imageio
+        output_loss_viz = output_dir / Path('losses')
+        output_loss_viz.mkdir(parents=True, exist_ok=True)
+        output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
+        imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
 
 
 class WriteResults:
