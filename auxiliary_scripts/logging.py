@@ -393,12 +393,11 @@ class WriteResults:
             feat_renders_crop = feat_renders[..., b0[0]:b0[1], b0[2]:b0[3]]
 
             last_segment = observed_segmentations[:, -1:]
-            last_segment_mask = last_segment[:, 0, 1]
 
             self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
                                            observed_segmentations[:, [-1], [-1]], stepi, tracking6d)
 
-            write_renders(feat_renders, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
+            write_renders(feat_renders[:, :, :3], tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
 
             # write_renders(torch.cat((images[..., b0[0]:b0[1], b0[2]:b0[3]], feat_renders[:, :, :, -1:]), 3),
@@ -490,9 +489,6 @@ class WriteResults:
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
 
-            if silh_losses[-1] > 0.3:
-                renders[0, -1, 0, 3] = last_segment[0, 0, -1]
-                renders[0, -1, 0, :3] = images[0, -1, :3] * last_segment[0, 0, -1]
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
