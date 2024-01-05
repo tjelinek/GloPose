@@ -45,8 +45,6 @@ class FrameResult:
 
 
 class Tracking6D:
-    FrameResult = namedtuple('FrameResult', ['theoretical_flow', 'encoder_result', 'renders', 'frame_losses',
-                                             'per_pixel_flow_error'])
 
     def __init__(self, config: TrackerConfig, device, write_folder, file0, bbox0, init_mask=None):
         # Encoders and related components
