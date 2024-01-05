@@ -131,6 +131,10 @@ class KeyframeBuffer:
 
         return concatenated_tensors
 
+    def get_flows_between_frames(self, source_frame: int, target_frame: int) -> FlowObservation:
+
+        return self.G.get_edge_data(source_frame, target_frame)['flow_observations']
+
     def get_observations_for_all_keyframes(self, bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
         vertices = list(filter(lambda vertex: vertex[0] in self.keyframes, self.G.nodes(data=True)))
         vertices.sort(key=lambda vertex: vertex[0])
