@@ -1,6 +1,6 @@
 from itertools import product
 
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Tuple, List
 
 import os
 import math
@@ -19,7 +19,7 @@ from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder, angle_axis_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
-from keyframe_buffer import FrameObservation, FlowObservation
+from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from segmentations import create_mask_from_string, pad_image
 from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
@@ -699,80 +699,78 @@ class WriteResults:
         return encoder_result_prime, keyframes_prime
 
 
-def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowResult, current_image_segmentation,
-                               previous_image_segmentation, bounding_box, observed_flow, opt_frames, stepi):
-    """
-    Visualizes the theoretical flow and related images for a given step.
+def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowResult, bounding_box,
+                               keyframe_buffer: KeyframeBuffer,
+                               new_flow_arcs: List[Tuple[int, int]]):
 
-    Args:
-        tracking6d (Tracking6D): The Tracking6D instance.
-        rendered_flow_result (RenderedFlowResult): Rendered flow result as defined in RenderingKaolin
-        current_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
-        previous_image_segmentation (torch.Tensor): Gt segmentations of shape (1, B, 1, H, W) in  [0, 1] range.
-        bounding_box (torch.Tensor): Bounding box of the observed object
-        observed_flow (torch.Tensor): Observed flow tensor with shape (1, B, 2, H, W) w.r.t. the [-1, 1] image
-                                      coordinates.
-        opt_frames (list): List of optical flow frames.
-        stepi (int): Step index.
-
-    Returns:
-        None
-    """
     with torch.no_grad():
-        # Get optical flow frames
-        opt_frames_prime = [max(opt_frames) - 1, max(opt_frames)]
+        print(new_flow_arcs)
+        for flow_arc in new_flow_arcs:
 
-        # Compute estimated shape
-        enc_result_prime, _ = tracking6d.frames_and_flow_frames_inference(opt_frames_prime, opt_frames_prime)
+            source_frame = flow_arc[0]
+            target_frame = flow_arc[1]
 
-        # Get texture map
-        tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
+            # Get optical flow frames
+            keyframes = [source_frame, target_frame]
+            flow_frames = [source_frame, target_frame]
 
-        # Render keyframe images
-        rendering: RenderingKaolin = tracking6d.rendering
-        rendering_rgb, rendering_silhouette = rendering.forward(enc_result_prime.translations,
-                                                                enc_result_prime.quaternions, enc_result_prime.vertices,
-                                                                tracking6d.encoder.face_features, tex_rgb,
-                                                                enc_result_prime.lights)
+            # Compute estimated shape
+            enc_result_prime, _ = tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames)
 
-        rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
+            # Get texture map
+            tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
 
-        # Extract current and previous rendered images
-        current_rendered_image_rgb = rendered_keyframe_images[0, -1]
-        previous_rendered_image_rgb = rendered_keyframe_images[0, -2]
+            # Render keyframe images
+            rendering: RenderingKaolin = tracking6d.rendering
+            rendering_rgb, rendering_silhouette = rendering.forward(enc_result_prime.translations,
+                                                                    enc_result_prime.quaternions,
+                                                                    enc_result_prime.vertices,
+                                                                    tracking6d.encoder.face_features, tex_rgb,
+                                                                    enc_result_prime.lights)
 
-        # Prepare file paths
-        theoretical_flow_paths = tracking6d.write_folder / Path('flows')
-        renderings_path = tracking6d.write_folder / Path('renderings')
-        occlusion_maps_path = tracking6d.write_folder / Path('occlusions')
+            rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 
-        theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
-        renderings_path.mkdir(exist_ok=True, parents=True)
-        occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+            # Extract current and previous rendered images
+            source_rendered_image_rgb = rendered_keyframe_images[0, -2]
+            target_rendered_image_rgb = rendered_keyframe_images[0, -1]
+
+            # Prepare file paths
+            theoretical_flow_paths = tracking6d.write_folder / Path('flows')
+            renderings_path = tracking6d.write_folder / Path('renderings')
+            occlusion_maps_path = tracking6d.write_folder / Path('occlusions')
+
+            theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
+            renderings_path.mkdir(exist_ok=True, parents=True)
+            occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
         theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{stepi}_{stepi + 1}.png")
         flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{stepi}_{stepi + 1}.png")
         rendering_1_path = renderings_path / Path(f"rendering_{stepi}_{stepi + 1}_1.png")
         occlusion_path = occlusion_maps_path / Path(f"occlusion_{stepi}_{stepi + 1}.png")
+            theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
+            flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
+            rendering_1_path = renderings_path / Path(f"rendering_{source_frame}_{target_frame}_1.png")
+            occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
-        visualize_occlusions(occlusion_path, previous_rendered_image_rgb, rendered_flow_result, alpha=0.5)
+            visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_result, alpha=0.5)
 
-        # Convert tensors to NumPy arrays
-        previous_rendered_image_np = (previous_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-        previous_rendered_image_np = previous_rendered_image_np.astype('uint8')
+            # Convert tensors to NumPy arrays
+            source_rendered_image_np = (source_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
+            source_rendered_image_np = source_rendered_image_np.astype('uint8')
 
-        # Save rendered images
-        imageio.imwrite(rendering_1_path, previous_rendered_image_np)
+            # Save rendered images
+            imageio.imwrite(rendering_1_path, source_rendered_image_np)
 
-        # Adjust (0, 1) range to pixel range
-        theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
-        theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
-        theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
+            # Adjust (0, 1) range to pixel range
+            theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
+            theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
+            theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
 
-        # Adjust (0, 1) range to pixel range
-        observed_flow = observed_flow[0, -1].detach().clone().cpu()
-        observed_flow[0, ...] *= observed_flow.shape[-1]
-        observed_flow[1, ...] *= observed_flow.shape[-2]
+            # Adjust (0, 1) range to pixel range
+            observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
+            observed_flow = observed_flow.squeeze().detach().clone().cpu()
+            observed_flow[0, ...] *= observed_flow.shape[-1]
+            observed_flow[1, ...] *= observed_flow.shape[-2]
 
         # Obtain flow and image illustrations
         theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
