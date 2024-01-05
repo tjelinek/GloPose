@@ -27,7 +27,7 @@ from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss
-from models.rendering import RenderingKaolin, infer_normalized_renderings
+from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
 from tracker_config import TrackerConfig
@@ -395,8 +395,7 @@ class Tracking6D:
 
                 for flow_arc in flow_arcs:
                     flow_source_frame, flow_target_frame = flow_arc
-                    observed_flow, occlusions, uncertainties = self.next_gt_flow(resize_transform, gt_flows,
-                                                                                 flow_source_frame, flow_target_frame)
+                    observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
 
                     self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
                                                        uncertainties, flow_source_frame, flow_target_frame)
@@ -409,8 +408,7 @@ class Tracking6D:
 
                     flow_arcs |= {(flow_source_frame, flow_target_frame)}
 
-                    observed_flow, occlusions, uncertainties = self.next_gt_flow(resize_transform, gt_flows,
-                                                                                 flow_source_frame, flow_target_frame,
+                    observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
                                                                                  mode='long')
                     if not already_present:
                         self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
@@ -533,31 +531,25 @@ class Tracking6D:
 
         return self.best_model
 
-    def next_gt_flow(self, resize_transform, gt_flow_files, flow_source_frame, flow_target_frame, mode='short'):
+    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
         occlusion = None
         uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
             keyframes = [flow_target_frame]
-            flow_frames = [flow_target_frame - 1]
+            flow_frames = [flow_source_frame]
             flow_arcs_indices = [(0, 0)]
 
             encoder_result, enc_flow = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                              encoder_type='gt_encoder')
 
-            observed_flow, _, _ = self.rendering.compute_theoretical_flow(encoder_result, enc_flow,
-                                                                          flow_arcs_indices)
-            observed_flow = observed_flow.detach()
+            observed_renderings = self.rendering.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
+
+            observed_flow = observed_renderings.theoretical_flow.detach()
             observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
-                                                     self.shape[-1], self.shape[-2])[0]
+                                                     self.shape[-1], self.shape[-2])
+            # occlusion = observed_renderings.rendered_flow_occlusion.detach()
 
-        elif self.config.gt_flow_source == 'FromFiles':  # We have ground truth flow annotations
-            assert mode == 'short'
-
-            # The annotations are assumed to be in the [0, 1] coordinate range
-            observed_flow = torch.load(gt_flow_files[flow_target_frame])[0].to(self.device)  # Size([1, H, W, 2])
-            observed_flow = observed_flow.permute(0, 3, 1, 2)
-            observed_flow = resize_transform(observed_flow)[None]
-        else:
+        elif self.config.gt_flow_source == 'FlowNetwork':
 
             last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
             last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
@@ -581,6 +573,9 @@ class Tracking6D:
 
             observed_flow[:, :, 0, ...] = observed_flow[:, :, 0, ...] / observed_flow.shape[-2]
             observed_flow[:, :, 1, ...] = observed_flow[:, :, 1, ...] / observed_flow.shape[-1]
+
+        else:
+            raise ValueError("'gt_flow_source' must be either 'GenerateSynthetic' or 'FlowNetwork'")
 
         if occlusion is None:
             occlusion = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
