@@ -687,12 +687,10 @@ class WriteResults:
         return encoder_result_prime, keyframes_prime
 
 
-def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowResult, bounding_box,
-                               keyframe_buffer: KeyframeBuffer,
+def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: KeyframeBuffer,
                                new_flow_arcs: List[Tuple[int, int]]):
 
     with torch.no_grad():
-        print(new_flow_arcs)
         for flow_arc in new_flow_arcs:
 
             source_frame = flow_arc[0]
@@ -703,18 +701,23 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
             flow_frames = [source_frame, target_frame]
 
             # Compute estimated shape
-            enc_result_prime, _ = tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames)
+            encoder_result, encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference(keyframes,
+                                                                                                     flow_frames)
 
             # Get texture map
             tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
 
             # Render keyframe images
             rendering: RenderingKaolin = tracking6d.rendering
-            rendering_rgb, rendering_silhouette = rendering.forward(enc_result_prime.translations,
-                                                                    enc_result_prime.quaternions,
-                                                                    enc_result_prime.vertices,
+            rendering_rgb, rendering_silhouette = rendering.forward(encoder_result.translations,
+                                                                    encoder_result.quaternions,
+                                                                    encoder_result.vertices,
                                                                     tracking6d.encoder.face_features, tex_rgb,
                                                                     enc_result_prime.lights)
+                                                                    encoder_result.lights)
+
+            rendered_flow_result = rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                      flow_arcs_indices=[(0, 1)])
 
             rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 

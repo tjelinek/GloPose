@@ -457,8 +457,8 @@ class Tracking6D:
             if self.config.write_results:
                 with torch.no_grad():
                     new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
-                    visualize_theoretical_flow(self, frame_result.flow_render_result, bounding_box=b0,
-                                               keyframe_buffer=self.active_keyframes, new_flow_arcs=new_flow_arcs)
+                    visualize_theoretical_flow(self, bounding_box=b0, keyframe_buffer=self.active_keyframes,
+                                               new_flow_arcs=new_flow_arcs)
 
                     self.write_results.write_results(self, b0=b0,
                                                      bboxes=bboxes, our_losses=our_losses,
