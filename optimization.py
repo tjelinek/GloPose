@@ -77,7 +77,7 @@ class EndPointErrorCostFunction(ceres.CostFunction):
         residuals[:] = function_eval_np[:]
 
         if jacobians is not None:
-            jacobian = compute_jacobian_using_vmap(parameters_tensor, self.cost_function).flatten()
+            jacobian = compute_jacobian(parameters_tensor, self.cost_function).flatten()
             jacobian_np_flat = jacobian.detach().cpu()
             jacobians[0][:] = jacobian_np_flat[:]
 
@@ -170,7 +170,7 @@ def lsq_lma_custom(
         fun = function
 
     if jac_function is None:
-        jac_fun = lambda p: compute_jacobian_using_vmap(p, f=fun)
+        jac_fun = lambda p: compute_jacobian(p, f=fun)
     else:
         jac_fun = lambda p: jac_function(p, *args)
 
