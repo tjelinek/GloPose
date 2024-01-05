@@ -713,7 +713,6 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
                                                                     encoder_result.quaternions,
                                                                     encoder_result.vertices,
                                                                     tracking6d.encoder.face_features, tex_rgb,
-                                                                    enc_result_prime.lights)
                                                                     encoder_result.lights)
 
             rendered_flow_result = rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
