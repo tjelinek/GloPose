@@ -30,7 +30,7 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
-def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_image, segment_prev_image, stepi,
+def visualize_flow(observed_flow, image, image_new, image_prev, segment_target_image, segment_prev_image, stepi,
                    output_dir, per_pixel_flow_error):
     """
     Visualize optical flow between two images and save the results as image files.
@@ -40,7 +40,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
         image (torch.Tensor): Original image tensor.
         image_new (torch.Tensor): New (second) image tensor.
         image_prev (torch.Tensor): Previous (first) image tensor.
-        segment_current_image (torch.Tensor): Segmentation mask tensor.
+        segment_target_image (torch.Tensor): Segmentation mask tensor.
         segment_prev_image (torch.Tensor): Segmentation mask tensor.
         stepi (int): Index of the current step in the frame sequence.
         output_dir (Path): Flow output directory
@@ -63,7 +63,7 @@ def visualize_flow(observed_flow, image, image_new, image_prev, segment_current_
     image_new_reformatted: torch.Tensor = image_new.to(torch.uint8)[0].detach().cpu()
 
     flow_illustration = visualize_flow_with_images(image_prev_reformatted, image_new_reformatted, flow_video_up, None,
-                                                   gt_silhouette_current=segment_current_image.cpu(),
+                                                   gt_silhouette_current=segment_target_image.cpu(),
                                                    gt_silhouette_prev=segment_prev_image.cpu())
     transform = transforms.ToPILImage()
     # image_pure_flow_segmented = transform(flow_image_segmented)
@@ -805,9 +805,9 @@ def visualize_theoretical_flow(tracking6d, rendered_flow_result: RenderedFlowRes
         imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
 
-def visualize_occlusions(occlusion_path, previous_rendered_image_rgb, rendered_flow_result, alpha):
+def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_result, alpha):
     occlusion_mask = rendered_flow_result.rendered_flow_occlusion[:, -1:].detach().clone().repeat(1, 1, 3, 1, 1)
-    blended_image = alpha * occlusion_mask + (1 - alpha) * previous_rendered_image_rgb
+    blended_image = alpha * occlusion_mask + (1 - alpha) * source_rendered_image_rgb
     blended_image_np = blended_image.squeeze().cpu().numpy()
     blended_image_np = (blended_image_np * 255).astype(np.uint8).transpose(1, 2, 0)
     imageio.imwrite(occlusion_path, blended_image_np)
