@@ -57,17 +57,29 @@ def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_p
 
         source_frame_segment_squeezed = source_frame_segment.squeeze()[0]
         target_frame_segment_squeezed = target_frame_segment.squeeze()[0]
+        observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
 
         flow_illustration = visualize_flow_with_images(source_image_discrete, target_image_discrete,
                                                        observed_flow_reordered, None,
                                                        gt_silhouette_current=source_frame_segment_squeezed,
-                                                       gt_silhouette_prev=target_frame_segment_squeezed)
-        (output_dir / Path('flows')).mkdir(exist_ok=True, parents=True)
-        (output_dir / Path('gt_imgs')).mkdir(exist_ok=True, parents=True)
+                                                       gt_silhouette_prev=target_frame_segment_squeezed,
+                                                       flow_occlusion_mask=observed_flow_occlusions_squeezed)
+
+        flows_path = output_dir / Path('flows')
+        gt_imgs_path = output_dir / Path('gt_imgs')
+        occlusion_maps_path = output_dir / Path('mft_occlusions')
+
+        flows_path.mkdir(exist_ok=True, parents=True)
+        gt_imgs_path.mkdir(exist_ok=True, parents=True)
+        occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
         # Define output file paths
         new_image_path = output_dir / Path('gt_imgs') / Path(f'gt_img_{source_frame}_{target_frame}.png')
         flow_image_path = output_dir / Path('flows') / Path(f'flow_{source_frame}_{target_frame}.png')
+        occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+
+        visualize_occlusions(occlusion_path, source_frame_image.squeeze(),
+                             observed_flow_occlusions_squeezed, alpha=0.5)
 
         transform = transforms.ToPILImage()
         target_image_PIL = transform(target_image_discrete)
@@ -727,7 +739,7 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
             # Prepare file paths
             theoretical_flow_paths = tracking6d.write_folder / Path('flows')
             renderings_path = tracking6d.write_folder / Path('renderings')
-            occlusion_maps_path = tracking6d.write_folder / Path('occlusions')
+            occlusion_maps_path = tracking6d.write_folder / Path('rendered_occlusions')
 
             theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
             renderings_path.mkdir(exist_ok=True, parents=True)
@@ -735,10 +747,11 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
 
             theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
             flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
-            rendering_1_path = renderings_path / Path(f"rendering_{source_frame}_{target_frame}_1.png")
+            rendering_1_path = renderings_path / Path(f"rendering_{source_frame}_{target_frame}.png")
             occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
-            visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_result, alpha=0.5)
+            visualize_occlusions(occlusion_path, source_rendered_image_rgb,
+                                 rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
 
             # Convert tensors to NumPy arrays
             source_rendered_image_np = (source_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
@@ -791,8 +804,8 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
 
-def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_result, alpha):
-    occlusion_mask = rendered_flow_result.rendered_flow_occlusion[:, -1:].detach().clone().repeat(1, 1, 3, 1, 1)
+def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_occlusion, alpha):
+    occlusion_mask = rendered_flow_occlusion[:, -1:].detach().clone().repeat(1, 1, 3, 1, 1)
     blended_image = alpha * occlusion_mask + (1 - alpha) * source_rendered_image_rgb
     blended_image_np = blended_image.squeeze().cpu().numpy()
     blended_image_np = (blended_image_np * 255).astype(np.uint8).transpose(1, 2, 0)
