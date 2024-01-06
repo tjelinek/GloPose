@@ -192,7 +192,8 @@ class Tracking6D:
 
                 # Do not optimize the poses
                 for param in [self.encoder.quaternion_w, self.encoder.quaternion_x, self.encoder.quaternion_y,
-                              self.encoder.quaternion_z, self.encoder.translation]:
+                              self.encoder.quaternion_z, self.encoder.translation,
+                              self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z]:
                     param.detach_()
             else:
                 raise ValueError("Required not to optimize pose even though no ground truth "
