@@ -174,15 +174,16 @@ class Tracking6D:
 
         def set_encoder_poses(encoder, rotations, translations):
             rotation_quaternion = angle_axis_to_quaternion(rotations, order=QuaternionCoeffOrder.WXYZ)
-            encoder.quaternion_w[...] = rotation_quaternion[..., 0, None]
-            encoder.quaternion_x[...] = rotation_quaternion[..., 1, None]
-            encoder.quaternion_y[...] = rotation_quaternion[..., 2, None]
-            encoder.quaternion_z[...] = rotation_quaternion[..., 3, None]
-            encoder.axis_angle_x[...] = rotations[..., 0, None]
-            encoder.axis_angle_y[...] = rotations[..., 1, None]
-            encoder.axis_angle_z[...] = rotations[..., 2, None]
+            encoder.quaternion_w = torch.nn.Parameter(rotation_quaternion[..., 0, None])
+            encoder.quaternion_x = torch.nn.Parameter(rotation_quaternion[..., 1, None])
+            encoder.quaternion_y = torch.nn.Parameter(rotation_quaternion[..., 2, None])
+            encoder.quaternion_z = torch.nn.Parameter(rotation_quaternion[..., 3, None])
 
-            encoder.translation[...] = translations
+            encoder.axis_angle_x = torch.nn.Parameter(rotations[..., 0, None])
+            encoder.axis_angle_y = torch.nn.Parameter(rotations[..., 1, None])
+            encoder.axis_angle_z = torch.nn.Parameter(rotations[..., 2, None])
+
+            encoder.translation = torch.nn.Parameter(translations)
 
         self.encoder.train()
 
