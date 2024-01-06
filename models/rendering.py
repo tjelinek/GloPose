@@ -147,10 +147,10 @@ class RenderingKaolin(nn.Module):
             face_normals_z_1 = face_normals_1[:, :, -1]
             face_normals_z_2 = face_normals_2[:, :, -1]
 
-            face_occlusion_indication = torch.sign(face_normals_z_1 * face_normals_z_2)
+            # This implementation is correct, but due to low mesh resolution, it does not work
+            face_occlusion_indication = 1. * (face_normals_2[:, :, -1] < 0)
             face_occlusion_indication_features = face_occlusion_indication[..., None, None].repeat(1, 1, 3, 1)
 
-            # face_vertices_3d_motion = face_vertices_cam_2 - face_vertices_cam_1
             face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
 
             features_for_rendering = torch.cat([face_vertices_image_motion,
