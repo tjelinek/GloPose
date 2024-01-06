@@ -94,13 +94,14 @@ class RenderingKaolin(nn.Module):
 
         return all_renderings, all_renderings_masks
 
-    def compute_theoretical_flow(self, encoder_out, encoder_out_prev_frames, flow_arcs_indices) -> RenderedFlowResult:
+    def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
+            -> RenderedFlowResult:
         """
         Computes the theoretical flow between consecutive frames.
 
         Args:
-            encoder_out (EncoderResult): The encoder result for the current frame.
-            encoder_out_prev_frames (EncoderResult): The encoder results for the previous frames.
+            encoder_out_new_pose (EncoderResult): The encoder result for the current frame.
+            encoder_out_prev_pose (EncoderResult): The encoder results for the previous frames.
             flow_arcs_indices (Sorted[Tuple[int, int]]): Indexes in encoder_out_prev_frames and encoder_out given as a 
                                                          sorted collection of tuples.
 
@@ -112,19 +113,19 @@ class RenderingKaolin(nn.Module):
         rendering_masks = []
         occlusion_masks = []
         for frame_i_prev, frame_i in flow_arcs_indices:
-            translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i_prev]
-            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i_prev],
+            translation_vector_1 = encoder_out_prev_pose.translations[:, :, frame_i_prev]
+            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_pose.quaternions[:, frame_i_prev],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            translation_vector_2 = encoder_out.translations[:, :, frame_i]
-            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
+            translation_vector_2 = encoder_out_new_pose.translations[:, :, frame_i]
+            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out_new_pose.quaternions[:, frame_i],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
             # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out.vertices,
+            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_pose.vertices,
                                                                       rotation_matrix_1, self.obj_center)
-            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out.vertices,
-                                                                      rotation_matrix_2, self.obj_center)
+            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_pose.vertices,
+                                                                      rotation_matrix_2, self.obj_center).clone()
 
             vertices_1 = vertices_1 + translation_vector_1
             vertices_2 = vertices_2 + translation_vector_2
