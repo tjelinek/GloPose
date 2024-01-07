@@ -303,7 +303,6 @@ class Tracking6D:
         self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2],
                                    3, texture_map_init).to(self.device)
 
-
         rgb_parameters = [self.rgb_encoder.texture_map]
         self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
         self.rgb_encoder.train()
@@ -683,7 +682,7 @@ class Tracking6D:
 
             infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                             'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = infer_result
+            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
 
             model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
                                                     losses, encoder_result)
@@ -692,9 +691,6 @@ class Tracking6D:
                 self.best_model["value"] = model_loss
                 self.best_model["losses"] = losses_all
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-                if self.config.write_intermediate:
-                    write_renders(torch.cat((renders[:, :, :, :3], renders[:, :, :, -1:]), 3), self.write_folder,
-                                  self.config.max_keyframes + 1)
             else:
                 iters_without_change += 1
 
@@ -1058,6 +1054,7 @@ class Tracking6D:
 
     def infer_model(self, observations: FrameObservation, flow_observations: FlowObservation, keyframes, flow_frames,
                     flow_arcs, encoder_type):
+                    flow_arcs, encoder_type) -> Tuple[EncoderResult, Any, Any, Any, Any, Any, RenderedFlowResult]:
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
                                                                                            encoder_type=encoder_type)
@@ -1068,6 +1065,7 @@ class Tracking6D:
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
                                                        self.shape[-1], self.shape[-2])
         renders, rendered_silhouettes, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
+        renders, rendered_silhouettes, rendered_flow_result = inference_result
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function
