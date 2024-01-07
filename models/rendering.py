@@ -182,6 +182,36 @@ class RenderingKaolin(nn.Module):
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
 
+    def get_occlusion_mask_using_rendered_coordinates(self, rendered_pose1_with_pose2_coordinates,
+                                                      rendered_pose2_with_pose2_coordinates, theoretical_flow):
+        theoretical_flow_discrete = self.theoretical_flow_kaolin_to_image_warp(theoretical_flow)
+
+        x_coords, x_coords_new, y_coords, y_coords_new = (
+            self.get_original_and_warped_coordinates_from_flow(theoretical_flow_discrete))
+
+        position_difference = (rendered_pose2_with_pose2_coordinates[0, y_coords_new, x_coords_new] -
+                               rendered_pose1_with_pose2_coordinates[0, y_coords, x_coords])
+        position_difference_norm = torch.linalg.vector_norm(position_difference, dim=-1)
+
+        occlusion_mask = torch.zeros(1, 1, self.height, self.width).cuda()
+        occlusion_mask[0, 0, y_coords, x_coords] = (position_difference_norm > 1e-1).float()
+
+        return occlusion_mask
+
+    def get_occlusion_mask_using_rendered_indices(self, rendered_pose1_with_pose2_indices,
+                                                  rendered_pose2_with_pose2_indices, theoretical_flow):
+        theoretical_flow_discrete = self.theoretical_flow_kaolin_to_image_warp(theoretical_flow)
+
+        x_coords, x_coords_new, y_coords, y_coords_new = (
+            self.get_original_and_warped_coordinates_from_flow(theoretical_flow_discrete))
+
+        indices_eq_tensor = 1. * (rendered_pose2_with_pose2_indices == rendered_pose1_with_pose2_indices)
+
+        occlusion_mask = torch.zeros(1, 1, self.height, self.width).cuda()
+        occlusion_mask[0, 0, y_coords, x_coords] = indices_eq_tensor[0]
+
+        return occlusion_mask
+
     def get_original_and_warped_coordinates_from_flow(self, theoretical_flow_discrete):
         x_coord_delta = theoretical_flow_discrete[..., 0]
         y_coord_delta = theoretical_flow_discrete[..., 1]
