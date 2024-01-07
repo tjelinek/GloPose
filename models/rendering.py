@@ -182,6 +182,23 @@ class RenderingKaolin(nn.Module):
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
 
+    def get_original_and_warped_coordinates_from_flow(self, theoretical_flow_discrete):
+        x_coord_delta = theoretical_flow_discrete[..., 0]
+        y_coord_delta = theoretical_flow_discrete[..., 1]
+        x_coords, y_coords = torch.meshgrid(torch.arange(self.height), torch.arange(self.width))
+        x_coords = x_coords.long().cuda()
+        y_coords = y_coords.long().cuda()
+        x_coords_new = torch.clamp(x_coords + x_coord_delta, 0, self.width).long()
+        y_coord_new = torch.clamp(y_coords + y_coord_delta, 0, self.height).long()
+        return x_coords, x_coords_new, y_coords, y_coord_new
+
+    def theoretical_flow_kaolin_to_image_warp(self, theoretical_flow):
+        theoretical_flow_discrete = theoretical_flow.clone()
+        theoretical_flow_discrete[..., 0] *= self.height * 0.5
+        theoretical_flow_discrete[..., 1] *= -self.width * 0.5
+        theoretical_flow_discrete = theoretical_flow_discrete[0].long()
+        return theoretical_flow_discrete
+
     def rendered_world_mesh_coordinates(self, encoder_result):
         rendered_camera_coordinates = []
         rendering_masks = []
