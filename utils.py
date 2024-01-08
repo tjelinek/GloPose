@@ -459,9 +459,10 @@ def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, 
     return rendered_flows
 
 
-def normalize_vertices(vertices):
-    vertices = vertices - vertices[0].mean(0)
-    magnification = 1 / (vertices.max() - vertices.mean()) * 1.0
+def normalize_vertices(vertices: torch.Tensor):
+    vertices = vertices - vertices.mean(axis=0)
+    max_abs_val = torch.max(torch.abs(vertices))
+    magnification = 1.0 / max_abs_val if max_abs_val != 0 else 1.0
     vertices *= magnification
 
     return vertices
