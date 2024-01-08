@@ -1,112 +1,111 @@
-from dataclasses import dataclass, field
-from typing import List
-
 from tracker_config import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(TrackerConfig):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
     # General settings
-    tracker_type: str = 'd3s'
-    features: str = 'deep'
-    verbose: bool = True
-    write_results: bool = True
-    write_intermediate: bool = False
-    visualize_loss_landscape: bool = True
-    render_just_bounding_box: bool = False
-    training_print_status_frequency = 20
+    cfg.tracker_type = 'd3s'
+    cfg.features = 'deep'
+    cfg.verbose = True
+    cfg.write_results = True
+    cfg.write_intermediate = False
+    cfg.visualize_loss_landscape = True
+    cfg.render_just_bounding_box = False
+    cfg.training_print_status_frequency = 20
 
     # Frame and keyframe settings
-    input_frames: int = 0
-    max_keyframes: int = 8
-    all_frames_keyframes: bool = False
-    fmo_steps: int = 1
-    stochastically_add_keyframes: bool = False
+    cfg.input_frames = 0
+    cfg.max_keyframes = 8
+    cfg.all_frames_keyframes = False
+    cfg.fmo_steps = 1
+    cfg.stochastically_add_keyframes = False
 
     # Mesh settings
-    mesh_size: int = 11
-    mesh_normalize: bool = False
-    texture_size: int = 300
-    use_lights: bool = False
+    cfg.mesh_size = 11
+    cfg.mesh_normalize = False
+    cfg.texture_size = 300
+    cfg.use_lights = False
 
     # Camera settings
-    camera_distance: float = 5
-    max_width: int = 500
-    image_downsample: float = 1.0
+    cfg.camera_distance = 5
+    cfg.max_width = 500
+    cfg.image_downsample = 1.0
 
     # Learning rates
-    learning_rate: float = 0.1
-    quaternion_learning_rate_coef: float = 1.0
-    translation_learning_rate_coef: float = 1.0
+    cfg.learning_rate = 0.1
+    cfg.quaternion_learning_rate_coef = 1.0
+    cfg.translation_learning_rate_coef = 1.0
 
     # Tracking settings
-    tran_init: float = 0.0
-    rot_init: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    inc_step: int = 5
-    iterations: int = 500
-    stop_value: float = 0.05
-    rgb_iters: int = 200
-    project_coin: bool = False
-    connect_frames: bool = False
-    accumulate: bool = False
-    weight_by_gradient: bool = False
-    mot_opt_all: bool = True
-    motion_only_last: bool = True
+    cfg.tran_init = 0.0
+    cfg.rot_init = (0, 0, 0)
+    cfg.inc_step = 5
+    cfg.iterations = 500
+    cfg.stop_value = 0.05
+    cfg.rgb_iters = 200
+    cfg.project_coin = False
+    cfg.connect_frames = False
+    cfg.accumulate = False
+    cfg.weight_by_gradient = False
+    cfg.mot_opt_all = True
+    cfg.motion_only_last = True
 
     # Loss function coefficients
-    loss_laplacian_weight: float = 1000.0
-    loss_tv_weight: float = 0.001
-    loss_iou_weight: float = 1.0
-    loss_dist_weight: float = 0
-    loss_q_weight: float = 1.0
-    loss_texture_change_weight: float = 0
-    loss_t_weight: float = 1.0
-    loss_rgb_weight: float = 1.0
-    loss_flow_weight: float = 10.0
-    loss_fl_obs_and_rend_weight: float = None
-    loss_fl_not_obs_rend_weight: float = None
-    loss_fl_obs_not_rend_weight: float = None
+    cfg.loss_laplacian_weight = 1000.0
+    cfg.loss_tv_weight = 0.001
+    cfg.loss_iou_weight = 1.0
+    cfg.loss_dist_weight = 0
+    cfg.loss_q_weight = 1.0
+    cfg.loss_texture_change_weight = 0
+    cfg.loss_t_weight = 1.0
+    cfg.loss_rgb_weight = 1.0
+    cfg.loss_flow_weight = 10.0
+    cfg.loss_fl_obs_and_rend_weight = None
+    cfg.loss_fl_not_obs_rend_weight = None
+    cfg.loss_fl_obs_not_rend_weight = None
 
     # Additional settings
-    sigmainv: float = 7000
-    factor: float = 1
-    mask_iou_th: float = 0
-    erode_renderer_mask: int = 3
-    rotation_divide: int = 8
-    sequence: str = None
+    cfg.sigmainv = 7000
+    cfg.factor = 1
+    cfg.mask_iou_th = 0
+    cfg.erode_renderer_mask = 3
+    cfg.rotation_divide = 8
+    cfg.sequence = None
 
     # Ground truths
-    initial_mesh_path: str = 'prototypes/sphere.obj'
-    gt_mesh_path: str = None
-    optimize_shape: bool = True
+    cfg.initial_mesh_path = 'prototypes/sphere.obj'
+    cfg.gt_mesh_path = None
+    cfg.optimize_shape = True
 
-    gt_texture_path: str = None
-    optimize_texture: bool = True
+    cfg.gt_texture_path = None
+    cfg.optimize_texture = True
 
-    gt_track_path: str = None
-    optimize_pose: bool = True
+    cfg.gt_track_path = None
+    cfg.optimize_pose = True
 
-    generate_synthetic_observations_if_possible: bool = True
+    cfg.generate_synthetic_observations_if_possible = True
 
-    gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
-    short_flow_model: str = 'GMA'  # 'RAFT' 'GMA'
-    long_flow_model: str = 'MFT'   # 'MFT' or None
+    cfg.gt_flow_source = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
+    cfg.short_flow_model = 'GMA'  # 'RAFT' 'GMA'
+    cfg.long_flow_model = 'MFT'  # 'MFT' or None
 
     # Optimization
-    allow_break_sgd_after = 30
-    break_sgd_after_iters_with_no_change = 20
-    optimize_non_positional_params_after = 70
-    levenberg_marquardt_max_ter = allow_break_sgd_after
-    use_lr_scheduler = False
-    lr_scheduler_patience = 5
+    cfg.allow_break_sgd_after = 30
+    cfg.break_sgd_after_iters_with_no_change = 20
+    cfg.optimize_non_positional_params_after = 70
+    cfg.levenberg_marquardt_max_ter = cfg.allow_break_sgd_after
+    cfg.use_lr_scheduler = False
+    cfg.lr_scheduler_patience = 5
 
     # Optical flow settings
-    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
+    cfg.add_flow_arcs_strategy = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).
-    segmentation_mask_erosion_iters: int = 0
-    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent' and 'lbfgs'
-    preinitialization_method: str = 'levenberg-marquardt'
-    flow_sgd: bool = False
-    flow_sgd_n_samples: int = 100
+    cfg.segmentation_mask_erosion_iters = 0
+    # Pre-initialization method of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent' and 'lbfgs'
+    cfg.preinitialization_method = 'levenberg-marquardt'
+    cfg.flow_sgd = False
+    cfg.flow_sgd_n_samples = 100
+
+    return cfg

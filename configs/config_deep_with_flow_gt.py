@@ -1,11 +1,10 @@
-from dataclasses import dataclass, field
-from typing import List
-
 from tracker_config import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(TrackerConfig):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
-    optimize_shape = False
-    all_frames_keyframes = True
+    cfg.optimize_shape = False
+    cfg.all_frames_keyframes = True
+
+    return cfg

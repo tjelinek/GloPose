@@ -1,9 +1,9 @@
-from dataclasses import dataclass
-
-from configs.config_deep import ConfigDeep
+from configs.config_deep import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(ConfigDeep):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
-    loss_flow_weight: float = 0
+    cfg.loss_flow_weight = 0
+
+    return cfg

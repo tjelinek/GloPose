@@ -1,21 +1,21 @@
-from dataclasses import dataclass
-
-from configs.config_deep import ConfigDeep
+from configs.config_deep import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(ConfigDeep):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
-    loss_laplacian_weight: float = 0
-    loss_tv_weight: float = 0
-    loss_iou_weight: float = 0
-    loss_dist_weight: float = 0
-    loss_texture_change_weight: float = 0
-    loss_rgb_weight: float = 0
-    loss_q_weight: float = 0
-    loss_t_weight: float = 0
-    loss_flow_weight: float = 10.0
+    cfg.loss_laplacian_weight = 0
+    cfg.loss_tv_weight = 0
+    cfg.loss_iou_weight = 0
+    cfg.loss_dist_weight = 0
+    cfg.loss_texture_change_weight = 0
+    cfg.loss_rgb_weight = 0
+    cfg.loss_q_weight = 0
+    cfg.loss_t_weight = 0
+    cfg.loss_flow_weight = 10.0
 
-    optimize_shape: bool = False
-    max_keyframes: int = 1
+    cfg.optimize_shape = False
+    cfg.max_keyframes = 1
+
+    return cfg
 

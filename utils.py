@@ -79,11 +79,26 @@ def calciou_masks(mask1, mask2):
     return iou
 
 
-def load_config(config_name) -> TrackerConfig:
+def load_config_yaml(config_name) -> TrackerConfig:
     with open(config_name) as file:
         config = yaml.safe_load(file)
     tracker_config = TrackerConfig(**config)
     return tracker_config
+
+
+def load_config(config_path) -> TrackerConfig:
+    config_path = Path(config_path)
+    if config_path.suffix == 'yaml':
+        load_config_yaml(config_path)
+
+    spec = importlib.util.spec_from_file_location("module.name", config_path)
+    config_module = importlib.util.module_from_spec(spec)
+    sys.modules["module.name"] = config_module
+    spec.loader.exec_module(config_module)
+
+    config_instance: TrackerConfig = config_module.get_config()
+
+    return config_instance
 
 
 def fmo_detect(I, B):

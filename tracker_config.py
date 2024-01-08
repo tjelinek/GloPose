@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
+from typing import Tuple
 
 
 @dataclass
@@ -44,7 +44,7 @@ class TrackerConfig:
 
     # Tracking settings
     tran_init: float = 0.0
-    rot_init: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    rot_init: Tuple[float] = (0, 0, 0)
     inc_step: int = 5
     iterations: int = 500
     stop_value: float = 0.05

@@ -1,10 +1,9 @@
-from dataclasses import dataclass, field
-from typing import List
-
 from tracker_config import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(TrackerConfig):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
-    loss_rgb_weight = 0
+    cfg.loss_rgb_weight = 0
+
+    return cfg

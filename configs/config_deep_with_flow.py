@@ -1,10 +1,7 @@
-from dataclasses import dataclass, field
-from typing import List
-
 from tracker_config import TrackerConfig
 
 
-@dataclass
-class ConfigDeep(TrackerConfig):
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
 
-    pass
+    return cfg

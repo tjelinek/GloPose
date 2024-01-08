@@ -102,7 +102,6 @@ class Tracking6D:
         self.shape = tuple()
         self.write_folder = Path(write_folder)
         self.config = config
-        self.config.fmo_steps = 1
         self.config_copy = copy.deepcopy(self.config)
         self.device = device
 
