@@ -1171,6 +1171,8 @@ class Tracking6D:
 
     def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
                   flow_observations: FlowObservation, frame_losses):
+        start_time = time.time()
+
         self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
         pretrained_dict = self.best_model["encoder"]
@@ -1179,6 +1181,7 @@ class Tracking6D:
         self.rgb_encoder.load_state_dict(model_state)
 
         print("Texture optimization")
+        epoch = 0
         for epoch in range(self.config.rgb_iters):
             infer_result = self.infer_model(observations, flow_observations, keyframes=keyframes,
                                             flow_frames=flow_frames, flow_arcs=flow_arcs, encoder_type='rgb')
@@ -1193,3 +1196,5 @@ class Tracking6D:
             self.rgb_optimizer.zero_grad()
             joint_loss.backward(retain_graph=True)
             self.rgb_optimizer.step()
+
+        print(f'Elapsed time in seconds: {time.time() - start_time} for total of {epoch + 1} epochs.')
