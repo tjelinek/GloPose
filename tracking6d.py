@@ -153,8 +153,13 @@ class Tracking6D:
 
     def initialize_gt_texture(self):
         if self.config.gt_texture_path is not None:
-            texture_np = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture_path)))
-            self.gt_texture = texture_np.permute(2, 0, 1)[None].to(self.device) / 255.0
+            texture = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture_path)))
+            texture = texture.permute(2, 0, 1)[None].to(self.device) / 255.0
+            if max(texture.shape[-2:]) > 1000:
+                resize = transforms.Resize(size=1000)
+                texture = resize(texture)
+
+            self.gt_texture = texture
         self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
     def initialize_gt_tracks(self):
