@@ -27,18 +27,15 @@ def main():
     dataset = 'concept'
     folder_name = '360photo'
     sequences = ["09"]
-
+    args = parse_args()
 
     for sequence in sequences:
-        args = parse_args(sequence, dataset, folder_name)
 
         experiment_name = args.experiment
         config = load_config(args.config)
-        config.image_downsample = 0.25
-        config.tran_init = 0
-        config.sequence = args.sequence
+        config.sequence = sequence
 
-        write_folder = os.path.join(tmp_folder, experiment_name, args.folder_name, args.sequence)
+        write_folder = os.path.join(tmp_folder, experiment_name, folder_name, sequence)
         if os.path.exists(write_folder):
             shutil.rmtree(write_folder)
         os.makedirs(write_folder)
@@ -51,15 +48,15 @@ def main():
 
         t0 = time.time()
         files = np.array(
-            glob.glob(os.path.join(dataset_folder_, renderings_folder, args.dataset, args.sequence, '*.*')))
+            glob.glob(os.path.join(dataset_folder_, renderings_folder, dataset, sequence, '*.*')))
         files.sort()
         segms = np.array(
-            glob.glob(os.path.join(dataset_folder_, segmentations_folder, args.dataset, args.sequence, '*.*')))
+            glob.glob(os.path.join(dataset_folder_, segmentations_folder, dataset, sequence, '*.*')))
         segms.sort()
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(args, config, files, segms, write_folder, None)
+        run_tracking_on_sequence(config, files, segms, write_folder, None)
 
 
 if __name__ == "__main__":

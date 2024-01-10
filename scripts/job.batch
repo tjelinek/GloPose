@@ -11,50 +11,43 @@
 #SBATCH --err=/mnt/personal/jelint19/results/FlowTracker.err
 #SBATCH --out=/mnt/personal/jelint19/results/FlowTracker.out
 
-if [ $# -eq 0 ]; then
-    experiment="Default"
-else
-    experiment=$1
+dataset_runner=""
+config_file_path="config/config_deep.py"
+output_folder="/mnt/personal/jelint19/results/FlowTracker/"
+sequences=()
+experiment=""
+
+# Extract arguments
+while [[ "$#" -gt 0 ]]; do
+    if [[ $parsing_sequences -eq 1 ]]; then
+        if [[ $1 == --* ]]; then
+            parsing_sequences=0
+            continue
+        else
+            sequences+=("$1")
+            shift
+            continue
+        fi
+    fi
+
+    case $1 in
+        --dataset-runner) dataset_runner="$2"; shift ;;
+        --config) config_file_path="$2"; shift ;;
+        --experiment) experiment="$2"; shift ;;
+        --output-folder) output_folder="$2"; shift ;;
+        --sequences) parsing_sequences=1 ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+
+if [ -z "$dataset_runner" ] || [ -z "$config_file_path" ] || [ -z "$output_folder" ]; then
+    echo "Missing required arguments"
+    exit 1
 fi
 
-outputfolder_root="/mnt/personal/jelint19/results/FlowTracker/"
+ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.9.2-foss-2022a-CUDA-11.7.0 tensorboard/2.11.0-foss-2022a kornia/0.6.12-foss-2022a-CUDA-11.7.0 kaolin/0.14.0-foss-2022a-CUDA-11.7.0 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.15.2-foss-2022a-CUDA-11.7.0 PyTorch3D/0.7.4-foss-2022a-CUDA-11.7.0 OpenCV/4.6.0-foss-2022a-CUDA-11.7.0-contrib scikit-image/0.19.3-foss-2022a visdom/0.2.4-foss-2022a-PyTorch-2.0.1 COLMAP/3.8-foss-2022a-CUDA-11.7.0 CeresSolver/2.2.0-foss-2022a-CUDA-11.7.0 pyceres/1.0-foss-2022a-CUDA-11.7.0 pycolmap/0.4.0-foss-2022a-CUDA-11.7.0
 
-#experiment="config_deep_only_iou_and_flow_gt_max_keyframes"
-
-# Function to check if a folder exists
-folder_exists() {
-  [ -d "$1" ]
-}
-
-# Function to find the lowest non-used number
-find_lowest_nonused_number() {
-  local i=1
-  while folder_exists "${outputfolder_root}${experiment}_${i}"; do
-    ((i++))
-  done
-  echo "$i"
-}
-
-# Check if the folder already exists
-if folder_exists "${outputfolder_root}${experiment}"; then
-  # Find the lowest non-used number and modify experiment name
-  lowest_nonused_number=$(find_lowest_nonused_number)
-  modified_experiment="${experiment}_${lowest_nonused_number}"
-else
-  modified_experiment="$experiment"
-fi
-
-
-outputfolder="${outputfolder_root}${modified_experiment}"
-
-cfg="configs/${experiment}.py"
-
-ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.9.2-foss-2022a-CUDA-11.7.0 tensorboard/2.13.0-foss-2022a kornia/0.6.9-foss-2022a-CUDA-11.7.0 kaolin/0.14.0-foss-2022a-CUDA-11.7.0 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.15.2-foss-2022a-CUDA-11.7.0 PyTorch3D/0.7.4-foss-2022a-CUDA-11.7.0 OpenCV/4.6.0-foss-2022a-CUDA-11.7.0-contrib scikit-image/0.19.3-foss-2022a
-
-mkdir -p "${outputfolder}"
-
-
-python run_SyntheticObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/SyntheticObjects.log" 2>&1 &
-#python run_GoogleScannedObjects.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/GoogleScannedObjects.log" 2>&1 &
-#python run_360.py --experiment="$modified_experiment" --config="$cfg" >> "${outputfolder}/360.log" 2>&1
-wait
+python "$dataset_runner" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}"
+# >> "${output_folder}/${experiment}.log" 2>&1

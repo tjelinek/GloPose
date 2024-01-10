@@ -12,19 +12,13 @@ sys.path.append('OSTrack/S2DNet')
 from tracking6d import Tracking6D
 
 
-def run_tracking_on_sequence(args, config: TrackerConfig, files, segms, write_folder, optical_flows=None):
+def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder, optical_flows=None):
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
     print("Running tracking on dataset:", write_folder_path.parent.name)
     print("Sequence:", write_folder_path.name)
     print('---------------------------------------------------\n\n')
 
-    if args.length is None:
-        args.length = len(files)
-    files = files[args.start:args.length:args.skip]
-    segms = segms[args.start:args.length:args.skip]
-    if optical_flows is not None:
-        optical_flows = optical_flows[args.start:args.length:args.skip]
     config.input_frames = len(files)
     if config.inc_step == 0:
         config.inc_step = len(files)
@@ -41,15 +35,10 @@ def run_tracking_on_sequence(args, config: TrackerConfig, files, segms, write_fo
                                                                             best_model["value"]))
 
 
-def parse_args(sequence, dataset, folder_name=None):
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
-    parser.add_argument("--dataset", required=False, default=dataset)
-    parser.add_argument("--sequence", required=False, default=sequence)
-    parser.add_argument("--start", required=False, default=0)
-    parser.add_argument("--length", required=False, default=360)
-    parser.add_argument("--skip", required=False, default=1)
-    parser.add_argument("--perc", required=False, default=1.0)
-    parser.add_argument("--folder_name", required=False, default=folder_name)
+    parser.add_argument("--sequences", required=False, nargs='*', default=None)
+    parser.add_argument("--output_folder", required=False)
     parser.add_argument("--experiment", required=False, default='')  # Experiment name
     return parser.parse_args()
