@@ -112,3 +112,4 @@ class TrackerConfig:
     preinitialization_method: str = 'levenberg-marquardt'
     flow_sgd: bool = False
     flow_sgd_n_samples: int = 100
+    points_fraction_visible_new_track = None  # If more then this foreground pixels are occluded, create new MFT track

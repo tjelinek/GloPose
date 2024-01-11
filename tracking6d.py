@@ -26,7 +26,7 @@ from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
-from models.loss import FMOLoss
+from models.loss import FMOLoss, iou_loss
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
@@ -404,7 +404,7 @@ class Tracking6D:
                                                        uncertainties, flow_source_frame, flow_target_frame)
 
                 if self.long_flow_model is not None:
-                    long_flow_arc = (0, stepi)
+                    long_flow_arc = (self.flow_tracks_inits[-1], stepi)
                     flow_source_frame, flow_target_frame = long_flow_arc
 
                     already_present = long_flow_arc in flow_arcs
@@ -511,6 +511,18 @@ class Tracking6D:
             # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
             print("Angles:", angles)
 
+            if self.config.points_fraction_visible_new_track is not None:
+                longest_flow = self.all_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], stepi)
+                last_observed_segmentation = longest_flow.observed_flow_segmentation[:, -1:, -1:]
+                last_observed_occlusion = longest_flow.observed_flow_occlusion[:, -1:]
+                fraction_points_visible = float(iou_loss(last_observed_segmentation, last_observed_occlusion))
+
+                print(f"Fraction points not occluded {fraction_points_visible} flow tracks beginnings at "
+                      f"{self.flow_tracks_inits}")
+                if fraction_points_visible < self.config.points_fraction_visible_new_track:
+                    self.flow_tracks_inits.append(stepi)
+                    self.need_to_init_mft = True
+
             rot_degree_th = 45
             small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
             if small_rotation:  # and small_translation):
@@ -558,9 +570,12 @@ class Tracking6D:
                 image_new_x255_mft = tensor_image_to_mft_format(image_new_x255)
                 image_prev_x255_mft = tensor_image_to_mft_format(image_prev_x255)
 
-                if max(self.all_keyframes.keyframes) == 1:
+                if self.need_to_init_mft and self.flow_tracks_inits[-1] == flow_source_frame:
                     self.long_flow_model.init(image_prev_x255_mft)
-                assert flow_source_frame == 0 and flow_target_frame == max(self.all_keyframes.keyframes)
+                    self.need_to_init_mft = False
+
+                assert (flow_source_frame == self.flow_tracks_inits[-1] and
+                        flow_target_frame == max(self.all_keyframes.keyframes))
                 observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
                                                                                  self.long_flow_model)
             elif mode == 'short':
