@@ -171,10 +171,10 @@ class Tracking6D:
             self.gt_rotations = gt_rotations.to(self.device)
             self.gt_translations = gt_translations.to(self.device)
 
-    def initialize_renderer_and_encoder(self, iface_features, ivertices, num_channels):
+    def initialize_renderer_and_encoder(self, iface_features, ivertices):
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
         self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
-                               num_channels).to(self.device)
+                               self.config.features_channels).to(self.device)
 
         if not self.config.optimize_texture and self.gt_texture is not None:
             self.encoder.texture_map = self.gt_texture_features
