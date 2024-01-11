@@ -124,8 +124,7 @@ class Tracking6D:
 
         if self.config.generate_synthetic_observations_if_possible and \
                 self.gt_translations is not None and self.gt_rotations is not None:
-            self.tracker = SyntheticDataGeneratingTracker(self.config.image_downsample, self.config.max_width, self,
-                                                          self.gt_rotations, self.gt_translations)
+            self.tracker = SyntheticDataGeneratingTracker(self.config, self)
             # Re-render the images using the synthetic tracker
             images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
 

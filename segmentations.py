@@ -96,7 +96,7 @@ class BaseTracker(ABC):
         segment = (segment > 0.5).astype(np.float64)
         segment_resized = cv2.resize(segment, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
         segment_orig_torch = transforms.ToTensor()(segment)
-        segments = compute_segments_dist(segment_resized[None], segment_orig_torch)
+        segments = compute_segments_dist(segment_resized[None])
         return image, segments
 
 
@@ -144,11 +144,9 @@ class PrecomputedTracker(BaseTracker):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, perc, max_width, tracking6d, gt_rotations, gt_translations):
-        super().__init__(perc, max_width)
+    def __init__(self, tracker_config: TrackerConfig, tracking6d):
+        super().__init__(tracker_config.image_downsample, tracker_config.max_width)
         self.tracking6d = tracking6d
-        self.gt_rotations = gt_rotations
-        self.gt_translations = gt_translations
         self.encoder_face_features = self.tracking6d.gt_encoder.face_features
         self.gt_texture = self.tracking6d.gt_texture
         self.shape = (self.tracking6d.rendering.width, self.tracking6d.rendering.height, 3)
@@ -169,7 +167,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         segment = segment.detach()
         segment_np = segment.cpu().numpy()
 
-        segments = compute_segments_dist(segment_np[0, 0], segment)[None]
+        segments = compute_segments_dist(segment_np[0, 0])[None]
         segments = segments.cuda()
         return image, segments
 
