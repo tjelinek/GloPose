@@ -167,7 +167,10 @@ class FMOLoss(nn.Module):
             # per_pixel_flow_loss_observed = (end_point_error_l1_norm * observed_flow_segmentation_binary)
             per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation)
 
-            per_pixel_flow_loss = per_pixel_flow_loss_rendered
+            observed_flow_occlusion_thresholded = (observed_flow_occlusion[:, :, 0] < 0.9) * 1.0
+            per_pixel_flow_loss_occlusions_rendered = observed_flow_occlusion_thresholded * per_pixel_flow_loss_rendered
+
+            per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered
             if return_end_point_errors:
                 nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
                 per_pixel_flow_loss_nonzero = per_pixel_flow_loss[nonzero_indices]
@@ -184,7 +187,7 @@ class FMOLoss(nn.Module):
             # per_pixel_mean_flow_loss_observed = (
             #         per_pixel_flow_loss_observed.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
             per_pixel_mean_flow_loss_rendered = (
-                    per_pixel_flow_loss_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
+                    per_pixel_flow_loss_occlusions_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
 
             # losses["fl_obs_not_ren"] = (per_pixel_mean_flow_loss_observed_not_rendered *
             #                              self.config.loss_flow_weight)
