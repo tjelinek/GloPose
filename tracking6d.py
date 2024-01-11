@@ -28,7 +28,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optimization import lsq_lma_custom
+from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
 from tracker_config import TrackerConfig
 from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
@@ -676,7 +676,8 @@ class Tracking6D:
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
 
-        print("Pre-initializing the objects position")
+        if self.config.preinitialization_method is not None:
+            print("Pre-initializing the objects position")
         # First optimize the positional parameters first while preventing steps that increase the loss
         if self.config.preinitialization_method == 'levenberg-marquardt':
             self.run_levenberg_marquardt_method(observations, flow_observations, flow_frames, keyframes, flow_arcs,
@@ -799,8 +800,14 @@ class Tracking6D:
                                               self.shape[-2])
 
         fun = flow_loss_model.forward
-        coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=None,
-                                           max_iter=self.config.levenberg_marquardt_max_ter)
+        if self.config.levenberg_marquardt_implementation == 'ceres':
+            coefficients_list = levenberg_marquardt_ceres(p=trans_quats, cost_function=fun,
+                                                          num_residuals=self.config.flow_sgd_n_samples * len(flow_arcs))
+        elif self.config.levenberg_marquardt_implementation == 'custom':
+            coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=None,
+                                               max_iter=self.config.levenberg_marquardt_max_ter)
+        else:
+            raise ValueError("'levenberg_marquardt_implementation' must be either 'custom' or 'ceres'")
 
         for epoch in range(len(coefficients_list)):
             trans_quats = coefficients_list[epoch]

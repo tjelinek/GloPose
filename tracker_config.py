@@ -108,8 +108,9 @@ class TrackerConfig:
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).
     segmentation_mask_erosion_iters: int = 0
-    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent' and 'lbfgs'
-    preinitialization_method: str = 'levenberg-marquardt'
+    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'lbfgs' or None
+    preinitialization_method: str = None
+    levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     flow_sgd: bool = False
     flow_sgd_n_samples: int = 100
     points_fraction_visible_new_track = None  # If more then this foreground pixels are occluded, create new MFT track
