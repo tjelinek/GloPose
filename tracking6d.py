@@ -350,7 +350,7 @@ class Tracking6D:
 
         self.short_flow_model = flow_getter.get_flow_model()
 
-    def run_tracking(self, files, bboxes, gt_flows=None):
+    def run_tracking(self, files, bboxes):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
         if type(bboxes) is dict:
             sorted_bb_keys = sorted(list(bboxes.keys()))
