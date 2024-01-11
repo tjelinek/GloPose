@@ -29,7 +29,7 @@ def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder, 
     t0 = time.time()
 
     sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict)
-    best_model = sfb.run_tracking(files, baseline_dict, optical_flows)
+    best_model = sfb.run_tracking(files, baseline_dict)
     print('{:4d} epochs took {:.2f} seconds, best model loss {:.4f}'.format(config["iterations"],
                                                                             (time.time() - t0) / 1,
                                                                             best_model["value"]))
