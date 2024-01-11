@@ -110,11 +110,6 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_s
         background2_PIL.paste(silh2_PIL, (0, 0))
         background2_PIL.paste(image2_pil, (0, 0))
         image2_pil = background2_PIL
-        occlusion_blend = int(255 * 0.25)
-        occlusion_mask_pil = tensor_to_pil_with_alpha((flow_occlusion_mask + 1), alpha=1.).convert("L")
-        silver_image = Image.new('RGBA', image1_pil.size, (255, 255, 255, occlusion_blend))
-        image1_pil.paste(silver_image, (0, 0), mask=occlusion_mask_pil)
-
 
     flow_pil = None
     if flow_up is not None:
