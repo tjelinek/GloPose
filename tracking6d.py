@@ -94,6 +94,10 @@ class Tracking6D:
         self.all_keyframes: Optional[KeyframeBuffer] = None
         self.recently_flushed_keyframes: Optional[KeyframeBuffer] = None
 
+        # Flow tracks
+        self.need_to_init_mft = True
+        self.flow_tracks_inits = [0]
+
         # Other utilities and flags
         self.write_results = None
         self.logged_sgd_translations = []
@@ -155,8 +159,8 @@ class Tracking6D:
         if self.config.gt_texture_path is not None:
             texture = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture_path)))
             texture = texture.permute(2, 0, 1)[None].to(self.device) / 255.0
-            if max(texture.shape[-2:]) > 1000:
-                resize = transforms.Resize(size=1000)
+            if max(texture.shape[-2:]) > self.config.texture_size:
+                resize = transforms.Resize(size=self.config.texture_size)
                 texture = resize(texture)
 
             self.gt_texture = texture
