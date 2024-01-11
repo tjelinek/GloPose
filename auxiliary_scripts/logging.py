@@ -89,17 +89,18 @@ def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_p
         imageio.imwrite(flow_image_path, flow_illustration)
 
         # PER PIXEL FLOW ERROR VISUALIZATION
-        per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
+        if per_pixel_flow_error is not None:
+            per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
 
-        # Normalize values for visualization (optional)
-        per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
-                                      (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
+            # Normalize values for visualization (optional)
+            per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
+                                          (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
 
-        # Convert to uint8 and save using imageio
-        output_loss_viz = output_dir / Path('losses')
-        output_loss_viz.mkdir(parents=True, exist_ok=True)
-        output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
-        imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
+            # Convert to uint8 and save using imageio
+            output_loss_viz = output_dir / Path('losses')
+            output_loss_viz.mkdir(parents=True, exist_ok=True)
+            output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
+            imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
 
 
 class WriteResults:
@@ -703,7 +704,7 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
                                new_flow_arcs: List[Tuple[int, int]]):
 
     with torch.no_grad():
-        for flow_arc in new_flow_arcs:
+        for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
             source_frame = flow_arc[0]
             target_frame = flow_arc[1]
@@ -747,18 +748,19 @@ def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: Keyfra
 
             theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
             flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
-            rendering_1_path = renderings_path / Path(f"rendering_{source_frame}_{target_frame}.png")
+            rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
             occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
             visualize_occlusions(occlusion_path, source_rendered_image_rgb,
                                  rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
 
             # Convert tensors to NumPy arrays
-            source_rendered_image_np = (source_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-            source_rendered_image_np = source_rendered_image_np.astype('uint8')
+            target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
+            target_rendered_image_np = target_rendered_image_np.astype('uint8')
 
             # Save rendered images
-            imageio.imwrite(rendering_1_path, source_rendered_image_np)
+            if flow_arc_idx == 0:
+                imageio.imwrite(rendering_path, target_rendered_image_np)
 
             # Adjust (0, 1) range to pixel range
             theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()

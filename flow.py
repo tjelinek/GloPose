@@ -92,6 +92,12 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_s
     image1_pil = transform(image1)
     image2_pil = transform(image2)
 
+    if flow_occlusion_mask is not None:
+        occlusion_blend = int(255 * 0.25)
+        occlusion_mask_pil = tensor_to_pil_with_alpha(flow_occlusion_mask, alpha=1.).convert("L")
+        silver_image = Image.new('RGBA', image1_pil.size, (255, 255, 255, occlusion_blend))
+        image1_pil.paste(silver_image, (0, 0), mask=occlusion_mask_pil)
+
     if gt_silhouette_prev is not None:
         silh1_PIL = tensor_to_pil_with_alpha(gt_silhouette_prev, alpha=0.25)
         background1_PIL = Image.new('RGBA', image1_pil.size, (0, 0, 0, 0))
