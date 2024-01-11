@@ -1083,7 +1083,6 @@ class Tracking6D:
         return model_loss
 
     def infer_model(self, observations: FrameObservation, flow_observations: FlowObservation, keyframes, flow_frames,
-                    flow_arcs, encoder_type):
                     flow_arcs, encoder_type) -> Tuple[EncoderResult, Any, Any, Any, Any, Any, RenderedFlowResult]:
 
         encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
