@@ -103,7 +103,7 @@ class Tracking6D:
         self.logged_sgd_translations = []
         self.logged_sgd_quaternions = []
 
-        self.shape = tuple()
+        self.shape: Optional[torch.Size] = None
         self.write_folder = Path(write_folder)
         self.config = config
         self.config_copy = copy.deepcopy(self.config)
