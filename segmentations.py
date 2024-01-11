@@ -22,17 +22,7 @@ from OSTrack.lib.test.tracker.ostrack import OSTrack
 from OSTrack.lib.test.parameter.ostrack import parameters
 
 
-def compute_segments(segment, image, width, height):
-    segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-    image_tensor = transforms.ToTensor()(image / 255.0)
-    image = image_tensor.unsqueeze(0).float()
-    segm = transforms.ToTensor()(segment).unsqueeze(0)
-    weights = compute_weights(image)
-    segments = torch.cat((weights * segm, segm), 1)
-    return segments
-
-
-def compute_segments_dist(segment_resized, segment_orig_torch):
+def compute_segments_dist(segment_resized):
     """
 
     :param segment_resized: np.ndarray of shape [1, H, W]
