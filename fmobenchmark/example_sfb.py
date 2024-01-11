@@ -32,11 +32,11 @@ def main():
 	config_path = args.config
 	if config_path is None:
 		if args.dataset == 'f':
-			config_path = "../configs/config_falling.yaml"
+			config_path = "../configs/old/config_falling.yaml"
 		elif args.dataset == '3d':
-			config_path = "../configs/config_tbd3d.yaml"
+			config_path = "../configs/old/config_tbd3d.yaml"
 		elif args.dataset == 'tbd':
-			config_path = "../configs/config_tbd.yaml"
+			config_path = "../configs/old/config_tbd.yaml"
 	config = load_config(config_path)
 
 	print(config)
