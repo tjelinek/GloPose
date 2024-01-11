@@ -2,7 +2,6 @@ from typing import Tuple
 
 from abc import abstractmethod, ABC
 
-import glob
 import os
 import sys
 
@@ -10,12 +9,12 @@ import cv2
 import torch
 import numpy as np
 
-from kornia.filters import gaussian_blur2d, spatial_gradient
 from scipy import ndimage
 from scipy.ndimage import uniform_filter
 from torchvision import transforms
 import torch.nn.functional as F
 
+from tracker_config import TrackerConfig
 from utils import imread, normalize_rendered_flows
 
 sys.path.insert(0, 'OSTrack')
@@ -315,91 +314,6 @@ class OSTracker(BaseTracker):
         return image, segments
 
 
-def compute_weights(input_batch):
-    blurry_input = gaussian_blur2d(input_batch[:, :3], kernel_size=tuple([9, 9]), sigma=tuple([5, 5]))
-    grad_input = spatial_gradient(blurry_input)
-    grad_input = (grad_input[:, :, 0] ** 2 + grad_input[:, :, 1] ** 2) ** 0.5
-    grad_input = grad_input.sum(1)
-    weights = (grad_input / grad_input.max())[:, None]
-    weights = weights + 0.05
-    weights = weights / weights.max()
-    return weights
-
-
-def segment_d3s_vot(files, bboxes):
-    perc = 0.5
-    tracker = None
-    params = vot_params.parameters()
-    input_batch = torch.Tensor([])
-    hs_frames = torch.Tensor([])
-    for ind, fl in enumerate(files):
-        image = imread(fl) * 255
-        if tracker is None:
-            tracker = Segm(params)
-            tracker.initialize(image, bboxes[ind])
-        else:
-            prediction = tracker.track(image)
-
-        segment = cv2.resize(tracker.mask, image.shape[1::-1]).astype(np.float64)
-
-        width = int(image.shape[1] * perc)
-        height = int(image.shape[0] * perc)
-        image = cv2.resize(image, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-        image = uniform_filter(image, size=(3, 3, 1))
-        segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-
-        image_tranformed = transforms.ToTensor()(image / 255.0)
-        hs_frames_one = torch.cat((image_tranformed.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(
-            0)
-
-        input_batch_one = torch.cat((image_tranformed, 0 * image_tranformed.clone()), 0).unsqueeze(0).float()
-        input_batch = torch.cat((input_batch, input_batch_one), 0)
-        hs_frames = torch.cat((hs_frames, hs_frames_one), 0)
-    return input_batch, hs_frames
-
-
-def get_length(cdtb_folder, seqs):
-    lens = np.zeros(seqs.shape, dtype=int)
-    for ki in range(seqs.shape[0]):
-        deformable = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'deformable.tag'), delimiter='\n', dtype=int)
-        reflective = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'reflective-target.tag'), delimiter='\n', dtype=int)
-        full_occlusion = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'full-occlusion.tag'), delimiter='\n',
-                                    dtype=int)
-        occlusion = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'occlusion.tag'), delimiter='\n', dtype=int)
-        partial_occlusion = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'partial-occlusion.tag'), delimiter='\n',
-                                       dtype=int)
-        out_frame = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'out-of-frame.tag'), delimiter='\n', dtype=int)
-        non_acceptable = deformable + reflective + out_frame + occlusion + full_occlusion + partial_occlusion
-        nonzero = np.nonzero(non_acceptable)[0]
-        if nonzero.shape[0] == 0:
-            lens[ki] = deformable.shape[0]
-        else:
-            lens[ki] = nonzero[0]
-    return lens
-
-
-def get_length_st(cdtb_folder, seqs):
-    lens = np.zeros(seqs.shape, dtype=int)
-    for ki in range(seqs.shape[0]):
-        full_occlusion = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'full-occlusion.tag'), delimiter='\n',
-                                    dtype=int)
-        out_frame = np.loadtxt(os.path.join(cdtb_folder, seqs[ki], 'out-of-frame.tag'), delimiter='\n', dtype=int)
-        non_acceptable = out_frame + full_occlusion
-        nonzero = np.nonzero(non_acceptable)[0] - 5
-        if nonzero.shape[0] == 0:
-            lens[ki] = non_acceptable.shape[0]
-        else:
-            lens[ki] = nonzero[0]
-    return lens
-
-
-def get_length_full(cdtb_folder, seqs):
-    lens = np.zeros(seqs.shape, dtype=int)
-    for ki in range(seqs.shape[0]):
-        lens[ki] = len(glob.glob(os.path.join(cdtb_folder, seqs[ki], 'color', '*')))
-    return lens
-
-
 def rle_to_mask(rle, width, height):
     """
     rle: input rle mask encoding
@@ -464,46 +378,3 @@ def get_bbox(segments):
         x1 = min(all_segments.shape[0] - 1, x1 + add1)
     bounds = [x0, x1, y0, y1]
     return bounds
-
-# def segment_d3s(files):
-#     perc = 1
-
-#     params = vot_params.parameters()
-#     tracker = Segm(params)
-#     gt_rect = None
-#     input_batch = torch.Tensor([])
-#     hs_frames = torch.Tensor([])
-#     for fl in files:
-#         I = imread(fl)
-#         if gt_rect is None: 
-#             mask = np.zeros(I.shape[:2],np.uint8)
-#             bgdModel = np.zeros((1,65),np.float64)
-#             fgdModel = np.zeros((1,65),np.float64)
-#             mask, bgdModel, fgdModel = cv2.grabCut(I.astype(np.uint8),mask,(100,200,500,750),bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
-#             segment = ((mask == cv2.GC_PR_FGD) | (mask == cv2.GC_FGD)).astype(np.float64)
-#             regions = regionprops(label(segment))
-#             ind = -1
-#             maxarea = 0
-#             for ki in range(len(regions)):
-#                 if regions[ki].area > maxarea:
-#                     ind = ki
-#                     maxarea = regions[ki].area
-#             gt_rect = np.array(regions[ind].bbox)
-#             tracker.initialize(I, gt_rect, init_mask=segment)
-#         else:
-#             prediction = tracker.track(I)
-#             segment = cv2.resize(tracker.mask, I.shape[1::-1]).astype(np.float64)
-
-#         width = int(I.shape[1] * perc)
-#         height = int(I.shape[0] * perc)
-#         I = cv2.resize(I, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-#         I = uniform_filter(I, size=(3, 3, 1))
-#         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
-
-#         It = transforms.ToTensor()(I/255.0)
-#         hs_frames_one = torch.cat((It.clone(), transforms.ToTensor()(segment)), 0).unsqueeze(0).unsqueeze(0)
-
-#         input_batch_one = torch.cat((It, 0*It.clone()), 0).unsqueeze(0).float()
-#         input_batch = torch.cat( (input_batch, input_batch_one), 0)
-#         hs_frames = torch.cat( (hs_frames, hs_frames_one), 0)
-#     return input_batch, hs_frames
