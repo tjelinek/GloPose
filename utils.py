@@ -270,3 +270,7 @@ def normalize_vertices(vertices: torch.Tensor):
     vertices *= magnification
 
     return vertices
+
+
+def binary_segmentation_from_observed_segmentation(observed_segmentations):
+    return (~(observed_segmentations[:, -1:, [-1]] < 1)).to(observed_segmentations.dtype)
