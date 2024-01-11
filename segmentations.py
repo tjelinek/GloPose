@@ -14,6 +14,7 @@ from scipy.ndimage import uniform_filter
 from torchvision import transforms
 import torch.nn.functional as F
 
+from models.encoder import Encoder
 from tracker_config import TrackerConfig
 from utils import imread, normalize_rendered_flows
 
@@ -149,7 +150,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.tracking6d = tracking6d
         self.encoder_face_features = self.tracking6d.gt_encoder.face_features
         self.gt_texture = self.tracking6d.gt_texture
-        self.shape = (self.tracking6d.rendering.width, self.tracking6d.rendering.height, 3)
+        self.shape = (tracker_config.max_width, tracker_config, 3)
 
     def next(self, frame_id):
         keyframes = [frame_id]
@@ -159,7 +160,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
                                                                              encoder_type='gt_encoder')
 
         rendering_result = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
-                                                     encoder_result.vertices, self.encoder_face_features,
+                                                     encoder_result.vertices, self.gt_encoder.face_features,
                                                      self.gt_texture, encoder_result.lights)
 
         image, segment = rendering_result
