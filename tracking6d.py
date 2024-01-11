@@ -746,7 +746,8 @@ class Tracking6D:
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
-        if self.config.visualize_loss_landscape and (frame_index in {0, 1, 2, 3} or frame_index % 18 == 0):
+        if (self.config.visualize_loss_landscape and
+                (frame_index in {0, 1, 2, 3} or frame_index % self.config.loss_landscape_visualization_frequency == 0)):
             self.write_results.visualize_loss_landscape(observations, flow_observations, self, frame_index,
                                                         relative_mode=True)
 
