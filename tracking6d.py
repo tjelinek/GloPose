@@ -363,8 +363,6 @@ class Tracking6D:
         self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
 
-        resize_transform = transforms.Resize(self.shape, interpolation=transforms.InterpolationMode.BICUBIC)
-
         b0 = None
         for stepi in range(1, self.config.input_frames):
 
