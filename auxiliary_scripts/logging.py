@@ -30,78 +30,6 @@ from models.encoder import EncoderResult
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
-def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_pixel_flow_error):
-    for flow_arcs in flow_arcs:
-
-        source_frame = flow_arcs[0]
-        target_frame = flow_arcs[1]
-
-        flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
-        source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
-        target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
-
-        observed_flow = flow_observation.observed_flow.cpu()
-        observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
-        source_frame_image = source_frame_observation.observed_image.cpu()
-        source_frame_segment = source_frame_observation.observed_segmentation.cpu()
-        target_frame_image = target_frame_observation.observed_image.cpu()
-        target_frame_segment = target_frame_observation.observed_segmentation.cpu()
-
-        observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
-        observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
-        observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
-
-        source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
-        target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
-
-        source_frame_segment_squeezed = source_frame_segment.squeeze()
-        target_frame_segment_squeezed = target_frame_segment.squeeze()
-        observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
-
-        flow_illustration = visualize_flow_with_images(source_image_discrete, target_image_discrete,
-                                                       observed_flow_reordered, None,
-                                                       gt_silhouette_current=source_frame_segment_squeezed,
-                                                       gt_silhouette_prev=target_frame_segment_squeezed,
-                                                       flow_occlusion_mask=observed_flow_occlusions_squeezed)
-
-        flows_path = output_dir / Path('flows')
-        gt_imgs_path = output_dir / Path('gt_imgs')
-        occlusion_maps_path = output_dir / Path('mft_occlusions')
-
-        flows_path.mkdir(exist_ok=True, parents=True)
-        gt_imgs_path.mkdir(exist_ok=True, parents=True)
-        occlusion_maps_path.mkdir(exist_ok=True, parents=True)
-
-        # Define output file paths
-        new_image_path = output_dir / Path('gt_imgs') / Path(f'gt_img_{source_frame}_{target_frame}.png')
-        flow_image_path = output_dir / Path('flows') / Path(f'flow_{source_frame}_{target_frame}.png')
-        occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
-
-        visualize_occlusions(occlusion_path, source_frame_image.squeeze(),
-                             observed_flow_occlusions_squeezed, alpha=0.5)
-
-        transform = transforms.ToPILImage()
-        target_image_PIL = transform(target_image_discrete)
-
-        # Save the images to disk
-        imageio.imwrite(new_image_path, target_image_PIL)
-        imageio.imwrite(flow_image_path, flow_illustration)
-
-        # PER PIXEL FLOW ERROR VISUALIZATION
-        if per_pixel_flow_error is not None:
-            per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
-
-            # Normalize values for visualization (optional)
-            per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
-                                          (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
-
-            # Convert to uint8 and save using imageio
-            output_loss_viz = output_dir / Path('losses')
-            output_loss_viz.mkdir(parents=True, exist_ok=True)
-            output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
-            imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
-
-
 class WriteResults:
 
     def __init__(self, write_folder, shape, num_frames):
@@ -356,8 +284,13 @@ class WriteResults:
         for field_name, value in values_dict.items():
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, stepi, encoder_result,
-                      observed_segmentations, images, images_feat, tex, frame_losses):
+    def write_results(self, tracking6d, b0, bboxes, our_losses, stepi, encoder_result, observed_segmentations, images,
+                      images_feat, tex, frame_losses, new_flow_arcs, frame_result):
+
+        self.visualize_theoretical_flow(tracking6d, bounding_box=b0, keyframe_buffer=tracking6d.active_keyframes,
+                                        new_flow_arcs=new_flow_arcs)
+
+        self.visualize_flow(tracking6d.active_keyframes, new_flow_arcs, frame_result.per_pixel_flow_error)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -695,110 +628,186 @@ class WriteResults:
         encoder_result_prime = tracking6d.encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
+    def visualize_theoretical_flow(self, tracking6d, bounding_box, keyframe_buffer: KeyframeBuffer,
+                                   new_flow_arcs: List[Tuple[int, int]]):
+        with torch.no_grad():
+            for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
-def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: KeyframeBuffer,
-                               new_flow_arcs: List[Tuple[int, int]]):
-    with torch.no_grad():
-        for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
-
-            source_frame = flow_arc[0]
-            target_frame = flow_arc[1]
+                source_frame = flow_arc[0]
+                target_frame = flow_arc[1]
 
             # Get optical flow frames
             keyframes = [source_frame, target_frame]
             flow_frames = [source_frame, target_frame]
+                # Get optical flow frames
+                keyframes = [source_frame, target_frame]
+                flow_frames = [source_frame, target_frame]
 
-            # Compute estimated shape
-            encoder_result, encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference(keyframes,
-                                                                                                     flow_frames)
+                # Compute estimated shape
+                encoder_result, encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference(keyframes,
+                                                                                                         flow_frames)
 
-            # Get texture map
-            tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
+                # Get texture map
+                tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
 
-            # Render keyframe images
-            rendering: RenderingKaolin = tracking6d.rendering
-            rendering_rgb, rendering_silhouette = rendering.forward(encoder_result.translations,
-                                                                    encoder_result.quaternions,
-                                                                    encoder_result.vertices,
-                                                                    tracking6d.encoder.face_features, tex_rgb,
-                                                                    encoder_result.lights)
+                # Render keyframe images
+                rendering: RenderingKaolin = tracking6d.rendering
+                rendering_rgb, rendering_silhouette = rendering.forward(encoder_result.translations,
+                                                                        encoder_result.quaternions,
+                                                                        encoder_result.vertices,
+                                                                        tracking6d.encoder.face_features, tex_rgb,
+                                                                        encoder_result.lights)
 
-            rendered_flow_result = rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                      flow_arcs_indices=[(0, 1)])
+                rendered_flow_result = rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                          flow_arcs_indices=[(0, 1)])
 
-            rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
+                rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 
             # Extract current and previous rendered images
             source_rendered_image_rgb = rendered_keyframe_images[0, -2]
             target_rendered_image_rgb = rendered_keyframe_images[0, -1]
+                # Extract current and previous rendered images
+                source_rendered_image_rgb = rendered_keyframe_images[0, -2]
+                target_rendered_image_rgb = rendered_keyframe_images[0, -1]
 
-            # Prepare file paths
-            theoretical_flow_paths = tracking6d.write_folder / Path('flows')
-            renderings_path = tracking6d.write_folder / Path('renderings')
-            occlusion_maps_path = tracking6d.write_folder / Path('rendered_occlusions')
+                # Prepare file paths
+                theoretical_flow_paths = self.write_folder / Path('flows')
+                renderings_path = self.write_folder / Path('renderings')
+                occlusion_maps_path = self.write_folder / Path('rendered_occlusions')
 
-            theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
-            renderings_path.mkdir(exist_ok=True, parents=True)
+                theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
+                renderings_path.mkdir(exist_ok=True, parents=True)
+                occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+
+                theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
+                flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
+                rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
+                occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+
+                visualize_occlusions(occlusion_path, source_rendered_image_rgb,
+                                     rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
+
+                # Convert tensors to NumPy arrays
+                target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
+                target_rendered_image_np = target_rendered_image_np.astype('uint8')
+
+                # Save rendered images
+                if flow_arc_idx == 0:
+                    imageio.imwrite(rendering_path, target_rendered_image_np)
+
+                # Adjust (0, 1) range to pixel range
+                theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
+                theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
+                theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
+
+                # Adjust (0, 1) range to pixel range
+                observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
+                observed_flow = observed_flow.squeeze().detach().clone().cpu()
+                observed_flow[0, ...] *= observed_flow.shape[-1]
+                observed_flow[1, ...] *= observed_flow.shape[-2]
+
+                # Obtain flow and image illustrations
+                theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
+                observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
+
+                observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
+                theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
+
+                target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
+                source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
+
+                target_image_segmentation = target_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
+                source_image_segmentation = source_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
+
+                rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
+
+                # Visualize flow and flow difference
+                flow_illustration = visualize_flow_with_images(source_rendered_image_rgb, target_rendered_image_rgb,
+                                                               flow_up=None, flow_up_prime=theoretical_flow_np,
+                                                               gt_silhouette_current=target_image_segmentation,
+                                                               gt_silhouette_prev=source_image_segmentation,
+                                                               flow_occlusion_mask=rendered_flow_occlusion_mask)
+
+                flow_difference_illustration = compare_flows_with_images(source_rendered_image_rgb,
+                                                                         target_rendered_image_rgb,
+                                                                         observed_flow_np, theoretical_flow_np,
+                                                                         gt_silhouette_current=target_image_segmentation,
+                                                                         gt_silhouette_prev=source_image_segmentation)
+
+                # Save flow illustrations
+                imageio.imwrite(theoretical_flow_path, flow_illustration)
+                imageio.imwrite(flow_difference_path, flow_difference_illustration)
+
+    def visualize_flow(self, keyframe_buffer: KeyframeBuffer, flow_arcs, per_pixel_flow_error):
+        for flow_arcs in flow_arcs:
+
+            source_frame = flow_arcs[0]
+            target_frame = flow_arcs[1]
+
+            flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
+            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
+            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
+
+            observed_flow = flow_observation.observed_flow.cpu()
+            observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
+            source_frame_image = source_frame_observation.observed_image.cpu()
+            source_frame_segment = source_frame_observation.observed_segmentation.cpu()
+            target_frame_image = target_frame_observation.observed_image.cpu()
+            target_frame_segment = target_frame_observation.observed_segmentation.cpu()
+
+            observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
+            observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
+            observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
+
+            source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
+            target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
+
+            source_frame_segment_squeezed = source_frame_segment.squeeze()
+            target_frame_segment_squeezed = target_frame_segment.squeeze()
+            observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
+
+            flow_illustration = visualize_flow_with_images(source_image_discrete, target_image_discrete,
+                                                           observed_flow_reordered, None,
+                                                           gt_silhouette_current=source_frame_segment_squeezed,
+                                                           gt_silhouette_prev=target_frame_segment_squeezed,
+                                                           flow_occlusion_mask=observed_flow_occlusions_squeezed)
+
+            flows_path = self.write_folder / Path('flows')
+            gt_imgs_path = self.write_folder / Path('gt_imgs')
+            occlusion_maps_path = self.write_folder / Path('mft_occlusions')
+
+            flows_path.mkdir(exist_ok=True, parents=True)
+            gt_imgs_path.mkdir(exist_ok=True, parents=True)
             occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
-            theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
-            flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
-            rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
+            # Define output file paths
+            new_image_path = self.write_folder / Path('gt_imgs') / Path(f'gt_img_{source_frame}_{target_frame}.png')
+            flow_image_path = self.write_folder / Path('flows') / Path(f'flow_{source_frame}_{target_frame}.png')
             occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
-            visualize_occlusions(occlusion_path, source_rendered_image_rgb,
-                                 rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
+            visualize_occlusions(occlusion_path, source_frame_image.squeeze(),
+                                 observed_flow_occlusions_squeezed, alpha=0.5)
 
-            # Convert tensors to NumPy arrays
-            target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-            target_rendered_image_np = target_rendered_image_np.astype('uint8')
+            transform = transforms.ToPILImage()
+            target_image_PIL = transform(target_image_discrete)
 
-            # Save rendered images
-            if flow_arc_idx == 0:
-                imageio.imwrite(rendering_path, target_rendered_image_np)
+            # Save the images to disk
+            imageio.imwrite(new_image_path, target_image_PIL)
+            imageio.imwrite(flow_image_path, flow_illustration)
 
-            # Adjust (0, 1) range to pixel range
-            theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
-            theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
-            theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
+            # PER PIXEL FLOW ERROR VISUALIZATION
+            if per_pixel_flow_error is not None:
+                per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
 
-            # Adjust (0, 1) range to pixel range
-            observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
-            observed_flow = observed_flow.squeeze().detach().clone().cpu()
-            observed_flow[0, ...] *= observed_flow.shape[-1]
-            observed_flow[1, ...] *= observed_flow.shape[-2]
+                # Normalize values for visualization (optional)
+                per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
+                                              (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
 
-            # Obtain flow and image illustrations
-            theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
-            observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
-
-            observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
-            theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
-
-            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
-            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
-
-            target_image_segmentation = target_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
-            source_image_segmentation = source_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
-
-            rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
-
-            # Visualize flow and flow difference
-            flow_illustration = visualize_flow_with_images(source_rendered_image_rgb, target_rendered_image_rgb,
-                                                           flow_up=None, flow_up_prime=theoretical_flow_np,
-                                                           gt_silhouette_current=target_image_segmentation,
-                                                           gt_silhouette_prev=source_image_segmentation,
-                                                           flow_occlusion_mask=rendered_flow_occlusion_mask)
-
-            flow_difference_illustration = compare_flows_with_images(source_rendered_image_rgb,
-                                                                     target_rendered_image_rgb,
-                                                                     observed_flow_np, theoretical_flow_np,
-                                                                     gt_silhouette_current=target_image_segmentation,
-                                                                     gt_silhouette_prev=source_image_segmentation)
-
-            # Save flow illustrations
-            imageio.imwrite(theoretical_flow_path, flow_illustration)
-            imageio.imwrite(flow_difference_path, flow_difference_illustration)
+                # Convert to uint8 and save using imageio
+                output_loss_viz = self.write_folder / Path('losses')
+                output_loss_viz.mkdir(parents=True, exist_ok=True)
+                output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
+                imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
 
 
 def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_occlusion, alpha):

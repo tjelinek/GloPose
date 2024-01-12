@@ -462,17 +462,14 @@ class Tracking6D:
             if self.config.write_results:
                 with torch.no_grad():
                     new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
-                    visualize_theoretical_flow(self, bounding_box=b0, keyframe_buffer=self.active_keyframes,
-                                               new_flow_arcs=new_flow_arcs)
 
-                    self.write_results.write_results(self, b0=b0,
-                                                     bboxes=bboxes, our_losses=our_losses, stepi=stepi,
+                    self.write_results.write_results(self, b0=b0, bboxes=bboxes, our_losses=our_losses, stepi=stepi,
                                                      encoder_result=encoder_result,
                                                      observed_segmentations=all_frame_observations.observed_segmentation,
                                                      images=all_frame_observations.observed_image,
                                                      images_feat=all_frame_observations.observed_image_features,
-                                                     tex=tex,
-                                                     frame_losses=frame_result.frame_losses)
+                                                     tex=tex, frame_losses=frame_result.frame_losses,
+                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None
@@ -488,13 +485,6 @@ class Tracking6D:
                     #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
                     # Visualize flow we get from the video
-                    last_keyframe = self.active_keyframes.keyframes[-1]
-                    last_flowframe = self.active_keyframes.get_flow_frames_for_keyframe(last_keyframe)[-1]
-                    last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(last_keyframe)
-                    last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(last_flowframe)
-
-                    visualize_flow(self.active_keyframes, flow_arcs, self.write_folder,
-                                   frame_result.per_pixel_flow_error)
 
             if 0 in self.all_keyframes.keyframes:
                 keep_keyframes = np.ones(len(active_buffer_indices), dtype='bool')
