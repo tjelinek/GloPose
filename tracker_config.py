@@ -53,7 +53,6 @@ class TrackerConfig:
     project_coin: bool = False
     connect_frames: bool = False
     accumulate: bool = False
-    weight_by_gradient: bool = False
     mot_opt_all: bool = True
     motion_only_last: bool = True
 

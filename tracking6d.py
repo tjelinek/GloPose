@@ -274,7 +274,7 @@ class Tracking6D:
     def initialize_feature_extractor(self):
         if self.config.features == 'deep':
             self.net = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
-            self.feat = lambda x: self.net(x[0])[0][None][:, :, :64]
+            self.feat = lambda x: self.net(x[0])[0][None][:, :, :self.config.features_channels]
             self.feat_rgb = lambda x: x
         else:
             self.feat = lambda x: x
@@ -629,10 +629,6 @@ class Tracking6D:
             save_image(torch.cat((observations.observed_image[0],
                                   observations.observed_segmentation[0, :, [1]]), 1),
                        os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
-            if self.config.weight_by_gradient:
-                save_image(torch.cat((observations.observed_segmentation[0, :, [0, 0, 0]],
-                                      0 * observations.observed_image[0, :, :1] + 1), 1),
-                           os.path.join(self.write_folder, 'weights.png'))
 
         # Restore the learning rate on its prior values
         self.reset_learning_rate()
