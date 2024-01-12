@@ -12,6 +12,7 @@ class TrackerConfig:
     # General settings
     tracker_type: str = 'd3s'
     features: str = 'deep'
+    features_channels = 64
     verbose: bool = True
     write_results: bool = True
     write_intermediate: bool = False
