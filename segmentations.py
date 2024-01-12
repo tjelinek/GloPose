@@ -97,9 +97,8 @@ class BaseTracker(ABC):
 
         segment = (segment > 0.5).astype(np.float64)
         segment_resized = cv2.resize(segment, dsize=(new_width, new_height), interpolation=cv2.INTER_CUBIC)
-        segment_orig_torch = transforms.ToTensor()(segment)
-        segments = compute_segments_dist(segment_resized[None])
-        return image, segments
+        segment = torch.from_numpy(segment_resized).cuda()[None, None]
+        return image, segment
 
 
 class PrecomputedTracker(BaseTracker):
@@ -166,7 +165,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         image, segment = rendering_result
         image = image.detach()
         segment = segment.detach()
-        segment_np = segment.cpu().numpy()
+        return image, segment
 
         segments = compute_segments_dist(segment_np[0, 0])[None]
         segments = segments.cuda()

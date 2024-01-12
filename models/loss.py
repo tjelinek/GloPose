@@ -106,7 +106,7 @@ class FMOLoss(nn.Module):
 
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
-            observed_flow_segmentation = observed_flow_segmentation[0, :, -1:].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
+            observed_flow_segmentation = observed_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
             rendered_flow_segmentation = rendered_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
 
             # observed_not_rendered_flow_segmentation = (observed_flow_segmentation - rendered_flow_segmentation > 0)\

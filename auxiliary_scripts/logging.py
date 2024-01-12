@@ -55,8 +55,8 @@ def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_p
         source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
         target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
 
-        source_frame_segment_squeezed = source_frame_segment.squeeze()[0]
-        target_frame_segment_squeezed = target_frame_segment.squeeze()[0]
+        source_frame_segment_squeezed = source_frame_segment.squeeze()
+        target_frame_segment_squeezed = target_frame_segment.squeeze()
         observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
 
         flow_illustration = visualize_flow_with_images(source_image_discrete, target_image_discrete,
@@ -400,7 +400,7 @@ class WriteResults:
             last_segment = observed_segmentations[:, -1:]
 
             self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-                                           observed_segmentations[:, [-1], [-1]], stepi, tracking6d)
+                                           observed_segmentations[:, [-1]], stepi, tracking6d)
 
             write_renders(feat_renders[:, :, :3], tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
@@ -423,9 +423,9 @@ class WriteResults:
             with open(tracking6d.write_folder / f"model_{stepi}.mtl", "w") as file:
                 file.writelines(lines)
 
-            renders_np = renders.detach().cpu().numpy()
-            observed_images_numpy = images.detach().cpu().numpy()
-            observed_segmentations_numpy = observed_segmentations[0, :, 1:2].cpu().numpy()
+            renders_np = renders.numpy(force=True)
+            observed_images_numpy = images.numpy(force=True)
+            observed_segmentations_numpy = observed_segmentations.numpy(force=True)
             segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
 
             write_video(renders_np, os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
@@ -434,7 +434,7 @@ class WriteResults:
             write_video(segmented_images_numpy, os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = observed_segmentations[0, :, 1:2][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                seg = observed_segmentations[0][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
                 save_image(seg, os.path.join(tracking6d.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(tracking6d.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
@@ -481,7 +481,7 @@ class WriteResults:
             image_to_write = (image_to_write * 255).astype(np.uint8)
             self.all_input.write(image_to_write)
 
-            segmentation_to_write = (images[0, :, :3] * observed_segmentations[0, :, 1:2])
+            segmentation_to_write = (images[0, :, :3] * observed_segmentations[0])
             segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
             segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
             segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
@@ -493,7 +493,6 @@ class WriteResults:
             rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
-
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
