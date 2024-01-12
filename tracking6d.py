@@ -16,7 +16,7 @@ from torch.optim import lr_scheduler
 from typing import Optional, Tuple, Any
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.logging import visualize_flow, WriteResults, visualize_theoretical_flow, load_gt_annotations_file
+from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import get_flow_from_images, get_flow_from_images_mft, FlowModelGetterRAFT, FlowModelGetter, \
     FlowModelGetterGMA, FlowModelGetterMFT, tensor_image_to_mft_format
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
@@ -463,13 +463,18 @@ class Tracking6D:
                 with torch.no_grad():
                     new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
 
-                    self.write_results.write_results(self, b0=b0, bboxes=bboxes, our_losses=our_losses, stepi=stepi,
+                    self.write_results.write_results(self, b0=b0, bboxes=bboxes, our_losses=our_losses, frame_i=stepi,
                                                      encoder_result=encoder_result,
                                                      observed_segmentations=all_frame_observations.observed_segmentation,
                                                      images=all_frame_observations.observed_image,
                                                      images_feat=all_frame_observations.observed_image_features,
                                                      tex=tex, frame_losses=frame_result.frame_losses,
                                                      new_flow_arcs=new_flow_arcs, frame_result=frame_result)
+                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result,
+                                                     active_keyframes=self.active_keyframes,
+                                                     all_keyframes=self.all_keyframes,
+                                                     logged_sgd_translations=self.logged_sgd_translations,
+                                                     logged_sgd_quaternions=self.logged_sgd_quaternions)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None

@@ -284,33 +284,34 @@ class WriteResults:
         for field_name, value in values_dict.items():
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, stepi, encoder_result, observed_segmentations, images,
-                      images_feat, tex, frame_losses, new_flow_arcs, frame_result):
+    def write_results(self, tracking6d, b0, bboxes, our_losses, frame_i, encoder_result, observed_segmentations, images,
+                      images_feat, tex, frame_losses, new_flow_arcs, frame_result, active_keyframes: KeyframeBuffer,
+                      all_keyframes: KeyframeBuffer, logged_sgd_translations, logged_sgd_quaternions):
 
-        self.visualize_theoretical_flow(tracking6d, bounding_box=b0, keyframe_buffer=tracking6d.active_keyframes,
+        self.visualize_theoretical_flow(tracking6d, bounding_box=b0, keyframe_buffer=active_keyframes,
                                         new_flow_arcs=new_flow_arcs)
 
-        self.visualize_flow(tracking6d.active_keyframes, new_flow_arcs, frame_result.per_pixel_flow_error)
+        self.visualize_flow(active_keyframes, new_flow_arcs, frame_result.per_pixel_flow_error)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
 
         with torch.no_grad():
 
-            self.visualize_rotations_per_epoch(tracking6d, frame_losses, stepi)
+            self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i)
 
-            stochastically_added_keyframes = list(set(tracking6d.all_keyframes.keyframes) -
-                                                  set(tracking6d.active_keyframes.keyframes))
-            print(f"Keyframes: {tracking6d.active_keyframes.keyframes}, "
-                  f"flow arcs: {sorted(tracking6d.active_keyframes.G.edges, key=lambda x: x[::-1])}")
+            stochastically_added_keyframes = list(set(all_keyframes.keyframes) -
+                                                  set(active_keyframes.keyframes))
+            print(f"Keyframes: {active_keyframes.keyframes}, "
+                  f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
             print("Stochastically added keyframes: ", stochastically_added_keyframes)
 
-            self.tracking_log.write(f"Step {stepi}:\n")
-            self.tracking_log.write(f"Keyframes: {tracking6d.all_keyframes.keyframes}\n")
+            self.tracking_log.write(f"Step {frame_i}:\n")
+            self.tracking_log.write(f"Keyframes: {all_keyframes.keyframes}\n")
             self.tracking_log.write(f"Stochastically added keyframes: "
                                     f"{stochastically_added_keyframes}\n")
 
-            self.write_keyframe_rotations(detached_result, tracking6d.active_keyframes.keyframes)
+            self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
 
             self.write_all_encoder_rotations(tracking6d)
 
@@ -333,7 +334,7 @@ class WriteResults:
             last_segment = observed_segmentations[:, -1:]
 
             self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-                                           observed_segmentations[:, [-1]], stepi)
+                                           observed_segmentations[:, [-1]], frame_i)
 
             write_renders(feat_renders[:, :, :3], self.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
             write_renders(renders_crop, self.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
@@ -342,18 +343,18 @@ class WriteResults:
             #     self.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
             write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
                            tracking6d.encoder.face_features[0].cpu().numpy(),
-                           os.path.join(self.write_folder, f'mesh_{stepi}.obj'), "model_" + str(stepi) + ".mtl")
+                           os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
             save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-            save_image(tex, os.path.join(self.write_folder, f'tex_{stepi}.png'))
+            save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
 
             with open(self.write_folder / "model.mtl", "r") as file:
                 lines = file.readlines()
 
             # Replace the last line
-            lines[-1] = f"map_Kd tex_{stepi}.png\n"
+            lines[-1] = f"map_Kd tex_{frame_i}.png\n"
 
             # Write the result to a new file
-            with open(self.write_folder / f"model_{stepi}.mtl", "w") as file:
+            with open(self.write_folder / f"model_{frame_i}.mtl", "w") as file:
                 file.writelines(lines)
 
             renders_np = renders.numpy(force=True)
@@ -382,27 +383,27 @@ class WriteResults:
                 save_image(feat_renders_crop[0, tmpi, 0, :],
                            os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
-            if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
+            if type(bboxes) is dict or (bboxes[frame_i][0] == 'm'):
                 gt_segm = None
                 if tracking6d.config.gt_track_path and tracking6d.config.generate_synthetic_observations_if_possible:
                     gt_segm = last_segment[0, 0, -1]
-                elif (not type(bboxes) is dict) and bboxes[stepi][0] == 'm':
-                    m_, offset_ = create_mask_from_string(bboxes[stepi][1:].split(','))
+                elif (not type(bboxes) is dict) and bboxes[frame_i][0] == 'm':
+                    m_, offset_ = create_mask_from_string(bboxes[frame_i][1:].split(','))
                     gt_segm = last_segment[0, 0, -1] * 0
                     gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
                         torch.from_numpy(m_)
-                elif stepi in bboxes:
-                    img = imread(bboxes[stepi])
+                elif frame_i in bboxes:
+                    img = imread(bboxes[frame_i])
                     gt_segm = tracking6d.tracker.process_segm(img)[0].to(tracking6d.device)
                     gt_segm = pad_image(gt_segm)
                 if gt_segm is not None:
                     segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
-                    self.baseline_iou[stepi - 1] = 1 - iou_loss(segmentations_discrete,
+                    self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
                                                                 observed_segmentations[:, -1:, [-1]]).detach().cpu()
-                    self.our_iou[stepi - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
+                    self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
                                                            observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
-            print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
+            print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
             np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
                        delimiter='\n')
             np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
@@ -517,14 +518,14 @@ class WriteResults:
             self.metrics_writer.writerow(row_results_rounded)
             self.metrics_log.flush()
 
-    def visualize_rotations_per_epoch(self, tracking6d, frame_losses, stepi):
+    def visualize_rotations_per_epoch(self, logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i):
         fig, ax1 = plt.subplots()
         fig.subplots_adjust(left=0.25, right=0.85)
 
-        translation_tensors = [t[0, 0, -1].detach().cpu() for t in tracking6d.logged_sgd_translations]
+        translation_tensors = [t[0, 0, -1].detach().cpu() for t in logged_sgd_translations]
         rotation_tensors = [
             rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, -1]
-            for q in tracking6d.logged_sgd_quaternions
+            for q in logged_sgd_quaternions
         ]
 
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
@@ -566,7 +567,7 @@ class WriteResults:
 
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
         fig_path = (Path(self.write_folder) /
-                    Path('rotations_by_epoch') / ('rotations_by_epoch_frame_' + str(stepi) + '.png'))
+                    Path('rotations_by_epoch') / ('rotations_by_epoch_frame_' + str(frame_i) + '.png'))
         plt.savefig(fig_path)
         plt.close()
 
