@@ -206,6 +206,52 @@ class Encoder(nn.Module):
         self.se3_algebra_offsets[stepi] = (Se3.exp(self.se3_algebra_offsets[stepi]) *
                                            Se3.exp(self.se3_algebra[stepi])).log()
 
+    def frames_and_flow_frames_inference(self, keyframes, flow_frames) -> Tuple[EncoderResult, EncoderResult]:
+
+        joined_frames = sorted(set(keyframes + flow_frames))
+        not_optimized_frames = set(flow_frames) - set(keyframes)
+        optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
+
+        joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
+
+        frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
+        flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
+
+        joined_encoder_result: EncoderResult = self.forward(optimized_frames)
+
+        optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
+        optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
+
+        keyframes_translations = optimized_translations[:, :, frames_join_idx]
+        keyframes_quaternions = optimized_quaternions[:, frames_join_idx]
+        flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
+        flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
+
+        keyframes_tdiff, keyframes_qdiff = self.compute_tdiff_qdiff(keyframes, optimized_quaternions[:, -1],
+                                                                    joined_encoder_result.quaternions,
+                                                                    joined_encoder_result.translations)
+        flow_frames_tdiff, flow_frames_qdiff = self.compute_tdiff_qdiff(flow_frames, optimized_quaternions[:, -1],
+                                                                        joined_encoder_result.quaternions,
+                                                                        joined_encoder_result.translations)
+
+        encoder_result = EncoderResult(translations=keyframes_translations,
+                                       quaternions=keyframes_quaternions,
+                                       vertices=joined_encoder_result.vertices,
+                                       texture_maps=joined_encoder_result.texture_maps,
+                                       lights=joined_encoder_result.lights,
+                                       translation_difference=keyframes_tdiff,
+                                       quaternion_difference=keyframes_qdiff)
+
+        encoder_result_flow_frames = EncoderResult(translations=flow_frames_translations,
+                                                   quaternions=flow_frames_quaternions,
+                                                   vertices=joined_encoder_result.vertices,
+                                                   texture_maps=joined_encoder_result.texture_maps,
+                                                   lights=joined_encoder_result.lights,
+                                                   translation_difference=flow_frames_tdiff,
+                                                   quaternion_difference=flow_frames_qdiff)
+
+        return encoder_result, encoder_result_flow_frames
+
     def forward_normalize(self):
         exp = 0
         if self.config.connect_frames:

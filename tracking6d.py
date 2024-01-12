@@ -542,8 +542,7 @@ class Tracking6D:
             flow_frames = [flow_source_frame]
             flow_arcs_indices = [(0, 0)]
 
-            encoder_result, enc_flow = self.frames_and_flow_frames_inference(keyframes, flow_frames,
-                                                                             encoder_type='gt_encoder')
+            encoder_result, enc_flow = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
 
             observed_renderings = self.rendering.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
 
@@ -766,8 +765,8 @@ class Tracking6D:
 
         self.best_model["value"] = 100
 
-        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
-                                                                                           encoder_type='deep_features')
+        encoder_result, encoder_result_flow_frames = self.encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                   flow_frames)
         kf_translations = encoder_result.translations[0].detach()
         kf_quaternions = encoder_result.quaternions.detach()
         trans_quats = torch.cat([kf_translations, kf_quaternions[..., 1:]], dim=-1).squeeze().flatten()
@@ -1064,8 +1063,15 @@ class Tracking6D:
     def infer_model(self, observations: FrameObservation, flow_observations: FlowObservation, keyframes, flow_frames,
                     flow_arcs, encoder_type) -> Tuple[EncoderResult, Any, Any, Any, Any, Any, RenderedFlowResult]:
 
-        encoder_result, encoder_result_flow_frames = self.frames_and_flow_frames_inference(keyframes, flow_frames,
-                                                                                           encoder_type=encoder_type)
+        if encoder_type == 'rgb':
+            encoder = self.rgb_encoder
+        elif encoder_type == 'gt_encoder':
+            encoder = self.gt_encoder
+        else:  # 'deep_features' - Deep features encoder
+            encoder = self.encoder
+
+        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
+
         flow_arcs_indices = [(flow_frames.index(pair[0]), keyframes.index(pair[1])) for pair in flow_arcs]
         flow_arcs_indices_sorted = self.sort_flow_arcs_indices(flow_arcs_indices)
 
@@ -1123,59 +1129,6 @@ class Tracking6D:
         }
         dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
         self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
-
-    def frames_and_flow_frames_inference(self, keyframes, flow_frames, encoder_type='deep_features') \
-            -> Tuple[EncoderResult, EncoderResult]:
-        joined_frames = sorted(set(keyframes + flow_frames))
-        not_optimized_frames = set(flow_frames) - set(keyframes)
-        optimized_frames = list(sorted(set(joined_frames) - not_optimized_frames))
-
-        joined_frames_idx = {frame: idx for idx, frame in enumerate(joined_frames)}
-
-        frames_join_idx = [joined_frames_idx[frame] for frame in keyframes]
-        flow_frames_join_idx = [joined_frames_idx[frame] for frame in flow_frames]
-
-        if encoder_type == 'rgb':
-            encoder = self.rgb_encoder
-        elif encoder_type == 'gt_encoder':
-            encoder = self.gt_encoder
-        else:  # 'deep_features' - Deep features encoder
-            encoder = self.encoder
-
-        joined_encoder_result: EncoderResult = encoder(optimized_frames)
-
-        optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
-        optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
-
-        keyframes_translations = optimized_translations[:, :, frames_join_idx]
-        keyframes_quaternions = optimized_quaternions[:, frames_join_idx]
-        flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
-        flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
-
-        keyframes_tdiff, keyframes_qdiff = encoder.compute_tdiff_qdiff(keyframes, optimized_quaternions[:, -1],
-                                                                       joined_encoder_result.quaternions,
-                                                                       joined_encoder_result.translations)
-        flow_frames_tdiff, flow_frames_qdiff = encoder.compute_tdiff_qdiff(flow_frames, optimized_quaternions[:, -1],
-                                                                           joined_encoder_result.quaternions,
-                                                                           joined_encoder_result.translations)
-
-        encoder_result = EncoderResult(translations=keyframes_translations,
-                                       quaternions=keyframes_quaternions,
-                                       vertices=joined_encoder_result.vertices,
-                                       texture_maps=joined_encoder_result.texture_maps,
-                                       lights=joined_encoder_result.lights,
-                                       translation_difference=keyframes_tdiff,
-                                       quaternion_difference=keyframes_qdiff)
-
-        encoder_result_flow_frames = EncoderResult(translations=flow_frames_translations,
-                                                   quaternions=flow_frames_quaternions,
-                                                   vertices=joined_encoder_result.vertices,
-                                                   texture_maps=joined_encoder_result.texture_maps,
-                                                   lights=joined_encoder_result.lights,
-                                                   translation_difference=flow_frames_tdiff,
-                                                   quaternion_difference=flow_frames_qdiff)
-
-        return encoder_result, encoder_result_flow_frames
 
     def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
                   flow_observations: FlowObservation, frame_losses):
