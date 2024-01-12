@@ -15,6 +15,7 @@ from torchvision import transforms
 import torch.nn.functional as F
 
 from models.encoder import Encoder
+from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
 from utils import imread, normalize_rendered_flows
 
@@ -145,23 +146,22 @@ class PrecomputedTracker(BaseTracker):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, tracker_config: TrackerConfig, tracking6d):
+    def __init__(self, tracker_config: TrackerConfig, renderer: RenderingKaolin, gt_encoder: Encoder, gt_texture):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width)
-        self.tracking6d = tracking6d
-        self.encoder_face_features = self.tracking6d.gt_encoder.face_features
-        self.gt_texture = self.tracking6d.gt_texture
+        self.gt_encoder: Encoder = gt_encoder
+        self.renderer = renderer
+        self.gt_texture = gt_texture
         self.shape = (tracker_config.max_width, tracker_config, 3)
 
     def next(self, frame_id):
         keyframes = [frame_id]
         flow_frames = [frame_id]
 
-        encoder_result, _ = self.tracking6d.frames_and_flow_frames_inference(keyframes, flow_frames,
-                                                                             encoder_type='gt_encoder')
+        encoder_result, _ = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
 
-        rendering_result = self.tracking6d.rendering(encoder_result.translations, encoder_result.quaternions,
-                                                     encoder_result.vertices, self.gt_encoder.face_features,
-                                                     self.gt_texture, encoder_result.lights)
+        rendering_result = self.renderer.forward(encoder_result.translations, encoder_result.quaternions,
+                                                 encoder_result.vertices, self.gt_encoder.face_features,
+                                                 self.gt_texture, encoder_result.lights)
 
         image, segment = rendering_result
         image = image.detach()
