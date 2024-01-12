@@ -31,7 +31,6 @@ from flow import visualize_flow_with_images, compare_flows_with_images
 
 
 def visualize_flow(keyframe_buffer: KeyframeBuffer, flow_arcs, output_dir, per_pixel_flow_error):
-
     for flow_arcs in flow_arcs:
 
         source_frame = flow_arcs[0]
@@ -119,6 +118,7 @@ class WriteResults:
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
         self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
+        self.write_folder = Path(write_folder)
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
@@ -356,7 +356,7 @@ class WriteResults:
         for field_name, value in values_dict.items():
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, silh_losses, stepi, encoder_result,
+    def write_results(self, tracking6d, b0, bboxes, our_losses, stepi, encoder_result,
                       observed_segmentations, images, images_feat, tex, frame_losses):
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
@@ -400,27 +400,27 @@ class WriteResults:
             last_segment = observed_segmentations[:, -1:]
 
             self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-                                           observed_segmentations[:, [-1]], stepi, tracking6d)
+                                           observed_segmentations[:, [-1]], stepi)
 
-            write_renders(feat_renders[:, :, :3], tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
-            write_renders(renders_crop, tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
+            write_renders(feat_renders[:, :, :3], self.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
+            write_renders(renders_crop, self.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
 
             # write_renders(torch.cat((images[..., b0[0]:b0[1], b0[2]:b0[3]], feat_renders[:, :, :, -1:]), 3),
-            #     tracking6d.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
+            #     self.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
             write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
                            tracking6d.encoder.face_features[0].cpu().numpy(),
-                           os.path.join(tracking6d.write_folder, f'mesh_{stepi}.obj'), "model_" + str(stepi) + ".mtl")
-            save_image(detached_result.texture_maps[:, :3], os.path.join(tracking6d.write_folder, 'tex_deep.png'))
-            save_image(tex, os.path.join(tracking6d.write_folder, f'tex_{stepi}.png'))
+                           os.path.join(self.write_folder, f'mesh_{stepi}.obj'), "model_" + str(stepi) + ".mtl")
+            save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
+            save_image(tex, os.path.join(self.write_folder, f'tex_{stepi}.png'))
 
-            with open(tracking6d.write_folder / "model.mtl", "r") as file:
+            with open(self.write_folder / "model.mtl", "r") as file:
                 lines = file.readlines()
 
             # Replace the last line
             lines[-1] = f"map_Kd tex_{stepi}.png\n"
 
             # Write the result to a new file
-            with open(tracking6d.write_folder / f"model_{stepi}.mtl", "w") as file:
+            with open(self.write_folder / f"model_{stepi}.mtl", "w") as file:
                 file.writelines(lines)
 
             renders_np = renders.numpy(force=True)
@@ -428,26 +428,26 @@ class WriteResults:
             observed_segmentations_numpy = observed_segmentations.numpy(force=True)
             segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
 
-            write_video(renders_np, os.path.join(tracking6d.write_folder, 'im_recon.avi'), fps=6)
-            write_video(observed_images_numpy, os.path.join(tracking6d.write_folder, 'input.avi'), fps=6)
+            write_video(renders_np, os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
+            write_video(observed_images_numpy, os.path.join(self.write_folder, 'input.avi'), fps=6)
 
-            write_video(segmented_images_numpy, os.path.join(tracking6d.write_folder, 'segments.avi'), fps=6)
+            write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
                 seg = observed_segmentations[0][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
-                save_image(seg, os.path.join(tracking6d.write_folder, 'imgs', 's{}.png'.format(tmpi)))
+                save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
-                save_image(img, os.path.join(tracking6d.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
+                save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
                 save_image(images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
-                           os.path.join(tracking6d.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
+                           os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
                 save_image(torch.cat((img, seg), 0),
-                           os.path.join(tracking6d.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
+                           os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
                 save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
-                           os.path.join(tracking6d.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
+                           os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
                 save_image(renders_crop[0, tmpi, 0, :],
-                           os.path.join(tracking6d.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
+                           os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
                 save_image(feat_renders_crop[0, tmpi, 0, :],
-                           os.path.join(tracking6d.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
+                           os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
             if type(bboxes) is dict or (bboxes[stepi][0] == 'm'):
                 gt_segm = None
@@ -470,10 +470,10 @@ class WriteResults:
                                                            observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[stepi - 1], self.our_iou[stepi - 1]))
-            np.savetxt(os.path.join(tracking6d.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
+            np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
                        delimiter='\n')
-            np.savetxt(os.path.join(tracking6d.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
-            np.savetxt(os.path.join(tracking6d.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
+            np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
+            np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
 
             image_to_write = images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
             image_to_write = image_to_write.transpose(2, 3, 1, 0)
@@ -584,8 +584,7 @@ class WriteResults:
             self.metrics_writer.writerow(row_results_rounded)
             self.metrics_log.flush()
 
-    @staticmethod
-    def visualize_rotations_per_epoch(tracking6d, frame_losses, stepi):
+    def visualize_rotations_per_epoch(self, tracking6d, frame_losses, stepi):
         fig, ax1 = plt.subplots()
         fig.subplots_adjust(left=0.25, right=0.85)
 
@@ -632,14 +631,13 @@ class WriteResults:
 
         fig.legend(handles, labels, loc='upper right')
 
-        (Path(tracking6d.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
-        fig_path = Path(tracking6d.write_folder) / Path('rotations_by_epoch') / \
-                   ('rotations_by_epoch_frame_' + str(stepi) + '.png')
+        (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
+        fig_path = (Path(self.write_folder) /
+                    Path('rotations_by_epoch') / ('rotations_by_epoch_frame_' + str(stepi) + '.png'))
         plt.savefig(fig_path)
         plt.close()
 
-    @staticmethod
-    def render_silhouette_overlap(last_rendered_silhouette, last_segment_mask, stepi, tracking6d):
+    def render_silhouette_overlap(self, last_rendered_silhouette, last_segment_mask, frame_idx):
         last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0.5
         last_segment_mask_binary = last_segment_mask[0] > 0.5
         silh_overlap_image = torch.zeros(1, *last_segment_mask.shape[-2:], 3)
@@ -657,9 +655,8 @@ class WriteResults:
         silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = G
 
         silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
-        (tracking6d.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
-        silhouette_overlap_path = tracking6d.write_folder / Path('silhouette_overlap') / \
-                                  Path(f"silhouette_overlap_{stepi}.png")
+        (self.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
+        silhouette_overlap_path = self.write_folder / 'silhouette_overlap' / Path(f"silhouette_overlap_{frame_idx}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
     def write_keyframe_rotations(self, detached_result, keyframes):
@@ -701,7 +698,6 @@ class WriteResults:
 
 def visualize_theoretical_flow(tracking6d, bounding_box, keyframe_buffer: KeyframeBuffer,
                                new_flow_arcs: List[Tuple[int, int]]):
-
     with torch.no_grad():
         for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 

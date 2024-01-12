@@ -13,7 +13,6 @@ import torchvision.transforms as transforms
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
-from torchvision.utils import save_image
 from typing import Optional, Tuple, Any
 
 from OSTrack.S2DNet.s2dnet import S2DNet
@@ -467,8 +466,7 @@ class Tracking6D:
                                                new_flow_arcs=new_flow_arcs)
 
                     self.write_results.write_results(self, b0=b0,
-                                                     bboxes=bboxes, our_losses=our_losses,
-                                                     silh_losses=silh_losses, stepi=stepi,
+                                                     bboxes=bboxes, our_losses=our_losses, stepi=stepi,
                                                      encoder_result=encoder_result,
                                                      observed_segmentations=all_frame_observations.observed_segmentation,
                                                      images=all_frame_observations.observed_image,
