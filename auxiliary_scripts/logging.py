@@ -21,18 +21,18 @@ from pytorch3d.loss.chamfer import chamfer_distance
 
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
-from segmentations import create_mask_from_string, pad_image
+from tracker_config import TrackerConfig
 from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
-from models.rendering import infer_normalized_renderings, RenderingKaolin, RenderedFlowResult
+from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
-from models.encoder import EncoderResult
+from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images
 
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape, num_frames):
+    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig):
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
                                          10, (shape[1], shape[0]), True)
         self.all_segm = cv2.VideoWriter(os.path.join(write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
@@ -42,6 +42,8 @@ class WriteResults:
         self.all_proj_filtered = cv2.VideoWriter(os.path.join(write_folder, 'all_proj_filtered.avi'),
                                                  cv2.VideoWriter_fourcc(*"MJPG"), 10,
                                                  (shape[1], shape[0]), True)
+        self.tracking_config: TrackerConfig = tracking_config
+        self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((num_frames - 1, 1))
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
@@ -284,12 +286,19 @@ class WriteResults:
         for field_name, value in values_dict.items():
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
-    def write_results(self, tracking6d, b0, bboxes, our_losses, frame_i, encoder_result, observed_segmentations, images,
-                      images_feat, tex, frame_losses, new_flow_arcs, frame_result, active_keyframes: KeyframeBuffer,
-                      all_keyframes: KeyframeBuffer, logged_sgd_translations, logged_sgd_quaternions):
+    def write_tensor_into_bbox(self, image, bounding_box):
+        image_with_margins = torch.zeros(image.shape[:-2] + self.output_size).to(image.device)
+        image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = image
+        return image_with_margins
 
-        self.visualize_theoretical_flow(tracking6d, bounding_box=b0, keyframe_buffer=active_keyframes,
-                                        new_flow_arcs=new_flow_arcs)
+    def write_results(self, bounding_box, our_losses, frame_i, encoder_result, observed_segmentations, images,
+                      images_feat, tex, new_flow_arcs, frame_result, active_keyframes: KeyframeBuffer,
+                      all_keyframes: KeyframeBuffer, logged_sgd_translations, logged_sgd_quaternions,
+                      deep_encoder: Encoder, rgb_encoder: Encoder, renderer: RenderingKaolin, best_model):
+
+        self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
+                                        new_flow_arcs=new_flow_arcs, rgb_encoder=rgb_encoder,
+                                        deep_encoder=deep_encoder, renderer=renderer)
 
         self.visualize_flow(active_keyframes, new_flow_arcs, frame_result.per_pixel_flow_error)
 
@@ -298,7 +307,8 @@ class WriteResults:
 
         with torch.no_grad():
 
-            self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i)
+            self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
+                                               frame_result.frame_losses, frame_i)
 
             stochastically_added_keyframes = list(set(all_keyframes.keyframes) -
                                                   set(active_keyframes.keyframes))
@@ -312,37 +322,34 @@ class WriteResults:
                                     f"{stochastically_added_keyframes}\n")
 
             self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
+            self.write_all_encoder_rotations(deep_encoder, max(all_keyframes.keyframes) + 1)
 
-            self.write_all_encoder_rotations(tracking6d)
-
-            if tracking6d.config.features == 'rgb':
+            if self.tracking_config.features == 'rgb':
                 tex = detached_result.texture_maps
 
-            rendering: RenderingKaolin = tracking6d.rendering
+            feat_renders, _ = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                               detached_result.vertices, deep_encoder.face_features,
+                                               detached_result.texture_maps, detached_result.lights)
 
-            feat_renders, _ = rendering.forward(detached_result.translations, detached_result.quaternions,
-                                                detached_result.vertices, tracking6d.encoder.face_features,
-                                                detached_result.texture_maps, detached_result.lights)
+            renders, rendered_silhouette = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                                            detached_result.vertices, deep_encoder.face_features,
+                                                            tex, detached_result.lights)
 
-            renders, rendered_silhouette = rendering.forward(detached_result.translations, detached_result.quaternions,
-                                                             detached_result.vertices, tracking6d.encoder.face_features,
-                                                             tex, detached_result.lights)
-
-            renders_crop = renders[..., b0[0]:b0[1], b0[2]:b0[3]]
-            feat_renders_crop = feat_renders[..., b0[0]:b0[1], b0[2]:b0[3]]
-
-            last_segment = observed_segmentations[:, -1:]
+            renders_crop = renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+            feat_renders_crop = feat_renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
 
             self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
                                            observed_segmentations[:, [-1]], frame_i)
 
-            write_renders(feat_renders[:, :, :3], self.write_folder, tracking6d.config.max_keyframes + 1, ids=0)
-            write_renders(renders_crop, self.write_folder, tracking6d.config.max_keyframes + 1, ids=1)
+            write_renders(feat_renders[:, :, :3], self.write_folder, self.tracking_config.max_keyframes + 1, ids=0)
+            write_renders(renders_crop, self.write_folder, self.tracking_config.max_keyframes + 1, ids=1)
 
-            # write_renders(torch.cat((images[..., b0[0]:b0[1], b0[2]:b0[3]], feat_renders[:, :, :, -1:]), 3),
-            #     self.write_folder, tracking6d.config.max_keyframes + 1, ids=2)
-            write_obj_mesh(detached_result.vertices[0].cpu().numpy(), tracking6d.best_model["faces"],
-                           tracking6d.encoder.face_features[0].cpu().numpy(),
+            # write_renders(torch.cat((images[..., bounding_box[0]:bounding_box[1],
+            #                          bounding_box[2]:bounding_box[3]], feat_renders[:, :, :, -1:]), 3),
+            #                 self.write_folder, self.tracking_config.max_keyframes + 1, ids=2)
+
+            write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
+                           deep_encoder.face_features[0].cpu().numpy(),
                            os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
             save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
             save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
@@ -367,12 +374,12 @@ class WriteResults:
 
             write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
-                img = images[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]]
-                seg = observed_segmentations[0][tmpi, :, b0[0]:b0[1], b0[2]:b0[3]].clone()
+                img = images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+                seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]].clone()
                 save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(images_feat[0, tmpi, :3, b0[0]:b0[1], b0[2]:b0[3]],
+                save_image(images_feat[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]],
                            os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
                 save_image(torch.cat((img, seg), 0),
                            os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
@@ -383,25 +390,11 @@ class WriteResults:
                 save_image(feat_renders_crop[0, tmpi, 0, :],
                            os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
-            if type(bboxes) is dict or (bboxes[frame_i][0] == 'm'):
-                gt_segm = None
-                if tracking6d.config.gt_track_path and tracking6d.config.generate_synthetic_observations_if_possible:
-                    gt_segm = last_segment[0, 0, -1]
-                elif (not type(bboxes) is dict) and bboxes[frame_i][0] == 'm':
-                    m_, offset_ = create_mask_from_string(bboxes[frame_i][1:].split(','))
-                    gt_segm = last_segment[0, 0, -1] * 0
-                    gt_segm[offset_[1]:offset_[1] + m_.shape[0], offset_[0]:offset_[0] + m_.shape[1]] = \
-                        torch.from_numpy(m_)
-                elif frame_i in bboxes:
-                    img = imread(bboxes[frame_i])
-                    gt_segm = tracking6d.tracker.process_segm(img)[0].to(tracking6d.device)
-                    gt_segm = pad_image(gt_segm)
-                if gt_segm is not None:
-                    segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
-                    self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
-                                                                observed_segmentations[:, -1:, [-1]]).detach().cpu()
-                    self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
-                                                           observed_segmentations[:, -1:, [-1]]).detach().cpu()
+                segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
+                self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
+                                                              observed_segmentations[:, -1:, [-1]]).detach().cpu()
+                self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
+                                                         observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
             print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
             np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
@@ -433,7 +426,7 @@ class WriteResults:
                          gt_object_mask=None):
 
         with torch.no_grad():
-            encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d)
+            encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d.encoder, max(keyframes) + 1)
 
             chamfer_dist = "NA"
             iou_3d = "NA"
@@ -613,24 +606,25 @@ class WriteResults:
         self.tracking_log.write('\n')
         self.tracking_log.flush()
 
-    def write_all_encoder_rotations(self, tracking6d):
+    def write_all_encoder_rotations(self, encoder: Encoder, last_keyframe_idx):
         self.tracking_log.write("============================================\n")
-        tracking6d.write_results.tracking_log.write("Writing all the states of the encoder\n")
+        self.tracking_log.write("Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n")
-        encoder_result_prime, keyframes_prime = self.encoder_result_all_frames(tracking6d)
+        encoder_result_prime, keyframes_prime = self.encoder_result_all_frames(encoder, last_keyframe_idx)
         self.write_keyframe_rotations(encoder_result_prime, keyframes_prime)
         self.tracking_log.write("============================================\n")
         self.tracking_log.write("END of Writing all the states of the encoder\n")
         self.tracking_log.write("============================================\n\n\n")
 
     @staticmethod
-    def encoder_result_all_frames(tracking6d):
-        keyframes_prime = list(range(max(tracking6d.all_keyframes.keyframes) + 1))
-        encoder_result_prime = tracking6d.encoder(keyframes_prime)
+    def encoder_result_all_frames(encoder: Encoder, last_keyframe_idx: int):
+        keyframes_prime = list(range(last_keyframe_idx))
+        encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_theoretical_flow(self, tracking6d, bounding_box, keyframe_buffer: KeyframeBuffer,
-                                   new_flow_arcs: List[Tuple[int, int]]):
+    def visualize_theoretical_flow(self, bounding_box, keyframe_buffer: KeyframeBuffer,
+                                   new_flow_arcs: List[Tuple[int, int]], rgb_encoder: Encoder, deep_encoder: Encoder,
+                                   renderer: RenderingKaolin):
         with torch.no_grad():
             for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
@@ -642,24 +636,23 @@ class WriteResults:
                 flow_frames = [source_frame, target_frame]
 
                 # Compute estimated shape
-                encoder_result, encoder_result_flow_frames = tracking6d.frames_and_flow_frames_inference(keyframes,
-                                                                                                         flow_frames)
+                encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                           flow_frames)
 
                 # Get texture map
-                tex_rgb = nn.Sigmoid()(tracking6d.rgb_encoder.texture_map)
+                tex_rgb = nn.Sigmoid()(rgb_encoder.texture_map)
 
                 # Render keyframe images
-                rendering: RenderingKaolin = tracking6d.rendering
-                rendering_rgb, rendering_silhouette = rendering.forward(encoder_result.translations,
-                                                                        encoder_result.quaternions,
-                                                                        encoder_result.vertices,
-                                                                        tracking6d.encoder.face_features, tex_rgb,
-                                                                        encoder_result.lights)
+                rendering_rgb, rendering_silhouette = renderer.forward(encoder_result.translations,
+                                                                       encoder_result.quaternions,
+                                                                       encoder_result.vertices,
+                                                                       deep_encoder.face_features, tex_rgb,
+                                                                       encoder_result.lights)
 
-                rendered_flow_result = rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                          flow_arcs_indices=[(0, 1)])
+                rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                         flow_arcs_indices=[(0, 1)])
 
-                rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
+                rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
 
                 # Extract current and previous rendered images
                 source_rendered_image_rgb = rendered_keyframe_images[0, -2]
@@ -674,8 +667,10 @@ class WriteResults:
                 renderings_path.mkdir(exist_ok=True, parents=True)
                 occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
-                theoretical_flow_path = theoretical_flow_paths / Path(f"predicted_flow_{source_frame}_{target_frame}.png")
-                flow_difference_path = theoretical_flow_paths / Path(f"flow_difference_{source_frame}_{target_frame}.png")
+                theoretical_flow_path = theoretical_flow_paths / Path(
+                    f"predicted_flow_{source_frame}_{target_frame}.png")
+                flow_difference_path = theoretical_flow_paths / Path(
+                    f"flow_difference_{source_frame}_{target_frame}.png")
                 rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
                 occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
@@ -702,8 +697,8 @@ class WriteResults:
                 observed_flow[1, ...] *= observed_flow.shape[-2]
 
                 # Obtain flow and image illustrations
-                theoretical_flow = tracking6d.write_tensor_into_bbox(bounding_box, theoretical_flow)
-                observed_flow = tracking6d.write_tensor_into_bbox(bounding_box, observed_flow)
+                theoretical_flow = self.write_tensor_into_bbox(theoretical_flow, bounding_box)
+                observed_flow = self.write_tensor_into_bbox(observed_flow, bounding_box)
 
                 observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
                 theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
@@ -711,10 +706,13 @@ class WriteResults:
                 target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
                 source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
 
-                target_image_segmentation = target_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
-                source_image_segmentation = source_frame_observation.observed_segmentation[0, 0, 0].detach().clone().cpu()
+                target_image_segmentation = target_frame_observation.observed_segmentation[
+                    0, 0, 0].detach().clone().cpu()
+                source_image_segmentation = source_frame_observation.observed_segmentation[
+                    0, 0, 0].detach().clone().cpu()
 
-                rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[0, 0, 0].detach().clone().cpu()
+                rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[
+                    0, 0, 0].detach().clone().cpu()
 
                 # Visualize flow and flow difference
                 flow_illustration = visualize_flow_with_images(source_rendered_image_rgb, target_rendered_image_rgb,

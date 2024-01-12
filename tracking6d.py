@@ -356,7 +356,8 @@ class Tracking6D:
 
         our_losses = -np.ones((files.shape[0] - 1, 1))
 
-        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0])
+        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
+                                          tracking_config=self.config)
 
         self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
@@ -463,18 +464,18 @@ class Tracking6D:
                 with torch.no_grad():
                     new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
 
-                    self.write_results.write_results(self, b0=b0, bboxes=bboxes, our_losses=our_losses, frame_i=stepi,
+                    self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
                                                      encoder_result=encoder_result,
                                                      observed_segmentations=all_frame_observations.observed_segmentation,
                                                      images=all_frame_observations.observed_image,
                                                      images_feat=all_frame_observations.observed_image_features,
-                                                     tex=tex, frame_losses=frame_result.frame_losses,
-                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result)
-                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result,
+                                                     tex=tex, new_flow_arcs=new_flow_arcs, frame_result=frame_result,
                                                      active_keyframes=self.active_keyframes,
                                                      all_keyframes=self.all_keyframes,
                                                      logged_sgd_translations=self.logged_sgd_translations,
-                                                     logged_sgd_quaternions=self.logged_sgd_quaternions)
+                                                     logged_sgd_quaternions=self.logged_sgd_quaternions,
+                                                     deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
+                                                     renderer=self.rendering, best_model=self.best_model)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None
@@ -589,18 +590,7 @@ class Tracking6D:
 
         return observed_flow, occlusion, uncertainty
 
-    def write_tensor_into_bbox(self, bounding_box, image):
-        """
-
-        :param bounding_box: List specifying the bounding box starts, resp. end
-        :param image: Tensor of shape ..., C, H, W
-        :return:
-        """
-        image_with_margins = torch.zeros(image.shape[:-2] + self.shape[-2:]).to(image.device)
-        image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = image
-        return image_with_margins
-
-    def apply(self, observations, flow_observations, keyframes, flow_frames, flow_arcs, frame_index):
+    def apply(self, observations, flow_observations, keyframes, flow_frames, flow_arcs, frame_index) -> FrameResult:
 
         self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
         self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
