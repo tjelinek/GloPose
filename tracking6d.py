@@ -622,14 +622,6 @@ class Tracking6D:
         self.write_results.set_tensorboard_log_for_frame(frame_index)
 
         frame_losses = []
-        if self.config.write_results:
-            save_image(observations.observed_image[0, :, :3], os.path.join(self.write_folder, 'im.png'),
-                       nrow=self.config.max_keyframes + 1)
-
-            save_image(torch.cat((observations.observed_image[0],
-                                  observations.observed_segmentation[0, :, [1]]), 1),
-                       os.path.join(self.write_folder, 'segments.png'), nrow=self.config.max_keyframes + 1)
-
         # Restore the learning rate on its prior values
         self.reset_learning_rate()
 
