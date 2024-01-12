@@ -636,9 +636,6 @@ class WriteResults:
                 source_frame = flow_arc[0]
                 target_frame = flow_arc[1]
 
-            # Get optical flow frames
-            keyframes = [source_frame, target_frame]
-            flow_frames = [source_frame, target_frame]
                 # Get optical flow frames
                 keyframes = [source_frame, target_frame]
                 flow_frames = [source_frame, target_frame]
@@ -663,9 +660,6 @@ class WriteResults:
 
                 rendered_keyframe_images = tracking6d.write_tensor_into_bbox(bounding_box, rendering_rgb)
 
-            # Extract current and previous rendered images
-            source_rendered_image_rgb = rendered_keyframe_images[0, -2]
-            target_rendered_image_rgb = rendered_keyframe_images[0, -1]
                 # Extract current and previous rendered images
                 source_rendered_image_rgb = rendered_keyframe_images[0, -2]
                 target_rendered_image_rgb = rendered_keyframe_images[0, -1]
