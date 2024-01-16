@@ -73,7 +73,7 @@ class BaseTracker(ABC):
         segments = pad_image(segments)
         image = pad_image(image)
 
-        return image, segments, self.perc
+        return image, segments
 
     @abstractmethod
     def next(self, file) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -130,7 +130,7 @@ class PrecomputedTracker(BaseTracker):
         segments = pad_image(segments)
         image = pad_image(image)
 
-        return image, segments, self.perc
+        return image, segments
 
     def next(self, file):
         ind = os.path.splitext(os.path.basename(file))[0]
@@ -150,7 +150,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.gt_encoder: Encoder = gt_encoder
         self.renderer = renderer
         self.gt_texture = gt_texture
-        self.shape = (tracker_config.max_width, tracker_config, 3)
+        self.shape = (tracker_config.max_width, tracker_config.max_width)
 
     def next(self, frame_id):
         keyframes = [frame_id]
@@ -167,9 +167,11 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         segment = segment.detach()
         return image, segment
 
-        segments = compute_segments_dist(segment_np[0, 0])[None]
-        segments = segments.cuda()
-        return image, segments
+    @staticmethod
+    def binary_segmentation_from_observed_segmentation(rendered_segmentations: torch.Tensor):
+        rendered_segment_discrete: torch.Tensor = ~(rendered_segmentations < 1)
+        rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
+        return rendered_segment_discrete
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
@@ -177,7 +179,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         segments = pad_image(segments)
         image = pad_image(image)
 
-        return image, segments, self.perc
+        return image, segments
 
 
 class MyTracker(BaseTracker):
@@ -207,7 +209,7 @@ class MyTracker(BaseTracker):
         image = imread(file0) * 255
         self.tracker.initialize(image, bbox0, init_mask=init_mask)
         image, segments = self.process(image)
-        return image, segments, self.perc
+        return image, segments
 
     def next(self, file):
         image = imread(file) * 255
@@ -241,7 +243,7 @@ class CSRTrack(BaseTracker):
         bbox = bbox0.astype(int)
         self.tracker.init(image, bbox)
         image, segments = self.process(image, bbox)
-        return image, segments, self.perc
+        return image, segments
 
     def next(self, file):
         image = (imread(file) * 255).astype(np.uint8)
@@ -291,7 +293,7 @@ class OSTracker(BaseTracker):
         self.RF_module = get_ar(image, bbox, "/cluster/home/denysr/scratch/dataset/ostrack/SEcmnet_ep0040-c.pth.tar")
         segment = self.RF_module.get_mask(image, np.array(bbox0))
         image, segments = self.process(image, bbox, segment)
-        return image, segments, self.perc
+        return image, segments
 
     def next(self, file):
         image = (imread(file) * 255).astype(np.uint8)

@@ -28,7 +28,8 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker
+from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker, \
+    BaseTracker
 from tracker_config import TrackerConfig
 from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
 
@@ -97,6 +98,9 @@ class Tracking6D:
         self.need_to_init_mft = True
         self.flow_tracks_inits = [0]
 
+        # Tracker
+        self.tracker: Optional[BaseTracker] = None
+
         # Other utilities and flags
         self.write_results = None
         self.logged_sgd_translations = []
@@ -113,10 +117,11 @@ class Tracking6D:
         self.initialize_feature_extractor()
         self.initialize_gt_texture()
         self.initialize_gt_tracks()
-        self.initialize_tracker(bbox0)
+        self.initialize_tracker(bbox0, file0, init_mask)
+
+        self.shape = self.tracker.shape[:2]
 
         torch.backends.cudnn.benchmark = True
-        images, images_feat, observed_flows, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         self.initialize_renderer_and_encoder(iface_features, ivertices)
 
@@ -125,7 +130,7 @@ class Tracking6D:
 
             self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture)
             # Re-render the images using the synthetic tracker
-            images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
+        images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         self.initialize_optimizer_and_loss(ivertices)
 
@@ -142,7 +147,7 @@ class Tracking6D:
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
 
-    def initialize_tracker(self, bbox0):
+    def initialize_tracker(self, bbox0, file0, init_mask):
         if type(bbox0) is dict:
             self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
         else:
@@ -152,6 +157,10 @@ class Tracking6D:
                 self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
             else:  # d3s
                 self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
+
+        if type(self.tracker) is SyntheticDataGeneratingTracker:
+            file0 = 0
+        self.tracker.init_bbox(file0, bbox0, init_mask)
 
     def initialize_gt_texture(self):
         if self.config.gt_texture_path is not None:
@@ -172,7 +181,7 @@ class Tracking6D:
 
     def initialize_renderer_and_encoder(self, iface_features, ivertices):
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
-        self.encoder = Encoder(self.config, ivertices, self.faces, iface_features, self.shape[-1], self.shape[-2],
+        self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
                                self.config.features_channels).to(self.device)
 
         if not self.config.optimize_texture and self.gt_texture is not None:
@@ -207,7 +216,7 @@ class Tracking6D:
                                  "rotations and translations are provided.")
 
         #  Ground truth encoder for synthetic data generation
-        self.gt_encoder = Encoder(self.config, ivertices, self.faces, iface_features,
+        self.gt_encoder = Encoder(self.config, ivertices, iface_features,
                                   self.shape[-1], self.shape[-2], 3).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
@@ -222,10 +231,9 @@ class Tracking6D:
     def get_initial_images(self, file0, bbox0, init_mask):
         if type(self.tracker) is SyntheticDataGeneratingTracker:
             file0 = 0
-        images, segments, self.config.image_downsample = self.tracker.init_bbox(file0, bbox0, init_mask)
+        images, segments = self.tracker.init_bbox(file0, bbox0, init_mask)
         images, segments = images.to(self.device), segments.to(self.device)
         images_feat = self.feat(images).detach()
-        self.shape = segments.shape[-2:]
         observed_flows = torch.zeros(1, 0, 2, *segments.shape[-2:])
         return images, images_feat, observed_flows, segments
 
@@ -306,7 +314,7 @@ class Tracking6D:
         if not self.config.optimize_texture and self.gt_texture is not None:
             texture_map_init = self.gt_texture.detach()
 
-        self.rgb_encoder = Encoder(config, ivertices, faces, iface_features, shape[-1], shape[-2],
+        self.rgb_encoder = Encoder(config, ivertices, iface_features, shape[-1], shape[-2],
                                    3, texture_map_init).to(self.device)
 
         rgb_parameters = [self.rgb_encoder.texture_map]

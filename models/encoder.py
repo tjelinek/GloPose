@@ -1,4 +1,5 @@
 from collections import namedtuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -14,7 +15,7 @@ EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'ver
 
 
 class Encoder(nn.Module):
-    def __init__(self, config, ivertices, faces, face_features, width, height, n_feat, texture_maps_init=None):
+    def __init__(self, config, ivertices, face_features, width, height, n_feat, texture_maps_init=None):
         super(Encoder, self).__init__()
         self.config = config
 
