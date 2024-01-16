@@ -402,8 +402,8 @@ class Tracking6D:
                     flow_source_frame, flow_target_frame = flow_arc
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
 
-                    self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
-                                                       uncertainties, flow_source_frame, flow_target_frame)
+                    self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
+                                                       occlusions, uncertainties, flow_source_frame, flow_target_frame)
 
                 if self.long_flow_model is not None:
                     long_flow_arc = (self.flow_tracks_inits[-1], stepi)
@@ -416,8 +416,9 @@ class Tracking6D:
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
                                                                                  mode='long')
                     if not already_present:
-                        self.active_keyframes.add_new_flow(observed_flow, segment[0][None, :, -1:], occlusions,
-                                                           uncertainties, flow_source_frame, flow_target_frame)
+                        self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
+                                                           occlusions, uncertainties, flow_source_frame,
+                                                           flow_target_frame)
 
             # We have added some keyframes. If it is more than the limit, delete them
             if not self.config.all_frames_keyframes:
