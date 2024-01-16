@@ -97,29 +97,37 @@ class KeyframeBuffer:
 
     def add_new_keyframe(self, observed_image, observed_image_features, observed_image_segmentation, keyframe_index):
 
-        vertex_attribute = FrameObservation(observed_image=observed_image,
-                                            observed_image_features=observed_image_features,
-                                            observed_segmentation=observed_image_segmentation)
+        frame_observation = FrameObservation(observed_image=observed_image,
+                                             observed_image_features=observed_image_features,
+                                             observed_segmentation=observed_image_segmentation)
 
-        self.G.add_node(keyframe_index, observations=vertex_attribute)
+        self.add_new_keyframe_observation(frame_observation, keyframe_index)
 
+    def add_new_keyframe_observation(self, frame_observation: FrameObservation, keyframe_index: int) -> None:
+
+        self.G.add_node(keyframe_index, observations=frame_observation)
         insort(self.keyframes, keyframe_index)
 
     def add_new_flow(self, observed_flow: torch.Tensor, observed_flows_segmentation: torch.Tensor,
                      observed_flows_occlusion: torch.Tensor, observed_flows_uncertainty: torch.Tensor,
                      source_frame: int, target_frame: int) -> None:
+
+        flow_observation = FlowObservation(observed_flow=observed_flow,
+                                           observed_flow_segmentation=observed_flows_segmentation,
+                                           observed_flow_uncertainty=observed_flows_uncertainty,
+                                           observed_flow_occlusion=observed_flows_occlusion)
+
+        self.add_new_flow_observation(flow_observation, source_frame, target_frame)
+
+    def add_new_flow_observation(self, flow_observation: FlowObservation, source_frame: int, target_frame: int) -> None:
         if source_frame not in self.G:
             raise ValueError("source_frame not in the graph")
         elif target_frame not in self.G:
             raise ValueError("target_frame not in the graph")
 
-        arc_attributes = FlowObservation(observed_flow=observed_flow,
-                                         observed_flow_segmentation=observed_flows_segmentation,
-                                         observed_flow_uncertainty=observed_flows_uncertainty,
-                                         observed_flow_occlusion=observed_flows_occlusion)
         if source_frame not in self.flow_frames:
             insort(self.flow_frames, source_frame)
-        self.G.add_edge(source_frame, target_frame, flow_observations=arc_attributes)
+        self.G.add_edge(source_frame, target_frame, flow_observations=flow_observation)
 
     def get_flows_from_frame(self, source_frame: int) -> FlowObservation:
 
