@@ -128,7 +128,8 @@ class Tracking6D:
         if self.config.generate_synthetic_observations_if_possible:
             assert self.gt_translations is not None and self.gt_rotations is not None
 
-            self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture)
+            self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture,
+                                                          self.feat)
             # Re-render the images using the synthetic tracker
         images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
 
@@ -149,7 +150,7 @@ class Tracking6D:
 
     def initialize_tracker(self, bbox0, file0, init_mask):
         if type(bbox0) is dict:
-            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0)
+            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0, self.feat)
         else:
             if self.config.tracker_type == 'csrt':
                 self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
@@ -377,18 +378,10 @@ class Tracking6D:
                 next_tracker_frame = stepi  # Index of a frame
             else:
                 next_tracker_frame = files[stepi]  # Name of file
-            image_raw, segment = self.tracker.next(next_tracker_frame)
 
-            image, segment = image_raw.to(self.device), segment.to(self.device)
+            new_frame_observation = self.tracker.next(next_tracker_frame)
 
-            if b0 is not None:
-                segment_clean = segment * 0
-                segment_clean[:, :, :, b0[0]:b0[1], b0[2]:b0[3]] = segment[:, :, :, b0[0]:b0[1], b0[2]:b0[3]]
-                segment_clean[:, :, 0] = segment[:, :, 0]
-                segment = segment_clean
-
-            image_feat = self.feat(image).detach()
-            self.active_keyframes.add_new_keyframe(image, image_feat, segment, stepi)
+            self.active_keyframes.add_new_keyframe_observation(new_frame_observation, stepi)
 
             start = time.time()
             if self.config.render_just_bounding_box:

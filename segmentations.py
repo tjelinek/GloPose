@@ -9,11 +9,11 @@ import cv2
 import torch
 import numpy as np
 
-from scipy import ndimage
 from scipy.ndimage import uniform_filter
 from torchvision import transforms
 import torch.nn.functional as F
 
+from keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
@@ -47,10 +47,12 @@ def resize_and_filter_image(image, new_width, new_height):
 
 
 class BaseTracker(ABC):
-    def __init__(self, perc, max_width):
+    def __init__(self, perc, max_width, feature_extractor, device = torch.device('cuda')):
         self.perc = perc
         self.max_width = max_width
+        self.feature_extractor = feature_extractor
         self.shape = None
+        self.device = device
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
@@ -61,9 +63,7 @@ class BaseTracker(ABC):
         return image, segments
 
     @abstractmethod
-    def next(self, file) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Implement this method or replace with the actual logic
-        # Returns tensors of shape (1, 1, 3, H, W) for image and (1, 1, 1, H, W) for segmentation
+    def next(self, file) -> FrameObservation:
         pass
 
     def process_segm(self, img):
@@ -87,8 +87,8 @@ class BaseTracker(ABC):
 
 
 class PrecomputedTracker(BaseTracker):
-    def __init__(self, perc, max_width, baseline_dict):
-        super().__init__(perc, max_width)
+    def __init__(self, perc, max_width, baseline_dict, feature_extractor):
+        super().__init__(perc, max_width, feature_extractor)
         self.perc = perc
         self.max_width = max_width
         self.baseline_dict = baseline_dict
@@ -130,12 +130,19 @@ class PrecomputedTracker(BaseTracker):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, tracker_config: TrackerConfig, renderer: RenderingKaolin, gt_encoder: Encoder, gt_texture):
-        super().__init__(tracker_config.image_downsample, tracker_config.max_width)
+    def __init__(self, tracker_config: TrackerConfig, renderer: RenderingKaolin, gt_encoder: Encoder, gt_texture,
+                 feature_extractor):
+        super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
         self.gt_encoder: Encoder = gt_encoder
         self.renderer = renderer
         self.gt_texture = gt_texture
         self.shape = (tracker_config.max_width, tracker_config.max_width)
+
+    @staticmethod
+    def binary_segmentation_from_rendered_segmentation(rendered_segmentations: torch.Tensor):
+        rendered_segment_discrete: torch.Tensor = ~(rendered_segmentations < 1)
+        rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
+        return rendered_segment_discrete
 
     def next(self, frame_id):
         keyframes = [frame_id]
@@ -148,15 +155,14 @@ class SyntheticDataGeneratingTracker(BaseTracker):
                                                  self.gt_texture, encoder_result.lights)
 
         image, segment = rendering_result
-        image = image.detach()
-        segment = segment.detach()
-        return image, segment
+        image = image.detach().to(self.device)
+        image_feat = self.feature_extractor(image)
+        segment = segment.detach().to(self.device)
 
-    @staticmethod
-    def binary_segmentation_from_observed_segmentation(rendered_segmentations: torch.Tensor):
-        rendered_segment_discrete: torch.Tensor = ~(rendered_segmentations < 1)
-        rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
-        return rendered_segment_discrete
+        frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
+                                             observed_segmentation=segment)
+
+        return frame_observation
 
     def init_bbox(self, file0, bbox0, init_mask=None):
         image, segments = self.next(file0)
@@ -169,7 +175,8 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
 class MyTracker(BaseTracker):
     def __init__(self, perc, max_width):
-        super().__init__(perc, max_width, None)
+        feature_extractor = None
+        super().__init__(perc, max_width, feature_extractor)
         sys.path.insert(0, './d3s')
         from pytracking.tracker.segm import Segm
         from pytracking.parameter.segm import default_params as vot_params
@@ -204,7 +211,8 @@ class MyTracker(BaseTracker):
 
 class CSRTrack(BaseTracker):
     def __init__(self, perc, max_width):
-        super().__init__(perc, max_width)
+        feature_extractor = None
+        super().__init__(perc, max_width, feature_extractor)
         self.tracker = cv2.TrackerCSRT_create()
         self.perc = perc
         self.max_width = max_width
@@ -251,7 +259,8 @@ def get_ar(img, init_box, ar_path):
 
 class OSTracker(BaseTracker):
     def __init__(self, perc, max_width):
-        super().__init__(perc, max_width)
+        feature_extractor = None
+        super().__init__(perc, max_width, feature_extractor)
         params = parameters("vitb_384_mae_ce_32x4_ep300")
         params.debug = 0
         params.tracker_name = "ostrack"
