@@ -17,26 +17,11 @@ import torch.nn.functional as F
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-from utils import imread, normalize_rendered_flows
+from utils import imread
 
 sys.path.insert(0, 'OSTrack')
 from OSTrack.lib.test.tracker.ostrack import OSTrack
 from OSTrack.lib.test.parameter.ostrack import parameters
-
-
-def compute_segments_dist(segment_resized):
-    """
-
-    :param segment_resized: np.ndarray of shape [1, H, W]
-    :param segment_orig_torch: torch.Tensor of shape [1, H, W]
-    :return: Segmentation of shape [1, 2, H, W], where the 1st dimension contains distance to the background in pixels
-             and 2nd the segmentation mask as a floating point number in [0.0, 1.0].
-    """
-    euclid_distance_to_background = ndimage.distance_transform_edt(1 - segment_resized)
-    distance_tensor = torch.from_numpy(euclid_distance_to_background)[None]
-    segment_resized_torch = torch.from_numpy(segment_resized)[None]
-    segments = torch.cat((distance_tensor, segment_resized_torch), 1)
-    return segments
 
 
 def pad_image(image):
@@ -302,48 +287,6 @@ class OSTracker(BaseTracker):
         segment = self.RF_module.get_mask(image, np.array(bbox0))
         image, segments = self.process(image, bbox0, segment)
         return image, segments
-
-
-def rle_to_mask(rle, width, height):
-    """
-    rle: input rle mask encoding
-    each evenly-indexed element represents number of consecutive 0s
-    each oddly indexed element represents number of consecutive 1s
-    width and height are dimensions of the mask
-    output: 2-D binary mask
-    """
-    # allocate list of zeros
-    v = [0] * (width * height)
-
-    # set id of the last different element to the beginning of the vector
-    idx_ = 0
-    for i in range(len(rle)):
-        if i % 2 != 0:
-            # write as many 1s as RLE says (zeros are already in the vector)
-            for j in range(rle[i]):
-                v[idx_ + j] = 1
-        idx_ += rle[i]
-
-    # reshape vector into 2-D mask
-    # return np.reshape(np.array(v, dtype=np.uint8), (height, width)) # numba bug / not supporting np.reshape
-    return np.array(v, dtype=np.uint8).reshape((height, width))
-
-
-def create_mask_from_string(mask_encoding):
-    """
-    mask_encoding: a string in the following format: x0, y0, w, h, RLE
-    output: mask, offset
-    mask: 2-D binary mask, size defined in the mask encoding
-    offset: (x, y) offset of the mask in the image coordinates
-    """
-    elements = [int(el) for el in mask_encoding]
-    tl_x, tl_y, region_w, region_h = elements[:4]
-    rle = np.array([el for el in elements[4:]], dtype=np.int32)
-
-    # create mask from RLE within target region
-    mask = rle_to_mask(rle, region_w, region_h)
-
-    return mask, (tl_x, tl_y)
 
 
 def get_bbox(segments):
