@@ -369,7 +369,7 @@ class WriteResults:
                 file.writelines(lines)
 
             renders_np = renders.numpy(force=True)
-            observed_images_numpy = images.numpy(force=True)
+            observed_images_numpy = observed_images.numpy(force=True)
             observed_segmentations_numpy = observed_segmentations.numpy(force=True)
             segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
 
@@ -378,12 +378,12 @@ class WriteResults:
 
             write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
-                img = images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+                img = observed_images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
                 seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]].clone()
                 save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(images_feat[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]],
+                save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]],
                            os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
                 save_image(torch.cat((img, seg), 0),
                            os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
@@ -406,13 +406,13 @@ class WriteResults:
             np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
             np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
 
-            image_to_write = images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
+            image_to_write = observed_images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
             image_to_write = image_to_write.transpose(2, 3, 1, 0)
             image_to_write = image_to_write[:, :, [2, 1, 0], -1]
             image_to_write = (image_to_write * 255).astype(np.uint8)
             self.all_input.write(image_to_write)
 
-            segmentation_to_write = (images[0, :, :3] * observed_segmentations[0])
+            segmentation_to_write = (observed_images[0, :, :3] * observed_segmentations[0])
             segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
             segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
             segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
