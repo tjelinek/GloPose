@@ -11,7 +11,6 @@ from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternio
 from kornia.morphology import erosion
 
 import cfg
-from models.kaolin_wrapper import prepare_vertices
 from tracker_config import TrackerConfig
 from utils import normalize_rendered_flows
 
@@ -132,14 +131,16 @@ class RenderingKaolin(nn.Module):
             vertices_1 = vertices_1 + translation_vector_1
             vertices_2 = vertices_2 + translation_vector_2
 
-            face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepare_vertices(vertices_1, self.faces,
-                                                                                          self.camera_rot,
-                                                                                          self.camera_trans,
-                                                                                          self.camera_proj)
-            face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepare_vertices(vertices_2, self.faces,
-                                                                                          self.camera_rot,
-                                                                                          self.camera_trans,
-                                                                                          self.camera_proj)
+            prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices_1, self.faces,
+                                                                            self.camera_proj, self.camera_rot,
+                                                                            self.camera_trans)
+            face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepared_vertices_1
+
+            prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices_2, self.faces,
+                                                                            self.camera_rot,
+                                                                            self.camera_trans,
+                                                                            self.camera_proj)
+            face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepared_vertices_2
 
             # Extract the z-coordinates of the face vertices in camera space
             face_vertices_z_1 = face_vertices_cam_1[:, :, :, -1]
@@ -147,7 +148,7 @@ class RenderingKaolin(nn.Module):
 
             # Extract the z-components of the face normals
             face_normals_z_1 = face_normals_1[:, :, -1]
-            face_normals_z_2 = face_normals_2[:, :, -1]
+            # face_normals_z_2 = face_normals_2[:, :, -1]
 
             # This implementation is correct, but due to low mesh resolution, it does not work
             face_occlusion_indication = 1. * (face_normals_2[:, :, -1] < 0)
@@ -156,18 +157,46 @@ class RenderingKaolin(nn.Module):
             face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
 
             features_for_rendering = torch.cat([face_vertices_image_motion,
-                                                face_occlusion_indication_features], dim=-1)
+                                                face_occlusion_indication_features,
+                                                face_vertices_cam_2], dim=-1).float()
 
-            ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                                     face_vertices_z_1,
-                                                                                     face_vertices_image_1,
-                                                                                     features_for_rendering,
-                                                                                     face_normals_z_1,
-                                                                                     sigmainv=self.config.sigmainv,
-                                                                                     boxlen=0.02, knum=30,
-                                                                                     multiplier=1000)
-            theoretical_flow = ren_outputs[..., :2]
-            occlusion_mask = ren_outputs[None, ..., 2]
+            ren_outputs_1, ren_mask_1, red_index_1 = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                                           face_vertices_z_1,
+                                                                                           face_vertices_image_1,
+                                                                                           features_for_rendering,
+                                                                                           face_normals_z_1,
+                                                                                           sigmainv=self.config.sigmainv,
+                                                                                           boxlen=0.02, knum=30,
+                                                                                           multiplier=1000)
+
+            theoretical_flow = ren_outputs_1[..., :2]
+            occlusion_mask = ren_outputs_1[None, ..., 2].detach()
+            # Here we render the expected vertices positions in pose 2 by storing their coordinates in pose 2 as
+            # features to the vertices, which are still in pose 1.
+            # Hence, the image rendering coordinates correspond to pose 1.
+            # rendered_pose1_with_pose2_coordinates = ren_outputs_1[..., 3:]
+
+            # Occlusion computation
+            # features_for_rendering = torch.cat([face_vertices_cam_2], dim=-1).float()
+            # ren_outputs_2, ren_mask_2, red_index_2 = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+            #                                                                                face_vertices_z_2,
+            #                                                                                face_vertices_image_2,
+            #                                                                                features_for_rendering,
+            #                                                                                face_normals_z_2,
+            #                                                                                sigmainv=self.config.sigmainv,
+            #                                                                                boxlen=0.02, knum=30,
+            #                                                                                multiplier=1000)
+
+            # Here we render the actual vertices positions in pose 2 by storing their coordinates in pose 2 as
+            # features to the vertices which are transformed to pose 2.
+            # Hence, the image rendering coordinates correspond to pose 2.
+            # rendered_pose2_with_pose2_coordinates = ren_outputs_2
+            # occlusion_mask = self.get_occlusion_mask_using_rendered_coordinates(rendered_pose1_with_pose2_coordinates,
+            #                                                                     rendered_pose2_with_pose2_coordinates,
+            #                                                                     theoretical_flow)
+            # occlusion_mask = self.get_occlusion_mask_using_rendered_indices(red_index_1,
+            #                                                                 red_index_2,
+            #                                                                 theoretical_flow)
 
             theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
             theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
@@ -176,7 +205,7 @@ class RenderingKaolin(nn.Module):
 
             theoretical_flows.append(theoretical_flow)
             occlusion_masks.append(occlusion_mask)
-            rendering_masks.append(ren_mask[None])
+            rendering_masks.append(ren_mask_1[None])
 
         theoretical_flow = torch.stack(theoretical_flows, 1).contiguous()  # torch.Size([1, N, 2, H, W])
         flow_render_mask = torch.stack(rendering_masks, 1).contiguous()  # torch.Size([1, N, 1, H, W])
@@ -244,9 +273,10 @@ class RenderingKaolin(nn.Module):
 
             vertices = vertices + translation_vector
 
-            face_vertices_cam, face_vertices_image, face_normals = prepare_vertices(vertices, self.faces,
-                                                                                    self.camera_rot, self.camera_trans,
-                                                                                    self.camera_proj)
+            prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices, self.faces,
+                                                                          self.camera_rot, self.camera_trans,
+                                                                          self.camera_proj)
+            face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
 
             face_vertices_z = face_vertices_cam[:, :, :, -1]
             face_normals_z = face_normals[:, :, -1]
@@ -330,9 +360,10 @@ class RenderingKaolin(nn.Module):
         vertices = vertices + translation_vector
 
         # Prepare the vertices for rendering by computing their camera coordinates, image coordinates, and face normals
-        face_vertices_cam, face_vertices_image, face_normals = prepare_vertices(vertices, self.faces,
-                                                                                self.camera_rot, self.camera_trans,
-                                                                                self.camera_proj)
+        prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices, self.faces,
+                                                                      self.camera_rot, self.camera_trans,
+                                                                      self.camera_proj)
+        face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
 
         # Extract the z-coordinates of the face vertices in camera space
         face_vertices_z = face_vertices_cam[:, :, :, -1]
