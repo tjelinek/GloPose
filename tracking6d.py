@@ -653,9 +653,6 @@ class Tracking6D:
         if self.config.preinitialization_method == 'levenberg-marquardt':
             self.run_levenberg_marquardt_method(observations, flow_observations, flow_frames, keyframes, flow_arcs,
                                                 frame_losses)
-        elif self.config.preinitialization_method == 'lbfgs':
-            self.run_lbfgs_optimization(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        frame_losses, epoch)
 
         elif self.config.preinitialization_method == 'gradient_descent':
             self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch, keyframes,
@@ -829,73 +826,6 @@ class Tracking6D:
 
         infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                         'deep_features')
-        return infer_result
-
-    def run_lbfgs_optimization(self, observations, flow_observations, keyframes, flow_frames, flow_arcs, frame_losses,
-                               epoch):
-        """
-            Runs the LBFGS optimization on the positional parameters of the model.
-
-            This method is an experimental approach to optimizing the positional parameters using the LBFGS algorithm.
-            The optimization is terminated either after 5 iterations or when the best loss becomes less than or
-            equal to 1e-4.
-
-            Parameters:
-            - epoch (int): The starting epoch for the optimization.
-            - observations: Observations
-            - flow_observations: FlowObservations
-            - keyframes (torch.Tensor): Keyframes used for model inference.
-            - flow_frames (torch.Tensor): Optical flow frames used for model inference.
-            - frame_losses (list): List to store individual frame losses for logging purposes.
-            - flow_arcs (set): Set of arcs (flow_frame, key_frame) on which the flow is computed.
-
-            Returns:
-            - float: Best loss achieved during the optimization.
-            - int: Last epoch after optimization.
-
-            Note:
-            The method saves the state dictionary of the best encoder model achieved during the optimization.
-        """
-        self.optimizer_positional_parameters = torch.optim.LBFGS(self.positional_params,
-                                                                 lr=self.config.learning_rate)
-        best_loss = math.inf
-        iters_without_change = 0
-
-        def closure():
-            nonlocal iters_without_change
-            nonlocal best_loss
-
-            inf_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                          'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, theoretical_flow = inf_result
-            model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
-
-            joint_loss = joint_loss.mean()
-
-            if abs(best_loss - joint_loss) > 1e-3:
-                iters_without_change = 0
-                best_loss = joint_loss
-                self.best_model["value"] = model_loss
-                self.best_model["losses"] = losses_all
-                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-            else:
-                iters_without_change += 1
-
-            self.optimizer_positional_parameters.zero_grad()
-            joint_loss.backward()
-
-            return joint_loss
-
-        for i in range(5):
-            self.optimizer_positional_parameters.step(closure)
-            epoch += 1
-            if best_loss <= 1e-4:
-                break
-        self.encoder.load_state_dict(self.best_model["encoder"])
-
-        infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        'deep_features')
-
         return infer_result
 
     def gradient_descent_with_linear_lr_schedule(self, observations, flow_observations, epoch, frame_losses, keyframes,
