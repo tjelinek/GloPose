@@ -142,8 +142,7 @@ class Tracking6D:
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
-        self.initialize_keyframes(images=images, images_feat=images_feat,
-                                  segments=segments)
+        self.initialize_keyframes()
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
@@ -161,10 +160,6 @@ class Tracking6D:
                 self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
             else:  # d3s
                 self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
-
-        if type(self.tracker) is SyntheticDataGeneratingTracker:
-            file0 = 0
-        self.tracker.init_bbox(file0, bbox0, init_mask)
 
     def initialize_gt_texture(self):
         if self.config.gt_texture_path is not None:
@@ -333,13 +328,10 @@ class Tracking6D:
         config.loss_texture_change_weight = 0
         self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
 
-    def initialize_keyframes(self, images, images_feat, segments):
+    def initialize_keyframes(self):
 
         self.active_keyframes = KeyframeBuffer()
-        self.active_keyframes.add_new_keyframe(observed_image=images,
-                                               observed_image_features=images_feat,
-                                               observed_image_segmentation=segments,
-                                               keyframe_index=0)
+        self.active_keyframes_backview = KeyframeBuffer()
 
         self.recently_flushed_keyframes = KeyframeBuffer()
         self.all_keyframes = self.active_keyframes
@@ -372,6 +364,11 @@ class Tracking6D:
 
         self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
+        new_frame_observation = self.tracker.next(0)
+        self.active_keyframes.add_new_keyframe_observation(new_frame_observation, 0)
+
+        self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
+        self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
 
         b0 = None
         for stepi in range(1, self.config.input_frames):
