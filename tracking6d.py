@@ -122,8 +122,8 @@ class Tracking6D:
         self.shape = self.tracker.shape[:2]
 
         torch.backends.cudnn.benchmark = True
-
-        self.initialize_renderer_and_encoder(iface_features, ivertices)
+        self.initialize_renderer()
+        self.initialize_encoders(iface_features, ivertices)
 
         if self.config.generate_synthetic_observations_if_possible:
             assert self.gt_translations is not None and self.gt_rotations is not None
@@ -147,6 +147,9 @@ class Tracking6D:
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
+
+    def initialize_renderer(self):
+        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
 
     def initialize_tracker(self, bbox0, file0, init_mask):
         if type(bbox0) is dict:
@@ -180,8 +183,7 @@ class Tracking6D:
             self.gt_rotations = gt_rotations.to(self.device)
             self.gt_translations = gt_translations.to(self.device)
 
-    def initialize_renderer_and_encoder(self, iface_features, ivertices):
-        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
+    def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
                                self.config.features_channels).to(self.device)
 
