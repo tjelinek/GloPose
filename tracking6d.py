@@ -1002,7 +1002,6 @@ class Tracking6D:
         inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
                                                        self.shape[-1], self.shape[-2])
-        renders, rendered_silhouettes, theoretical_flow, rendered_flow_segmentation, occlusion_masks = inference_result
         renders, rendered_silhouettes, rendered_flow_result = inference_result
 
         if encoder_type == 'rgb':
