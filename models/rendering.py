@@ -1,4 +1,5 @@
 from collections import namedtuple
+from typing import Tuple
 
 import kaolin
 import math
@@ -11,6 +12,7 @@ from kornia.morphology import erosion
 
 import cfg
 from models.kaolin_wrapper import prepare_vertices
+from tracker_config import TrackerConfig
 from utils import normalize_rendered_flows
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
@@ -23,7 +25,7 @@ RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rend
 
 
 class RenderingKaolin(nn.Module):
-    def __init__(self, config, faces, width, height):
+    def __init__(self, config: TrackerConfig, faces: torch.Tensor, width: int, height: int):
         super().__init__()
         self.config = config
         self.height = height
@@ -31,7 +33,7 @@ class RenderingKaolin(nn.Module):
         camera_proj = kaolin.render.camera.generate_perspective_projection(1.57 / 2,  # field of view 45 degrees
                                                                            self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
-        self.register_buffer('camera_trans', torch.Tensor([0, 0, self.config.camera_distance])[None])
+        self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
         camera_up_direction = torch.Tensor((0, 1, 0))[None]
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,

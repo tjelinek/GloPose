@@ -35,7 +35,7 @@ class TrackerConfig:
     use_lights: bool = False
 
     # Camera settings
-    camera_distance: float = 5
+    camera_position: Tuple[float] = (0, 0, 5.0)
     max_width: int = 500
     image_downsample: float = 1.0
 
