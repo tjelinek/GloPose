@@ -22,6 +22,9 @@ MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertice
 RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rendered_flow_segmentation',
                                                        'rendered_flow_occlusion'])
 
+RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation',
+                                                 'rendered_face_camera_coords', 'rendered_face_image_coords'])
+
 
 class RenderingKaolin(nn.Module):
     def __init__(self, config: TrackerConfig, faces: torch.Tensor, width: int, height: int):
@@ -47,53 +50,51 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device=cfg.DEVICE))
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps, lights=None):
-        all_renderings = []
-        all_renderings_masks = []
+        batch_size = quaternion.shape[1]
 
-        for frmi in range(quaternion.shape[1]):
-            translation_vector = translation[:, :, frmi]
-            rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
+        translation_vector = translation[0, 0]
+        rotation_matrix = quaternion_to_rotation_matrix(quaternion, order=QuaternionCoeffOrder.WXYZ)
 
-            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
-                                                          translation_vector, unit_vertices)
+        unit_vertices_batched = unit_vertices.repeat(batch_size, 1, 1)
+        face_features_batched = face_features.repeat(batch_size, 1, 1, 1)
+        texture_maps_batched = texture_maps.repeat(batch_size, 1, 1, 1)
 
-            ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
-                                                              texture_maps, mode='bilinear')
+        rendering_result = self.render_mesh_with_dibr(face_features_batched, rotation_matrix, translation_vector,
+                                                      unit_vertices_batched)
 
-            if lights is not None:
-                im_normals = rendering_result.face_normals[0, rendering_result.red_index, :]
-                lighting = None
-                for li in range(lights.shape[0]):
-                    lighting_r = \
-                        kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 0])[
-                            ..., None]
-                    lighting_g = \
-                        kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 1])[
-                            ..., None]
-                    lighting_b = \
-                        kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 2])[
-                            ..., None]
-                    lighting_one = torch.cat((lighting_r, lighting_g, lighting_b), 3)
-                    if lighting is None:
-                        lighting = lighting_one
-                    else:
-                        lighting += lighting_one
-                lighting[rendering_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
-                ren_features = ren_features * lighting
-            rendering_rgb = ren_features.permute(0, 3, 1, 2)
-            if self.config.erode_renderer_mask > 0:
-                ren_mask = erosion(rendering_result.ren_mask[:, None], self.kernel)[:, 0]
-            else:
-                ren_mask = torch.ones(1, self.height, self.width)
+        ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
+                                                          texture_maps_batched, mode='bilinear')
 
-            # rendering_rgba = torch.cat((rendering_rgb, ren_mask[:, None]), 1)
-            all_renderings.append(rendering_rgb)
-            all_renderings_masks.append(ren_mask[None])
+        if lights is not None:
+            im_normals = rendering_result.face_normals[0, rendering_result.red_index, :]
+            lighting = None
+            for li in range(lights.shape[0]):
+                lighting_r = \
+                    kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 0])[
+                        ..., None]
+                lighting_g = \
+                    kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 1])[
+                        ..., None]
+                lighting_b = \
+                    kaolin.render.mesh.utils.spherical_harmonic_lighting(im_normals, lights[li:(li + 1), 2])[
+                        ..., None]
+                lighting_one = torch.cat((lighting_r, lighting_g, lighting_b), 3)
+                if lighting is None:
+                    lighting = lighting_one
+                else:
+                    lighting += lighting_one
+            lighting[rendering_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
+            ren_features = ren_features * lighting
+        rendering_rgb = ren_features.permute(0, 3, 1, 2)
+        if self.config.erode_renderer_mask > 0:
+            ren_mask = erosion(rendering_result.ren_mask[:, None], self.kernel)
+        else:
+            ren_mask = torch.ones(batch_size, 1, self.height, self.width)
 
-        all_renderings_masks = torch.stack(all_renderings_masks, 1).contiguous()
-        all_renderings = torch.stack(all_renderings, 1).contiguous()
+        renderings = rendering_rgb.unsqueeze(0)
+        segmentations = ren_mask.unsqueeze(0)
 
-        return all_renderings, all_renderings_masks
+        return renderings, segmentations
 
     def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
             -> RenderedFlowResult:
@@ -273,9 +274,10 @@ class RenderingKaolin(nn.Module):
 
             vertices = vertices + translation_vector
 
-            prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices, self.faces,
-                                                                          self.camera_rot, self.camera_trans,
-                                                                          self.camera_proj)
+            prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices, faces=self.faces,
+                                                                          camera_rot=self.camera_rot,
+                                                                          camera_trans=self.camera_trans,
+                                                                          camera_proj=self.camera_proj)
             face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
 
             face_vertices_z = face_vertices_cam[:, :, :, -1]
@@ -357,12 +359,17 @@ class RenderingKaolin(nn.Module):
         vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
 
         # Apply the translation to the vertices
-        vertices = vertices + translation_vector
+        vertices = vertices + translation_vector.unsqueeze(1)
 
         # Prepare the vertices for rendering by computing their camera coordinates, image coordinates, and face normals
-        prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices, self.faces,
-                                                                      self.camera_rot, self.camera_trans,
-                                                                      self.camera_proj)
+        camera_rot_batched = self.camera_rot.repeat(translation_vector.shape[0], 1, 1)
+        camera_trans_batched = self.camera_trans.repeat(translation_vector.shape[0], 1)
+
+        prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices,
+                                                                      faces=self.faces,
+                                                                      camera_rot=camera_rot_batched,
+                                                                      camera_trans=camera_trans_batched,
+                                                                      camera_proj=self.camera_proj)
         face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
 
         # Extract the z-coordinates of the face vertices in camera space
@@ -384,12 +391,12 @@ class RenderingKaolin(nn.Module):
 
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
         ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
-        ren_mesh_vertices_coords = ren_outputs[..., face_features.shape[-1]:
+        ren_mesh_vertices_camera_coords = ren_outputs[..., face_features.shape[-1]:
                                                     face_features.shape[-1] + face_vertices_cam.shape[-1]]
         ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:]
 
         return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
-                                ren_mesh_vertices_features, ren_mesh_vertices_coords,
+                                ren_mesh_vertices_features, ren_mesh_vertices_camera_coords,
                                 ren_mesh_vertices_image_coords)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
@@ -424,19 +431,20 @@ class RenderingKaolin(nn.Module):
 def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
                                 encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height) \
         -> Tuple[torch.Tensor, torch.Tensor, RenderedFlowResult]:
+
+    from time import time
+    start_time = time()
     rendering, rendering_mask = renderer(encoder_result.translations, encoder_result.quaternions,
                                          encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
                                          encoder_result.lights)
 
-    start_cuda_mem = int(torch.cuda.memory_allocated() / (1024 * 1024))
+    print("Rendering time: ", time() - start_time)
+    start_time = time()
     flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
+
+    print("Flow time: ", time() - start_time)
+
     theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
-    end_cuda_mem = int(torch.cuda.memory_allocated() / (1024 * 1024))
-    new_tensors_sizes = (theoretical_flow.element_size() * theoretical_flow.numel() +
-                         rendered_flow_segmentation.element_size() * rendered_flow_segmentation.numel() +
-                         occlusion_masks.element_size() * occlusion_masks.numel()) / (1024 * 1024)
-    # print(f"------ Flow objects sizes {new_tensors_sizes}")
-    # print(f"------ Computing flow start mem {start_cuda_mem}, end mem {end_cuda_mem}")
 
     # Renormalization compensating for the fact that we render into bounding box that is smaller than the actual image
     normalized_theoretical_flow = normalize_rendered_flows(theoretical_flow, renderer.width, renderer.height,
