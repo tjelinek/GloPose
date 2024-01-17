@@ -466,17 +466,15 @@ class Tracking6D:
                     new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
 
                     self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
-                                                     encoder_result=encoder_result,
-                                                     observed_segmentations=all_frame_observations.observed_segmentation,
-                                                     images=all_frame_observations.observed_image,
-                                                     images_feat=all_frame_observations.observed_image_features,
-                                                     tex=tex, new_flow_arcs=new_flow_arcs, frame_result=frame_result,
+                                                     encoder_result=encoder_result, tex=tex,
+                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result,
                                                      active_keyframes=self.active_keyframes,
                                                      all_keyframes=self.all_keyframes,
                                                      logged_sgd_translations=self.logged_sgd_translations,
                                                      logged_sgd_quaternions=self.logged_sgd_quaternions,
                                                      deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                                     renderer=self.rendering, best_model=self.best_model)
+                                                     renderer=self.rendering, best_model=self.best_model,
+                                                     observations=all_frame_observations)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None

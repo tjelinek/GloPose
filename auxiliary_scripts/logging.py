@@ -291,10 +291,14 @@ class WriteResults:
         image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = image
         return image_with_margins
 
-    def write_results(self, bounding_box, our_losses, frame_i, encoder_result, observed_segmentations, images,
-                      images_feat, tex, new_flow_arcs, frame_result, active_keyframes: KeyframeBuffer,
-                      all_keyframes: KeyframeBuffer, logged_sgd_translations, logged_sgd_quaternions,
-                      deep_encoder: Encoder, rgb_encoder: Encoder, renderer: RenderingKaolin, best_model):
+    def write_results(self, bounding_box, our_losses, frame_i, encoder_result, tex, new_flow_arcs, frame_result,
+                      active_keyframes: KeyframeBuffer, all_keyframes: KeyframeBuffer, logged_sgd_translations,
+                      logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder, renderer: RenderingKaolin,
+                      best_model, observations: FrameObservation):
+
+        observed_images = observations.observed_image
+        observed_image_features = observations.observed_image_features
+        observed_segmentations = observations.observed_segmentation
 
         self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                         new_flow_arcs=new_flow_arcs, rgb_encoder=rgb_encoder,
