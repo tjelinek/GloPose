@@ -103,14 +103,14 @@ class RenderingKaolin(nn.Module):
                                            rendered_face_normals=rendered_object_face_normals_camera_coords)
         return rendering_result
 
-    def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
+    def compute_theoretical_flow(self, encoder_out_pose_2, encoder_out_pose_1, flow_arcs_indices) \
             -> RenderedFlowResult:
         """
         Computes the theoretical flow between consecutive frames.
 
         Args:
-            encoder_out_new_pose (EncoderResult): The encoder result for the current frame.
-            encoder_out_prev_pose (EncoderResult): The encoder results for the previous frames.
+            encoder_out_pose_2 (EncoderResult): The encoder result for the current frame.
+            encoder_out_pose_1 (EncoderResult): The encoder results for the previous frames.
             flow_arcs_indices (Sorted[Tuple[int, int]]): Indexes in encoder_out_prev_frames and encoder_out given as a 
                                                          sorted collection of tuples.
 
@@ -118,107 +118,94 @@ class RenderingKaolin(nn.Module):
             torch.Tensor: The computed theoretical flow between consecutive frames. The output flow is respective to the
                           coordinates range [0, 1].
         """
-        theoretical_flows = []
-        rendering_masks = []
-        occlusion_masks = []
-        for frame_i_prev, frame_i in flow_arcs_indices:
-            translation_vector_1 = encoder_out_prev_pose.translations[:, :, frame_i_prev]
-            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_pose.quaternions[:, frame_i_prev],
-                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            translation_vector_2 = encoder_out_new_pose.translations[:, :, frame_i]
-            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out_new_pose.quaternions[:, frame_i],
-                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
+        indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]
 
-            # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-            vertices_1 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_pose.vertices,
-                                                                      rotation_matrix_1, self.obj_center)
-            vertices_2 = kaolin.render.camera.rotate_translate_points(encoder_out_prev_pose.vertices,
-                                                                      rotation_matrix_2, self.obj_center).clone()
+        # Convert lists to tensors
+        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
+        indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
 
-            vertices_1 = vertices_1 + translation_vector_1
-            vertices_2 = vertices_2 + translation_vector_2
+        # Batch gather translations
+        translation_vector_1_batch = torch.index_select(encoder_out_pose_1.translations, 2, indices_pose_1)[0, 0]
+        translation_vector_2_batch = torch.index_select(encoder_out_pose_2.translations, 2, indices_pose_2)[0, 0]
 
-            prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_1, faces=self.faces,
-                                                                            camera_proj=self.camera_proj,
-                                                                            camera_rot=self.camera_rot,
-                                                                            camera_trans=self.camera_trans)
-            face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepared_vertices_1
+        # Batch convert quaternions to rotation matrices
+        quaternion_batch_1 = torch.index_select(encoder_out_pose_1.quaternions, 1, indices_pose_1)
+        quaternion_batch_2 = torch.index_select(encoder_out_pose_2.quaternions, 1, indices_pose_2)
 
-            prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_2, faces=self.faces,
-                                                                            camera_rot=self.camera_rot,
-                                                                            camera_trans=self.camera_trans,
-                                                                            camera_proj=self.camera_proj)
-            face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepared_vertices_2
+        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            # Extract the z-coordinates of the face vertices in camera space
-            face_vertices_z_1 = face_vertices_cam_1[:, :, :, -1]
-            # face_vertices_z_2 = face_vertices_cam_2[:, :, :, -1]
+        # translation_vector_1_batch = torch.cat(translation_vectors_1, dim=0)
+        # translation_vector_2_batch = torch.cat(translation_vectors_2, dim=0)
+        # rotation_matrix_1_batch = torch.cat(rotation_matrices_1, dim=0)
+        # rotation_matrix_2_batch = torch.cat(rotation_matrices_2, dim=0)
 
-            # Extract the z-components of the face normals
-            face_normals_z_1 = face_normals_1[:, :, -1]
-            # face_normals_z_2 = face_normals_2[:, :, -1]
+        batch_size = translation_vector_1_batch.shape[0]
 
-            # This implementation is correct, but due to low mesh resolution, it does not work
-            face_occlusion_indication = 1. * (face_normals_2[:, :, -1] < 0)
-            face_occlusion_indication_features = face_occlusion_indication[..., None, None].repeat(1, 1, 3, 1)
+        vertices_1_batch = encoder_out_pose_1.vertices.repeat(batch_size, 1, 1)
+        vertices_2_batch = vertices_1_batch
+        obj_center_batch = self.obj_center.repeat(batch_size, 1)
+        camera_rot_batch = self.camera_rot.repeat(batch_size, 1, 1)
+        camera_trans_batch = self.camera_trans.repeat(batch_size, 1)
 
-            face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
+        # Rotate and translate the vertices using the given rotation_matrix and translation_vector
+        vertices_1_batch = kaolin.render.camera.rotate_translate_points(vertices_1_batch,
+                                                                        rotation_matrix_1_batch, obj_center_batch)
+        vertices_2_batch = kaolin.render.camera.rotate_translate_points(vertices_2_batch,
+                                                                        rotation_matrix_2_batch, obj_center_batch)
 
-            features_for_rendering = torch.cat([face_vertices_image_motion,
-                                                face_occlusion_indication_features,
-                                                face_vertices_cam_2], dim=-1).float()
+        vertices_1_batch = vertices_1_batch + translation_vector_1_batch.unsqueeze(1)
+        vertices_2_batch = vertices_2_batch + translation_vector_2_batch.unsqueeze(1)
 
-            ren_outputs_1, ren_mask_1, red_index_1 = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                                           face_vertices_z_1,
-                                                                                           face_vertices_image_1,
-                                                                                           features_for_rendering,
-                                                                                           face_normals_z_1,
-                                                                                           sigmainv=self.config.sigmainv,
-                                                                                           boxlen=0.02, knum=30,
-                                                                                           multiplier=1000)
+        prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_1_batch, faces=self.faces,
+                                                                        camera_proj=self.camera_proj,
+                                                                        camera_rot=camera_rot_batch,
+                                                                        camera_trans=camera_trans_batch)
+        face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepared_vertices_1
 
-            theoretical_flow = ren_outputs_1[..., :2]
-            occlusion_mask = ren_outputs_1[None, ..., 2].detach()
-            # Here we render the expected vertices positions in pose 2 by storing their coordinates in pose 2 as
-            # features to the vertices, which are still in pose 1.
-            # Hence, the image rendering coordinates correspond to pose 1.
-            # rendered_pose1_with_pose2_coordinates = ren_outputs_1[..., 3:]
+        prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_2_batch, faces=self.faces,
+                                                                        camera_proj=self.camera_proj,
+                                                                        camera_rot=camera_rot_batch,
+                                                                        camera_trans=camera_trans_batch)
+        face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepared_vertices_2
 
-            # Occlusion computation
-            # features_for_rendering = torch.cat([face_vertices_cam_2], dim=-1).float()
-            # ren_outputs_2, ren_mask_2, red_index_2 = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-            #                                                                                face_vertices_z_2,
-            #                                                                                face_vertices_image_2,
-            #                                                                                features_for_rendering,
-            #                                                                                face_normals_z_2,
-            #                                                                                sigmainv=self.config.sigmainv,
-            #                                                                                boxlen=0.02, knum=30,
-            #                                                                                multiplier=1000)
+        # Extract the z-coordinates of the face vertices in camera space
+        face_vertices_z_1 = face_vertices_cam_1[:, :, :, -1]
 
-            # Here we render the actual vertices positions in pose 2 by storing their coordinates in pose 2 as
-            # features to the vertices which are transformed to pose 2.
-            # Hence, the image rendering coordinates correspond to pose 2.
-            # rendered_pose2_with_pose2_coordinates = ren_outputs_2
-            # occlusion_mask = self.get_occlusion_mask_using_rendered_coordinates(rendered_pose1_with_pose2_coordinates,
-            #                                                                     rendered_pose2_with_pose2_coordinates,
-            #                                                                     theoretical_flow)
-            # occlusion_mask = self.get_occlusion_mask_using_rendered_indices(red_index_1,
-            #                                                                 red_index_2,
-            #                                                                 theoretical_flow)
+        # Extract the z-components of the face normals
+        face_normals_z_1 = face_normals_1[:, :, -1]
+        # This implementation is correct, but due to low mesh resolution, it does not work
+        face_occlusion_indication = 1. * (face_normals_2[:, :, -1] < 0)
+        face_occlusion_indication_features = face_occlusion_indication[..., None, None].repeat(1, 1, 3, 1)
 
-            theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
-            theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
-            theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
-            theoretical_flow = theoretical_flow_new.permute(0, 3, 1, 2)
+        face_vertices_image_motion = face_vertices_image_2 - face_vertices_image_1  # Vertices are in [-1, 1] range
 
-            theoretical_flows.append(theoretical_flow)
-            occlusion_masks.append(occlusion_mask)
-            rendering_masks.append(ren_mask_1[None])
+        features_for_rendering = torch.cat([face_vertices_image_motion,
+                                            face_occlusion_indication_features,
+                                            face_vertices_cam_2], dim=-1).float()
 
-        theoretical_flow = torch.stack(theoretical_flows, 1).contiguous()  # torch.Size([1, N, 2, H, W])
-        flow_render_mask = torch.stack(rendering_masks, 1).contiguous()  # torch.Size([1, N, 1, H, W])
-        occlusion_mask = torch.stack(occlusion_masks, 1).contiguous()  # torch.Size([1, N, 1, H, W])
+        ren_outputs_1, ren_mask_1, red_index_1 = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
+                                                                                       face_vertices_z_1,
+                                                                                       face_vertices_image_1,
+                                                                                       features_for_rendering,
+                                                                                       face_normals_z_1,
+                                                                                       sigmainv=self.config.sigmainv,
+                                                                                       boxlen=0.02, knum=30,
+                                                                                       multiplier=1000)
+
+        theoretical_flow = ren_outputs_1[..., :2]
+
+        theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
+        theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
+        theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
+
+        theoretical_flow = theoretical_flow_new.permute(0, 3, 1, 2).unsqueeze(0)   # torch.Size([1, N, 2, H, W])
+        flow_render_mask = ren_mask_1.unsqueeze(1).unsqueeze(0)                    # torch.Size([1, N, 1, H, W])
+        occlusion_mask = ren_outputs_1[..., 2].detach().unsqueeze(1).unsqueeze(0)  # torch.Size([1, N, 1, H, W])
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
 
@@ -446,9 +433,6 @@ class RenderingKaolin(nn.Module):
 def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features, encoder_result,
                                 encoder_result_flow_frames, flow_arcs_indices, input_image_width, input_image_height) \
         -> Tuple[torch.Tensor, torch.Tensor, RenderedFlowResult]:
-
-    from time import time
-    start_time = time()
     rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
                                         encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
                                         encoder_result.lights)
@@ -456,8 +440,6 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
     rendering = rendering_result.rendered_image
     rendering_mask = rendering_result.rendered_image_segmentation
 
-    # print("Rendering time: ", time() - start_time)
-    start_time = time()
     flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
 
     print("Flow time: ", time() - start_time)
