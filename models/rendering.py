@@ -23,8 +23,7 @@ RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rend
                                                        'rendered_flow_occlusion'])
 
 RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation',
-                                                 'rendered_face_camera_coords', 'rendered_face_image_coords'])
-RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation', ])
+                                                 'rendered_face_camera_coords'])
 
 
 class RenderingKaolin(nn.Module):
@@ -95,9 +94,10 @@ class RenderingKaolin(nn.Module):
 
         renderings = rendering_rgb.unsqueeze(0)
         segmentations = ren_mask.unsqueeze(0)
+        rendered_object_camera_coords = dibr_result.ren_mesh_vertices_coords.permute(0, 3, 1, 2).unsqueeze(0)
 
-        return renderings, segmentations
-        rendering_result = RenderingResult(rendered_image=renderings, rendered_image_segmentation=segmentations)
+        rendering_result = RenderingResult(rendered_image=renderings, rendered_image_segmentation=segmentations,
+                                           rendered_face_camera_coords=rendered_object_camera_coords)
         return rendering_result
 
     def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
@@ -443,9 +443,10 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
                                         encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
                                         encoder_result.lights)
 
-    print("Rendering time: ", time() - start_time)
     rendering = rendering_result.rendered_image
     rendering_mask = rendering_result.rendered_image_segmentation
+
+    # print("Rendering time: ", time() - start_time)
     start_time = time()
     flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
 
