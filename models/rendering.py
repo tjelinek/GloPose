@@ -132,15 +132,16 @@ class RenderingKaolin(nn.Module):
             vertices_1 = vertices_1 + translation_vector_1
             vertices_2 = vertices_2 + translation_vector_2
 
-            prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices_1, self.faces,
-                                                                            self.camera_proj, self.camera_rot,
-                                                                            self.camera_trans)
+            prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_1, faces=self.faces,
+                                                                            camera_proj=self.camera_proj,
+                                                                            camera_rot=self.camera_rot,
+                                                                            camera_trans=self.camera_trans)
             face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepared_vertices_1
 
-            prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices_2, self.faces,
-                                                                            self.camera_rot,
-                                                                            self.camera_trans,
-                                                                            self.camera_proj)
+            prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_2, faces=self.faces,
+                                                                            camera_rot=self.camera_rot,
+                                                                            camera_trans=self.camera_trans,
+                                                                            camera_proj=self.camera_proj)
             face_vertices_cam_2, face_vertices_image_2, face_normals_2 = prepared_vertices_2
 
             # Extract the z-coordinates of the face vertices in camera space
