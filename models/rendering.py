@@ -310,19 +310,23 @@ class RenderingKaolin(nn.Module):
 
         return rendered_camera_coordinates, flow_render_mask
 
-    def compute_theoretical_flow_using_rendered_vertices(self, rendered_vertices, encoder_out, encoder_out_prev_frames,
-                                                         flow_arcs_indices):
+    def compute_theoretical_flow_using_rendered_vertices(self, rendering_result_frame_1: RenderingResult,
+                                                         encoder_out_frame_2, encoder_out_frame_1,
+                                                         flow_arcs_indices) -> RenderedFlowResult:
+
+        rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_camera_coords
+
         theoretical_flows = []
         for frame_i_prev, frame_i in flow_arcs_indices:
-            translation_vector_1 = encoder_out_prev_frames.translations[:, :, frame_i_prev]
-            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_prev_frames.quaternions[:, frame_i_prev],
+            translation_vector_1 = encoder_out_frame_1.translations[:, :, frame_i_prev]
+            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_frame_1.quaternions[:, frame_i_prev],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            translation_vector_2 = encoder_out.translations[:, :, frame_i]
-            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out.quaternions[:, frame_i],
+            translation_vector_2 = encoder_out_frame_2.translations[:, :, frame_i]
+            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out_frame_2.quaternions[:, frame_i],
                                                               order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            rendered_vertices_frame = rendered_vertices[:, [frame_i_prev]]
+            rendered_vertices_frame = rendered_vertices_frame_1[:, frame_i_prev].permute(0, 2, 3, 1)
             rendered_vertices_frame_norm = rendered_vertices_frame.norm(dim=-1)
 
             zero_vertices_positions = tuple(rendered_vertices_frame_norm.eq(0).nonzero().T)
@@ -357,7 +361,7 @@ class RenderingKaolin(nn.Module):
             theoretical_flows.append(theoretical_flow)
 
         theoretical_flows = torch.cat(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
-        theoretical_flows = theoretical_flows.permute(0, 1, 4, 2, 3)
+        theoretical_flows = theoretical_flows.permute(0, 3, 1, 2).unsqueeze(0)
 
         return theoretical_flows
 
