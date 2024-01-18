@@ -379,6 +379,7 @@ class RenderingKaolin(nn.Module):
                                                                       camera_trans=camera_trans_batched,
                                                                       camera_proj=self.camera_proj)
         face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
+        face_normals_feature = face_normals.unsqueeze(-1)
 
         # Extract the z-coordinates of the face vertices in camera space
         face_vertices_z = face_vertices_cam[:, :, :, -1]
@@ -386,7 +387,8 @@ class RenderingKaolin(nn.Module):
         # Extract the z-components of the face normals
         face_normals_z = face_normals[:, :, -1]
 
-        features_for_rendering = torch.cat((face_features, face_vertices_cam, face_vertices_image), dim=-1)
+        features_for_rendering = torch.cat((face_features, face_vertices_cam,
+                                            face_vertices_image, face_normals_feature), dim=-1)
 
         # Perform dibr rasterization
         ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
@@ -400,12 +402,13 @@ class RenderingKaolin(nn.Module):
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
         ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
         ren_mesh_vertices_camera_coords = ren_outputs[..., face_features.shape[-1]:
-                                                    face_features.shape[-1] + face_vertices_cam.shape[-1]]
-        ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:]
+                                                           face_features.shape[-1] + face_vertices_cam.shape[-1]]
+        ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:-1]
+        ren_face_normals_features = ren_outputs[..., -1:]
 
         return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
                                 ren_mesh_vertices_features, ren_mesh_vertices_camera_coords,
-                                ren_mesh_vertices_image_coords)
+                                ren_mesh_vertices_image_coords, ren_face_normals_features)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
