@@ -331,13 +331,18 @@ class WriteResults:
             if self.tracking_config.features == 'rgb':
                 tex = detached_result.texture_maps
 
-            feat_renders, _ = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                               detached_result.vertices, deep_encoder.face_features,
-                                               detached_result.texture_maps, detached_result.lights)
+            feat_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                                   detached_result.vertices, deep_encoder.face_features,
+                                                   detached_result.texture_maps, detached_result.lights)
 
-            renders, rendered_silhouette = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                                            detached_result.vertices, deep_encoder.face_features,
-                                                            tex, detached_result.lights)
+            feat_renders = feat_renders_result.rendered_image
+
+            rgb_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                                  detached_result.vertices, deep_encoder.face_features,
+                                                  tex, detached_result.lights)
+
+            renders = rgb_renders_result.rendered_image
+            rendered_silhouette = rgb_renders_result.rendered_image_segmentation
 
             renders_crop = renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
             feat_renders_crop = feat_renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
@@ -379,11 +384,13 @@ class WriteResults:
             write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
             for tmpi in range(renders.shape[1]):
                 img = observed_images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-                seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]].clone()
+                seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1],
+                      bounding_box[2]:bounding_box[3]].clone()
                 save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
                 seg[seg == 0] = 0.35
                 save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]],
+                save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1],
+                           bounding_box[2]:bounding_box[3]],
                            os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
                 save_image(torch.cat((img, seg), 0),
                            os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
@@ -647,11 +654,11 @@ class WriteResults:
                 tex_rgb = nn.Sigmoid()(rgb_encoder.texture_map)
 
                 # Render keyframe images
-                rendering_rgb, rendering_silhouette = renderer.forward(encoder_result.translations,
-                                                                       encoder_result.quaternions,
-                                                                       encoder_result.vertices,
-                                                                       deep_encoder.face_features, tex_rgb,
-                                                                       encoder_result.lights)
+                rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
+                                                    encoder_result.vertices, deep_encoder.face_features, tex_rgb,
+                                                    encoder_result.lights)
+
+                rendering_rgb = rendering_result.rendered_image
 
                 rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                                          flow_arcs_indices=[(0, 1)])

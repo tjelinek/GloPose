@@ -24,6 +24,7 @@ RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rend
 
 RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation',
                                                  'rendered_face_camera_coords', 'rendered_face_image_coords'])
+RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation', ])
 
 
 class RenderingKaolin(nn.Module):
@@ -49,7 +50,8 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('faces', torch.LongTensor(faces))
         self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device=cfg.DEVICE))
 
-    def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps, lights=None):
+    def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps,
+                lights=None) -> RenderingResult:
         batch_size = quaternion.shape[1]
 
         translation_vector = translation[0, 0]
@@ -59,14 +61,14 @@ class RenderingKaolin(nn.Module):
         face_features_batched = face_features.repeat(batch_size, 1, 1, 1)
         texture_maps_batched = texture_maps.repeat(batch_size, 1, 1, 1)
 
-        rendering_result = self.render_mesh_with_dibr(face_features_batched, rotation_matrix, translation_vector,
-                                                      unit_vertices_batched)
+        dibr_result = self.render_mesh_with_dibr(face_features_batched, rotation_matrix, translation_vector,
+                                                 unit_vertices_batched)
 
-        ren_features = kaolin.render.mesh.texture_mapping(rendering_result.ren_mesh_vertices_features,
+        ren_features = kaolin.render.mesh.texture_mapping(dibr_result.ren_mesh_vertices_features,
                                                           texture_maps_batched, mode='bilinear')
 
         if lights is not None:
-            im_normals = rendering_result.face_normals[0, rendering_result.red_index, :]
+            im_normals = dibr_result.face_normals[0, dibr_result.red_index, :]
             lighting = None
             for li in range(lights.shape[0]):
                 lighting_r = \
@@ -83,11 +85,11 @@ class RenderingKaolin(nn.Module):
                     lighting = lighting_one
                 else:
                     lighting += lighting_one
-            lighting[rendering_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
+            lighting[dibr_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
             ren_features = ren_features * lighting
         rendering_rgb = ren_features.permute(0, 3, 1, 2)
         if self.config.erode_renderer_mask > 0:
-            ren_mask = erosion(rendering_result.ren_mask[:, None], self.kernel)
+            ren_mask = erosion(dibr_result.ren_mask[:, None], self.kernel)
         else:
             ren_mask = torch.ones(batch_size, 1, self.height, self.width)
 
@@ -95,6 +97,8 @@ class RenderingKaolin(nn.Module):
         segmentations = ren_mask.unsqueeze(0)
 
         return renderings, segmentations
+        rendering_result = RenderingResult(rendered_image=renderings, rendered_image_segmentation=segmentations)
+        return rendering_result
 
     def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
             -> RenderedFlowResult:
@@ -435,11 +439,13 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
 
     from time import time
     start_time = time()
-    rendering, rendering_mask = renderer(encoder_result.translations, encoder_result.quaternions,
-                                         encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
-                                         encoder_result.lights)
+    rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
+                                        encoder_result.vertices, encoder_face_features, encoder_result.texture_maps,
+                                        encoder_result.lights)
 
     print("Rendering time: ", time() - start_time)
+    rendering = rendering_result.rendered_image
+    rendering_mask = rendering_result.rendered_image_segmentation
     start_time = time()
     flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
 

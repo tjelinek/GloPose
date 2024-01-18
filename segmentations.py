@@ -154,9 +154,11 @@ class SyntheticDataGeneratingTracker(BaseTracker):
                                                  encoder_result.vertices, self.gt_encoder.face_features,
                                                  self.gt_texture, encoder_result.lights)
 
-        image, segment = rendering_result
+        image = rendering_result.rendered_image
+        segment = rendering_result.rendered_image_segmentation
+
         image = image.detach().to(self.device)
-        image_feat = self.feature_extractor(image)
+        image_feat = self.feature_extractor(image).detach()
         segment = segment.detach().to(self.device)
 
         frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
@@ -165,7 +167,10 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         return frame_observation
 
     def init_bbox(self, file0, bbox0, init_mask=None):
-        image, segments = self.next(file0)
+        frame_observation = self.next(file0)
+
+        image = frame_observation.observed_image
+        segments = frame_observation.observed_segmentation
 
         segments = pad_image(segments)
         image = pad_image(image)

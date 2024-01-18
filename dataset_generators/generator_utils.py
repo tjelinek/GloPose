@@ -202,7 +202,8 @@ def create_tracking_log(movement_scenario: MovementScenario, gt_tracking_log_fil
             writer.writerow(row)
 
 
-def render_object_poses(rendering: RenderingKaolin, vertices, face_features, texture_maps, movement_scenario: MovementScenario,
+def render_object_poses(rendering: RenderingKaolin, vertices, face_features, texture_maps,
+                        movement_scenario: MovementScenario,
                         optical_flow_relative_destination, optical_flow_absolute_destination, rendering_destination,
                         segmentation_destination, background_image):
     # The initial rotations are expected to be in radians
@@ -265,12 +266,13 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
                                                                              first_encoder_result, flow_arcs_indices)
 
             if texture_maps is not None:
-                ren_features_and_mask = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
-                                                          quaternion=quaternions[:, frame_i:frame_i + 1, :],
-                                                          unit_vertices=vertices, face_features=face_features,
-                                                          texture_maps=texture_maps)
+                rendering_result = rendering.forward(translation=translations[:, :, frame_i:frame_i + 1, :],
+                                                     quaternion=quaternions[:, frame_i:frame_i + 1, :],
+                                                     unit_vertices=vertices, face_features=face_features,
+                                                     texture_maps=texture_maps)
 
-                rendering_rgb, ren_silhouette = ren_features_and_mask
+                rendering_rgb = rendering_result.rendered_image
+                ren_silhouette = rendering_result.rendered_image_segmentation
             else:
                 rendering_rgb = rendering_result.ren_mesh_vertices_features.permute(0, -1, 1, 2)[None]
                 ren_silhouette = rendering_result.ren_mask[None, None]
