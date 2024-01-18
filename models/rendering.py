@@ -17,13 +17,14 @@ from utils import normalize_rendered_flows
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
                                                    'ren_mask', 'ren_mesh_vertices_features',
                                                    'ren_mesh_vertices_coords',
-                                                   'ren_mesh_vertices_image_coords'])
+                                                   'ren_mesh_vertices_image_coords',
+                                                   'ren_face_normals'])
 
 RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rendered_flow_segmentation',
                                                        'rendered_flow_occlusion'])
 
 RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation',
-                                                 'rendered_face_camera_coords'])
+                                                 'rendered_face_camera_coords', 'rendered_face_normals'])
 
 
 class RenderingKaolin(nn.Module):
@@ -95,9 +96,11 @@ class RenderingKaolin(nn.Module):
         renderings = rendering_rgb.unsqueeze(0)
         segmentations = ren_mask.unsqueeze(0)
         rendered_object_camera_coords = dibr_result.ren_mesh_vertices_coords.permute(0, 3, 1, 2).unsqueeze(0)
+        rendered_object_face_normals_camera_coords = dibr_result.ren_face_normals.permute(0, 3, 1, 2).unsqueeze(0)
 
         rendering_result = RenderingResult(rendered_image=renderings, rendered_image_segmentation=segmentations,
-                                           rendered_face_camera_coords=rendered_object_camera_coords)
+                                           rendered_face_camera_coords=rendered_object_camera_coords,
+                                           rendered_face_normals=rendered_object_face_normals_camera_coords)
         return rendering_result
 
     def compute_theoretical_flow(self, encoder_out_new_pose, encoder_out_prev_pose, flow_arcs_indices) \
