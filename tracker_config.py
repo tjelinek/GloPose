@@ -18,7 +18,6 @@ class TrackerConfig:
     write_intermediate: bool = False
     visualize_loss_landscape: bool = False
     loss_landscape_visualization_frequency: int = 18
-    render_just_bounding_box: bool = False
     training_print_status_frequency = 20
 
     # Frame and keyframe settings

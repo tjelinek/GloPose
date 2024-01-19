@@ -383,11 +383,6 @@ class Tracking6D:
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, stepi)
 
             start = time.time()
-            if self.config.render_just_bounding_box:
-                b0 = get_bbox(self.all_keyframes.segments)
-            else:
-                b0 = [0, self.shape[-1], 0, self.shape[-2]]
-            self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
                 if self.config.add_flow_arcs_strategy == 'all-previous':
