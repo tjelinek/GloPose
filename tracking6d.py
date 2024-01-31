@@ -1,7 +1,7 @@
 import math
 import copy
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import imageio
 import kaolin
@@ -56,6 +56,7 @@ class Tracking6D:
 
         # Rendering and mesh related
         self.rendering: Optional[RenderingKaolin] = None
+        self.rendering_backview: Optional[RenderingKaolin] = None
         self.faces = None
         self.gt_mesh_prototype = None
         self.gt_texture = None
@@ -84,6 +85,7 @@ class Tracking6D:
         self.net = None
         self.short_flow_model = None
         self.long_flow_model = None
+        self.long_flow_model_backview = None
 
         # Ground truth related
         self.gt_rotations = None
@@ -95,6 +97,7 @@ class Tracking6D:
 
         # Flow tracks
         self.need_to_init_mft = True
+        self.need_to_init_mft_backview = True
         self.flow_tracks_inits = [0]
 
         # Tracker
@@ -118,7 +121,7 @@ class Tracking6D:
         self.initialize_gt_tracks()
         self.initialize_tracker(bbox0, file0, init_mask)
 
-        self.shape = self.tracker.shape[:2]
+        self.shape = (self.config.max_width, self.config.max_width)
 
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
@@ -129,6 +132,9 @@ class Tracking6D:
 
             self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture,
                                                           self.feat)
+
+            self.tracker_backview = SyntheticDataGeneratingTracker(self.config, self.rendering_backview,
+                                                                   self.gt_encoder, self.gt_texture, self.feat)
             # Re-render the images using the synthetic tracker
         images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
 
@@ -342,6 +348,7 @@ class Tracking6D:
 
         if self.config.long_flow_model == 'MFT':
             self.long_flow_model = FlowModelGetterMFT.get_flow_model()
+            self.long_flow_model_backview = FlowModelGetterMFT.get_flow_model()
         else:
             assert self.config.long_flow_model is None
 
@@ -358,15 +365,14 @@ class Tracking6D:
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
                                           tracking_config=self.config)
 
-        self.last_encoder_result_rgb = self.rgb_encoder(self.all_keyframes.keyframes)
-        self.last_encoder_result = self.encoder(self.all_keyframes.keyframes)
         new_frame_observation = self.tracker.next(0)
+        new_frame_observation_from_back = self.tracker_backview.next(0)
         self.active_keyframes.add_new_keyframe_observation(new_frame_observation, 0)
+        self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, 0)
 
         self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
 
-        b0 = None
         for stepi in range(1, self.config.input_frames):
 
             if type(self.tracker) is SyntheticDataGeneratingTracker:
@@ -378,7 +384,13 @@ class Tracking6D:
 
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, stepi)
 
+            new_frame_observation_backview = self.tracker.next(next_tracker_frame)
+            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_backview, stepi)
+
             start = time.time()
+
+            b0 = [0, self.shape[-1], 0, self.shape[-2]]
+            self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
                 if self.config.add_flow_arcs_strategy == 'all-previous':
@@ -429,15 +441,38 @@ class Tracking6D:
                                                            self.rgb_encoder(self.active_keyframes.keyframes)])
 
             all_frame_observations: FrameObservation = \
-                self.all_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
-            all_flow_observations: FlowObservation = self.all_keyframes.get_flows_observations(bounding_box=b0)
-            flow_arcs = sorted(self.all_keyframes.G.edges(), key=lambda x: x[::-1])
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
             all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
             flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
-            frame_result = self.apply(all_frame_observations, all_flow_observations, self.all_keyframes.keyframes,
-                                      self.all_keyframes.flow_frames, flow_arcs, frame_index=stepi)
+            all_frame_observations_backview: FrameObservation = \
+                self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
+            all_flow_observations_backview: FlowObservation = self.active_keyframes_backview.get_flows_observations(
+                bounding_box=b0)
+
+            all_frame_observations = replace(
+                all_frame_observations,
+                observed_image=torch.cat(
+                    [all_frame_observations.observed_image, all_frame_observations_backview.observed_image], dim=1),
+                observed_image_features=torch.cat([all_frame_observations.observed_image_features,
+                                                   all_frame_observations_backview.observed_image_features], dim=1),
+                observed_segmentation=torch.cat([all_frame_observations.observed_segmentation,
+                                                 all_frame_observations_backview.observed_segmentation], dim=1)
+            )
+
+            all_flow_observations = replace(
+                all_flow_observations,
+                observed_flow=torch.cat(
+                    [all_flow_observations.observed_flow, all_flow_observations_backview.observed_flow], dim=1),
+                observed_flow_occlusion=torch.cat([all_flow_observations.observed_flow_occlusion,
+                                                   all_flow_observations_backview.observed_flow_occlusion], dim=1),
+                observed_flow_segmentation=torch.cat([all_flow_observations.observed_flow_segmentation,
+                                                      all_flow_observations_backview.observed_flow_segmentation],
+                                                     dim=1),
+                observed_flow_uncertainty=torch.cat([all_flow_observations.observed_flow_uncertainty,
+                                                     all_flow_observations_backview.observed_flow_uncertainty], dim=1)
+            )
+
             frame_result = self.apply(all_frame_observations, all_flow_observations, self.active_keyframes.keyframes,
                                       self.active_keyframes.flow_frames, flow_arcs, frame_index=stepi)
 
@@ -467,8 +502,10 @@ class Tracking6D:
                                                      logged_sgd_translations=self.logged_sgd_translations,
                                                      logged_sgd_quaternions=self.logged_sgd_quaternions,
                                                      deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                                     renderer=self.rendering, best_model=self.best_model,
-                                                     observations=all_frame_observations)
+                                                     renderer=self.rendering, renderer_backview=self.rendering_backview,
+                                                     best_model=self.best_model, observations=all_frame_observations,
+                                                     observations_backview=all_frame_observations_backview,
+                                                     gt_encoder=self.gt_encoder)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None
@@ -523,7 +560,7 @@ class Tracking6D:
         # torch.cuda.memory._record_memory_history(enabled=None)
         return self.best_model
 
-    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
+    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short', backview=False):
         occlusion = None
         uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
@@ -542,8 +579,14 @@ class Tracking6D:
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
-            last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
-            last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
+            if not backview:
+                last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
+                last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
+            else:
+                last_keyframe_observations = self.active_keyframes_backview.get_observations_for_keyframe(
+                    flow_target_frame)
+                last_flowframe_observations = self.active_keyframes_backview.get_observations_for_keyframe(
+                    flow_source_frame)
 
             image_new_x255 = (last_keyframe_observations.observed_image[:, -1, :, :, :]).float() * 255
             image_prev_x255 = (last_flowframe_observations.observed_image[:, -1, :, :, :]).float() * 255
@@ -556,11 +599,19 @@ class Tracking6D:
                     self.long_flow_model.init(image_prev_x255_mft)
                     self.need_to_init_mft = False
 
+                if self.need_to_init_mft_backview and self.flow_tracks_inits[-1] == flow_source_frame and backview:
+                    self.long_flow_model_backview.init(image_prev_x255_mft)
+                    self.need_to_init_mft_backview = False
+
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
-                        flow_target_frame == max(self.all_keyframes.keyframes))
-                observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
-                                                                                 self.long_flow_model)
                         flow_target_frame == max(self.active_keyframes.keyframes))
+
+                if not backview:
+                    observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
+                                                                                     self.long_flow_model)
+                else:
+                    observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
+                                                                                     self.long_flow_model_backview)
             elif mode == 'short':
                 _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.short_flow_model)
             else:
@@ -987,7 +1038,30 @@ class Tracking6D:
         inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
                                                        self.shape[-1], self.shape[-2])
+        inference_result_backview = infer_normalized_renderings(self.rendering_backview, self.encoder.face_features,
+                                                                encoder_result, encoder_result_flow_frames,
+                                                                flow_arcs_indices_sorted, self.shape[-1],
+                                                                self.shape[-2])
+
         renders, rendered_silhouettes, rendered_flow_result = inference_result
+        renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
+
+        renders = torch.cat([renders, renders_backview], dim=1)
+        rendered_silhouettes = torch.cat([rendered_silhouettes, rendered_silhouettes_backview], dim=1)
+
+        rendered_flow_result = rendered_flow_result._replace(theoretical_flow=torch.cat(
+            [rendered_flow_result.theoretical_flow,
+             rendered_flow_result_backview.theoretical_flow],
+            dim=1),
+            rendered_flow_segmentation=torch.cat(
+                [rendered_flow_result.rendered_flow_segmentation,
+                 rendered_flow_result_backview.rendered_flow_segmentation],
+                dim=1),
+            rendered_flow_occlusion=torch.cat(
+                [rendered_flow_result.rendered_flow_occlusion,
+                 rendered_flow_result_backview.rendered_flow_occlusion],
+                dim=1)
+        )
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function

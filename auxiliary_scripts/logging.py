@@ -307,6 +307,17 @@ class WriteResults:
 
         self.visualize_flow(active_keyframes, new_flow_arcs, frame_result.per_pixel_flow_error)
 
+        # FLOW BACKVIEW ERROR VISUALIZATION
+        for new_flow_arc in new_flow_arcs:
+            flow_arc_source, flow_arc_target = new_flow_arc
+
+            flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
+            flow_observation_backview = active_keyframes_backview.get_flows_between_frames(flow_arc_source, flow_arc_target)
+
+            # breakpoint()
+
+        # FLOW BACKVIEW ERROR VISUALIZATION
+
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
 
