@@ -65,7 +65,6 @@ class KeyframeBuffer:
 
     @staticmethod
     def merge(buffer1, buffer2):
-        # TODO
         """
         Concatenates and merges two KeyframeBuffer instances while sorting the keyframes. Assumes buffer1.keyframes
         and buffer2.keyframes are disjoint.
@@ -95,14 +94,6 @@ class KeyframeBuffer:
 
         return merged_buffer, indices_buffer1, indices_buffer2
 
-    def add_new_keyframe(self, observed_image, observed_image_features, observed_image_segmentation, keyframe_index):
-
-        frame_observation = FrameObservation(observed_image=observed_image,
-                                             observed_image_features=observed_image_features,
-                                             observed_segmentation=observed_image_segmentation)
-
-        self.add_new_keyframe_observation(frame_observation, keyframe_index)
-
     def add_new_keyframe_observation(self, frame_observation: FrameObservation, keyframe_index: int) -> None:
 
         self.G.add_node(keyframe_index, observations=frame_observation)
@@ -129,16 +120,6 @@ class KeyframeBuffer:
             insort(self.flow_frames, source_frame)
         self.G.add_edge(source_frame, target_frame, flow_observations=flow_observation)
 
-    def get_flows_from_frame(self, source_frame: int) -> FlowObservation:
-
-        outgoing_arcs = list(self.G.edges(source_frame))
-        outgoing_arcs.sort(key=lambda edge: edge[:2:-1])  # Sort by target frame
-        outgoing_arcs_observations = [arc['flow_observations'] for arc in outgoing_arcs]
-
-        concatenated_tensors = FlowObservation.concatenate(*outgoing_arcs_observations)
-
-        return concatenated_tensors
-
     def get_flows_between_frames(self, source_frame: int, target_frame: int) -> FlowObservation:
 
         return self.G.get_edge_data(source_frame, target_frame)['flow_observations']
@@ -163,9 +144,6 @@ class KeyframeBuffer:
             observations = observations.trim_bounding_box(bounding_box)
 
         return observations
-
-    def get_flow_frames_for_keyframe(self, keyframe):
-        return sorted(self.G.predecessors(keyframe))
 
     def get_flows_observations(self, bounding_box=None):
         arcs = list(self.G.edges(data=True))
@@ -213,13 +191,3 @@ class KeyframeBuffer:
 
         return deleted_buffer
 
-    def stochastic_update(self, max_keyframes):
-        N = len(self.keyframes)
-        if len(self.keyframes) > max_keyframes:
-            keep_keyframes = np.full(N, False)  # Create an array of length N initialized with False
-            indices = np.random.choice(N, max_keyframes, replace=False)  # Randomly select keep_keyframes indices
-            keep_keyframes[indices] = True  # Set the selected indices to True
-
-            return self.keep_selected_keyframes(keep_keyframes)
-        else:
-            return KeyframeBuffer()  # No items removed, return an empty buffer
