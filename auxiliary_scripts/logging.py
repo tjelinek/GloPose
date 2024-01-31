@@ -292,9 +292,10 @@ class WriteResults:
         return image_with_margins
 
     def write_results(self, bounding_box, our_losses, frame_i, encoder_result, tex, new_flow_arcs, frame_result,
-                      active_keyframes: KeyframeBuffer, all_keyframes: KeyframeBuffer, logged_sgd_translations,
-                      logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder, renderer: RenderingKaolin,
-                      best_model, observations: FrameObservation):
+                      active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
+                      logged_sgd_translations, logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder,
+                      renderer: RenderingKaolin, renderer_backview,  best_model, observations: FrameObservation,
+                      observations_backview: FrameObservation, gt_encoder: Encoder):
 
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
@@ -314,19 +315,14 @@ class WriteResults:
             self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
                                                frame_result.frame_losses, frame_i)
 
-            stochastically_added_keyframes = list(set(all_keyframes.keyframes) -
-                                                  set(active_keyframes.keyframes))
             print(f"Keyframes: {active_keyframes.keyframes}, "
                   f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
-            print("Stochastically added keyframes: ", stochastically_added_keyframes)
 
             self.tracking_log.write(f"Step {frame_i}:\n")
-            self.tracking_log.write(f"Keyframes: {all_keyframes.keyframes}\n")
-            self.tracking_log.write(f"Stochastically added keyframes: "
-                                    f"{stochastically_added_keyframes}\n")
+            self.tracking_log.write(f"Keyframes: {active_keyframes.keyframes}\n")
 
             self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
-            self.write_all_encoder_rotations(deep_encoder, max(all_keyframes.keyframes) + 1)
+            self.write_all_encoder_rotations(deep_encoder, max(active_keyframes.keyframes) + 1)
 
             if self.tracking_config.features == 'rgb':
                 tex = detached_result.texture_maps

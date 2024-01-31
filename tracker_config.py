@@ -25,7 +25,6 @@ class TrackerConfig:
     max_keyframes: int = 8
     all_frames_keyframes: bool = False
     fmo_steps: int = 1
-    stochastically_add_keyframes: bool = False
 
     # Mesh settings
     mesh_size: int = 11

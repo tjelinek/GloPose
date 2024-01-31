@@ -91,8 +91,7 @@ class Tracking6D:
 
         # Keyframes
         self.active_keyframes: Optional[KeyframeBuffer] = None
-        self.all_keyframes: Optional[KeyframeBuffer] = None
-        self.recently_flushed_keyframes: Optional[KeyframeBuffer] = None
+        self.active_keyframes_backview: Optional[KeyframeBuffer] = None
 
         # Flow tracks
         self.need_to_init_mft = True
@@ -333,9 +332,6 @@ class Tracking6D:
         self.active_keyframes = KeyframeBuffer()
         self.active_keyframes_backview = KeyframeBuffer()
 
-        self.recently_flushed_keyframes = KeyframeBuffer()
-        self.all_keyframes = self.active_keyframes
-
     def initialize_flow_model(self):
         if self.config.short_flow_model == 'RAFT':
             flow_getter = FlowModelGetterRAFT
@@ -414,33 +410,36 @@ class Tracking6D:
                                                            occlusions, uncertainties, flow_source_frame,
                                                            flow_target_frame)
 
-            # We have added some keyframes. If it is more than the limit, delete them
-            if not self.config.all_frames_keyframes:
-                deleted_keyframes = self.active_keyframes.trim_keyframes(self.config.max_keyframes)
-                self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
-                                                                             deleted_keyframes)
+                    observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
+                                                                                 mode='long', backview=True)
 
-            if self.config.stochastically_add_keyframes:
-                self.all_keyframes, active_buffer_indices, _ = KeyframeBuffer.merge(self.active_keyframes,
-                                                                                    self.recently_flushed_keyframes)
-            else:
-                self.all_keyframes = self.active_keyframes
-                active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
+                    if not already_present:
+                        self.active_keyframes_backview.add_new_flow(observed_flow,
+                                                                    new_frame_observation_backview.observed_segmentation,
+                                                                    occlusions, uncertainties, flow_source_frame,
+                                                                    flow_target_frame)
+
+            active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
 
             self.last_encoder_result = EncoderResult(*[tensor.clone()
                                                        if tensor is not None else None for tensor in
-                                                       self.encoder(self.all_keyframes.keyframes)])
+                                                       self.encoder(self.active_keyframes.keyframes)])
             self.last_encoder_result_rgb = EncoderResult(*[tensor.clone()
                                                            if tensor is not None else None for tensor in
-                                                           self.rgb_encoder(self.all_keyframes.keyframes)])
+                                                           self.rgb_encoder(self.active_keyframes.keyframes)])
 
             all_frame_observations: FrameObservation = \
                 self.all_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
             all_flow_observations: FlowObservation = self.all_keyframes.get_flows_observations(bounding_box=b0)
             flow_arcs = sorted(self.all_keyframes.G.edges(), key=lambda x: x[::-1])
+                self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
+            all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
+            flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
             frame_result = self.apply(all_frame_observations, all_flow_observations, self.all_keyframes.keyframes,
                                       self.all_keyframes.flow_frames, flow_arcs, frame_index=stepi)
+            frame_result = self.apply(all_frame_observations, all_flow_observations, self.active_keyframes.keyframes,
+                                      self.active_keyframes.flow_frames, flow_arcs, frame_index=stepi)
 
             encoder_result = frame_result.encoder_result
 
@@ -452,7 +451,7 @@ class Tracking6D:
 
             tex = None
             if self.config.features == 'deep':
-                self.rgb_apply(self.all_keyframes.keyframes, self.all_keyframes.flow_frames, flow_arcs,
+                self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
                                all_frame_observations, all_flow_observations, frame_result.frame_losses)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
@@ -464,7 +463,7 @@ class Tracking6D:
                                                      encoder_result=encoder_result, tex=tex,
                                                      new_flow_arcs=new_flow_arcs, frame_result=frame_result,
                                                      active_keyframes=self.active_keyframes,
-                                                     all_keyframes=self.all_keyframes,
+                                                     active_keyframes_backview=self.active_keyframes_backview,
                                                      logged_sgd_translations=self.logged_sgd_translations,
                                                      logged_sgd_quaternions=self.logged_sgd_quaternions,
                                                      deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
@@ -486,7 +485,7 @@ class Tracking6D:
 
                     # Visualize flow we get from the video
 
-            if 0 in self.all_keyframes.keyframes:
+            if 0 in self.active_keyframes.keyframes:
                 keep_keyframes = np.ones(len(active_buffer_indices), dtype='bool')
             else:
                 keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
@@ -501,7 +500,7 @@ class Tracking6D:
             print("Angles:", angles)
 
             if self.config.points_fraction_visible_new_track is not None:
-                longest_flow = self.all_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], stepi)
+                longest_flow = self.active_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], stepi)
                 last_observed_segmentation = longest_flow.observed_flow_segmentation[:, -1:, -1:]
                 last_observed_occlusion = longest_flow.observed_flow_occlusion[:, -1:]
                 fraction_points_visible = float(iou_loss(last_observed_segmentation, last_observed_occlusion))
@@ -521,12 +520,7 @@ class Tracking6D:
                     keep_keyframes[-keep_n_previous - 1] = False
                 keep_keyframes[:-keep_n_previous - 1] = True
 
-            if not self.config.all_frames_keyframes:
-                deleted_keyframes = self.active_keyframes.keep_selected_keyframes(keep_keyframes)
-                self.recently_flushed_keyframes, _, _ = KeyframeBuffer.merge(self.recently_flushed_keyframes,
-                                                                             deleted_keyframes)
-                self.recently_flushed_keyframes.stochastic_update(4)
-
+        # torch.cuda.memory._record_memory_history(enabled=None)
         return self.best_model
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
@@ -566,6 +560,7 @@ class Tracking6D:
                         flow_target_frame == max(self.all_keyframes.keyframes))
                 observed_flow, occlusion, uncertainty = get_flow_from_images_mft(image_new_x255_mft,
                                                                                  self.long_flow_model)
+                        flow_target_frame == max(self.active_keyframes.keyframes))
             elif mode == 'short':
                 _, observed_flow = get_flow_from_images(image_prev_x255, image_new_x255, self.short_flow_model)
             else:
