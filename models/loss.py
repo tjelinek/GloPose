@@ -4,13 +4,14 @@ import torch.nn as nn
 from kornia.losses import total_variation
 
 from models.encoder import EncoderResult
+from tracker_config import TrackerConfig
 from utils import erode_segment_mask2
 
 
 class FMOLoss(nn.Module):
     def __init__(self, config, ivertices, faces):
         super(FMOLoss, self).__init__()
-        self.config = config
+        self.config: TrackerConfig = config
         if self.config.loss_laplacian_weight > 0:
             self.lapl_loss = LaplacianLoss(ivertices, faces)
 
@@ -167,7 +168,8 @@ class FMOLoss(nn.Module):
             # per_pixel_flow_loss_observed = (end_point_error_l1_norm * observed_flow_segmentation_binary)
             per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation)
 
-            observed_flow_occlusion_thresholded = (observed_flow_occlusion[:, :, 0] < 0.9) * 1.0
+            observed_flow_occlusion_thresholded = (observed_flow_occlusion[:, :, 0] <
+                                                   self.config.occlusion_coef_threshold) * 1.0
             per_pixel_flow_loss_occlusions_rendered = observed_flow_occlusion_thresholded * per_pixel_flow_loss_rendered
 
             per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered
