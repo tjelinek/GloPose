@@ -347,10 +347,15 @@ class RenderingKaolin(nn.Module):
 
             theoretical_flows.append(theoretical_flow)
 
-        theoretical_flows = torch.cat(theoretical_flows, 1)  # torch.Size([1, N, H, W, 2])
+        theoretical_flows = torch.cat(theoretical_flows, 0)  # torch.Size([1, N, H, W, 2])
         theoretical_flows = theoretical_flows.permute(0, 3, 1, 2).unsqueeze(0)
 
-        return theoretical_flows
+        mock_occlusion = torch.Tensor(*rendering_result_frame_1.rendered_image_segmentation.shape).cuda()  # TODO implement
+
+        flow_result = RenderedFlowResult(theoretical_flows, rendering_result_frame_1.rendered_image_segmentation,
+                                         mock_occlusion)
+
+        return flow_result
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
