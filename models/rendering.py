@@ -256,47 +256,6 @@ class RenderingKaolin(nn.Module):
         theoretical_flow_discrete = theoretical_flow_discrete[0].long()
         return theoretical_flow_discrete
 
-    def rendered_world_mesh_coordinates(self, encoder_result):
-        rendered_camera_coordinates = []
-        rendering_masks = []
-        for frame_i in range(0, encoder_result.quaternions.shape[1]):
-            translation_vector = encoder_result.translations[:, :, frame_i]
-            rotation_matrix = quaternion_to_rotation_matrix(encoder_result.quaternions[:, frame_i],
-                                                            order=QuaternionCoeffOrder.WXYZ).to(torch.float)
-            # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-            vertices = kaolin.render.camera.rotate_translate_points(encoder_result.vertices,
-                                                                    rotation_matrix, self.obj_center)
-
-            vertices = vertices + translation_vector
-
-            prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices, faces=self.faces,
-                                                                          camera_rot=self.camera_rot,
-                                                                          camera_trans=self.camera_trans,
-                                                                          camera_proj=self.camera_proj)
-            face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
-
-            face_vertices_z = face_vertices_cam[:, :, :, -1]
-            face_normals_z = face_normals[:, :, -1]
-
-            features_for_rendering = vertices[:, self.faces, :]
-
-            ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
-                                                                                     face_vertices_z,
-                                                                                     face_vertices_image,
-                                                                                     features_for_rendering,
-                                                                                     face_normals_z,
-                                                                                     sigmainv=self.config.sigmainv,
-                                                                                     boxlen=0.02, knum=30,
-                                                                                     multiplier=1000)
-
-            rendered_camera_coordinates.append(ren_outputs)
-            rendering_masks.append(ren_mask)
-
-        rendered_camera_coordinates = torch.stack(rendered_camera_coordinates, dim=1)
-        flow_render_mask = torch.stack(rendering_masks, 1)  # torch.Size([1, N, 1, H, W])
-
-        return rendered_camera_coordinates, flow_render_mask
-
     def compute_theoretical_flow_using_rendered_vertices(self, rendering_result_frame_1: RenderingResult,
                                                          encoder_out_frame_2, encoder_out_frame_1,
                                                          flow_arcs_indices) -> RenderedFlowResult:
