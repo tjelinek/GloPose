@@ -263,6 +263,7 @@ class RenderingKaolin(nn.Module):
         rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_camera_coords
 
         theoretical_flows = []
+        theoretical_flows_segmentations = []
         for frame_i_prev, frame_i in flow_arcs_indices:
             translation_vector_1 = encoder_out_frame_1.translations[:, :, frame_i_prev]
             rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_frame_1.quaternions[:, frame_i_prev],
@@ -305,14 +306,18 @@ class RenderingKaolin(nn.Module):
             theoretical_flow = theoretical_flow_new
 
             theoretical_flows.append(theoretical_flow)
+            flow_segmentation = rendering_result_frame_1.rendered_image_segmentation[:, [frame_i_prev]]
+            theoretical_flows_segmentations.append(flow_segmentation)
 
         theoretical_flows = torch.cat(theoretical_flows, 0)  # torch.Size([1, N, H, W, 2])
         theoretical_flows = theoretical_flows.permute(0, 3, 1, 2).unsqueeze(0)
 
-        mock_occlusion = torch.Tensor(*rendering_result_frame_1.rendered_image_segmentation.shape).cuda()  # TODO implement
+        theoretical_flows_segmentations = torch.cat(theoretical_flows_segmentations, 1)
 
-        flow_result = RenderedFlowResult(theoretical_flows, rendering_result_frame_1.rendered_image_segmentation,
-                                         mock_occlusion)
+        # TODO implement mock occlusion as real occlusion
+        mock_occlusion = torch.Tensor(*rendering_result_frame_1.rendered_image_segmentation.shape).cuda()
+
+        flow_result = RenderedFlowResult(theoretical_flows, theoretical_flows_segmentations, mock_occlusion)
 
         return flow_result
 
