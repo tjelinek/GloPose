@@ -17,8 +17,6 @@ class LossFunctionWrapper(torch.nn.Module):
         self.encoder: Encoder = encoder
         self.flow_arcs_indices = flow_arcs_indices
         self.loss_function: FMOLoss = loss_function
-        self.observed_images = observed_images
-        self.observed_segmentations = observed_segmentations
         self.observed_flows = observed_flows
         self.observed_flows_segmentations = observed_flows_segmentations
         self.rendered_width = rendered_width
@@ -27,17 +25,12 @@ class LossFunctionWrapper(torch.nn.Module):
         self.original_height = original_height
         self.custom_points_for_ransac = custom_points_for_ransac
 
-        self.rendered_vertices_coordinates, self.rendered_flow_segmentation = \
-            self.rendering.rendered_world_mesh_coordinates(self.encoder_result_flow_frames)
-        self.rendered_flow_segmentation = self.rendered_flow_segmentation[None]
-
-        inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features,
-                                                       self.encoder_result, self.encoder_result_flow_frames,
-                                                       self.flow_arcs_indices, self.original_width,
-                                                       self.original_height)
-
-        # TODO delete this, use solely renderings
-        self.renders, self.rendered_silhouettes, self.rendered_flow_result = inference_result
+        self.rendering_result_flow_frames = self.rendering.forward(self.encoder_result.translations,
+                                                                   self.encoder_result.quaternions,
+                                                                   self.encoder_result.vertices,
+                                                                   self.encoder.face_features,
+                                                                   self.encoder_result.texture_maps,
+                                                                   self.encoder_result.lights)
 
     def forward(self, trans_quats):
         trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
@@ -49,24 +42,19 @@ class LossFunctionWrapper(torch.nn.Module):
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 
-        theoretical_flow = \
-            self.rendering.compute_theoretical_flow_using_rendered_vertices(self.rendered_vertices_coordinates,
+        theoretical_flow_result = \
+            self.rendering.compute_theoretical_flow_using_rendered_vertices(self.rendering_result_flow_frames,
                                                                             encoder_result,
                                                                             self.encoder_result_flow_frames,
                                                                             self.flow_arcs_indices)
 
-        loss_result = self.loss_function.forward(rendered_images=self.renders, observed_images=self.observed_images,
-                                                 rendered_silhouettes=self.rendered_silhouettes,
-                                                 observed_silhouettes=self.observed_segmentations,
-                                                 rendered_flow=theoretical_flow,
-                                                 observed_flow=self.observed_flows,
-                                                 observed_flow_segmentation=self.observed_flows_segmentations,
-                                                 rendered_flow_segmentation=self.rendered_flow_segmentation,
-                                                 observed_flow_occlusion=None,
-                                                 rendered_flow_occlusion=None,
-                                                 observed_flow_uncertainties=None,
-                                                 keyframes_encoder_result=encoder_result,
-                                                 last_keyframes_encoder_result=None,
-                                                 return_end_point_errors=True)
+        # TODO replace me with true occlusions
+        mock_occlusion = torch.zeros(1, 1, 1, *self.observed_flows.shape[-2:]).cuda()
+
+        loss_result = self.loss_function.get_optical_flow_epes(observed_flow=self.observed_flows,
+                                                               observed_flow_occlusion=mock_occlusion,
+                                                               observed_flow_segmentation=self.observed_flows_segmentations,
+                                                               rendered_flow=theoretical_flow_result.theoretical_flow,
+                                                               rendered_flow_segmentation=theoretical_flow_result.rendered_flow_segmentation)
 
         return loss_result.to(torch.float)

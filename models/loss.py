@@ -107,55 +107,11 @@ class FMOLoss(nn.Module):
 
         per_pixel_flow_loss = None
         if self.config.loss_flow_weight > 0:
-            observed_flow_segmentation = observed_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
-            rendered_flow_segmentation = rendered_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
-
-            observed_flow_segmentation = (observed_flow_segmentation > 0).to(observed_flow_segmentation.dtype)
-            rendered_flow_segmentation = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
-
-            # Perform erosion of the segmentation mask
-            if self.config.segmentation_mask_erosion_iters:
-                erosion_iterations = self.config.segmentation_mask_erosion_iters
-                observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
-
-                flow_from_tracking_tmp = rendered_flow[0].permute(0, 3, 1, 2)
-                flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, rendered_flow_segmentation)
-                rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
-
-            flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, 2, H, W)
-            flow_from_tracking_clone = flow_from_tracking_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, H, W, 2)
-
-            observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
-            observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, 2, H, W)
-
-            if self.config.flow_sgd:
-                if custom_points_for_ransac is not None:
-                    rendered_flow_segmentation[...] = False
-                    rendered_flow_segmentation[custom_points_for_ransac] = True
-                    image_area = custom_points_for_ransac[0].shape[0]
-                else:
-                    rendered_flow_segmentation = random_points_from_binary_mask(rendered_flow_segmentation[0],
-                                                                                self.config.flow_sgd_n_samples)[None]
-
-                    image_area = self.config.flow_sgd_n_samples
-            else:
-                image_area = rendered_images.shape[-2:].numel()
-
-            # Compute the mean of the loss divided by the total object area to take into account different objects size
-            end_point_error = observed_flow_clone - flow_from_tracking_clone
-            end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=2)
-
-            per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation)
-
-            observed_flow_occlusion_thresholded = (observed_flow_occlusion[:, :, 0] <
-                                                   self.config.occlusion_coef_threshold) * 1.0
-            per_pixel_flow_loss_occlusions_rendered = observed_flow_occlusion_thresholded * per_pixel_flow_loss_rendered
+            image_area, per_pixel_flow_loss_occlusions_rendered, rendered_flow_segmentation = (
+                self.get_per_pixel_flow_epe(observed_flow, observed_flow_occlusion, observed_flow_segmentation,
+                                            rendered_flow, rendered_flow_segmentation, custom_points_for_ransac))
 
             per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered
-            if return_end_point_errors:
-                nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
-                per_pixel_flow_loss_nonzero = per_pixel_flow_loss[nonzero_indices]
-                return per_pixel_flow_loss_nonzero.flatten()
 
             per_pixel_mean_flow_loss_rendered = (
                     per_pixel_flow_loss_occlusions_rendered.sum(dim=(2, 3)) / image_area).mean(dim=(1,))
@@ -177,6 +133,57 @@ class FMOLoss(nn.Module):
             if ls not in ['fl_obs_not_rend', 'fl_not_obs_rend', 'fl_obs_and_rend', 'fl_obs_or_rend']:
                 loss += losses[ls]
         return losses_all, losses, loss, per_pixel_flow_loss
+
+    def get_optical_flow_epes(self, observed_flow, observed_flow_occlusion, observed_flow_segmentation, rendered_flow,
+                              rendered_flow_segmentation):
+        image_area, per_pixel_flow_loss_occlusions_rendered, rendered_flow_segmentation = (
+            self.get_per_pixel_flow_epe(observed_flow, observed_flow_occlusion, observed_flow_segmentation,
+                                        rendered_flow, rendered_flow_segmentation))
+        per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered
+        nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
+        per_pixel_flow_loss_nonzero = per_pixel_flow_loss[nonzero_indices]
+        return per_pixel_flow_loss_nonzero.flatten()
+
+    def get_per_pixel_flow_epe(self, observed_flow, observed_flow_occlusion, observed_flow_segmentation, rendered_flow,
+                               rendered_flow_segmentation, custom_points_for_ransac=None):
+        observed_flow_segmentation = observed_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
+        rendered_flow_segmentation = rendered_flow_segmentation[0].permute(1, 0, 2, 3)  # Shape (1, N, H, W)
+        observed_flow_segmentation = (observed_flow_segmentation > 0).to(observed_flow_segmentation.dtype)
+        rendered_flow_segmentation = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
+        # Perform erosion of the segmentation mask
+        if self.config.segmentation_mask_erosion_iters:
+            # TODO fix
+            raise ("Needs to be fixed")
+            erosion_iterations = self.config.segmentation_mask_erosion_iters
+            observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
+
+            flow_from_tracking_tmp = rendered_flow[0].permute(0, 3, 1, 2)
+            flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, rendered_flow_segmentation)
+            rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
+        flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, 2, H, W)
+        flow_from_tracking_clone = flow_from_tracking_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, H, W, 2)
+        observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
+        observed_flow_clone = observed_flow_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, 2, H, W)
+        if self.config.flow_sgd:
+            if custom_points_for_ransac is not None:
+                rendered_flow_segmentation[...] = False
+                rendered_flow_segmentation[custom_points_for_ransac] = True
+                image_area = custom_points_for_ransac[0].shape[0]
+            else:
+                rendered_flow_segmentation = random_points_from_binary_mask(rendered_flow_segmentation[0],
+                                                                            self.config.flow_sgd_n_samples)[None]
+
+                image_area = self.config.flow_sgd_n_samples
+        else:
+            image_area = rendered_flow_segmentation.shape[-2:].numel()
+        # Compute the mean of the loss divided by the total object area to take into account different objects size
+        end_point_error = observed_flow_clone - flow_from_tracking_clone
+        end_point_error_l1_norm = torch.norm(end_point_error, dim=-1, p=2)
+        per_pixel_flow_loss_rendered = (end_point_error_l1_norm * rendered_flow_segmentation)
+        observed_flow_occlusion_thresholded = (observed_flow_occlusion[:, :, 0] <
+                                               self.config.occlusion_coef_threshold) * 1.0
+        per_pixel_flow_loss_occlusions_rendered = observed_flow_occlusion_thresholded * per_pixel_flow_loss_rendered
+        return image_area, per_pixel_flow_loss_occlusions_rendered, rendered_flow_segmentation
 
 
 def random_points_from_binary_mask(binary_mask, N):
