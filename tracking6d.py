@@ -796,7 +796,7 @@ class Tracking6D:
                                                                                                    flow_frames)
         kf_translations = encoder_result.translations[0].detach()
         kf_quaternions = encoder_result.quaternions.detach()
-        trans_quats = torch.cat([kf_translations, kf_quaternions[..., 1:]], dim=-1).squeeze().flatten()
+        trans_quats = torch.cat([kf_translations, kf_quaternions], dim=-1).squeeze().flatten()
 
         flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
                                               flow_arcs_indices, self.loss_function, observed_flows, observed_flows_segmentations,
