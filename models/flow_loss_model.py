@@ -33,12 +33,11 @@ class LossFunctionWrapper(torch.nn.Module):
                                                                    self.encoder_result.lights)
 
     def forward(self, trans_quats):
-        trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
+        trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 7, 7))
 
         translations = trans_quats[None, ..., :3]
         quaternions = trans_quats[..., 3:]
-        quaternions_weights = 1 - torch.linalg.vector_norm(quaternions, dim=-1).unsqueeze(-1)
-        quaternions = torch.cat([quaternions_weights, quaternions], dim=-1)
+        quaternions = qnorm_vectorized(quaternions)
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 

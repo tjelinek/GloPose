@@ -815,12 +815,10 @@ class Tracking6D:
 
         for epoch in range(len(coefficients_list)):
             trans_quats = coefficients_list[epoch]
-            trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 6, 6))
+            trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 7, 7))
 
             row_translation = trans_quats[None, :, :, :3]
             row_quaternion = trans_quats[:, :, 3:]
-            quaternions_weights = 1 - torch.linalg.vector_norm(row_quaternion, dim=-1).unsqueeze(-1)
-            row_quaternion = torch.cat([quaternions_weights, row_quaternion], dim=-1)
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
 
             inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
