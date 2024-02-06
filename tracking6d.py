@@ -851,7 +851,8 @@ class Tracking6D:
                 self.encoder.quaternion_offsets[0, keyframes, :] = encoder_result.quaternions[0, :].detach()
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-            self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result)
+            self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result,
+                                       write_all=True)
 
         for field_name in loss_coefs_names:
             if field_name != "loss_flow_weight":
@@ -996,7 +997,8 @@ class Tracking6D:
                 elif param_group['name'] == 'trans':
                     param_group['lr'] *= self.config.translation_learning_rate_coef
 
-    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result):
+    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result,
+                              write_all=False):
 
         self.logged_sgd_translations.append(encoder_result.translations.detach().clone())
         self.logged_sgd_quaternions.append(encoder_result.quaternions.detach().clone())
@@ -1008,7 +1010,7 @@ class Tracking6D:
             model_loss = losses["model"].mean().item()
         else:
             model_loss = losses["silh"].mean().item()
-        if self.config.verbose and epoch % self.config.training_print_status_frequency == 0:
+        if self.config.verbose and (epoch % self.config.training_print_status_frequency == 0 or write_all):
             print("Epoch {:4d}".format(epoch + 1), end=" ")
             for ls in losses:
                 print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
