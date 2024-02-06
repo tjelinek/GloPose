@@ -1,8 +1,9 @@
 import torch
 
-from models.encoder import Encoder
+from models.encoder import Encoder, EncoderResult
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin, infer_normalized_renderings
+from utils import qnorm_vectorized, normalize_rendered_flows
 
 
 class LossFunctionWrapper(torch.nn.Module):
@@ -50,10 +51,15 @@ class LossFunctionWrapper(torch.nn.Module):
         # TODO replace me with true occlusions
         mock_occlusion = torch.zeros(1, 1, 1, *self.observed_flows.shape[-2:]).cuda()
 
+        # theoretical_flow = normalize_rendered_flows(theoretical_flow_result.theoretical_flow,
+        #                                             self.rendered_width, self.rendered_height,
+        #                                             self.original_width, self.original_height)
+        theoretical_flow = theoretical_flow_result.theoretical_flow
+
         loss_result = self.loss_function.get_optical_flow_epes(observed_flow=self.observed_flows,
                                                                observed_flow_occlusion=mock_occlusion,
                                                                observed_flow_segmentation=self.observed_flows_segmentations,
-                                                               rendered_flow=theoretical_flow_result.theoretical_flow,
+                                                               rendered_flow=theoretical_flow,
                                                                rendered_flow_segmentation=theoretical_flow_result.rendered_flow_segmentation)
 
         return loss_result.to(torch.float)
