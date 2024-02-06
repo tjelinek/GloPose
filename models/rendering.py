@@ -130,38 +130,20 @@ class RenderingKaolin(nn.Module):
                           coordinates range [0, 1].
         """
 
-        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
-        indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]
-
-        # Convert lists to tensors
-        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
-        indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
-
-        # Batch gather translations
-        translation_vector_1_batch = torch.index_select(encoder_out_pose_1.translations, 2, indices_pose_1)[0, 0]
-        translation_vector_2_batch = torch.index_select(encoder_out_pose_2.translations, 2, indices_pose_2)[0, 0]
-
-        # Batch convert quaternions to rotation matrices
-        quaternion_batch_1 = torch.index_select(encoder_out_pose_1.quaternions, 1, indices_pose_1)
-        quaternion_batch_2 = torch.index_select(encoder_out_pose_2.quaternions, 1, indices_pose_2)
+        batches = self.quaternion_translation_batches_from_flow_arcs(encoder_out_pose_1, encoder_out_pose_2,
+                                                                     flow_arcs_indices)
+        quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch = batches
 
         rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
                                                                 order=QuaternionCoeffOrder.WXYZ).to(torch.float)
         rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
                                                                 order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-        # translation_vector_1_batch = torch.cat(translation_vectors_1, dim=0)
-        # translation_vector_2_batch = torch.cat(translation_vectors_2, dim=0)
-        # rotation_matrix_1_batch = torch.cat(rotation_matrices_1, dim=0)
-        # rotation_matrix_2_batch = torch.cat(rotation_matrices_2, dim=0)
-
         batch_size = translation_vector_1_batch.shape[0]
+        vertices_1 = encoder_out_pose_1.vertices
 
-        vertices_1_batch = encoder_out_pose_1.vertices.repeat(batch_size, 1, 1)
-        vertices_2_batch = vertices_1_batch
-        obj_center_batch = self.obj_center.repeat(batch_size, 1)
-        camera_rot_batch = self.camera_rot.repeat(batch_size, 1, 1)
-        camera_trans_batch = self.camera_trans.repeat(batch_size, 1)
+        batched_tensors = self.get_batched_tensors_for_rendering(batch_size, vertices_1)
+        camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch = batched_tensors
 
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices_1_batch = kaolin.render.camera.rotate_translate_points(vertices_1_batch,
@@ -219,6 +201,28 @@ class RenderingKaolin(nn.Module):
         occlusion_mask = ren_outputs_1[..., 2].detach().unsqueeze(1).unsqueeze(0)  # torch.Size([1, N, 1, H, W])
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
+
+    def get_batched_tensors_for_rendering(self, batch_size, vertices_1):
+        vertices_1_batch = vertices_1.repeat(batch_size, 1, 1)
+        vertices_2_batch = vertices_1_batch
+        obj_center_batch = self.obj_center.repeat(batch_size, 1)
+        camera_rot_batch = self.camera_rot.repeat(batch_size, 1, 1)
+        camera_trans_batch = self.camera_trans.repeat(batch_size, 1)
+        return camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch
+
+    def quaternion_translation_batches_from_flow_arcs(self, encoder_out_pose_1, encoder_out_pose_2, flow_arcs_indices):
+        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
+        indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]
+        # Convert lists to tensors
+        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
+        indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
+        # Batch gather translations
+        translation_vector_1_batch = torch.index_select(encoder_out_pose_1.translations, 2, indices_pose_1)[0, 0]
+        translation_vector_2_batch = torch.index_select(encoder_out_pose_2.translations, 2, indices_pose_2)[0, 0]
+        # Batch convert quaternions to rotation matrices
+        quaternion_batch_1 = torch.index_select(encoder_out_pose_1.quaternions, 1, indices_pose_1)
+        quaternion_batch_2 = torch.index_select(encoder_out_pose_2.quaternions, 1, indices_pose_2)
+        return quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch
 
     def get_occlusion_mask_using_rendered_coordinates(self, rendered_pose1_with_pose2_coordinates,
                                                       rendered_pose2_with_pose2_coordinates, theoretical_flow):
