@@ -8,11 +8,11 @@ from models.rendering import RenderingKaolin, infer_normalized_renderings
 class LossFunctionWrapper(torch.nn.Module):
 
     def __init__(self, encoder_result, encoder_result_flow_frames, encoder, rendering, flow_arcs_indices, loss_function,
-                 observed_images, observed_segmentations, observed_flows, observed_flows_segmentations, rendered_width,
+                 observed_flows, observed_flows_segmentations, rendered_width,
                  rendered_height, original_width, original_height, custom_points_for_ransac=None):
         super().__init__()
         self.encoder_result = encoder_result
-        self.encoder_result_flow_frames = encoder_result_flow_frames
+        self.encoder_result_flow_frames: EncoderResult = encoder_result_flow_frames
         self.rendering: RenderingKaolin = rendering
         self.encoder: Encoder = encoder
         self.flow_arcs_indices = flow_arcs_indices
