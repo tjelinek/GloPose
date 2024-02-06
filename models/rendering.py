@@ -14,17 +14,25 @@ import cfg
 from tracker_config import TrackerConfig
 from utils import normalize_rendered_flows
 
-MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals', 'face_vertices_cam', 'red_index',
-                                                   'ren_mask', 'ren_mesh_vertices_features',
-                                                   'ren_mesh_vertices_coords',
+MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
+                                                   'face_vertices_cam',
+                                                   'red_index',
+                                                   'ren_mask',
+                                                   'ren_mesh_vertices_features',
+                                                   'ren_mesh_vertices_world_coords',
+                                                   'ren_mesh_vertices_camera_coords',
                                                    'ren_mesh_vertices_image_coords',
                                                    'ren_face_normals'])
 
-RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow', 'rendered_flow_segmentation',
+RenderedFlowResult = namedtuple('RenderedFlowResult', ['theoretical_flow',
+                                                       'rendered_flow_segmentation',
                                                        'rendered_flow_occlusion'])
 
-RenderingResult = namedtuple('RenderingResult', ['rendered_image', 'rendered_image_segmentation',
-                                                 'rendered_face_camera_coords', 'rendered_face_normals'])
+RenderingResult = namedtuple('RenderingResult', ['rendered_image',
+                                                 'rendered_image_segmentation',
+                                                 'rendered_face_world_coords',
+                                                 'rendered_face_camera_coords',
+                                                 'rendered_face_normals'])
 
 
 class RenderingKaolin(nn.Module):
@@ -95,10 +103,13 @@ class RenderingKaolin(nn.Module):
 
         renderings = rendering_rgb.unsqueeze(0)
         segmentations = ren_mask.unsqueeze(0)
-        rendered_object_camera_coords = dibr_result.ren_mesh_vertices_coords.permute(0, 3, 1, 2).unsqueeze(0)
+        rendered_object_camera_coords = dibr_result.ren_mesh_vertices_camera_coords.permute(0, 3, 1, 2).unsqueeze(0)
+        rendered_object_world_coords = dibr_result.ren_mesh_vertices_world_coords.permute(0, 3, 1, 2).unsqueeze(0)
         rendered_object_face_normals_camera_coords = dibr_result.ren_face_normals.permute(0, 3, 1, 2).unsqueeze(0)
 
-        rendering_result = RenderingResult(rendered_image=renderings, rendered_image_segmentation=segmentations,
+        rendering_result = RenderingResult(rendered_image=renderings,
+                                           rendered_image_segmentation=segmentations,
+                                           rendered_face_world_coords=rendered_object_world_coords,
                                            rendered_face_camera_coords=rendered_object_camera_coords,
                                            rendered_face_normals=rendered_object_face_normals_camera_coords)
         return rendering_result
@@ -260,7 +271,7 @@ class RenderingKaolin(nn.Module):
                                                          encoder_out_frame_2, encoder_out_frame_1,
                                                          flow_arcs_indices) -> RenderedFlowResult:
 
-        rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_camera_coords
+        rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_world_coords
 
         theoretical_flows = []
         theoretical_flows_segmentations = []
@@ -338,6 +349,9 @@ class RenderingKaolin(nn.Module):
                                                                       camera_rot=camera_rot_batched,
                                                                       camera_trans=camera_trans_batched,
                                                                       camera_proj=self.camera_proj)
+
+        vertices_world_coordinates = kaolin.ops.mesh.index_vertices_by_faces(unit_vertices, self.faces)
+
         face_vertices_cam, face_vertices_image, face_normals = prepared_vertices
         face_normals_feature = face_normals.unsqueeze(-1)
 
@@ -347,8 +361,11 @@ class RenderingKaolin(nn.Module):
         # Extract the z-components of the face normals
         face_normals_z = face_normals[:, :, -1]
 
-        features_for_rendering = torch.cat((face_features, face_vertices_cam,
-                                            face_vertices_image, face_normals_feature), dim=-1)
+        features_for_rendering = torch.cat((face_features,
+                                            face_vertices_cam,
+                                            face_vertices_image,
+                                            vertices_world_coordinates,
+                                            face_normals_feature), dim=-1)
 
         # Perform dibr rasterization
         ren_outputs, ren_mask, red_index = kaolin.render.mesh.dibr_rasterization(self.height, self.width,
@@ -360,15 +377,21 @@ class RenderingKaolin(nn.Module):
                                                                                  boxlen=0.02, knum=30, multiplier=1000)
 
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
-        ren_mesh_vertices_features = ren_outputs[..., :face_features.shape[-1]]
-        ren_mesh_vertices_camera_coords = ren_outputs[..., face_features.shape[-1]:
-                                                           face_features.shape[-1] + face_vertices_cam.shape[-1]]
-        ren_mesh_vertices_image_coords = ren_outputs[..., face_features.shape[-1] + face_vertices_cam.shape[-1]:-1]
-        ren_face_normals_features = ren_outputs[..., -1:]
+        split_tuple = torch.split(ren_outputs, [face_features.shape[-1],
+                                                face_vertices_cam.shape[-1],
+                                                face_vertices_image.shape[-1],
+                                                vertices_world_coordinates.shape[-1],
+                                                face_normals_feature.shape[-1]], dim=-1)
+
+        (ren_mesh_vertices_features, ren_mesh_vertices_camera_coords, ren_mesh_vertices_image_coords,
+         ren_mesh_vertices_world_coords, ren_face_normals_features) = split_tuple
 
         return MeshRenderResult(face_normals, face_vertices_cam, red_index, ren_mask,
-                                ren_mesh_vertices_features, ren_mesh_vertices_camera_coords,
-                                ren_mesh_vertices_image_coords, ren_face_normals_features)
+                                ren_mesh_vertices_features,
+                                ren_mesh_vertices_world_coords,
+                                ren_mesh_vertices_camera_coords,
+                                ren_mesh_vertices_image_coords,
+                                ren_face_normals_features)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
