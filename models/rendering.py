@@ -2,8 +2,6 @@ from collections import namedtuple
 from typing import Tuple
 
 import kaolin
-import math
-import numpy as np
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis, \
@@ -11,6 +9,7 @@ from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternio
 from kornia.morphology import erosion
 
 import cfg
+from models.encoder import EncoderResult
 from tracker_config import TrackerConfig
 from utils import normalize_rendered_flows
 
@@ -272,67 +271,70 @@ class RenderingKaolin(nn.Module):
         return theoretical_flow_discrete
 
     def compute_theoretical_flow_using_rendered_vertices(self, rendering_result_frame_1: RenderingResult,
-                                                         encoder_out_frame_2, encoder_out_frame_1,
+                                                         encoder_out_frame_2: EncoderResult,
+                                                         encoder_out_frame_1: EncoderResult,
                                                          flow_arcs_indices) -> RenderedFlowResult:
 
         rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_world_coords
+        rendered_mask_frame_1 = rendering_result_frame_1.rendered_image_segmentation
 
-        theoretical_flows = []
-        theoretical_flows_segmentations = []
-        for frame_i_prev, frame_i in flow_arcs_indices:
-            translation_vector_1 = encoder_out_frame_1.translations[:, :, frame_i_prev]
-            rotation_matrix_1 = quaternion_to_rotation_matrix(encoder_out_frame_1.quaternions[:, frame_i_prev],
-                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        batches = self.quaternion_translation_batches_from_flow_arcs(encoder_out_frame_1, encoder_out_frame_2,
+                                                                     flow_arcs_indices)
+        quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch = batches
 
-            translation_vector_2 = encoder_out_frame_2.translations[:, :, frame_i]
-            rotation_matrix_2 = quaternion_to_rotation_matrix(encoder_out_frame_2.quaternions[:, frame_i],
-                                                              order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
 
-            rendered_vertices_frame = rendered_vertices_frame_1[:, frame_i_prev].permute(0, 2, 3, 1)
-            rendered_vertices_frame_norm = rendered_vertices_frame.norm(dim=-1)
+        batch_size = translation_vector_1_batch.shape[0]
+        vertices_1 = encoder_out_frame_1.vertices
 
-            zero_vertices_positions = tuple(rendered_vertices_frame_norm.eq(0).nonzero().T)
-            vertices_flattened = rendered_vertices_frame.flatten(start_dim=1, end_dim=-2)
+        batched_tensors = self.get_batched_tensors_for_rendering(batch_size, vertices_1)
+        camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch = batched_tensors
 
-            vertices_1_nonzero = kaolin.render.camera.rotate_translate_points(vertices_flattened, rotation_matrix_1,
-                                                                              self.obj_center)
-            vertices_2_nonzero = kaolin.render.camera.rotate_translate_points(vertices_flattened,
-                                                                              rotation_matrix_2, self.obj_center)
+        rendered_vertices_frame_1_batched = rendered_vertices_frame_1.repeat(1, batch_size, 1, 1, 1)
+        rendered_mask_frame_1_batched = rendered_mask_frame_1.repeat(1, batch_size, 1, 1, 1)
 
-            vertices_1_nonzero = vertices_1_nonzero + translation_vector_1
-            vertices_2_nonzero = vertices_2_nonzero + translation_vector_2
+        rendered_vertices_frame = rendered_vertices_frame_1_batched.permute(0, 1, 3, 4, 2)
+        rendered_vertices_frame_norm = rendered_vertices_frame.norm(dim=-1)
 
-            vertices_1_camera = kaolin.render.camera.rotate_translate_points(vertices_1_nonzero, self.camera_rot,
-                                                                             self.camera_trans)
-            vertices_1_image = kaolin.render.camera.perspective_camera(vertices_1_camera, self.camera_proj)
+        zero_vertices_positions = tuple(rendered_vertices_frame_norm.eq(0).nonzero().T)
 
-            vertices_2_camera = kaolin.render.camera.rotate_translate_points(vertices_2_nonzero, self.camera_rot,
-                                                                             self.camera_trans)
-            vertices_2_image = kaolin.render.camera.perspective_camera(vertices_2_camera, self.camera_proj)
+        vertices_flattened = rendered_vertices_frame.flatten(start_dim=2, end_dim=-2)[0]
 
-            vertices_flow = vertices_2_image - vertices_1_image
+        vertices_1_nonzero = kaolin.render.camera.rotate_translate_points(vertices_flattened, rotation_matrix_1_batch,
+                                                                          obj_center_batch)
+        vertices_2_nonzero = kaolin.render.camera.rotate_translate_points(vertices_flattened, rotation_matrix_2_batch,
+                                                                          obj_center_batch)
 
-            theoretical_flow = vertices_flow.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[1:-1]))
+        vertices_1_nonzero = vertices_1_nonzero + translation_vector_1_batch.unsqueeze(1)
+        vertices_2_nonzero = vertices_2_nonzero + translation_vector_2_batch.unsqueeze(1)
 
-            theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
-            theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
-            theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
-            theoretical_flow_new[zero_vertices_positions].zero_()
-            theoretical_flow = theoretical_flow_new
+        vertices_1_camera = kaolin.render.camera.rotate_translate_points(vertices_1_nonzero, camera_rot_batch,
+                                                                         camera_trans_batch)
+        vertices_1_image = kaolin.render.camera.perspective_camera(vertices_1_camera, self.camera_proj)
 
-            theoretical_flows.append(theoretical_flow)
-            flow_segmentation = rendering_result_frame_1.rendered_image_segmentation[:, [frame_i_prev]]
-            theoretical_flows_segmentations.append(flow_segmentation)
+        vertices_2_camera = kaolin.render.camera.rotate_translate_points(vertices_2_nonzero, camera_rot_batch,
+                                                                         camera_trans_batch)
+        vertices_2_image = kaolin.render.camera.perspective_camera(vertices_2_camera, self.camera_proj)
 
-        theoretical_flows = torch.cat(theoretical_flows, 0)  # torch.Size([1, N, H, W, 2])
-        theoretical_flows = theoretical_flows.permute(0, 3, 1, 2).unsqueeze(0)
+        vertices_flow = vertices_2_image - vertices_1_image
 
-        theoretical_flows_segmentations = torch.cat(theoretical_flows_segmentations, 1)
+        theoretical_flow = vertices_flow.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[2:-1])).unsqueeze(0)
+
+        theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
+        theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
+        theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
+        theoretical_flow_new[zero_vertices_positions].zero_()
+        theoretical_flow = theoretical_flow_new.permute(0, 1, 4, 2, 3)  # torch.Size([1, N, H, W, 2])
+
+        flow_segmentation = rendered_mask_frame_1_batched
 
         # TODO implement mock occlusion as real occlusion
-        mock_occlusion = torch.Tensor(*rendering_result_frame_1.rendered_image_segmentation.shape).cuda()
+        mock_occlusion = torch.zeros(flow_segmentation.shape).cuda()
 
-        flow_result = RenderedFlowResult(theoretical_flows, theoretical_flows_segmentations, mock_occlusion)
+        flow_result = RenderedFlowResult(theoretical_flow, flow_segmentation, mock_occlusion)
 
         return flow_result
 
