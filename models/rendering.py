@@ -254,7 +254,8 @@ class RenderingKaolin(nn.Module):
     def compute_theoretical_flow_using_rendered_vertices(self, rendering_result_frame_1: RenderingResult,
                                                          encoder_out_frame_2: EncoderResult,
                                                          encoder_out_frame_1: EncoderResult,
-                                                         flow_arcs_indices) -> RenderedFlowResult:
+                                                         flow_arcs_indices,
+                                                         ctx=None) -> RenderedFlowResult:
 
         rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_world_coords
         rendered_mask_frame_1 = rendering_result_frame_1.rendered_image_segmentation
@@ -298,6 +299,18 @@ class RenderingKaolin(nn.Module):
         vertices_2_image = kaolin.render.camera.perspective_camera(vertices_2_camera, self.camera_proj)
 
         vertices_flow = vertices_2_image - vertices_1_image
+
+        if ctx is not None:
+            ctx.x_world = rendered_vertices_frame_1_batched.detach().clone()
+
+            vertices_1_camera_ren = vertices_1_camera.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[2:-1]))
+            ctx.x_camera = vertices_1_camera_ren.detach().clone().permute(0, 3, 1, 2).unsqueeze(0)
+
+            vertices_1_image_ren = vertices_1_image.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[2:-1]))
+            ctx.x_image = vertices_1_image_ren.detach().clone().permute(0, 3, 1, 2).unsqueeze(0)
+
+            vertices_2_image_ren = vertices_2_image.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[2:-1]))
+            ctx.x_prime_image = vertices_2_image_ren.detach().clone().permute(0, 3, 1, 2).unsqueeze(0)
 
         theoretical_flow = vertices_flow.unflatten(dim=1, sizes=tuple(rendered_vertices_frame.shape[2:-1])).unsqueeze(0)
 
