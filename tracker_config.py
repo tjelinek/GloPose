@@ -68,6 +68,8 @@ class TrackerConfig:
     loss_fl_obs_and_rend_weight: float = None
     loss_fl_not_obs_rend_weight: float = None
     loss_fl_obs_not_rend_weight: float = None
+    occlusion_coef_threshold = 0.9  # Above this value, points will be considered as occluded
+    segmentation_mask_threshold = 0.99
 
     # Additional settings
     sigmainv: float = 7000
@@ -76,6 +78,7 @@ class TrackerConfig:
     erode_renderer_mask: int = 3
     rotation_divide: int = 8
     sequence: str = None
+    max_rendering_batch_size: int = 4
 
     # Ground truths
     initial_mesh_path: str = 'prototypes/sphere.obj'
@@ -98,18 +101,21 @@ class TrackerConfig:
     allow_break_sgd_after = 30
     break_sgd_after_iters_with_no_change = 20
     optimize_non_positional_params_after = 70
-    levenberg_marquardt_max_ter = allow_break_sgd_after
+    levenberg_marquardt_max_ter = 15
     use_lr_scheduler = False
     lr_scheduler_patience = 5
 
     # Optical flow settings
     add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
-    # only arc (i - 1, i).
+    # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'lbfgs' or None
     preinitialization_method: str = None
+    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'essential_matrix_decomposition' or None
+    preinitialization_method: str = 'levenberg-marquardt'
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
-    flow_sgd: bool = False
+    use_custom_jacobian: bool = False
+    flow_sgd: bool = True
     flow_sgd_n_samples: int = 100
     points_fraction_visible_new_track = None  # If more then this foreground pixels are occluded, create new MFT track
