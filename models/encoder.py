@@ -114,10 +114,6 @@ class Encoder(nn.Module):
         else:
             vertices = self.ivertices
 
-        se3 = self.get_composed_se3_at_frame_vectorized()
-        translation = se3.t[None, None].clone()
-        quaternion = se3.r.q.data[None].clone()
-
         translation = self.get_total_translation_at_frame_vectorized()
         quaternion = self.get_total_rotation_at_frame_vectorized()
         rotation = self.get_total_rotation_at_frame_vectorized_axis_angle()
@@ -131,10 +127,7 @@ class Encoder(nn.Module):
         rotation[:, noopt] = rotation[:, noopt].detach()
 
         quaternion = quaternion[:, :opt_frames[-1] + 1]
-        rotation = rotation[:, :opt_frames[-1] + 1]
         translation = translation[:, :, :opt_frames[-1] + 1]
-        # translation = translation.detach()
-        # quaternion = quaternion.detach()
 
         if self.config.features == 'deep':
             texture_map = self.texture_map
@@ -143,9 +136,6 @@ class Encoder(nn.Module):
 
         # Computes differences of consecutive translations and rotations
         tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
-
-        # quaternion = angle_axis_to_quaternion(rotation, order=QuaternionCoeffOrder.WXYZ)
-        # quaternion = axis_angle_to_quaternion(rotation)
 
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
@@ -257,7 +247,7 @@ class Encoder(nn.Module):
         exp = 0
         if self.config.connect_frames:
             exp = nn.Sigmoid()(self.exposure_fraction)
-        thr = self.config.camera_distance - 2
+        thr = self.config.camera_position - 2
         thrn = thr * 4
         translation_all = []
         quaternion_all = []
@@ -271,7 +261,7 @@ class Encoder(nn.Module):
             translation_new[:, :, :, :, 2][translation[:, :, :, :, 2] < 0] = translation[:, :, :, :, 2][
                                                                                  translation[:, :, :, :, 2] < 0] * thrn
             translation_new[:, :, :, :, :2] = translation[:, :, :, :, :2] * (
-                    (self.config.camera_distance - translation_new[:, :, :, :, 2:]) / 2)
+                    (self.config.camera_position - translation_new[:, :, :, :, 2:]) / 2)
             translation = translation_new
             translation[:, :, :, :, 1] = self.aspect_ratio * translation_new[:, :, :, :, 1]
 
