@@ -139,10 +139,12 @@ class FMOLoss(nn.Module):
         image_area, per_pixel_flow_loss_occlusions_rendered, rendered_flow_segmentation = (
             self.get_per_pixel_flow_epe(observed_flow, observed_flow_occlusion, observed_flow_segmentation,
                                         rendered_flow, rendered_flow_segmentation))
-        per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered
+        per_pixel_flow_loss = per_pixel_flow_loss_occlusions_rendered.unsqueeze(0)
+        rendered_flow_segmentation = rendered_flow_segmentation.unsqueeze(0)
+
         nonzero_indices = tuple(rendered_flow_segmentation.nonzero().t())
         per_pixel_flow_loss_nonzero = per_pixel_flow_loss[nonzero_indices]
-        return per_pixel_flow_loss_nonzero.flatten()
+        return per_pixel_flow_loss_nonzero.flatten(), rendered_flow_segmentation
 
     def get_per_pixel_flow_epe(self, observed_flow, observed_flow_occlusion, observed_flow_segmentation, rendered_flow,
                                rendered_flow_segmentation, custom_points_for_ransac=None):
