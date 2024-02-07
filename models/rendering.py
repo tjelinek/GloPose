@@ -121,7 +121,7 @@ class RenderingKaolin(nn.Module):
         Args:
             encoder_out_pose_2 (EncoderResult): The encoder result for the current frame.
             encoder_out_pose_1 (EncoderResult): The encoder results for the previous frames.
-            flow_arcs_indices (Sorted[Tuple[int, int]]): Indexes in encoder_out_prev_frames and encoder_out given as a 
+            flow_arcs_indices (Sorted[Tuple[int, int]]): Indexes in encoder_out_prev_frames and encoder_out given as a
                                                          sorted collection of tuples.
 
         Returns:
@@ -129,14 +129,9 @@ class RenderingKaolin(nn.Module):
                           coordinates range [0, 1].
         """
 
-        batches = self.quaternion_translation_batches_from_flow_arcs(encoder_out_pose_1, encoder_out_pose_2,
-                                                                     flow_arcs_indices)
-        quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch = batches
-
-        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
-        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        batches = self.rotations_translations_batched(encoder_out_pose_1, encoder_out_pose_2, flow_arcs_indices)
+        (rotation_matrix_1_batch, rotation_matrix_2_batch,
+         translation_vector_1_batch, translation_vector_2_batch) = batches
 
         batch_size = translation_vector_1_batch.shape[0]
         vertices_1 = encoder_out_pose_1.vertices
@@ -209,20 +204,6 @@ class RenderingKaolin(nn.Module):
         camera_trans_batch = self.camera_trans.repeat(batch_size, 1)
         return camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch
 
-    def quaternion_translation_batches_from_flow_arcs(self, encoder_out_pose_1, encoder_out_pose_2, flow_arcs_indices):
-        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
-        indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]
-        # Convert lists to tensors
-        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
-        indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
-        # Batch gather translations
-        translation_vector_1_batch = torch.index_select(encoder_out_pose_1.translations, 2, indices_pose_1)[0, 0]
-        translation_vector_2_batch = torch.index_select(encoder_out_pose_2.translations, 2, indices_pose_2)[0, 0]
-        # Batch convert quaternions to rotation matrices
-        quaternion_batch_1 = torch.index_select(encoder_out_pose_1.quaternions, 1, indices_pose_1)
-        quaternion_batch_2 = torch.index_select(encoder_out_pose_2.quaternions, 1, indices_pose_2)
-        return quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch
-
     def get_occlusion_mask_using_rendered_coordinates(self, rendered_pose1_with_pose2_coordinates,
                                                       rendered_pose2_with_pose2_coordinates, theoretical_flow):
         theoretical_flow_discrete = self.theoretical_flow_kaolin_to_image_warp(theoretical_flow)
@@ -278,23 +259,20 @@ class RenderingKaolin(nn.Module):
         rendered_vertices_frame_1 = rendering_result_frame_1.rendered_face_world_coords
         rendered_mask_frame_1 = rendering_result_frame_1.rendered_image_segmentation
 
-        batches = self.quaternion_translation_batches_from_flow_arcs(encoder_out_frame_1, encoder_out_frame_2,
-                                                                     flow_arcs_indices)
-        quaternion_batch_1, quaternion_batch_2, translation_vector_1_batch, translation_vector_2_batch = batches
+        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
+        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
+        rendered_vertices_frame_1_batched = torch.index_select(rendered_vertices_frame_1, 1, indices_pose_1)
+        rendered_mask_frame_1_batched = torch.index_select(rendered_mask_frame_1, 1, indices_pose_1)
 
-        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
-        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        batches = self.rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices)
+        (rotation_matrix_1_batch, rotation_matrix_2_batch,
+         translation_vector_1_batch, translation_vector_2_batch) = batches
 
         batch_size = translation_vector_1_batch.shape[0]
         vertices_1 = encoder_out_frame_1.vertices
 
         batched_tensors = self.get_batched_tensors_for_rendering(batch_size, vertices_1)
         camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch = batched_tensors
-
-        rendered_vertices_frame_1_batched = rendered_vertices_frame_1.repeat(1, batch_size, 1, 1, 1)
-        rendered_mask_frame_1_batched = rendered_mask_frame_1.repeat(1, batch_size, 1, 1, 1)
 
         rendered_vertices_frame = rendered_vertices_frame_1_batched.permute(0, 1, 3, 4, 2)
         rendered_vertices_frame_norm = rendered_vertices_frame.norm(dim=-1)
@@ -337,6 +315,27 @@ class RenderingKaolin(nn.Module):
         flow_result = RenderedFlowResult(theoretical_flow, flow_segmentation, mock_occlusion)
 
         return flow_result
+
+    def rotations_translations_batched(self, encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
+
+        indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
+        indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]
+        # Convert lists to tensors
+        indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
+        indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
+        # Batch gather translations
+        translation_vector_1_batch = torch.index_select(encoder_out_frame_1.translations, 2, indices_pose_1)[0, 0]
+        translation_vector_2_batch = torch.index_select(encoder_out_frame_2.translations, 2, indices_pose_2)[0, 0]
+        # Batch convert quaternions to rotation matrices
+        quaternion_batch_1 = torch.index_select(encoder_out_frame_1.quaternions, 1, indices_pose_1)
+        quaternion_batch_2 = torch.index_select(encoder_out_frame_2.quaternions, 1, indices_pose_2)
+
+        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
+                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+
+        return rotation_matrix_1_batch, rotation_matrix_2_batch, translation_vector_1_batch, translation_vector_2_batch
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
