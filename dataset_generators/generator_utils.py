@@ -255,8 +255,9 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
         flow_arcs_indices = [(0, 0)]
 
         with torch.no_grad():
-            rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix, current_translation[0],
-                                                               vertices)
+            # breakpoint()
+            rendering_result = rendering.render_mesh_with_dibr(face_features, rotation_matrix,
+                                                               current_translation[0, 0], vertices)
 
             optical_flow_relative, _, _ = rendering.compute_theoretical_flow(current_encoder_result,
                                                                              prev_encoder_result,

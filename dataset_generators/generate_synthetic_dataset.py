@@ -157,7 +157,7 @@ def generate_object_using_function(movement_scenario, background_image_path, obj
 
 
 if __name__ == '__main__':
-    config = load_config('./configs/config_generator.yaml')
+    config = load_config('./configs/config_deep.py')
 
     rendering_method = 'DIB-R'  # 'kubric' or 'DIB-R'
     synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshopDIB-R')
