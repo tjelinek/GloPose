@@ -25,13 +25,13 @@ from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
-from models.loss import FMOLoss, iou_loss
+from models.loss import FMOLoss, iou_loss, random_points_from_binary_mask
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import PrecomputedTracker, CSRTrack, OSTracker, MyTracker, get_bbox, SyntheticDataGeneratingTracker, \
     BaseTracker
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, rad_to_deg
 
 
 @dataclass
@@ -804,11 +804,14 @@ class Tracking6D:
                                               self.shape[-2])
 
         fun = flow_loss_model.forward
+        jac_function = None
+        if self.config.use_custom_jacobian:
+            jac_function = flow_loss_model.compute_jacobian
         if self.config.levenberg_marquardt_implementation == 'ceres':
             coefficients_list = levenberg_marquardt_ceres(p=trans_quats, cost_function=fun,
                                                           num_residuals=self.config.flow_sgd_n_samples * len(flow_arcs))
         elif self.config.levenberg_marquardt_implementation == 'custom':
-            coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=None,
+            coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=jac_function,
                                                max_iter=self.config.levenberg_marquardt_max_ter)
         else:
             raise ValueError("'levenberg_marquardt_implementation' must be either 'custom' or 'ceres'")
