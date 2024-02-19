@@ -1,5 +1,4 @@
 import contextlib
-import glob
 import os
 import sys
 
@@ -7,38 +6,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 import torch
 import torchvision
-import imageio
 import torchvision.transforms as T
 
-from pathlib import Path
-from typing import Iterable
 from argparse import Namespace
 from abc import ABC, abstractmethod
 
 from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
-from cfg import FLOW_OUT_DEFAULT_DIR, DEVICE
-
-
-def load_image(imfile):
-    img = np.array(Image.open(imfile)).astype(np.uint8)
-    img = torch.from_numpy(img).permute(2, 0, 1).float()
-    return img[None].to(DEVICE)
-
-
-def get_flow_from_files(files_source_dir: Path, model):
-    images = glob.glob(os.path.join(files_source_dir, '*.png')) + \
-             glob.glob(os.path.join(files_source_dir, '*.jpg'))
-
-    images = sorted(images)
-
-    for imfile1, imfile2 in zip(images[:-1], images[1:]):
-        image1 = load_image(imfile1)
-        image2 = load_image(imfile2)
-
-        flow_low, flow_up = get_flow_from_images(image1, image2, model)
-
-        yield (imfile1, imfile2), (flow_low, flow_up)
+from cfg import DEVICE
 
 
 def compare_flows_with_images(image1, image2, flow_up, flow_up_prime,
@@ -169,65 +144,34 @@ def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_s
     return canvas
 
 
-def export_flow_from_files(files_source_dir: Path, model, flows_target_dir: Path = FLOW_OUT_DEFAULT_DIR):
-    flows_target_dir.mkdir(exist_ok=True, parents=True)
+def normalize_flow_to_unit_range(observed_flow):
+    observed_flow[:, :, 0, ...] = observed_flow[:, :, 0, ...] / observed_flow.shape[-2]
+    observed_flow[:, :, 1, ...] = observed_flow[:, :, 1, ...] / observed_flow.shape[-1]
 
-    for (filename1, filename2), (flow_low, flow_up) in get_flow_from_files(files_source_dir, model):
-        flow_up = flow_up[0].permute(1, 2, 0).cpu().detach().numpy()
-        # flow_low = flow_low[0].permute(1, 2, 0).cpu().detach().numpy()
-
-        # map flow to rgb image
-        flow_up_img = flow_viz.flow_to_image(flow_up)
-        # flow_low_img = flow_viz.flow_to_image(flow_low)
-
-        file1_stem = Path(filename1).stem
-        file2_stem = Path(filename2).stem
-
-        image1 = load_image(filename1)
-        image2 = load_image(filename2)
-
-        flow = visualize_flow_with_images(image1[0] * 255, image2[0] * 255, flow_up)
-
-        flow_image_path = flows_target_dir / Path('flow_' + file1_stem + '_' + file2_stem + '.png')
-        print("Writing flow to ", flow_image_path)
-        imageio.imwrite(flow_image_path, flow)
-        pure_flow_image_path = flows_target_dir / Path('flow_pure_' + file1_stem + '_' + file2_stem + '.png')
-        imageio.imwrite(pure_flow_image_path, flow_up_img)
+    return observed_flow
 
 
-def get_flow_from_sequence(images_pairs: Iterable, model):
-    for image1, image2 in images_pairs:
-        yield get_flow_from_images(image1, image2, model)
+def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor):
+    observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
+    observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
+
+    return observed_flow
 
 
-def get_flow_from_images(image1, image2, model):
-    padder = InputPadder(image1.shape)
+def optical_flow_to_matched_coords(flow: torch.Tensor, step=1):
+    height, width = flow.shape[-2], flow.shape[-1]
+    x, y = torch.meshgrid(torch.arange(0, width, step), torch.arange(0, height, step))
+    coords = torch.stack((x, y), dim=0).float().to(flow.device)  # Shape: [2, height, width]
 
-    image1, image2 = padder.pad(image1, image2)
+    coords = coords.unsqueeze(0).unsqueeze(0)
 
-    flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
+    matched_coords = coords + flow[:, :, :, ::step, ::step]
 
-    flow_low = padder.unpad(flow_low)[None]
-    flow_up = padder.unpad(flow_up)[None]
-
-    return flow_low, flow_up
-
-
-def get_flow_from_images_mft(last_image, model):
-    from MFT_tracker.MFT.MFT import MFT as MFTTracker
-    tracker: MFTTracker = model
-
-    all_predictions = tracker.track(last_image)
-
-    flow = all_predictions.result.flow.cuda()[None, None]
-    occlusion = all_predictions.result.occlusion.cuda()[None, None]
-    sigma = all_predictions.result.sigma.cuda()[None, None]
-
-    return flow, occlusion, sigma
+    return matched_coords
 
 
 def tensor_image_to_mft_format(image_tensor):
-    return image_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+    return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy()
 
 
 def get_flow_from_images_raft(image1, image2, model):
@@ -275,7 +219,11 @@ def get_flow_from_images_raft(image1, image2, model):
     return flow_low, flow_up
 
 
-class FlowModelGetter(ABC):
+class FlowProvider(ABC):
+
+    def __init__(self):
+        super().__init__()
+        self.flow_model = self.get_flow_model()
 
     @staticmethod
     @abstractmethod
@@ -291,8 +239,20 @@ class FlowModelGetter(ABC):
         model.eval()
         return model
 
+    def next_flow(self, source_image, target_image):
+        padder = InputPadder(source_image.shape)
 
-class FlowModelGetterRAFT(FlowModelGetter):
+        image1, image2 = padder.pad(source_image, target_image)
+
+        flow_low, flow_up = self.model(image1, image2, iters=12, test_mode=True)
+
+        # flow_low = padder.unpad(flow_low)[None]
+        flow_up = padder.unpad(flow_up)[None]
+
+        return flow_up
+
+
+class RAFTFlowProvider(FlowProvider):
 
     @staticmethod
     def get_flow_model():
@@ -304,12 +264,12 @@ class FlowModelGetterRAFT(FlowModelGetter):
                          alternate_corr=False, small=False)
 
         model = torch.nn.DataParallel(RAFT(args))
-        model = FlowModelGetter.prepare_model(args, model)
+        model = FlowProvider.prepare_model(args, model)
 
         return model
 
 
-class FlowModelGetterGMA(FlowModelGetter):
+class GMAFlowProvider(FlowProvider):
 
     @staticmethod
     def get_flow_model():
@@ -321,9 +281,10 @@ class FlowModelGetterGMA(FlowModelGetter):
                          position_and_content=False, mixed_precision=True)
 
         model = torch.nn.DataParallel(RAFTGMA(args=args))
-        model = FlowModelGetter.prepare_model(args, model)
+        model = FlowProvider.prepare_model(args, model)
 
         return model
+
 
 @contextlib.contextmanager
 def temporary_change_directory(new_directory):
@@ -335,15 +296,41 @@ def temporary_change_directory(new_directory):
         os.chdir(original_directory)
 
 
-class FlowModelGetterMFT(FlowModelGetter):
+class MFTFlowProvider(FlowProvider):
+
+    def __init__(self):
+        super().__init__()
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('MFT_tracker')
+        from MFT_tracker.MFT.MFT import MFT as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model()
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
+
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
     class AttrDict(dict):
         def __init__(self, *args, **kwargs):
-            super(FlowModelGetterMFT.AttrDict, self).__init__(*args, **kwargs)
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
             self.__dict__.update(kwargs)
 
     @staticmethod
     def get_flow_model():
-        sys.path.append('MFT_tracker')
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('MFT_tracker')
         from MFT_tracker.MFT.MFT import MFT as MFTTracker
         from MFT_tracker.configs import MFT_cfg
 

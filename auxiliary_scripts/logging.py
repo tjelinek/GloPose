@@ -27,7 +27,8 @@ from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
-from flow import visualize_flow_with_images, compare_flows_with_images
+from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
+    optical_flow_to_matched_coords
 
 
 class WriteResults:
@@ -766,8 +767,7 @@ class WriteResults:
             target_frame_image = target_frame_observation.observed_image.cpu()
             target_frame_segment = target_frame_observation.observed_segmentation.cpu()
 
-            observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
-            observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
+            observed_flow = flow_unit_coords_to_image_coords(observed_flow.clone())
             observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
 
             source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()

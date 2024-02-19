@@ -97,6 +97,8 @@ class TrackerConfig:
     short_flow_model: str = 'GMA'  # 'RAFT' 'GMA'
     long_flow_model: str = 'MFT'   # 'MFT' or None
 
+    matching_target_to_backview: bool = True
+
     # Optimization
     allow_break_sgd_after = 30
     break_sgd_after_iters_with_no_change = 20
@@ -111,9 +113,9 @@ class TrackerConfig:
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'lbfgs' or None
-    preinitialization_method: str = None
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'essential_matrix_decomposition' or None
-    preinitialization_method: str = 'levenberg-marquardt'
+    # preinitialization_method: str = 'levenberg-marquardt'
+    preinitialization_method: str = None
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     use_custom_jacobian: bool = False
     flow_sgd: bool = True
