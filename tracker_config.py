@@ -112,7 +112,6 @@ class TrackerConfig:
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
-    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'lbfgs' or None
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'essential_matrix_decomposition' or None
     # preinitialization_method: str = 'levenberg-marquardt'
     preinitialization_method: str = None
