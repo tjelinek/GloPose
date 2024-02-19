@@ -1,5 +1,5 @@
 from bisect import insort
-
+from copy import deepcopy
 from typing import Tuple, List
 
 import numpy as np
@@ -13,10 +13,14 @@ from dataclasses import dataclass, field
 class Observation:
 
     def trim_bounding_box(self, bounding_box: Tuple[int, int, int, int]):
+        copy = deepcopy(self)
+
         for attr_name, attr_type in self.__annotations__.items():
             to_trim = getattr(self, attr_name)
             trimmed = to_trim[:, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-            setattr(self, attr_name, trimmed)
+            setattr(copy, attr_name, trimmed)
+
+        return copy
 
 
 @dataclass
@@ -132,7 +136,7 @@ class KeyframeBuffer:
         concatenated_observations = FrameObservation.concatenate(*vertices_observations)
 
         if bounding_box is not None:
-            concatenated_observations.trim_bounding_box(bounding_box)
+            concatenated_observations = concatenated_observations.trim_bounding_box(bounding_box)
 
         return concatenated_observations
 
@@ -153,7 +157,7 @@ class KeyframeBuffer:
         concatenated_tensors = FlowObservation.concatenate(*flow_observations)
 
         if bounding_box is not None:
-            concatenated_tensors.trim_bounding_box(bounding_box)
+            concatenated_tensors = concatenated_tensors.trim_bounding_box(bounding_box)
 
         return concatenated_tensors
 
