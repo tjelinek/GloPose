@@ -524,16 +524,6 @@ class Tracking6D:
 
                     # Visualize flow we get from the video
 
-            if 0 in self.active_keyframes.keyframes:
-                keep_keyframes = np.ones(len(active_buffer_indices), dtype='bool')
-            else:
-                keep_keyframes = (silh_losses < 0.8)  # remove really bad ones (IoU < 0.2)
-                keep_keyframes = keep_keyframes[active_buffer_indices]
-                min_index = np.argmin(silh_losses[active_buffer_indices])
-                keep_keyframes[min_index] = True  # keep the best (in case all are bad)
-
-            # normTdist = compute_trandist(renders)
-
             angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
             # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
             print("Angles:", angles)
@@ -550,16 +540,6 @@ class Tracking6D:
                     self.flow_tracks_inits.append(stepi)
                     self.need_to_init_mft = True
 
-            rot_degree_th = 45
-            small_rotation = angles.shape[0] > 1 and abs(angles[-1]) < rot_degree_th and abs(angles[-2]) < rot_degree_th
-            if small_rotation:  # and small_translation):
-                keep_n_previous = 2
-                keep_keyframes[-min(keep_n_previous, len(keep_keyframes) - 1):] = True
-                if keep_n_previous <= len(keep_keyframes) - 2:
-                    keep_keyframes[-keep_n_previous - 1] = False
-                keep_keyframes[:-keep_n_previous - 1] = True
-
-        # torch.cuda.memory._record_memory_history(enabled=None)
         return self.best_model
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
