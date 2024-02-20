@@ -11,6 +11,7 @@ import imageio
 import csv
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.patches import ConnectionPatch
 from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
@@ -22,7 +23,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from utils import write_video, qnorm, quaternion_angular_difference, imread, deg_to_rad, rad_to_deg
+from utils import write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
@@ -49,7 +50,17 @@ class WriteResults:
         self.our_iou = -np.ones((num_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
         self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
+
         self.write_folder = Path(write_folder)
+
+        self.flows_path = self.write_folder / Path('flows')
+        self.gt_imgs_path = self.write_folder / Path('gt_imgs')
+        self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
+
+        self.flows_path.mkdir(exist_ok=True, parents=True)
+        self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
+        self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
@@ -315,7 +326,65 @@ class WriteResults:
             flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
             flow_observation_backview = active_keyframes_backview.get_flows_between_frames(flow_arc_source, flow_arc_target)
 
-            # breakpoint()
+            flow_frontview = flow_observation_frontview.observed_flow
+            flow_backview = flow_observation_backview.observed_flow
+
+            occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
+            occlusion_mask_back = self.convert_observation_to_numpy(flow_observation_backview.observed_flow_occlusion)
+
+            flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
+            flow_backview = flow_unit_coords_to_image_coords(flow_backview.clone())
+
+            template_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_source)
+            template_observation_backview = active_keyframes_backview.get_observations_for_keyframe(flow_arc_source)
+
+            target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
+            target_observation_backview = active_keyframes_backview.get_observations_for_keyframe(flow_arc_target)
+
+            template_front = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
+            template_back = self.convert_observation_to_numpy(template_observation_backview.observed_image)
+            target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
+            target_back = self.convert_observation_to_numpy(target_observation_backview.observed_image)
+
+            matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=10)
+            matched_coords_backview = optical_flow_to_matched_coords(flow_backview, step=10)
+
+            matched_coords_frontview_2d = matched_coords_frontview.squeeze().view(2, -1).numpy(force=True)
+            matched_coords_backview_2d = matched_coords_backview.squeeze().view(2, -1).numpy(force=True)
+
+            template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front)
+            template_back_overlay = self.overlay_occlusion(template_back, occlusion_mask_back)
+
+            fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+
+            for ax in axs.flat:
+                ax.axis('off')
+
+            axs[0, 0].imshow(template_front_overlay)
+            axs[0, 0].set_title('Template Front')
+
+            axs[0, 1].imshow(template_back_overlay)
+            axs[0, 1].set_title('Template Back')
+
+            axs[1, 0].imshow(target_front)
+            axs[1, 0].set_title('Target Front', y=-0.01)
+
+            axs[1, 1].imshow(target_back)
+            axs[1, 1].set_title('Target Back', y=-0.01)
+
+            height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
+            x, y = np.meshgrid(np.arange(width, step=10), np.arange(height, step=10))
+            template_coords = np.stack((y, x), axis=0).reshape(2, -1)  # Shape: [2, height*width]
+
+            # Plot lines on the target front and back view subplots
+            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
+            self.plot_matched_lines(axs[1, 0], axs[1, 0], template_coords, matched_coords_frontview_2d,
+                                    occlusion_mask_front, occlusion_threshold, color='yellow')
+            self.plot_matched_lines(axs[1, 1], axs[1, 1], template_coords, matched_coords_backview_2d,
+                                    occlusion_mask_back, occlusion_threshold, color='yellow')
+
+            destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
+            fig.savefig(str(destination_path), dpi=300, bbox_inches='tight')
 
         # FLOW BACKVIEW ERROR VISUALIZATION
 
@@ -439,6 +508,51 @@ class WriteResults:
             rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
+
+    @staticmethod
+    def convert_observation_to_numpy(observation):
+        return observation[0, 0].permute(1, 2, 0).numpy(force=True)
+
+    @staticmethod
+    def overlay_occlusion(image, occlusion_mask):
+        """
+        Overlay an occlusion mask on an image.
+
+        Args:
+        - image: The original image as a numpy array of shape (H, W, C).
+        - occlusion_mask: The occlusion mask as a numpy array of shape (H, W, 1), values in [0, 1].
+
+        Returns:
+        - The image with the occlusion mask overlay as a numpy array of shape (H, W, C).
+        """
+        occlusion_mask = occlusion_mask.squeeze() * 0.2  # Remove the singleton dimension if present
+        if image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1):  # Grayscale or single-channel
+            image = np.dstack([image] * 3)  # Convert to 3-channel for coloring
+
+        white_overlay = np.ones_like(image) * 255
+        overlay_image = (1 - occlusion_mask[..., np.newaxis]) * image + occlusion_mask[..., np.newaxis] * white_overlay
+
+        return overlay_image.astype(image.dtype)
+
+    @staticmethod
+    def plot_matched_lines(ax1, ax2, source_coords, target_coords, occlusion_mask, occl_threshold, color='yellow'):
+        """
+        Draws lines from source coordinates in ax1 to target coordinates in ax2.
+        Args:
+        - ax1: The matplotlib axis to draw source points on.
+        - ax2: The matplotlib axis to draw target points on.
+        - source_coords: Source coordinates as a 2xN numpy array (N is the number of points).
+        - target_coords: Target coordinates as a 2xN numpy array.
+        - color: Line color.
+        """
+        for xy1, xy2 in zip(source_coords.transpose(), target_coords.transpose()):
+            # Create a ConnectionPatch for each pair of points
+            if occlusion_mask[xy1[0], xy1[1]] > occl_threshold:
+                continue
+
+            con = ConnectionPatch(xyA=xy1, xyB=xy2, coordsA="data", coordsB="data",
+                                  axesA=ax1, axesB=ax2, color=color, lw=0.5, alpha=0.8)
+            ax2.add_artist(con)
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
@@ -783,18 +897,10 @@ class WriteResults:
                                                            gt_silhouette_prev=target_frame_segment_squeezed,
                                                            flow_occlusion_mask=observed_flow_occlusions_squeezed)
 
-            flows_path = self.write_folder / Path('flows')
-            gt_imgs_path = self.write_folder / Path('gt_imgs')
-            occlusion_maps_path = self.write_folder / Path('mft_occlusions')
-
-            flows_path.mkdir(exist_ok=True, parents=True)
-            gt_imgs_path.mkdir(exist_ok=True, parents=True)
-            occlusion_maps_path.mkdir(exist_ok=True, parents=True)
-
             # Define output file paths
-            new_image_path = self.write_folder / Path('gt_imgs') / Path(f'gt_img_{source_frame}_{target_frame}.png')
-            flow_image_path = self.write_folder / Path('flows') / Path(f'flow_{source_frame}_{target_frame}.png')
-            occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            new_image_path = self.gt_imgs_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
+            flow_image_path = self.flows_path / Path(f'flow_{source_frame}_{target_frame}.png')
+            occlusion_path = self.occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
             visualize_occlusions(occlusion_path, source_frame_image.squeeze(),
                                  observed_flow_occlusions_squeezed, alpha=0.5)
