@@ -172,7 +172,7 @@ def optical_flow_to_matched_coords(flow: torch.Tensor, step=1):
 
 
 def tensor_image_to_mft_format(image_tensor):
-    return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy()
+    return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
 
 
 def get_flow_from_images_raft(image1, image2, model):
@@ -299,12 +299,11 @@ def temporary_change_directory(new_directory):
 
 class MFTFlowProvider(FlowProvider):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config_name):
         self.add_to_path()
         from MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
-        self.flow_model: MFTTracker = self.get_flow_model()
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
 
     @staticmethod
     def add_to_path():
@@ -333,7 +332,7 @@ class MFTFlowProvider(FlowProvider):
             self.__dict__.update(kwargs)
 
     @staticmethod
-    def get_flow_model(config_name='MFT_cfg'):
+    def get_flow_model(config_name=None):
         MFTFlowProvider.add_to_path()
 
         from MFT_tracker.MFT.MFT import MFT as MFTTracker
@@ -346,16 +345,41 @@ class MFTFlowProvider(FlowProvider):
         return model
 
 
-class MFTEnsembleFlowProvider(MFTFlowProvider):
-    def __init__(self):
-        super().__init__()
-        MFTFlowProvider.add_to_path()
+class MFTEnsembleFlowProvider(FlowProvider):
+    def __init__(self, config_name):
+        self.add_to_path()
         from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
         self.need_to_init = True
-        self.flow_model: MFTTracker = self.get_flow_model()
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
 
     @staticmethod
-    def get_flow_model(config_name='MFT_RoMa_cfg'):
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('MFT_tracker')
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
+
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model(config_name=None):
         MFTFlowProvider.add_to_path()
 
         from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker

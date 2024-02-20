@@ -17,7 +17,8 @@ from typing import Optional, Tuple, Any
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
-from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range
+from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
+    MFTEnsembleFlowProvider
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -343,7 +344,8 @@ class Tracking6D:
             'GMA': GMAFlowProvider
         }
         long_flow_models = {
-            'MFT': MFTFlowProvider
+            'MFT': MFTFlowProvider,
+            'MFTEnsemble': MFTEnsembleFlowProvider,
         }
 
         # For short_flow_model
@@ -355,7 +357,7 @@ class Tracking6D:
 
         # For long_flow_model
         if self.config.long_flow_model in long_flow_models:
-            self.long_flow_provider = long_flow_models[self.config.long_flow_model]()
+            self.long_flow_provider = long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg)
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
