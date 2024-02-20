@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import os
 import sys
 
@@ -300,11 +301,15 @@ class MFTFlowProvider(FlowProvider):
 
     def __init__(self):
         super().__init__()
-        if 'MFT_tracker' not in sys.path:
-            sys.path.append('MFT_tracker')
+        self.add_to_path()
         from MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
         self.flow_model: MFTTracker = self.get_flow_model()
+
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('MFT_tracker')
 
     def init(self, template):
         template_mft = tensor_image_to_mft_format(template)
@@ -328,14 +333,36 @@ class MFTFlowProvider(FlowProvider):
             self.__dict__.update(kwargs)
 
     @staticmethod
-    def get_flow_model():
-        if 'MFT_tracker' not in sys.path:
-            sys.path.append('MFT_tracker')
+    def get_flow_model(config_name='MFT_cfg'):
+        MFTFlowProvider.add_to_path()
+
         from MFT_tracker.MFT.MFT import MFT as MFTTracker
-        from MFT_tracker.configs import MFT_cfg
+        config_module = importlib.import_module(f'MFT_tracker.configs.{config_name}')
 
         with temporary_change_directory("MFT_tracker"):
-            default_config = MFT_cfg.get_config()
+            default_config = config_module.get_config()
+            model = MFTTracker(default_config)
+
+        return model
+
+
+class MFTEnsembleFlowProvider(MFTFlowProvider):
+    def __init__(self):
+        super().__init__()
+        MFTFlowProvider.add_to_path()
+        from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model()
+
+    @staticmethod
+    def get_flow_model(config_name='MFT_RoMa_cfg'):
+        MFTFlowProvider.add_to_path()
+
+        from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        config_module = importlib.import_module(f'MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("MFT_tracker"):
+            default_config = config_module.get_config()
             model = MFTTracker(default_config)
 
         return model
