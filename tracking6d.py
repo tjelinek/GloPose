@@ -10,6 +10,7 @@ import os
 import time
 import torch
 import torchvision.transforms as transforms
+from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
@@ -668,6 +669,9 @@ class Tracking6D:
         if self.config.preinitialization_method == 'levenberg-marquardt':
             self.run_levenberg_marquardt_method(observations, flow_observations, flow_frames, keyframes, flow_arcs,
                                                 frame_losses)
+        elif self.config.preinitialization_method == 'essential_matrix_decomposition':
+            self.essential_matrix_pre_initialization(observations, flow_observations, flow_arcs,
+                                                     frame_losses)
 
         elif self.config.preinitialization_method == 'gradient_descent':
             self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch, keyframes,
@@ -1122,3 +1126,45 @@ class Tracking6D:
             self.rgb_optimizer.step()
 
         print(f'Elapsed time in seconds: {time.time() - start_time} for total of {epoch + 1} epochs.')
+
+    def essential_matrix_pre_initialization(self, observations: FrameObservation, flow_observations: FlowObservation,
+                                            flow_arcs, frame_losses):
+        n_samples_for_ransac = 1000
+        import pygcransac
+        import cv2
+        from kornia.geometry import rotation_matrix_to_angle_axis
+        K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
+
+        height, width = self.shape
+        for flow_arc_idx, flow_arc in enumerate(flow_arcs):
+            flow_source_frame, flow_target_frame = flow_arc
+
+            not_occluded_binary_mask = ~(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] >
+                                         self.config.occlusion_coef_threshold)
+            segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
+                                        self.config.segmentation_mask_threshold)
+
+            not_occluded_object_points_mask = (not_occluded_binary_mask * segmentation_binary_mask)[0, 0]
+
+            sampled_points_mask = random_points_from_binary_mask(not_occluded_object_points_mask, n_samples_for_ransac)
+
+            optical_flow = flow_observations.observed_flow[0, flow_arc_idx]
+
+            src_pts = torch.nonzero(sampled_points_mask[0])
+            dst_pts = optical_flow[:, src_pts[:, 0], src_pts[:, 1]].permute(1, 0) + src_pts
+
+            src_pts_np = src_pts.numpy(force=True).astype(np.float64)
+            dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
+            correspondences = np.concatenate([src_pts_np, dst_pts_np], axis=1)
+
+            E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 3.0)
+            # pose, mask = pygcransac.find6DPose(correspondences, height, width, height, width, 3.0)
+
+            R1, R2, t = cv2.decomposeEssentialMat(E)
+            r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
+            r2 = rotation_matrix_to_angle_axis(torch.from_numpy(R2))
+
+            r1_deg = rad_to_deg(r1)
+            r2_deg = rad_to_deg(r2)
+
+            print(f"r1_deg: {r1_deg}, r2_deg: {r2_deg}")
