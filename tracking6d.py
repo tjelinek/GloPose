@@ -782,7 +782,8 @@ class Tracking6D:
         trans_quats = torch.cat([kf_translations, kf_quaternions], dim=-1).squeeze().flatten()
 
         flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
-                                              flow_arcs_indices, self.loss_function, observed_flows, observed_flows_segmentations,
+                                              flow_arcs_indices, self.loss_function, observed_flows,
+                                              observed_flows_segmentations,
                                               self.rendering.width, self.rendering.height, self.shape[-1],
                                               self.shape[-2])
 
