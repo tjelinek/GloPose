@@ -48,101 +48,118 @@ def tensor_to_pil_with_alpha(tensor, alpha=0.2):
     return img
 
 
-def visualize_flow_with_images(image1, image2, flow_up, flow_up_prime=None, gt_silhouette_current=None,
-                               gt_silhouette_prev=None, flow_occlusion_mask=None):
+def visualize_flow_with_images(templates, image2, observed_flows=None, gt_flows=None, gt_silhouette_current=None,
+                               gt_silhouettes_prev=None, flow_occlusion_masks=None):
     """
+    Visualize flow with multiple template images.
 
-    :param image1: uint8 image with [0-1] color range in [C, H, W] format
-    :param image2: uint8 image with [0-1] color range in [C, H, W] format
-    :param flow_up: np.ndarray [H, W, 2] flow
-    :param flow_up_prime: np.ndarray [H, W, 2] flow
+    :param templates: List of uint8 images with [0-1] color range in [C, H, W] format.
+    :param image2: uint8 image with [0-1] color range in [C, H, W] format.
+    :param observed_flows: List of np.ndarray [H, W, 2] flow for each template.
+    :param gt_flows: np.ndarray [H, W, 2] flow.
     :param gt_silhouette_current: Tensor - silhouette of the ground truth in the current frame of shape [H, W]
-    :param gt_silhouette_prev: Tensor - silhouette of the ground truth in the previous frame of shape [H, W]
-    :param flow_occlusion_mask: Tensor - indicating flow occlusion in format [H, W]
-    :return:
+    :param gt_silhouettes_prev: List of Tensors  - silhouette of the ground truth in the previous frame of shape [H, W]
+    :param flow_occlusion_masks: List of Tensors - indicating flow occlusion in format [H, W].
     """
-    width, height = image1.shape[-1], image1.shape[-2]
+    width, height = image2.shape[-1], image2.shape[-2]
 
-    # Tensors to PIL Images
+    assert observed_flows is not None or gt_flows is not None
+    assert np.all([(width, height) == t.shape[-2:] for t in templates])
+    assert gt_silhouettes_prev is None or len(templates) == len(gt_silhouettes_prev)
+    assert flow_occlusion_masks is None or len(templates) == len(flow_occlusion_masks)
+    assert observed_flows is None or len(templates) == len(observed_flows)
+
     transform = T.ToPILImage()
-    image1_pil = transform(image1)
     image2_pil = transform(image2)
 
-    if flow_occlusion_mask is not None:
-        occlusion_blend = int(255 * 0.25)
-        occlusion_mask_pil = tensor_to_pil_with_alpha(flow_occlusion_mask, alpha=1.).convert("L")
-        silver_image = Image.new('RGBA', image1_pil.size, (255, 255, 255, occlusion_blend))
-        image1_pil.paste(silver_image, (0, 0), mask=occlusion_mask_pil)
-
-    if gt_silhouette_prev is not None:
-        silh1_PIL = tensor_to_pil_with_alpha(gt_silhouette_prev, alpha=0.25)
-        background1_PIL = Image.new('RGBA', image1_pil.size, (0, 0, 0, 0))
-        background1_PIL.paste(silh1_PIL, (0, 0))
-        background1_PIL.paste(image1_pil, (0, 0))
-        image1_pil = background1_PIL
     if gt_silhouette_current is not None:
-        silh2_PIL = tensor_to_pil_with_alpha(gt_silhouette_current, alpha=0.25)
-        background2_PIL = Image.new('RGBA', image2_pil.size, (0, 0, 0, 0))
-        background2_PIL.paste(silh2_PIL, (0, 0))
-        background2_PIL.paste(image2_pil, (0, 0))
-        image2_pil = background2_PIL
-
-    flow_pil = None
-    if flow_up is not None:
-        if flow_up_prime is not None:
-            flow_up_image = flow_viz.flow_to_image(np.concatenate([flow_up, flow_up_prime], axis=1))
-        else:
-            flow_up_image = flow_viz.flow_to_image(flow_up)
-        flow_pil = transform(flow_up_image)
-
-    flow_prime_pil = None
-    if flow_up_prime is not None:
-        flow_up_prime_image = flow_viz.flow_to_image(flow_up_prime)
-        flow_prime_pil = transform(flow_up_prime_image)
-
-    draw1 = ImageDraw.Draw(image1_pil)
+        image2_pil = overlay_silhouette_on_image(gt_silhouette_current, image2_pil)
     draw2 = ImageDraw.Draw(image2_pil)
 
-    step = max(width, height) // 20
+    canvas_width_coef = int(observed_flows is not None) + int(gt_flows is not None) + 2
+    canvas = Image.new('RGBA', (width * canvas_width_coef, len(templates) * height), (255, 255, 255, 255))
 
-    r = max(height // 400, 1)  # radius of the drawn point
+    template_pils = []
+    for template_idx, template in enumerate(templates):
+        # Tensors to PIL Images
+        template_pil = transform(template)
 
-    for y in range(step, height, step):
-        for x in range(step, width, step):
-            draw1.ellipse((x - r, y - r, x + r, y + r), fill='black')
-            draw2.ellipse((x - r, y - r, x + r, y + r), fill='black')
+        if flow_occlusion_masks is not None:
+            flow_occlusion_mask = flow_occlusion_masks[template_idx]
+            occlusion_blend = int(255 * 0.25)
+            occlusion_mask_pil = tensor_to_pil_with_alpha(flow_occlusion_mask, alpha=1.).convert("L")
+            silver_image = Image.new('RGBA', template_pil.size, (255, 255, 255, occlusion_blend))
+            template_pil.paste(silver_image, (0, 0), mask=occlusion_mask_pil)
 
-            if flow_up is not None:
-                shift_up_x = flow_up[y, x, 0]
-                shift_up_y = flow_up[y, x, 1]
+        if gt_silhouettes_prev is not None:
+            gt_silhouette_prev = gt_silhouettes_prev[template_idx]
+            template_pil = overlay_silhouette_on_image(gt_silhouette_prev, template_pil)
 
-                draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
+        observed_flow_pil = None
+        if observed_flows is not None:
+            observed_flow = observed_flows[template_idx]
+            if gt_flows is not None:
+                observed_flow_image = flow_viz.flow_to_image(np.concatenate([observed_flow, gt_flows], axis=1))
+            else:
+                observed_flow_image = flow_viz.flow_to_image(observed_flow)
+            observed_flow_pil = transform(observed_flow_image)
 
-                draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
-                           fill='red')
-                draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
-                           fill='red')
-            if flow_up_prime is not None:
-                shift_up_prime_x = flow_up_prime[y, x, 0]
-                shift_up_prime_y = flow_up_prime[y, x, 1]
+        gt_flow_pil = None
+        if gt_flows is not None:
+            gt_flow_image = flow_viz.flow_to_image(gt_flows)
+            gt_flow_pil = transform(gt_flow_image)
 
-                draw2.line((x, y, x + shift_up_prime_x, y + shift_up_prime_y), fill='green')
+        draw1 = ImageDraw.Draw(template_pil)
 
-                draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
-                            y + shift_up_prime_y + r), fill='green')
-                draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y + r, x + shift_up_prime_x + r,
-                            y + shift_up_prime_y - r), fill='green')
+        step = max(width, height) // 20
 
-    canvas_width_coef = int(flow_pil is not None) + int(flow_prime_pil is not None) + 2
-    canvas = Image.new('RGBA', (width * canvas_width_coef, height), (255, 255, 255, 255))
-    canvas.paste(image1_pil, (0, 0))
-    if flow_pil is not None:
-        canvas.paste(flow_pil, (width, 0))
-    elif flow_prime_pil is not None and flow_pil is None:
-        canvas.paste(flow_prime_pil, (width, 0))
-    canvas.paste(image2_pil, ((canvas_width_coef - 1) * width, 0))
+        r = max(height // 400, 1)  # radius of the drawn point
+
+        for y in range(step, height, step):
+            for x in range(step, width, step):
+                draw1.ellipse((x - r, y - r, x + r, y + r), fill='black')
+                draw2.ellipse((x - r, y - r, x + r, y + r), fill='black')
+
+                if observed_flows is not None:
+                    observed_flow = observed_flows[template_idx]
+
+                    shift_up_x = observed_flow[y, x, 0]
+                    shift_up_y = observed_flow[y, x, 1]
+
+                    draw2.line((x, y, x + shift_up_x, y + shift_up_y), fill='red')
+
+                    draw2.line((x + shift_up_x, y + shift_up_y - r, x + shift_up_x, y + shift_up_y + r),
+                               fill='red')
+                    draw2.line((x + shift_up_x - r, y + shift_up_y, x + shift_up_x + r, y + shift_up_y),
+                               fill='red')
+                if gt_flows is not None:
+                    shift_up_prime_x = gt_flows[y, x, 0]
+                    shift_up_prime_y = gt_flows[y, x, 1]
+
+                    draw2.line((x, y, x + shift_up_prime_x, y + shift_up_prime_y), fill='green')
+
+                    draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y - r, x + shift_up_prime_x + r,
+                                y + shift_up_prime_y + r), fill='green')
+                    draw2.line((x + shift_up_prime_x - r, y + shift_up_prime_y + r, x + shift_up_prime_x + r,
+                                y + shift_up_prime_y - r), fill='green')
+
+        canvas.paste(template_pil, (0, template_idx * height))
+        if observed_flow_pil is not None:
+            canvas.paste(observed_flow_pil, (width, template_idx * height))
+        elif gt_flow_pil is not None and observed_flow_pil is None:
+            canvas.paste(gt_flow_pil, (width, template_idx * height))
+        canvas.paste(image2_pil, ((canvas_width_coef - 1) * width, template_idx * height))
 
     return canvas
+
+
+def overlay_silhouette_on_image(silhouette, image_pil):
+    silh1_PIL = tensor_to_pil_with_alpha(silhouette, alpha=0.25)
+    background1_PIL = Image.new('RGBA', image_pil.size, (0, 0, 0, 0))
+    background1_PIL.paste(silh1_PIL, (0, 0))
+    background1_PIL.paste(image_pil, (0, 0))
+    image_pil = background1_PIL
+    return image_pil
 
 
 def normalize_flow_to_unit_range(observed_flow):
