@@ -153,6 +153,7 @@ def normalize_flow_to_unit_range(observed_flow):
 
 
 def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor):
+    observed_flow = observed_flow.clone()
     observed_flow[:, :, 0, ...] *= observed_flow.shape[-1]
     observed_flow[:, :, 1, ...] *= observed_flow.shape[-2]
 
