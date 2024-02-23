@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.gridspec import GridSpec
 from matplotlib.patches import ConnectionPatch
 from torch import nn
 from pathlib import Path
@@ -340,6 +341,9 @@ class WriteResults:
             occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
             occlusion_mask_back = self.convert_observation_to_numpy(flow_observation_backview.observed_flow_occlusion)
 
+            seg_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_segmentation)
+            seg_mask_back = self.convert_observation_to_numpy(flow_observation_backview.observed_flow_segmentation)
+
             flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
             flow_backview = flow_unit_coords_to_image_coords(flow_backview.clone())
 
@@ -354,8 +358,10 @@ class WriteResults:
             target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
             target_back = self.convert_observation_to_numpy(target_observation_backview.observed_image)
 
-            matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=10)
-            matched_coords_backview = optical_flow_to_matched_coords(flow_backview, step=10)
+            N = 20
+            step = template_front.shape[0] // N
+            matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=step)
+            matched_coords_backview = optical_flow_to_matched_coords(flow_backview, step=step)
 
             matched_coords_frontview_2d = matched_coords_frontview.squeeze().view(2, -1).numpy(force=True)
             matched_coords_backview_2d = matched_coords_backview.squeeze().view(2, -1).numpy(force=True)
@@ -373,28 +379,31 @@ class WriteResults:
             for ax in axs.flat:
                 ax.axis('off')
 
-            axs[0, 0].imshow(template_front_overlay, extent=display_bounds)
+            darkening_factor = 0.5
+            axs[0, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
             axs[0, 0].set_title('Template Front')
 
-            axs[0, 1].imshow(template_back_overlay, extent=display_bounds)
+            axs[0, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
             axs[0, 1].set_title('Template Back')
 
-            axs[1, 0].imshow(target_front, extent=display_bounds)
-            axs[1, 0].set_title('Target Front', y=-0.01)
+            axs[1, 0].imshow(target_front * darkening_factor, extent=display_bounds)
+            axs[1, 0].set_title('Target Front')
 
-            axs[1, 1].imshow(target_front, extent=display_bounds)
-            axs[1, 1].set_title('Target Back', y=-0.01)
+            axs[1, 1].imshow(target_front * darkening_factor, extent=display_bounds)
+            axs[1, 1].set_title('Target Back')
 
             height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
-            x, y = np.meshgrid(np.arange(width, step=10), np.arange(height, step=10))
+            x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
             template_coords = np.stack((y, x), axis=0).reshape(2, -1)  # Shape: [2, height*width]
 
             # Plot lines on the target front and back view subplots
             occlusion_threshold = self.tracking_config.occlusion_coef_threshold
             self.plot_matched_lines(axs[0, 0], axs[1, 0], template_coords, matched_coords_frontview_2d,
-                                    occlusion_mask_front, occlusion_threshold, cmap='hot', marker='o')
+                                    occlusion_mask_front, occlusion_threshold, cmap='spring', marker='o',
+                                    segment_mask=seg_mask_front)
             self.plot_matched_lines(axs[0, 1], axs[1, 1], template_coords, matched_coords_backview_2d,
-                                    occlusion_mask_back, occlusion_threshold, cmap='cool', marker='x')
+                                    occlusion_mask_back, occlusion_threshold, cmap='cool', marker='x',
+                                    segment_mask=seg_mask_back)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
@@ -549,7 +558,7 @@ class WriteResults:
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, target_coords, occlusion_mask, occl_threshold, cmap='jet',
-                           marker='o'):
+                           marker='o', segment_mask=None, segment_threshold=0.99):
         """
         Draws lines from source coordinates in ax1 to target coordinates in ax2.
         Args:
@@ -561,23 +570,27 @@ class WriteResults:
         - marker: Marker style for the points.
         """
 
-        norm = Normalize(vmin=0, vmax=source_coords.shape[0] * source_coords.shape[1] - 1)
+        valid_coords = [(cs, ct) for (cs, ct) in zip(source_coords.transpose(), target_coords.transpose())
+                        if segment_mask is None or segment_mask[cs[0], cs[1]] > segment_threshold]
+
+        norm = Normalize(vmin=0, vmax=len(valid_coords))
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
-        for i, (xy1, xy2) in enumerate(zip(source_coords.transpose(), target_coords.transpose())):
+        for i, (xy1, xy2) in enumerate(valid_coords):
             # Create a ConnectionPatch for each pair of points
             color = mappable.to_rgba(i)
 
-            ax1.scatter(xy1[0], xy1[1], color=color, marker=marker, alpha=0.8, s=0.75)
+            ax1.scatter(xy1[0], xy1[1], color=color, marker=marker, alpha=0.8, s=1.5)
             ax1.text(xy1[0], xy1[1], str(i), color='black', fontsize=1, ha='center', va='center')
 
-            if occlusion_mask[xy1[0], xy1[1]] <= occl_threshold:
+            if (occlusion_mask[xy1[0], xy1[1]] <= occl_threshold and
+                    (segment_mask is None or segment_mask[xy1[0], xy1[1]]) > segment_threshold):
                 con = ConnectionPatch(xyA=xy1, xyB=xy2, coordsA="data", coordsB="data",
                                       axesA=ax2, axesB=ax2, color=color, lw=0.5, alpha=0.8)
                 ax2.add_artist(con)
 
-                ax2.scatter(xy2[0], xy2[1], color=color, marker=marker, alpha=0.8, s=0.75)
+                ax2.scatter(xy2[0], xy2[1], color=color, marker=marker, alpha=0.8, s=1.5)
                 ax2.text(xy2[0], xy2[1], str(i), color='black', fontsize=1, ha='center', va='center')
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
