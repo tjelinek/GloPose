@@ -17,7 +17,7 @@ sys.path.append('OSTrack/S2DNet')
 
 
 def main():
-    dataset = 'GoogleScannedObjects_default_pose'
+    dataset = 'GoogleScannedObjects'
     args = parse_args()
 
     if args.sequences is not None and len(args.sequences) > 0:
@@ -52,13 +52,10 @@ def main():
         # config['rot_init'] = [-math.pi / 2.0, 0, 0]
         config.sequence = sequence
 
-        write_folder = os.path.join(tmp_folder, experiment_name, dataset, sequence)
-
-        if os.path.exists(write_folder):
-            shutil.rmtree(write_folder)
-        os.makedirs(write_folder)
-        os.makedirs(os.path.join(write_folder, 'imgs'))
-        shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+        if args.output_folder is not None:
+            write_folder = Path(args.output_folder) / dataset / sequence
+        else:
+            write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
         renderings_folder = 'renderings'
         segmentations_folder = 'segmentations'
@@ -78,7 +75,7 @@ def main():
         # optical_flows = None
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(config, files, segms, write_folder, optical_flows=optical_flows)
+        run_tracking_on_sequence(config, files, segms, write_folder)
 
 
 if __name__ == "__main__":

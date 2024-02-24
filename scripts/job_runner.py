@@ -17,12 +17,8 @@ runners = {
 }
 
 
-def run_batch(configuration_name: str, sequences, dataset: Datasets):
+def run_batch(configuration_name: str, sequences, dataset: Datasets, output_folder: Path) -> None:
     configuration_path = Path('configs') / (configuration_name + '.py')
-
-    output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
-    output_folder = output_folder_root / configuration_name
-    output_folder = create_unused_folder(output_folder)
 
     args = []
     args.append("--config")
@@ -38,7 +34,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets):
 
     # Echo the arguments
     print("Running sbatch job.batch with arguments:", args)
-    subprocess.run(["sh", "scripts/job.batch"] + args)
+    subprocess.run(["sbatch", "scripts/job.batch"] + args)
 
 def create_unused_folder(output_folder: Path):
     if not os.path.exists(output_folder):
@@ -97,14 +93,19 @@ def main():
     }
 
     # Set batch length
-    batch_length = 3
+    batch_length = 1
 
     for configuration in configurations:
+
+        output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
+        output_folder = output_folder_root / configuration
+        output_folder = create_unused_folder(output_folder)
+
         for dataset in sequences:
             seq_index = 0
             while seq_index < len(sequences[dataset]):
                 batch_seqs = sequences[dataset][seq_index:seq_index + batch_length]
-                run_batch(configuration, batch_seqs, dataset)
+                run_batch(configuration, batch_seqs, dataset, output_folder)
                 seq_index += batch_length
 
 

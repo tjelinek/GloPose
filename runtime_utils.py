@@ -12,7 +12,14 @@ sys.path.append('OSTrack/S2DNet')
 from tracking6d import Tracking6D
 
 
-def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder, optical_flows=None):
+def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder):
+    if os.path.exists(write_folder):
+        shutil.rmtree(write_folder)
+
+    os.makedirs(write_folder)
+    os.makedirs(os.path.join(write_folder, 'imgs'))
+    shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
     print("Running tracking on dataset:", write_folder_path.parent.name)
