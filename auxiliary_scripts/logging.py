@@ -331,52 +331,14 @@ class WriteResults:
 
         # FLOW BACKVIEW ERROR VISUALIZATION
         for new_flow_arc in new_flow_arcs:
-            if observations_backview is None:
-                continue
+
             flow_arc_source, flow_arc_target = new_flow_arc
 
-            flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
-            flow_observation_backview = active_keyframes_backview.get_flows_between_frames(flow_arc_source,
-                                                                                           flow_arc_target)
+            values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
+            (matched_coords_frontview_2d, occlusion_mask_front,
+             seg_mask_front, target_front, template_front, template_front_overlay, step) = values_frontview
 
-            flow_frontview = flow_observation_frontview.observed_flow
-            flow_backview = flow_observation_backview.observed_flow
-
-            occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
-            occlusion_mask_back = self.convert_observation_to_numpy(flow_observation_backview.observed_flow_occlusion)
-
-            seg_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_segmentation)
-            seg_mask_back = self.convert_observation_to_numpy(flow_observation_backview.observed_flow_segmentation)
-
-            flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
-            flow_backview = flow_unit_coords_to_image_coords(flow_backview.clone())
-
-            template_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_source)
-            template_observation_backview = active_keyframes_backview.get_observations_for_keyframe(flow_arc_source)
-
-            target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
-            target_observation_backview = active_keyframes_backview.get_observations_for_keyframe(flow_arc_target)
-
-            template_front = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
-            template_back = self.convert_observation_to_numpy(template_observation_backview.observed_image)
-            target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
-            target_back = self.convert_observation_to_numpy(target_observation_backview.observed_image)
-
-            N = 20
-            step = template_front.shape[0] // N
-            matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=step)
-            matched_coords_backview = optical_flow_to_matched_coords(flow_backview, step=step)
-
-            matched_coords_frontview_2d = matched_coords_frontview.squeeze().view(2, -1).numpy(force=True)
-            matched_coords_backview_2d = matched_coords_backview.squeeze().view(2, -1).numpy(force=True)
-
-            template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front * 0)
-            template_back_overlay = self.overlay_occlusion(template_back, occlusion_mask_back * 0)
-
-            assert template_back_overlay.shape == template_front_overlay.shape
-            assert target_back.shape == target_front.shape
-
-            display_bounds = (0, target_front.shape[0], 0, target_back.shape[1])
+            display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
 
             fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 
@@ -387,14 +349,8 @@ class WriteResults:
             axs[0, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
             axs[0, 0].set_title('Template Front')
 
-            axs[0, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
-            axs[0, 1].set_title('Template Back')
-
             axs[1, 0].imshow(target_front * darkening_factor, extent=display_bounds)
             axs[1, 0].set_title('Target Front')
-
-            axs[1, 1].imshow(target_front * darkening_factor, extent=display_bounds)
-            axs[1, 1].set_title('Target Back')
 
             height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
             x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
@@ -405,9 +361,24 @@ class WriteResults:
             self.plot_matched_lines(axs[0, 0], axs[1, 0], template_coords, matched_coords_frontview_2d,
                                     occlusion_mask_front, occlusion_threshold, cmap='spring', marker='o',
                                     segment_mask=seg_mask_front)
-            self.plot_matched_lines(axs[0, 1], axs[1, 1], template_coords, matched_coords_backview_2d,
-                                    occlusion_mask_back, occlusion_threshold, cmap='cool', marker='x',
-                                    segment_mask=seg_mask_back)
+
+            if self.tracking_config.matching_target_to_backview:
+                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source, flow_arc_target)
+                (matched_coords_backview_2d, occlusion_mask_back,
+                 seg_mask_back, target_back, template_back, template_back_overlay, step) = values_backview
+
+                assert template_back_overlay.shape == template_front_overlay.shape
+                assert target_back.shape == target_front.shape
+
+                axs[0, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
+                axs[0, 1].set_title('Template Back')
+
+                axs[1, 1].imshow(target_front * darkening_factor, extent=display_bounds)
+                axs[1, 1].set_title('Target Back')
+
+                self.plot_matched_lines(axs[0, 1], axs[1, 1], template_coords, matched_coords_backview_2d,
+                                        occlusion_mask_back, occlusion_threshold, cmap='cool', marker='x',
+                                        segment_mask=seg_mask_back)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
@@ -550,6 +521,23 @@ class WriteResults:
             rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
+
+    def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
+        flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
+        flow_frontview = flow_observation_frontview.observed_flow
+        occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
+        seg_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_segmentation)
+        flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
+        template_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_source)
+        target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
+        template_front = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
+        target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
+        N = 20
+        step = template_front.shape[0] // N
+        matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=step)
+        matched_coords_frontview_2d = matched_coords_frontview.squeeze().view(2, -1).numpy(force=True)
+        template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front * 0)
+        return matched_coords_frontview_2d, occlusion_mask_front, seg_mask_front, target_front, template_front, template_front_overlay, step
 
     def add_loss_plot(self, ax_, frame_losses_, indices=None):
         if indices is None:
