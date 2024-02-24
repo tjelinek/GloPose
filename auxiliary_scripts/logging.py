@@ -1,3 +1,4 @@
+from collections import namedtuple
 from itertools import product
 
 from typing import Dict, Iterable, Tuple, List
@@ -13,7 +14,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
-from matplotlib.gridspec import GridSpec
 from matplotlib.patches import ConnectionPatch
 from torch import nn
 from pathlib import Path
@@ -36,6 +36,8 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 
 
 class WriteResults:
+    Metrics = namedtuple('Metrics', ['loss', 'rotation', 'translation',
+                                     'gt_rotation', 'gt_translation'])
 
     def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig):
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
@@ -72,6 +74,8 @@ class WriteResults:
         self.tensorboard_log_dir = Path(write_folder) / Path("logs")
         self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
         self.tensorboard_log = None
+
+        self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
 
     def __del__(self):
         self.all_input.release()
@@ -417,6 +421,18 @@ class WriteResults:
 
             gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
             gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
+
+            last_logged_sgd_rotation = rad_to_deg(quaternion_to_angle_axis(logged_sgd_quaternions[-1].detach().cpu(),
+                                                                           order=QuaternionCoeffOrder.WXYZ))[0, -1]
+
+            self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
+                                                        translation=logged_sgd_translations[-1][0, 0, -1],
+                                                        rotation=last_logged_sgd_rotation,
+                                                        gt_rotation=rad_to_deg(gt_rotation_current_frame),
+                                                        gt_translation=gt_translation_current_frame)
+
+            self.visualize_logged_metrics()
+
             self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
                                                frame_result.frame_losses, frame_i,
                                                gt_rotation=gt_rotation_current_frame,
@@ -534,6 +550,57 @@ class WriteResults:
             rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
+
+    def add_loss_plot(self, ax_, frame_losses_, indices=None):
+        if indices is None:
+            indices = range(len(frame_losses_))
+        ax_loss = ax_.twinx()
+        ax_loss.set_ylabel('Loss')
+        ax_loss.plot(indices, frame_losses_, color='red', label='Loss')
+        ax_loss.spines.right.set_position(("axes", 1.15))
+        ax_loss.legend(loc='upper left')
+
+    def visualize_logged_metrics(self):
+        fig, axs = plt.subplots(2, 1, figsize=(12, 15))
+        fig.subplots_adjust(hspace=0.4)
+        frame_indices = sorted(self.logged_metrics.keys())
+        losses = [self.logged_metrics[frame].loss for frame in frame_indices]
+        rotations = np.array([self.logged_metrics[frame].rotation.numpy(force=True) for frame in frame_indices])
+        translations = np.array([self.logged_metrics[frame].translation.numpy(force=True) for frame in frame_indices])
+        gt_rotations = np.array([self.logged_metrics[frame].gt_rotation.numpy(force=True) for frame in frame_indices])
+        gt_translations = np.array([self.logged_metrics[frame].gt_translation.numpy(force=True)
+                                    for frame in frame_indices])
+
+        # Plot Rotation
+        colors = ['yellow', 'green', 'blue']
+        axs[0].set_xticks(list(frame_indices))
+        axs[1].set_xticks(list(frame_indices))
+
+        for i, axis_label in enumerate(['X-axis', 'Y-axis', 'Z-axis']):
+            axs[0].plot(frame_indices, rotations[:, i], label=f'{axis_label} Rotation', color=colors[i])
+            axs[0].plot(frame_indices, gt_rotations[:, i], '--', label=f'GT {axis_label} Rotation', alpha=0.5,
+                        color=colors[i])
+        axs[0].set_title('Rotation per Frame')
+        axs[0].set_xlabel('Frame Index')
+        axs[0].set_ylabel('Rotation')
+        axs[0].legend(loc='lower right')
+        # Plot Translation
+        for i, axis_label in enumerate(['X-axis', 'Y-axis', 'Z-axis']):
+            axs[1].plot(frame_indices, translations[:, i], label=f'{axis_label} Translation', color=colors[i])
+            axs[1].plot(frame_indices, gt_translations[:, i], '--', label=f'GT {axis_label} Translation', alpha=0.5,
+                        color=colors[i])
+        axs[1].set_title('Translation per Frame')
+        axs[1].set_xlabel('Frame Index')
+        axs[1].set_ylabel('Translation')
+        axs[1].legend(loc='lower right')
+
+        self.add_loss_plot(axs[0], losses, indices=frame_indices)
+        self.add_loss_plot(axs[1], losses, indices=frame_indices)
+
+        (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
+        fig_path = Path(self.write_folder) / Path('rotations_by_epoch') / f'pose_per_frame.svg'
+        plt.savefig(fig_path)
+        plt.close()
 
     @staticmethod
     def convert_observation_to_numpy(observation):
@@ -724,27 +791,20 @@ class WriteResults:
             # Plot GT translations if provided
             if gt_translation is not None:
                 gt_translation_values = gt_translation.numpy(force=True)[i].repeat(len(translation_tensors))
-                ax3.plot(range(gt_translation_values.shape[0]), gt_translation_values,
+                ax3.plot(range(gt_translation_values.shape[0]), gt_translation_values, linestyle='dashed',
                          label=f"GT {translation_axis_labels[i]}", alpha=0.5, color=colors[i])
 
         ax3.set_xlabel('Gradient descend iteration')
         ax3.set_ylabel('Translation')
         ax3.legend(loc='lower left')
 
-        def add_loss_plot(ax_, frame_losses_):
-            ax_loss = ax_.twinx()
-            ax_loss.set_ylabel('Loss')
-            ax_loss.plot(range(len(frame_losses_)), frame_losses_, color='red', label='Loss')
-            ax_loss.spines.right.set_position(("axes", 1.15))
-            ax_loss.legend(loc='upper left')
-
         # Adjust the loss plot on the rotation axis for clarity
-        add_loss_plot(ax1, frame_losses)
-        add_loss_plot(ax3, frame_losses)
+        self.add_loss_plot(ax1, frame_losses)
+        self.add_loss_plot(ax3, frame_losses)
 
         # Saving the figure
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
-        fig_path = (Path(self.write_folder) / Path('rotations_by_epoch') / f'rotations_by_epoch_frame_{frame_i}.png')
+        fig_path = (Path(self.write_folder) / Path('rotations_by_epoch') / f'rotations_by_epoch_frame_{frame_i}.svg')
         plt.savefig(fig_path)
         plt.close()
 
