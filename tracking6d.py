@@ -293,7 +293,8 @@ class Tracking6D:
 
     def initialize_mesh(self):
         if self.config.gt_mesh_path is not None:
-            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_path), with_materials=True)
+            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_path), with_materials=True,
+                                                               heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
 
         if not self.config.optimize_shape:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
