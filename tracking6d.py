@@ -510,7 +510,8 @@ class Tracking6D:
                                                      renderer=self.rendering, renderer_backview=self.rendering_backview,
                                                      best_model=self.best_model, observations=all_frame_observations,
                                                      observations_backview=all_frame_observations_backview,
-                                                     gt_encoder=self.gt_encoder)
+                                                     gt_encoder=self.gt_encoder, gt_rotations=self.gt_rotations,
+                                                     gt_translations=self.gt_translations)
 
                     gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                         if self.gt_mesh_prototype is not None else None

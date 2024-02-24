@@ -311,7 +311,7 @@ class WriteResults:
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
                       logged_sgd_translations, logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder,
                       renderer: RenderingKaolin, renderer_backview, best_model, observations: FrameObservation,
-                      observations_backview: FrameObservation, gt_encoder: Encoder):
+                      observations_backview: FrameObservation, gt_encoder: Encoder, gt_rotations, gt_translations):
 
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
@@ -415,8 +415,12 @@ class WriteResults:
 
         with torch.no_grad():
 
+            gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
+            gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
             self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
-                                               frame_result.frame_losses, frame_i)
+                                               frame_result.frame_losses, frame_i,
+                                               gt_rotation=gt_rotation_current_frame,
+                                               gt_translation=gt_translation_current_frame)
 
             print(f"Keyframes: {active_keyframes.keyframes}, "
                   f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
@@ -683,56 +687,64 @@ class WriteResults:
             self.metrics_writer.writerow(row_results_rounded)
             self.metrics_log.flush()
 
-    def visualize_rotations_per_epoch(self, logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i):
-        fig, ax1 = plt.subplots()
-        fig.subplots_adjust(left=0.25, right=0.85)
+    def visualize_rotations_per_epoch(self, logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i,
+                                      gt_rotation=None, gt_translation=None):
+        fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(10, 12))  # Adjusted for two subplots, one above the other
+        fig.subplots_adjust(left=0.25, right=0.85, hspace=0.5)
 
+        # Current rotation and translation values
         translation_tensors = [t[0, 0, -1].detach().cpu() for t in logged_sgd_translations]
         rotation_tensors = [
             rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, -1]
             for q in logged_sgd_quaternions
         ]
 
+        # Plot rotations
         axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
+        colors = ['yellow', 'green', 'blue']
         for i in range(3):
             values = [tensor[i].item() for tensor in rotation_tensors]
-            ax1.plot(range(len(rotation_tensors)), values, label=axis_labels[i])
+            ax1.plot(range(len(rotation_tensors)), values, label=axis_labels[i], color=colors[i])
+            # Plot GT rotations if provided
+            if gt_rotation is not None:
+                gt_rotation_deg = rad_to_deg(gt_rotation)
+                gt_rotation_values = gt_rotation_deg.numpy(force=True)[i].repeat(len(rotation_tensors))
+                ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values,
+                         label=f"GT {axis_labels[i]}", alpha=0.5, color=colors[i])
 
         ax1.set_xlabel('Gradient descend iteration')
         ax1.set_ylabel('Rotation [degrees]')
+        ax1.legend(loc='lower left')
 
-        ax2 = ax1.twinx()
-        ax2.set_ylabel('Loss')
-        ax2.plot(range(len(frame_losses)), frame_losses, color='red', label='Loss')
-
-        ax3 = ax1.twinx()
-        ax3.set_ylabel('Translation')
+        # Plot translations
         translation_axis_labels = ['X-axis translation', 'Y-axis translation', 'Z-axis translation']
         for i in range(3):
             values = [tensor[i].item() for tensor in translation_tensors]
-            ax3.plot(range(len(translation_tensors)), values, label=translation_axis_labels[i], linestyle='dashed')
-        ax3.spines.left.set_position(("axes", -0.2))
-        ax3.spines.left.set_visible(True)
-        ax3.spines.right.set_visible(False)
-        ax3.yaxis.set_label_position('left')
-        ax3.yaxis.set_ticks_position('left')
+            ax3.plot(range(len(translation_tensors)), values, label=translation_axis_labels[i], color=colors[i])
+            # Plot GT translations if provided
+            if gt_translation is not None:
+                gt_translation_values = gt_translation.numpy(force=True)[i].repeat(len(translation_tensors))
+                ax3.plot(range(gt_translation_values.shape[0]), gt_translation_values,
+                         label=f"GT {translation_axis_labels[i]}", alpha=0.5, color=colors[i])
 
-        # Create a joint legend
-        handles, labels = [], []
-        for ax in [ax1, ax2, ax3]:
-            h, label = ax.get_legend_handles_labels()
-            handles.extend(h)
-            labels.extend(label)
+        ax3.set_xlabel('Gradient descend iteration')
+        ax3.set_ylabel('Translation')
+        ax3.legend(loc='lower left')
 
-            ax_min, ax_max = ax.get_ylim()
-            ax_range = max(abs(ax_min), abs(ax_max))
-            ax.set_ylim((-ax_range, ax_range))
+        def add_loss_plot(ax_, frame_losses_):
+            ax_loss = ax_.twinx()
+            ax_loss.set_ylabel('Loss')
+            ax_loss.plot(range(len(frame_losses_)), frame_losses_, color='red', label='Loss')
+            ax_loss.spines.right.set_position(("axes", 1.15))
+            ax_loss.legend(loc='upper left')
 
-        fig.legend(handles, labels, loc='upper right')
+        # Adjust the loss plot on the rotation axis for clarity
+        add_loss_plot(ax1, frame_losses)
+        add_loss_plot(ax3, frame_losses)
 
+        # Saving the figure
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
-        fig_path = (Path(self.write_folder) /
-                    Path('rotations_by_epoch') / ('rotations_by_epoch_frame_' + str(frame_i) + '.png'))
+        fig_path = (Path(self.write_folder) / Path('rotations_by_epoch') / f'rotations_by_epoch_frame_{frame_i}.png')
         plt.savefig(fig_path)
         plt.close()
 
