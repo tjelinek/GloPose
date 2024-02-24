@@ -86,6 +86,7 @@ class Tracking6D:
         self.net = None
         self.short_flow_model: Optional[FlowProvider] = None
         self.long_flow_provider: Optional[MFTFlowProvider] = None
+        self.long_flow_provider_backview: Optional[MFTFlowProvider] = None
 
         # Ground truth related
         self.gt_rotations = None
@@ -96,8 +97,6 @@ class Tracking6D:
         self.active_keyframes_backview: Optional[KeyframeBuffer] = None
 
         # Flow tracks
-        self.need_to_init_mft = True
-        self.need_to_init_mft_backview = True
         self.flow_tracks_inits = [0]
 
         # Tracker
@@ -155,9 +154,12 @@ class Tracking6D:
     def initialize_renderer(self):
         self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
 
-    def initialize_tracker(self, bbox0, file0, init_mask):
-        if type(bbox0) is dict:
-            self.tracker = PrecomputedTracker(self.config.image_downsample, self.config.max_width, bbox0, self.feat)
+        config_back_view = copy.deepcopy(self.config)
+        config_back_view.camera_position = tuple(-el for el in config_back_view.camera_position)
+
+        self.rendering_backview = RenderingKaolin(self.config, self.faces,
+                                                  self.shape[-1], self.shape[-2]).to(self.device)
+        self.rendering_backview.backview = True
         else:
             if self.config.tracker_type == 'csrt':
                 self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
@@ -359,6 +361,9 @@ class Tracking6D:
         # For long_flow_model
         if self.config.long_flow_model in long_flow_models:
             self.long_flow_provider = long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg)
+            if self.config.matching_target_to_backview:
+                self.long_flow_provider_backview = (
+                    long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg))
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
@@ -389,15 +394,14 @@ class Tracking6D:
                 next_tracker_frame = files[stepi]  # Name of file
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
+            new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
 
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, stepi)
-
-            new_frame_observation_backview = self.tracker.next(next_tracker_frame)
-            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_backview, stepi)
+            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, stepi)
 
             start = time.time()
 
-            b0 = [0, self.shape[-1], 0, self.shape[-2]]
+            b0 = (0, self.shape[-1], 0, self.shape[-2])
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             with torch.no_grad():
@@ -430,13 +434,16 @@ class Tracking6D:
                                                            occlusions, uncertainties, flow_source_frame,
                                                            flow_target_frame)
 
-                    if not already_present:
-                        self.active_keyframes_backview.add_new_flow(observed_flow,
-                                                                    new_frame_observation_backview.observed_segmentation,
-                                                                    occlusions, uncertainties, flow_source_frame,
-                                                                    flow_target_frame)
+                    observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
+                                                                                                flow_target_frame,
+                                                                                                mode='long',
+                                                                                                backview=True)
 
-            active_buffer_indices = list(range(len(self.active_keyframes.keyframes)))
+                    if not already_present:
+                        self.active_keyframes_backview.add_new_flow(observed_flow_back,
+                                                                    new_frame_observation_from_back.observed_segmentation,
+                                                                    occlusions_back, uncertainties_back,
+                                                                    flow_source_frame, flow_target_frame)
 
             self.last_encoder_result = EncoderResult(*[tensor.clone()
                                                        if tensor is not None else None for tensor in
@@ -447,23 +454,14 @@ class Tracking6D:
 
             all_frame_observations: FrameObservation = \
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
-            all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
-            flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
-
             all_frame_observations_backview: FrameObservation = \
-                self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
-            all_flow_observations_backview: FlowObservation = self.active_keyframes_backview.get_flows_observations(
-                bounding_box=b0)
+                (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
 
-            all_frame_observations = replace(
-                all_frame_observations,
-                observed_image=torch.cat(
-                    [all_frame_observations.observed_image, all_frame_observations_backview.observed_image], dim=1),
-                observed_image_features=torch.cat([all_frame_observations.observed_image_features,
-                                                   all_frame_observations_backview.observed_image_features], dim=1),
-                observed_segmentation=torch.cat([all_frame_observations.observed_segmentation,
-                                                 all_frame_observations_backview.observed_segmentation], dim=1)
-            )
+            all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
+            all_flow_observations_backview: FlowObservation = \
+                (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
+
+            flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
             all_flow_observations = replace(
                 all_flow_observations,
@@ -542,11 +540,20 @@ class Tracking6D:
                       f"{self.flow_tracks_inits}")
                 if fraction_points_visible < self.config.points_fraction_visible_new_track:
                     self.flow_tracks_inits.append(stepi)
-                    self.need_to_init_mft = True
+                    self.long_flow_provider.need_to_init = True
+
+            while self.active_keyframes.G.number_of_edges() > 8:
+                edges = sorted(list(self.active_keyframes.G.edges))
+                self.active_keyframes.G.remove_edge(*edges[0])
+                self.active_keyframes_backview.G.remove_edge(*edges[0])
+                print(f"Removed edge {edges[0]}")
 
         return self.best_model
 
-    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
+    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short', backview=False):
+
+        assert not backview or self.config.matching_target_to_backview  # Ensures long flow model is initialized
+
         occlusion = None
         uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
@@ -565,11 +572,15 @@ class Tracking6D:
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
+            b0 = (0, self.config.max_width, 0, self.config.max_width)
+
             last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
             last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
 
-            last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(flow_target_frame)
-            last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(flow_source_frame)
+            last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                flow_target_frame, b0)
+            last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                flow_source_frame, b0)
 
             image_new_x255 = last_keyframe_observations.observed_image.float() * 255
             image_prev_x255 = last_flowframe_observations.observed_image.float() * 255
@@ -581,21 +592,25 @@ class Tracking6D:
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
                         flow_target_frame == max(self.active_keyframes.keyframes))
 
-                if self.config.matching_target_to_backview:
-                    template = torch.cat([image_prev_x255, image_prev_x255_back], dim=-1)
-                    target = torch.cat([image_new_x255, image_new_x255_back], dim=-1)
+                if backview:
+                    template = image_prev_x255_back
+                    target = image_new_x255
+
+                    flow_provider = self.long_flow_provider_backview
                 else:
                     template = image_prev_x255
                     target = image_new_x255
 
-                if self.need_to_init_mft and self.flow_tracks_inits[-1] == flow_source_frame:
-                    self.long_flow_provider.init(template)
-                    self.need_to_init_mft = False
+                    flow_provider = self.long_flow_provider
 
-                observed_flow, occlusion, uncertainty = self.long_flow_provider.next_flow(template, target)
+                if flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
+                    flow_provider.init(template)
+                    flow_provider.need_to_init = False
+
+                observed_flow, occlusion, uncertainty = flow_provider.next_flow(template, target)
 
             elif mode == 'short':
-                observed_flow = self.short_flow_modl(image_prev_x255, image_new_x255)
+                observed_flow = self.short_flow_model.next_flow(image_prev_x255, image_new_x255)
             else:
                 raise ValueError("Unknown mode")
 
@@ -1032,9 +1047,6 @@ class Tracking6D:
 
         renders, rendered_silhouettes, rendered_flow_result = inference_result
         renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
-
-        renders = torch.cat([renders, renders_backview], dim=1)
-        rendered_silhouettes = torch.cat([rendered_silhouettes, rendered_silhouettes_backview], dim=1)
 
         rendered_flow_result = rendered_flow_result._replace(theoretical_flow=torch.cat(
             [rendered_flow_result.theoretical_flow,
