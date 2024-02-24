@@ -435,12 +435,12 @@ class Tracking6D:
                                                            occlusions, uncertainties, flow_source_frame,
                                                            flow_target_frame)
 
-                    observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
-                                                                                                flow_target_frame,
-                                                                                                mode='long',
-                                                                                                backview=True)
+                    if self.config.matching_target_to_backview:
+                        observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
+                                                                                                    flow_target_frame,
+                                                                                                    mode='long',
+                                                                                                    backview=True)
 
-                    if not already_present:
                         self.active_keyframes_backview.add_new_flow(observed_flow_back,
                                                                     new_frame_observation_from_back.observed_segmentation,
                                                                     occlusions_back, uncertainties_back,
@@ -455,27 +455,33 @@ class Tracking6D:
 
             all_frame_observations: FrameObservation = \
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
-            all_frame_observations_backview: FrameObservation = \
-                (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
-
             all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
-            all_flow_observations_backview: FlowObservation = \
-                (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
+
+            all_frame_observations_backview = None
+            all_flow_observations_backview = None
 
             flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
-            all_flow_observations = replace(
-                all_flow_observations,
-                observed_flow=torch.cat(
-                    [all_flow_observations.observed_flow, all_flow_observations_backview.observed_flow], dim=1),
-                observed_flow_occlusion=torch.cat([all_flow_observations.observed_flow_occlusion,
-                                                   all_flow_observations_backview.observed_flow_occlusion], dim=1),
-                observed_flow_segmentation=torch.cat([all_flow_observations.observed_flow_segmentation,
-                                                      all_flow_observations_backview.observed_flow_segmentation],
-                                                     dim=1),
-                observed_flow_uncertainty=torch.cat([all_flow_observations.observed_flow_uncertainty,
-                                                     all_flow_observations_backview.observed_flow_uncertainty], dim=1)
-            )
+            if self.config.matching_target_to_backview:
+                all_frame_observations_backview: FrameObservation = \
+                    (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
+                all_flow_observations_backview: FlowObservation = \
+                    (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
+
+                all_flow_observations = replace(
+                    all_flow_observations,
+                    observed_flow=torch.cat(
+                        [all_flow_observations.observed_flow, all_flow_observations_backview.observed_flow],
+                        dim=1),
+                    observed_flow_occlusion=torch.cat([all_flow_observations.observed_flow_occlusion,
+                                                       all_flow_observations_backview.observed_flow_occlusion], dim=1),
+                    observed_flow_segmentation=torch.cat([all_flow_observations.observed_flow_segmentation,
+                                                          all_flow_observations_backview.observed_flow_segmentation],
+                                                         dim=1),
+                    observed_flow_uncertainty=torch.cat([all_flow_observations.observed_flow_uncertainty,
+                                                         all_flow_observations_backview.observed_flow_uncertainty],
+                                                        dim=1)
+                )
 
             frame_result = self.apply(all_frame_observations, all_flow_observations, self.active_keyframes.keyframes,
                                       self.active_keyframes.flow_frames, flow_arcs, frame_index=stepi)
@@ -546,7 +552,8 @@ class Tracking6D:
             while self.active_keyframes.G.number_of_edges() > self.config.max_keyframes:
                 edges = sorted(list(self.active_keyframes.G.edges))
                 self.active_keyframes.G.remove_edge(*edges[0])
-                self.active_keyframes_backview.G.remove_edge(*edges[0])
+                if self.config.matching_target_to_backview:
+                    self.active_keyframes_backview.G.remove_edge(*edges[0])
                 print(f"Removed edge {edges[0]}")
 
         return self.best_model
@@ -1047,21 +1054,23 @@ class Tracking6D:
                                                                 self.shape[-2])
 
         renders, rendered_silhouettes, rendered_flow_result = inference_result
-        renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
 
-        rendered_flow_result = rendered_flow_result._replace(theoretical_flow=torch.cat(
-            [rendered_flow_result.theoretical_flow,
-             rendered_flow_result_backview.theoretical_flow],
-            dim=1),
-            rendered_flow_segmentation=torch.cat(
-                [rendered_flow_result.rendered_flow_segmentation,
-                 rendered_flow_result_backview.rendered_flow_segmentation],
+        if self.config.matching_target_to_backview:
+            renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
+
+            rendered_flow_result = rendered_flow_result._replace(theoretical_flow=torch.cat(
+                [rendered_flow_result.theoretical_flow,
+                 rendered_flow_result_backview.theoretical_flow],
                 dim=1),
-            rendered_flow_occlusion=torch.cat(
-                [rendered_flow_result.rendered_flow_occlusion,
-                 rendered_flow_result_backview.rendered_flow_occlusion],
-                dim=1)
-        )
+                rendered_flow_segmentation=torch.cat(
+                    [rendered_flow_result.rendered_flow_segmentation,
+                     rendered_flow_result_backview.rendered_flow_segmentation],
+                    dim=1),
+                rendered_flow_occlusion=torch.cat(
+                    [rendered_flow_result.rendered_flow_occlusion,
+                     rendered_flow_result_backview.rendered_flow_occlusion],
+                    dim=1)
+            )
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function

@@ -776,7 +776,7 @@ class WriteResults:
             if gt_rotation is not None:
                 gt_rotation_deg = rad_to_deg(gt_rotation)
                 gt_rotation_values = gt_rotation_deg.numpy(force=True)[i].repeat(len(rotation_tensors))
-                ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values,
+                ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values, linestyle='dashed',
                          label=f"GT {axis_labels[i]}", alpha=0.5, color=colors[i])
 
         ax1.set_xlabel('Gradient descend iteration')
@@ -984,37 +984,26 @@ class WriteResults:
             target_frame = flow_arcs[1]
 
             flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
-            flow_observation_backview = keyframe_buffer_backview.get_flows_between_frames(source_frame, target_frame)
             source_frame_observation = keyframe_buffer_backview.get_observations_for_keyframe(source_frame)
-            source_frame_observation_backview = keyframe_buffer_backview.get_observations_for_keyframe(source_frame)
             target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
 
             observed_flow = flow_observation.observed_flow.cpu()
             observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
-            observed_flow_backview = flow_observation_backview.observed_flow.cpu()
-            observed_flow_occlusions_backview = flow_observation_backview.observed_flow_occlusion.cpu()
             source_frame_image = source_frame_observation.observed_image.cpu()
             source_frame_segment = source_frame_observation.observed_segmentation.cpu()
-            source_frame_image_backview = source_frame_observation_backview.observed_image.cpu()
-            source_frame_segment_backview = source_frame_observation_backview.observed_segmentation.cpu()
 
             target_frame_image = target_frame_observation.observed_image.cpu()
             target_frame_segment = target_frame_observation.observed_segmentation.cpu()
 
             observed_flow = flow_unit_coords_to_image_coords(observed_flow)
             observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
-            observed_flow_backview = flow_unit_coords_to_image_coords(observed_flow_backview)
-            observed_flow_backview_reordered = observed_flow_backview.squeeze().permute(1, 2, 0).numpy()
 
             source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
-            source_image_backview_discrete: torch.Tensor = (source_frame_image_backview * 255).to(torch.uint8).squeeze()
             target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
 
             source_frame_segment_squeezed = source_frame_segment.squeeze()
-            source_frame_segment_backview_squeezed = source_frame_segment.squeeze()
             target_frame_segment_squeezed = target_frame_segment.squeeze()
             observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
-            observed_flow_occlusions_backview_squeezed = observed_flow_occlusions_backview.squeeze()
 
             flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
                                                            [observed_flow_reordered], None,
