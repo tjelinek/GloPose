@@ -543,7 +543,7 @@ class Tracking6D:
                     self.flow_tracks_inits.append(stepi)
                     self.long_flow_provider.need_to_init = True
 
-            while self.active_keyframes.G.number_of_edges() > 8:
+            while self.active_keyframes.G.number_of_edges() > self.config.max_keyframes:
                 edges = sorted(list(self.active_keyframes.G.edges))
                 self.active_keyframes.G.remove_edge(*edges[0])
                 self.active_keyframes_backview.G.remove_edge(*edges[0])
