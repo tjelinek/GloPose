@@ -8,10 +8,7 @@ import numpy as np
 import torch
 import yaml
 from kornia.morphology import erosion
-from scipy.ndimage import center_of_mass
 from skimage.measure import label, regionprops
-from torch import Tensor
-from typing import Tuple
 
 from main_settings import tmp_folder
 from tracker_config import TrackerConfig
