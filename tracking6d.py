@@ -118,7 +118,6 @@ class Tracking6D:
         self.initialize_feature_extractor()
         self.initialize_gt_texture()
         self.initialize_gt_tracks()
-        self.initialize_tracker(bbox0, file0, init_mask)
 
         self.shape = (self.config.max_width, self.config.max_width)
 
@@ -160,13 +159,14 @@ class Tracking6D:
         self.rendering_backview = RenderingKaolin(self.config, self.faces,
                                                   self.shape[-1], self.shape[-2]).to(self.device)
         self.rendering_backview.backview = True
-        else:
-            if self.config.tracker_type == 'csrt':
-                self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
-            elif self.config.tracker_type == 'ostrack':
-                self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
-            else:  # d3s
-                self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
+
+    def initialize_tracker(self):
+        if self.config.tracker_type == 'csrt':
+            self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
+        elif self.config.tracker_type == 'ostrack':
+            self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
+        else:  # d3s
+            self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
 
     def initialize_gt_texture(self):
         if self.config.gt_texture_path is not None:
