@@ -335,22 +335,25 @@ class WriteResults:
             flow_arc_source, flow_arc_target = new_flow_arc
 
             values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
-            (matched_coords_frontview_2d, occlusion_mask_front,
-             seg_mask_front, target_front, template_front, template_front_overlay, step) = values_frontview
+            (occlusion_mask_front, seg_mask_front, target_front,
+             template_front, template_front_overlay, step, flow_frontview) = values_frontview
 
             display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
 
-            fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+            fig, axs = plt.subplots(3, 2, figsize=(8, 8))
 
             for ax in axs.flat:
                 ax.axis('off')
 
             darkening_factor = 0.5
-            axs[0, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
+            axs[0, 0].imshow(template_front * darkening_factor, extent=display_bounds)
             axs[0, 0].set_title('Template Front')
 
-            axs[1, 0].imshow(target_front * darkening_factor, extent=display_bounds)
-            axs[1, 0].set_title('Target Front')
+            axs[1, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
+            axs[1, 0].set_title('Template Front Occlusion')
+
+            axs[2, 0].imshow(target_front * darkening_factor, extent=display_bounds)
+            axs[2, 0].set_title('Target Front')
 
             height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
             x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
@@ -358,26 +361,27 @@ class WriteResults:
 
             # Plot lines on the target front and back view subplots
             occlusion_threshold = self.tracking_config.occlusion_coef_threshold
-            self.plot_matched_lines(axs[0, 0], axs[1, 0], template_coords, matched_coords_frontview_2d,
-                                    occlusion_mask_front, occlusion_threshold, cmap='spring', marker='o',
-                                    segment_mask=seg_mask_front)
+            self.plot_matched_lines(axs[0, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
+                                    flow_frontview, cmap='spring', marker='o', segment_mask=seg_mask_front)
 
             if self.tracking_config.matching_target_to_backview:
                 values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source, flow_arc_target)
-                (matched_coords_backview_2d, occlusion_mask_back,
-                 seg_mask_back, target_back, template_back, template_back_overlay, step) = values_backview
+                (occlusion_mask_back, seg_mask_back, target_back, template_back,
+                 template_back_overlay, step, flow_backview) = values_backview
 
                 assert template_back_overlay.shape == template_front_overlay.shape
                 assert target_back.shape == target_front.shape
 
-                axs[0, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
+                axs[0, 1].imshow(template_back * darkening_factor, extent=display_bounds)
                 axs[0, 1].set_title('Template Back')
 
-                axs[1, 1].imshow(target_front * darkening_factor, extent=display_bounds)
-                axs[1, 1].set_title('Target Back')
+                axs[1, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
+                axs[1, 1].set_title('Template Back Occlusion')
 
-                self.plot_matched_lines(axs[0, 1], axs[1, 1], template_coords, matched_coords_backview_2d,
-                                        occlusion_mask_back, occlusion_threshold, cmap='cool', marker='x',
+                axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
+                axs[2, 1].set_title('Target Back')
+
+                self.plot_matched_lines(axs[0, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold, flow_backview, cmap='cool', marker='x',
                                         segment_mask=seg_mask_back)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
@@ -532,12 +536,15 @@ class WriteResults:
         target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
         template_front = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
         target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
+
         N = 20
         step = template_front.shape[0] // N
-        matched_coords_frontview = optical_flow_to_matched_coords(flow_frontview, step=step)
-        matched_coords_frontview_2d = matched_coords_frontview.squeeze().view(2, -1).numpy(force=True)
-        template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front * 0)
-        return matched_coords_frontview_2d, occlusion_mask_front, seg_mask_front, target_front, template_front, template_front_overlay, step
+
+        template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front >=
+                                                        self.tracking_config.occlusion_coef_threshold)
+
+        return (occlusion_mask_front, seg_mask_front, target_front,
+                template_front, template_front_overlay, step, flow_frontview)
 
     def add_loss_plot(self, ax_, frame_losses_, indices=None):
         if indices is None:
@@ -616,7 +623,7 @@ class WriteResults:
         return overlay_image.astype(image.dtype)
 
     @staticmethod
-    def plot_matched_lines(ax1, ax2, source_coords, target_coords, occlusion_mask, occl_threshold, cmap='jet',
+    def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet',
                            marker='o', segment_mask=None, segment_threshold=0.99):
         """
         Draws lines from source coordinates in ax1 to target coordinates in ax2.
@@ -628,29 +635,38 @@ class WriteResults:
         - cmap: Colormap used for plotting.
         - marker: Marker style for the points.
         """
+        valid_coords = [(cs, ct) for (cs, ct) in source_coords.transpose()
+                        if segment_mask is None or segment_mask[-cs[0], cs[1]] > segment_threshold]
 
-        valid_coords = [(cs, ct) for (cs, ct) in zip(source_coords.transpose(), target_coords.transpose())
-                        if segment_mask is None or segment_mask[cs[0], cs[1]] > segment_threshold]
+        flow = flow.squeeze()
 
         norm = Normalize(vmin=0, vmax=len(valid_coords))
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
-        for i, (xy1, xy2) in enumerate(valid_coords):
+        for i, xy1 in enumerate(valid_coords):
             # Create a ConnectionPatch for each pair of points
             color = mappable.to_rgba(i)
 
-            ax1.scatter(xy1[0], xy1[1], color=color, marker=marker, alpha=0.8, s=1.5)
-            ax1.text(xy1[0], xy1[1], str(i), color='black', fontsize=1, ha='center', va='center')
+            y1, x1 = xy1
 
-            if (occlusion_mask[xy1[0], xy1[1]] <= occl_threshold and
-                    (segment_mask is None or segment_mask[xy1[0], xy1[1]]) > segment_threshold):
-                con = ConnectionPatch(xyA=xy1, xyB=xy2, coordsA="data", coordsB="data",
+            delta_x = flow[0, -y1, x1].item()
+            delta_y = flow[1, -y1, x1].item()
+
+            y2_f = y1 - delta_y
+            x2_f = x1 + delta_x
+
+            ax1.scatter(x1, y1, color=color, marker=marker, alpha=0.8, s=1.5)
+            ax1.text(x1, y1, str(i), color='black', fontsize=1, ha='center', va='center')
+
+            if (occlusion_mask[-y1, x1] <= occl_threshold and
+                    (segment_mask is None or segment_mask[-y1, x1]) > segment_threshold):
+                con = ConnectionPatch(xyA=(x1, y1), xyB=(x2_f, y2_f), coordsA="data", coordsB="data",
                                       axesA=ax2, axesB=ax2, color=color, lw=0.5, alpha=0.8)
                 ax2.add_artist(con)
 
-                ax2.scatter(xy2[0], xy2[1], color=color, marker=marker, alpha=0.8, s=1.5)
-                ax2.text(xy2[0], xy2[1], str(i), color='black', fontsize=1, ha='center', va='center')
+                ax2.scatter(x2_f, y2_f, color=color, marker=marker, alpha=0.8, s=1.5)
+                ax2.text(x2_f, y2_f, str(i), color='black', fontsize=1, ha='center', va='center')
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
