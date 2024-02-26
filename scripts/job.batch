@@ -49,4 +49,4 @@ fi
 
 ml LMDB/0.9.29-GCCcore-11.2.0 timm/0.9.2-foss-2022a-CUDA-11.7.0 tensorboard/2.11.0-foss-2022a kornia/0.6.12-foss-2022a-CUDA-11.7.0 kaolin/0.14.0-foss-2022a-CUDA-11.7.0 typing-extensions/4.4.0-GCCcore-11.2.0 torchvision/0.15.2-foss-2022a-CUDA-11.7.0 PyTorch3D/0.7.4-foss-2022a-CUDA-11.7.0 OpenCV/4.6.0-foss-2022a-CUDA-11.7.0-contrib scikit-image/0.19.3-foss-2022a visdom/0.2.4-foss-2022a-PyTorch-2.0.1 COLMAP/3.8-foss-2022a-CUDA-11.7.0 CeresSolver/2.2.0-foss-2022a-CUDA-11.7.0 pyceres/1.0-foss-2022a-CUDA-11.7.0 pycolmap/0.4.0-foss-2022a-CUDA-11.7.0
 
-python "$dataset_runner" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" >> "${output_folder}/${experiment}.log" 2>&1
+python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" #>> "${output_folder}/${experiment}.log" 2>&1
