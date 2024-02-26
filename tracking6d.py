@@ -379,10 +379,10 @@ class Tracking6D:
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
                                           tracking_config=self.config)
 
-        new_frame_observation = self.tracker.next(0)
-        new_frame_observation_from_back = self.tracker_backview.next(0)
-        self.active_keyframes.add_new_keyframe_observation(new_frame_observation, 0)
-        self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, 0)
+        template_frame_observation = self.tracker.next(0)
+        template_frame_observation_from_back = self.tracker_backview.next(0)
+        self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
+        self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
 
         self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
@@ -431,7 +431,9 @@ class Tracking6D:
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
                                                                                  mode='long')
                     if not already_present:
-                        self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
+                        segment_front = self.active_keyframes.get_observations_for_keyframe(
+                            flow_source_frame).observed_segmentation
+                        self.active_keyframes.add_new_flow(observed_flow, segment_front,
                                                            occlusions, uncertainties, flow_source_frame,
                                                            flow_target_frame)
 
@@ -440,11 +442,13 @@ class Tracking6D:
                                                                                                     flow_target_frame,
                                                                                                     mode='long',
                                                                                                     backview=True)
-
-                        self.active_keyframes_backview.add_new_flow(observed_flow_back,
-                                                                    new_frame_observation_from_back.observed_segmentation,
-                                                                    occlusions_back, uncertainties_back,
-                                                                    flow_source_frame, flow_target_frame)
+                        if not already_present:
+                            segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                                flow_source_frame).observed_segmentation
+                            self.active_keyframes_backview.add_new_flow(observed_flow_back,
+                                                                        segment_back,
+                                                                        occlusions_back, uncertainties_back,
+                                                                        flow_source_frame, flow_target_frame)
 
             self.last_encoder_result = EncoderResult(*[tensor.clone()
                                                        if tensor is not None else None for tensor in
