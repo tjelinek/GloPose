@@ -34,6 +34,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
     # Echo the arguments
     print("Running sbatch job.batch with arguments:", args)
+    print('----------------------------------------')
     subprocess.run(["sbatch", "scripts/job.batch"] + args)
 
 def create_unused_folder(output_folder: Path):
