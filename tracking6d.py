@@ -407,13 +407,15 @@ class Tracking6D:
 
             with torch.no_grad():
                 if self.config.add_flow_arcs_strategy == 'all-previous':
-                    flow_arcs = {(flow_source, stepi) for flow_source in
-                                 set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
-                                 if flow_source < stepi}
-                else:  # self.config.add_flow_arcs_strategy == 'single-previous'
-                    flow_arcs = {(stepi - 1, stepi)}
+                    short_flow_arcs = {(flow_source, stepi) for flow_source in
+                                       set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
+                                       if flow_source < stepi}
+                elif self.config.add_flow_arcs_strategy == 'single-previous':
+                    short_flow_arcs = {(stepi - 1, stepi)}
+                elif self.config.add_flow_arcs_strategy is None:
+                    short_flow_arcs = set()
 
-                for flow_arc in flow_arcs:
+                for flow_arc in short_flow_arcs:
                     flow_source_frame, flow_target_frame = flow_arc
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
 
@@ -424,13 +426,9 @@ class Tracking6D:
                     long_flow_arc = (self.flow_tracks_inits[-1], stepi)
                     flow_source_frame, flow_target_frame = long_flow_arc
 
-                    already_present = long_flow_arc in flow_arcs
-
-                    flow_arcs |= {(flow_source_frame, flow_target_frame)}
-
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
                                                                                  mode='long')
-                    if not already_present:
+                    if long_flow_arc not in self.active_keyframes.G.edges:
                         segment_front = self.active_keyframes.get_observations_for_keyframe(
                             flow_source_frame).observed_segmentation
                         self.active_keyframes.add_new_flow(observed_flow, segment_front,
@@ -442,7 +440,7 @@ class Tracking6D:
                                                                                                     flow_target_frame,
                                                                                                     mode='long',
                                                                                                     backview=True)
-                        if not already_present:
+                        if long_flow_arc not in self.active_keyframes_backview.G.edges:
                             segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
                                 flow_source_frame).observed_segmentation
                             self.active_keyframes_backview.add_new_flow(observed_flow_back,

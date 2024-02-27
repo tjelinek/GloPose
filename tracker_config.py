@@ -109,7 +109,7 @@ class TrackerConfig:
     lr_scheduler_patience = 5
 
     # Optical flow settings
-    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
+    add_flow_arcs_strategy: str = None  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
