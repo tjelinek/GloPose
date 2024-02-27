@@ -46,8 +46,23 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
         camera_up_direction = torch.Tensor((0, 1, 0))[None]
+        self.register_buffer('camera_up', camera_up_direction)
+
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
                                                                                 camera_up_direction)
+        halfsize = torch.Tensor([0.5*width])
+        FOV = 45.
+        tanfov = torch.tan(torch.deg2rad(torch.Tensor([FOV/2.0])))
+        fx = halfsize / tanfov
+        fy = halfsize / tanfov
+        camera_intrinsics = torch.Tensor([[fx, 0., width / 2.0],
+                                          [0., fy, height / 2.0],
+                                          [0., 0., 1.]])
+
+        breakpoint()
+
+        self.register_buffer('camera_intrinsics', camera_intrinsics)
+
         self.register_buffer('camera_rot', camera_rot)
         self.set_faces(faces)
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).cuda()

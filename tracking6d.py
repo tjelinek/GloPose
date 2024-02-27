@@ -19,7 +19,7 @@ from typing import Optional, Tuple, Any
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider
+    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -1156,7 +1156,7 @@ class Tracking6D:
 
     def essential_matrix_pre_initialization(self, observations: FrameObservation, flow_observations: FlowObservation,
                                             flow_arcs, frame_losses):
-        n_samples_for_ransac = 1000
+        n_samples_for_ransac = int(1e6)
         import pygcransac
         import cv2
         from kornia.geometry import rotation_matrix_to_angle_axis
@@ -1175,17 +1175,16 @@ class Tracking6D:
 
             sampled_points_mask = random_points_from_binary_mask(not_occluded_object_points_mask, n_samples_for_ransac)
 
-            optical_flow = flow_observations.observed_flow[0, flow_arc_idx]
+            optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[0, flow_arc_idx]
 
             src_pts = torch.nonzero(sampled_points_mask[0])
             dst_pts = optical_flow[:, src_pts[:, 0], src_pts[:, 1]].permute(1, 0) + src_pts
 
             src_pts_np = src_pts.numpy(force=True).astype(np.float64)
             dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
-            correspondences = np.concatenate([src_pts_np, dst_pts_np], axis=1)
+            correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
 
-            E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 3.0)
-            # pose, mask = pygcransac.find6DPose(correspondences, height, width, height, width, 3.0)
+            E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 1e-12)
 
             R1, R2, t = cv2.decomposeEssentialMat(E)
             r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
@@ -1193,5 +1192,56 @@ class Tracking6D:
 
             r1_deg = rad_to_deg(r1)
             r2_deg = rad_to_deg(r2)
+
+            T1 = torch.zeros(1, 4, 4)
+            T1[:, 3, 3] = 1.
+            T1[0, 0:3, 0:3] = torch.from_numpy(R1)
+            T1[0, 3:, 0:3] = torch.from_numpy(t.T)
+            T1 = T1.cuda()
+
+            T2 = torch.zeros(1, 4, 4)
+            T2[:, 3, 3] = 1.
+            T2[0, 0:3, 0:3] = torch.from_numpy(R2)
+            T2[0, 3:, 0:3] = torch.from_numpy(t.T)
+            T2 = T2.cuda()
+
+            # W: World coords -> camera coords
+            W = kaolin.render.camera.generate_transformation_matrix(camera_position=self.rendering.camera_trans,
+                                                                    camera_up_direction=self.rendering.camera_up,
+                                                                    look_at=self.rendering.obj_center)
+
+            W_hom = torch.zeros(1, 4, 4).cuda()
+            W_hom[:, 3, 3] = 1.
+            W_hom[:, :, :3] = W
+
+            # Inverse of world ->camera matrix
+            W_rot = W[:, 0:3, :]
+            W_trans = W[:, [3], :]
+            W_inv = torch.zeros(1, 4, 4).cuda()
+            W_inv[0, 3, 3] = 1.0
+            W_inv[:, 0:3, 0:3] = W_rot.transpose(1, 2)
+            W_inv[:, 3:, 0:3] = (-W_rot.transpose(1, 2) @ W_trans.transpose(1, 2)).transpose(1, 2)
+
+            # Get the transformation matrices in world space
+            T1_world = W_inv @ T1 @ W_hom
+            T2_world = W_inv @ T2 @ W_hom
+
+            t_world = T1_world[:, 3:, 0:3]
+            R1_world = T1_world[:, 0:3, 0:3]
+            R2_world = T2_world[:, 0:3, 0:3]
+
+            r1_world = rotation_matrix_to_angle_axis(R1_world.contiguous())
+            r2_world = rotation_matrix_to_angle_axis(R2_world.contiguous())
+
+            r1_world_deg = rad_to_deg(r1_world)
+            r2_world_deg = rad_to_deg(r2_world)
+
+            print("Translation", t_world.squeeze().numpy(force=True).round(decimals=3))
+            print("r1", r1_world_deg.squeeze().numpy(force=True).round(decimals=3))
+            print("r2", r2_world_deg.squeeze().numpy(force=True).round(decimals=3))
+            print("r1_cam", r1_deg.round(decimals=3))
+            print("r2_cam", r2_deg.round(decimals=3))
+
+            breakpoint()
 
             print(f"r1_deg: {r1_deg}, r2_deg: {r2_deg}")
