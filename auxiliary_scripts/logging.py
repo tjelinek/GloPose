@@ -635,7 +635,7 @@ class WriteResults:
         - cmap: Colormap used for plotting.
         - marker: Marker style for the points.
         """
-        valid_coords = [(cs, ct) for (cs, ct) in source_coords.transpose()
+        valid_coords = [cs for cs in source_coords.transpose()
                         if segment_mask is None or segment_mask[-cs[0], cs[1]] > segment_threshold]
 
         flow = flow.squeeze()
