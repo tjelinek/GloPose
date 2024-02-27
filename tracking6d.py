@@ -715,47 +715,48 @@ class Tracking6D:
 
         # self.reset_learning_rate()
 
-        for epoch in range(epoch, self.config.iterations):
+        if self.config.run_main_optimization_loop:
+            for epoch in range(epoch, self.config.iterations):
 
-            infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                            'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+                infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
+                                                'deep_features')
+                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
 
-            model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
-                                                    losses, encoder_result)
-            if abs(model_loss - self.best_model["value"]) > 1e-3:
-                iters_without_change = 0
-                self.best_model["value"] = model_loss
-                self.best_model["losses"] = losses_all
-                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-            else:
-                iters_without_change += 1
+                model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
+                                                        losses, encoder_result)
+                if abs(model_loss - self.best_model["value"]) > 1e-3:
+                    iters_without_change = 0
+                    self.best_model["value"] = model_loss
+                    self.best_model["losses"] = losses_all
+                    self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+                else:
+                    iters_without_change += 1
 
-            if self.config.loss_rgb_weight == 0 and self.config_copy.loss_rgb_weight:
-                if epoch > 100 or model_loss < 0.1:
-                    self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
-                    self.best_model["value"] = 100
-            else:
-                if epoch > self.config.allow_break_sgd_after and \
-                        abs(self.best_model["value"] - model_loss) <= 1e-3 and \
-                        iters_without_change > self.config.break_sgd_after_iters_with_no_change:
-                    break
-            if epoch < self.config.iterations - 1:
-                joint_loss = joint_loss.mean()
-                self.optimizer_all_parameters.zero_grad()
+                if self.config.loss_rgb_weight == 0 and self.config_copy.loss_rgb_weight:
+                    if epoch > 100 or model_loss < 0.1:
+                        self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
+                        self.best_model["value"] = 100
+                else:
+                    if epoch > self.config.allow_break_sgd_after and \
+                            abs(self.best_model["value"] - model_loss) <= 1e-3 and \
+                            iters_without_change > self.config.break_sgd_after_iters_with_no_change:
+                        break
+                if epoch < self.config.iterations - 1:
+                    joint_loss = joint_loss.mean()
+                    self.optimizer_all_parameters.zero_grad()
 
-                self.optimizer_positional_parameters.zero_grad()
-                self.optimizer_rotational_parameters.zero_grad()
-                self.optimizer_translational_parameters.zero_grad()
-                self.optimizer_non_positional_parameters.zero_grad()
+                    self.optimizer_positional_parameters.zero_grad()
+                    self.optimizer_rotational_parameters.zero_grad()
+                    self.optimizer_translational_parameters.zero_grad()
+                    self.optimizer_non_positional_parameters.zero_grad()
 
-                joint_loss.backward()
+                    joint_loss.backward()
 
-                self.optimizer_all_parameters.step()
+                    self.optimizer_all_parameters.step()
 
-                if self.config.use_lr_scheduler:
-                    scheduler_positional_params.step(joint_loss)
-                    scheduler_non_positional_params.step()
+                    if self.config.use_lr_scheduler:
+                        scheduler_positional_params.step(joint_loss)
+                        scheduler_non_positional_params.step()
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 

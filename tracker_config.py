@@ -107,6 +107,7 @@ class TrackerConfig:
     levenberg_marquardt_max_ter = 15
     use_lr_scheduler = False
     lr_scheduler_patience = 5
+    run_main_optimization_loop: bool = True
 
     # Optical flow settings
     add_flow_arcs_strategy: str = None  # One of 'all-previous', 'single-previous' and 'absolute'
@@ -114,7 +115,6 @@ class TrackerConfig:
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'essential_matrix_decomposition' or None
-    # preinitialization_method: str = 'levenberg-marquardt'
     preinitialization_method: str = None
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     use_custom_jacobian: bool = False
