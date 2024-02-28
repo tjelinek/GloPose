@@ -19,7 +19,7 @@ from typing import Optional, Tuple, Any
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider
+    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -28,7 +28,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optim.essential_matrix_pose_estimation import essential_matrix_pre_initialization
+from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
@@ -779,6 +779,26 @@ class Tracking6D:
                                    per_pixel_flow_error=per_pixel_error)
 
         return frame_result
+
+    def essential_matrix_preinitialization(self, flow_arcs, flow_observations, frame_losses):
+        K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
+
+        W = kaolin.render.camera.generate_transformation_matrix(camera_position=self.rendering.camera_trans,
+                                                                camera_up_direction=self.rendering.camera_up,
+                                                                look_at=self.rendering.obj_center)
+
+        for flow_arc_idx, flow_arc in enumerate(flow_arcs):
+            not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
+                                        self.config.occlusion_coef_threshold)
+            segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
+                                        self.config.segmentation_mask_threshold)
+
+            not_occluded_corresbondences = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+
+            optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[0, flow_arc_idx]
+
+            estimate_pose_using_dense_correspondences(optical_flow, not_occluded_corresbondences, W, K1, K2,
+                                                      self.rendering.width, self.rendering.height)
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):

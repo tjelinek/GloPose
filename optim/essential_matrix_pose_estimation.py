@@ -1,85 +1,65 @@
 import cv2
-import kaolin
 import numpy as np
 import pygcransac
 import torch
 from kornia.geometry import rotation_matrix_to_angle_axis
 
-from flow import flow_unit_coords_to_image_coords
-from keyframe_buffer import FlowObservation
 
+def estimate_pose_using_dense_correspondences(dense_correspondences, dense_correspondences_mask,
+                                              camera_transformation_matrix, K1, K2, width, height):
 
-def essential_matrix_pre_initialization(flow_observations: FlowObservation, flow_arcs, frame_losses, rendering,
-                                        occlusion_coef_threshold, segmentation_mask_threshold):
-    K1 = K2 = rendering.camera_intrinsics.numpy(force=True)
+    src_pts = torch.nonzero(dense_correspondences_mask)
+    dst_pts = dense_correspondences[:, src_pts[:, 0], src_pts[:, 1]].permute(1, 0) + src_pts
 
-    height, width = rendering.height, rendering.width
-    for flow_arc_idx, flow_arc in enumerate(flow_arcs):
-        flow_source_frame, flow_target_frame = flow_arc
+    src_pts_np = src_pts.numpy(force=True).astype(np.float64)
+    dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
+    correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
 
-        not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
-                                    occlusion_coef_threshold)
-        segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
-                                    segmentation_mask_threshold)
+    E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 1e-4)
 
-        not_occluded_object_points_mask = (not_occluded_binary_mask * segmentation_binary_mask)[0, 0]
+    inlier_src_pts = src_pts[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
+    inlier_mask = torch.zeros_like(dense_correspondences_mask).cuda()
+    inlier_mask[inlier_src_pts[:, 0], inlier_src_pts[:, 1]] = True
 
-        optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[0, flow_arc_idx]
+    R1, R2, t = cv2.decomposeEssentialMat(E)
+    r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
+    r2 = rotation_matrix_to_angle_axis(torch.from_numpy(R2))
 
-        src_pts = torch.nonzero(not_occluded_object_points_mask[0])
-        dst_pts = optical_flow[:, src_pts[:, 0], src_pts[:, 1]].permute(1, 0) + src_pts
+    r1_deg = torch.rad2deg(r1) % 180
+    r2_deg = torch.rad2deg(r2) % 180
 
-        src_pts_np = src_pts.numpy(force=True).astype(np.float64)
-        dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
-        correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
+    T1 = transformation_matrix(torch.from_numpy(R1).cuda(), torch.from_numpy(t).cuda())
+    T2 = transformation_matrix(torch.from_numpy(R2).cuda(), torch.from_numpy(t).cuda())
 
-        E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 1e-4)
+    # W: World coords -> camera coords
+    W = camera_transformation_matrix
 
-        inlier_src_pts = src_pts[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
-        inlier_mask = torch.zeros_like(flow_observations.observed_flow_segmentation).cuda()
-        inlier_mask[:, :, :, inlier_src_pts[:, 0], inlier_src_pts[:, 1]] = True
+    W_hom = homogenize_transformation_matrix(W)
 
-        R1, R2, t = cv2.decomposeEssentialMat(E)
-        r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
-        r2 = rotation_matrix_to_angle_axis(torch.from_numpy(R2))
+    # Inverse of world -> camera matrix
+    W_inv = invert_transformation_matrix(W)
 
-        r1_deg = torch.rad2deg(r1) % 180
-        r2_deg = torch.rad2deg(r2) % 180
+    # Get the transformation matrices in world space
+    T1_world = W_inv @ T1 @ W_hom
+    T2_world = W_inv @ T2 @ W_hom
 
-        T1 = transformation_matrix(torch.from_numpy(R1).cuda(), torch.from_numpy(t).cuda())
-        T2 = transformation_matrix(torch.from_numpy(R2).cuda(), torch.from_numpy(t).cuda())
+    t_world = T1_world[:, 3:, 0:3]
+    R1_world = T1_world[:, 0:3, 0:3]
+    R2_world = T2_world[:, 0:3, 0:3]
 
-        # W: World coords -> camera coords
-        W = kaolin.render.camera.generate_transformation_matrix(camera_position=rendering.camera_trans,
-                                                                camera_up_direction=rendering.camera_up,
-                                                                look_at=rendering.obj_center)
+    r1_world = rotation_matrix_to_angle_axis(R1_world.contiguous())
+    r2_world = rotation_matrix_to_angle_axis(R2_world.contiguous())
 
-        W_hom = homogenize_transformation_matrix(W)
+    r1_world_deg = torch.rad2deg(r1_world) % 180
+    r2_world_deg = torch.rad2deg(r2_world) % 180
 
-        # Inverse of world -> camera matrix
-        W_inv = invert_transformation_matrix(W)
+    print("Translation", t_world.squeeze().round(decimals=3))
+    print("r1", r1_world_deg.squeeze().round(decimals=3))
+    print("r2", r2_world_deg.squeeze().round(decimals=3))
+    print("r1_cam", r1_deg.round(decimals=3))
+    print("r2_cam", r2_deg.round(decimals=3))
 
-        # Get the transformation matrices in world space
-        T1_world = W_inv @ T1 @ W_hom
-        T2_world = W_inv @ T2 @ W_hom
-
-        t_world = T1_world[:, 3:, 0:3]
-        R1_world = T1_world[:, 0:3, 0:3]
-        R2_world = T2_world[:, 0:3, 0:3]
-
-        r1_world = rotation_matrix_to_angle_axis(R1_world.contiguous())
-        r2_world = rotation_matrix_to_angle_axis(R2_world.contiguous())
-
-        r1_world_deg = torch.rad2deg(r1_world) % 180
-        r2_world_deg = torch.rad2deg(r2_world) % 180
-
-        print("Translation", t_world.squeeze().round(decimals=3))
-        print("r1", r1_world_deg.squeeze().round(decimals=3))
-        print("r2", r2_world_deg.squeeze().round(decimals=3))
-        print("r1_cam", r1_deg.round(decimals=3))
-        print("r2_cam", r2_deg.round(decimals=3))
-
-        breakpoint()
+    return r1_world, r2_world, t_world, inlier_src_pts
 
 
 def homogenize_transformation_matrix(T):
