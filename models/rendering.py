@@ -41,6 +41,8 @@ class RenderingKaolin(nn.Module):
         self.height = height
         self.width = width
         camera_proj = kaolin.render.camera.generate_perspective_projection(1.57 / 2,  # field of view 45 degrees
+        fov = torch.pi / 4  # 45 degrees
+        camera_proj = kaolin.render.camera.generate_perspective_projection(fov,  # field of view 45 degrees
                                                                            self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
         self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
@@ -50,16 +52,13 @@ class RenderingKaolin(nn.Module):
 
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
                                                                                 camera_up_direction)
-        halfsize = torch.Tensor([0.5*width])
-        FOV = 45.
-        tanfov = torch.tan(torch.deg2rad(torch.Tensor([FOV/2.0])))
-        fx = halfsize / tanfov
-        fy = halfsize / tanfov
-        camera_intrinsics = torch.Tensor([[fx, 0., width / 2.0],
-                                          [0., fy, height / 2.0],
-                                          [0., 0., 1.]])
 
-        breakpoint()
+        self.intrinsics = kaolin.render.camera.PinholeIntrinsics.from_fov(width, height, fov, x0=width / 2, y0=height / 2,
+                                                                          fov_direction=kaolin.render.camera.CameraFOV.VERTICAL,
+                                                                          )
+        camera_intrinsics = torch.Tensor([[self.intrinsics.focal_x, 0., self.intrinsics.x0],
+                                          [0., self.intrinsics.focal_y, self.intrinsics.y0],
+                                          [0., 0., 1.]])
 
         self.register_buffer('camera_intrinsics', camera_intrinsics)
 
