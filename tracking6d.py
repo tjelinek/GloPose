@@ -11,7 +11,7 @@ import time
 import torch
 import torchvision.transforms as transforms
 from kaolin.io.utils import mesh_handler_naive_triangulate
-from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, Tuple, Any
@@ -194,7 +194,7 @@ class Tracking6D:
             self.encoder.texture_map = self.gt_texture_features
 
         def set_encoder_poses(encoder, rotations, translations):
-            rotation_quaternion = angle_axis_to_quaternion(rotations, order=QuaternionCoeffOrder.WXYZ)
+            rotation_quaternion = axis_angle_to_quaternion(rotations)
             encoder.quaternion_w = torch.nn.Parameter(rotation_quaternion[..., 0, None])
             encoder.quaternion_x = torch.nn.Parameter(rotation_quaternion[..., 1, None])
             encoder.quaternion_y = torch.nn.Parameter(rotation_quaternion[..., 2, None])

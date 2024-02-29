@@ -4,8 +4,7 @@ from typing import Tuple
 import kaolin
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_rotation_matrix, quaternion_to_angle_axis, \
-    quaternion_to_rotation_matrix, QuaternionCoeffOrder
+from kornia.geometry.conversions import quaternion_to_rotation_matrix
 from kornia.morphology import erosion
 
 import cfg
@@ -76,7 +75,7 @@ class RenderingKaolin(nn.Module):
         batch_size = quaternion.shape[1]
 
         translation_vector = translation[0, 0]
-        rotation_matrix = quaternion_to_rotation_matrix(quaternion, order=QuaternionCoeffOrder.WXYZ)
+        rotation_matrix = quaternion_to_rotation_matrix(quaternion)[0]
 
         unit_vertices_batched = unit_vertices.repeat(batch_size, 1, 1)
         face_features_batched = face_features.repeat(batch_size, 1, 1, 1)
@@ -204,8 +203,8 @@ class RenderingKaolin(nn.Module):
         theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
         theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
 
-        theoretical_flow = theoretical_flow_new.permute(0, 3, 1, 2).unsqueeze(0)   # torch.Size([1, N, 2, H, W])
-        flow_render_mask = ren_mask_1.unsqueeze(1).unsqueeze(0)                    # torch.Size([1, N, 1, H, W])
+        theoretical_flow = theoretical_flow_new.permute(0, 3, 1, 2).unsqueeze(0)  # torch.Size([1, N, 2, H, W])
+        flow_render_mask = ren_mask_1.unsqueeze(1).unsqueeze(0)                   # torch.Size([1, N, 1, H, W])
         occlusion_mask = ren_outputs_1[..., 2].detach().unsqueeze(1).unsqueeze(0)  # torch.Size([1, N, 1, H, W])
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
@@ -357,10 +356,8 @@ class RenderingKaolin(nn.Module):
         quaternion_batch_1 = torch.index_select(encoder_out_frame_1.quaternions, 1, indices_pose_1)
         quaternion_batch_2 = torch.index_select(encoder_out_frame_2.quaternions, 1, indices_pose_2)
 
-        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
-        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2,
-                                                                order=QuaternionCoeffOrder.WXYZ).to(torch.float)
+        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1).to(torch.float)[0]
+        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2).to(torch.float)[0]
 
         return rotation_matrix_1_batch, rotation_matrix_2_batch, translation_vector_1_batch, translation_vector_2_batch
 
@@ -432,7 +429,7 @@ class RenderingKaolin(nn.Module):
         cnt = torch.zeros(self.config.texture_size, self.config.texture_size)
         for frmi in range(quaternion.shape[1]):
             translation_vector = translation[:, :, frmi]
-            rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi], order=QuaternionCoeffOrder.WXYZ)
+            rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi])
 
             rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
                                                           translation_vector, unit_vertices)

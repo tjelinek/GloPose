@@ -20,7 +20,7 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
-from kornia.geometry.conversions import quaternion_to_angle_axis, QuaternionCoeffOrder, angle_axis_to_quaternion
+from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
@@ -143,7 +143,7 @@ class WriteResults:
                                  gt_translation_diff
 
                 gt_rotation_quaternion = tracking6d.logged_sgd_quaternions[0].detach().cpu()
-                gt_rotation_rad = quaternion_to_angle_axis(gt_rotation_quaternion, order=QuaternionCoeffOrder.WXYZ)
+                gt_rotation_rad = quaternion_to_axis_angle(gt_rotation_quaternion)
                 last_rotation_deg = rad_to_deg(gt_rotation_rad)[0, 0]
 
                 gt_rotation_deg = last_rotation_deg + gt_rotation_diff
@@ -196,8 +196,7 @@ class WriteResults:
             for i in range(len(tracking6d.logged_sgd_translations)):
                 iteration_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, trans_axis_idx].detach().cpu()
                 iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
-                iteration_rotation_rad = quaternion_to_angle_axis(iteration_rotation_quaternion,
-                                                                  order=QuaternionCoeffOrder.WXYZ)
+                iteration_rotation_rad = quaternion_to_axis_angle(iteration_rotation_quaternion)
                 iteration_rotation_deg = rad_to_deg(iteration_rotation_rad)[0, -1, rot_axis_idx]
 
                 if i == 0:
@@ -259,8 +258,7 @@ class WriteResults:
                 rotation_tensor_deg = torch.Tensor([0, 0, 0])
                 rotation_tensor_deg[rot_axis_idx] = rotation_deg
                 rotation_tensor_rad = deg_to_rad(rotation_tensor_deg)
-                rotation_tensor_quaternion = angle_axis_to_quaternion(rotation_tensor_rad,
-                                                                      order=QuaternionCoeffOrder.WXYZ)
+                rotation_tensor_quaternion = axis_angle_to_quaternion(rotation_tensor_rad)
 
                 sampled_rotation = rotation_tensor_quaternion[None, None].cuda()
 
@@ -397,8 +395,8 @@ class WriteResults:
             gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
             gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
 
-            last_logged_sgd_rotation = rad_to_deg(quaternion_to_angle_axis(logged_sgd_quaternions[-1].detach().cpu(),
-                                                                           order=QuaternionCoeffOrder.WXYZ))[0, -1]
+            last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
+                                                                           ))[0, -1]
 
             self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
                                                         translation=logged_sgd_translations[-1][0, 0, -1],
@@ -690,7 +688,7 @@ class WriteResults:
                 chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
 
             if gt_rotation is not None:
-                gt_quaternion = angle_axis_to_quaternion(gt_rotation, order=QuaternionCoeffOrder.WXYZ)
+                gt_quaternion = axis_angle_to_quaternion(gt_rotation)
 
                 pred_quaternion_all_frames = encoder_result_all_frames.quaternions
                 gt_quaternion_all_frames = gt_quaternion[:, :stepi + 1]
@@ -766,7 +764,7 @@ class WriteResults:
         # Current rotation and translation values
         translation_tensors = [t[0, 0, -1].detach().cpu() for t in logged_sgd_translations]
         rotation_tensors = [
-            rad_to_deg(quaternion_to_angle_axis(q.detach().cpu(), order=QuaternionCoeffOrder.WXYZ))[0, -1]
+            rad_to_deg(quaternion_to_axis_angle(q.detach().cpu()))[0, -1]
             for q in logged_sgd_quaternions
         ]
 
@@ -839,7 +837,7 @@ class WriteResults:
         for k in range(quaternions.shape[0]):
             quaternions[k] = qnorm(quaternions[k])
         # Convert quaternions to Euler angles
-        angles_rad = quaternion_to_angle_axis(quaternions, order=QuaternionCoeffOrder.WXYZ)
+        angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
         angles_deg = angles_rad * 180.0 / math.pi
         rot_axes = ['X-axis: ', 'Y-axis: ', 'Z-axis: ']

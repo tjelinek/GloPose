@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from kornia.geometry.conversions import angle_axis_to_quaternion, QuaternionCoeffOrder
+from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from kornia.geometry.liegroup import Se3, So3
 from pytorch3d.transforms import quaternion_multiply
@@ -27,7 +27,7 @@ class Encoder(nn.Module):
         qinit = torch.zeros(1, config.input_frames, 4)
         qinit[:, :, 0] = 1.0
         init_angle = torch.Tensor(self.config.rot_init)
-        qinit[:, 0, :] = angle_axis_to_quaternion(init_angle, order=QuaternionCoeffOrder.WXYZ)
+        qinit[:, 0, :] = axis_angle_to_quaternion(init_angle)
 
         init_axis_angle = torch.zeros(1, config.input_frames, 3)
         init_axis_angle[:, 0] = init_angle
