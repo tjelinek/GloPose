@@ -14,7 +14,7 @@ from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
-from typing import Optional, Tuple, Any
+from typing import Optional, Any, NamedTuple
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
@@ -33,7 +33,7 @@ from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult
 
 
 @dataclass
@@ -44,6 +44,16 @@ class FrameResult:
     renders: Any
     frame_losses: Any
     per_pixel_flow_error: Any
+
+
+class InferenceResult(NamedTuple):
+    encoder_result: EncoderResult
+    joint_loss: Any
+    losses: Any
+    losses_all: Any
+    per_pixel_error: torch.Tensor
+    renders: torch.Tensor
+    rendered_flow_result: RenderedFlowResult
 
 
 class Tracking6D:
@@ -1056,14 +1066,16 @@ class Tracking6D:
         return model_loss
 
     def infer_model(self, observations: FrameObservation, flow_observations: FlowObservation, keyframes, flow_frames,
-                    flow_arcs, encoder_type) -> Tuple[EncoderResult, Any, Any, Any, Any, Any, RenderedFlowResult]:
+                    flow_arcs, encoder_type) -> InferenceResult:
 
         if encoder_type == 'rgb':
             encoder = self.rgb_encoder
         elif encoder_type == 'gt_encoder':
             encoder = self.gt_encoder
-        else:  # 'deep_features' - Deep features encoder
+        elif encoder_type == 'deep_features':
             encoder = self.encoder
+        else:
+            raise ValueError("Unknown encoder")
 
         encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
 
@@ -1118,7 +1130,10 @@ class Tracking6D:
                                             last_keyframes_encoder_result=self.last_encoder_result)
         losses_all, losses, joint_loss, per_pixel_error = loss_result
 
-        return encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result
+        result = InferenceResult(encoder_result, joint_loss, losses, losses_all,
+                                 per_pixel_error, renders, rendered_flow_result)
+
+        return result
 
     @staticmethod
     def sort_flow_arcs_indices(flow_arcs_indices):

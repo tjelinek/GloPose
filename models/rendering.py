@@ -359,6 +359,9 @@ class RenderingKaolin(nn.Module):
         rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1).to(torch.float)[0]
         rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2).to(torch.float)[0]
 
+        if self.backview:
+            pass
+
         return rotation_matrix_1_batch, rotation_matrix_2_batch, translation_vector_1_batch, translation_vector_2_batch
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
