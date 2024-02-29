@@ -18,8 +18,7 @@ def estimate_pose_using_dense_correspondences(dense_correspondences, dense_corre
     E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 1e-4)
 
     inlier_src_pts = src_pts[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
-    inlier_mask = torch.zeros_like(dense_correspondences_mask).cuda()
-    inlier_mask[inlier_src_pts[:, 0], inlier_src_pts[:, 1]] = True
+    outlier_src_pts = src_pts[torch.nonzero(~torch.from_numpy(mask), as_tuple=True)]
 
     R1, R2, t = cv2.decomposeEssentialMat(E)
     r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
@@ -59,7 +58,7 @@ def estimate_pose_using_dense_correspondences(dense_correspondences, dense_corre
     print("r1_cam", r1_deg.round(decimals=3))
     print("r2_cam", r2_deg.round(decimals=3))
 
-    return r1_world, r2_world, t_world, inlier_src_pts
+    return r1_world, r2_world, t_world, inlier_src_pts, outlier_src_pts
 
 
 def homogenize_transformation_matrix(T):
