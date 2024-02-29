@@ -643,52 +643,34 @@ class WriteResults:
         - cmap: Colormap used for plotting.
         - marker: Marker style for the points.
         """
-        valid_coords = [cs for cs in source_coords.transpose()
-                        if segment_mask is None or segment_mask[-cs[0], cs[1]] > segment_threshold]
+        # Assuming flow is [2, H, W] and source_coords is [2, N]
+        y1, x1 = source_coords
+        delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].numpy(force=True)
 
-        flow = flow.squeeze()
+        # Compute target coordinates
+        x2_f, y2_f = x1 + delta_x, y1 - delta_y
 
-        norm = Normalize(vmin=0, vmax=len(valid_coords))
+        # Apply masks
+        valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold
+        if segment_mask is not None:
+            valid_mask &= segment_mask[-y1.astype(int), x1.astype(int), 0] > segment_threshold
+
+        # Filter coordinates and colors based on valid_mask
+        x1, y1, x2_f, y2_f = x1[valid_mask], y1[valid_mask], x2_f[valid_mask], y2_f[valid_mask]
+
+        # Normalize and map colors
+        norm = Normalize(vmin=0, vmax=np.sum(valid_mask) - 1)
         cmap = plt.get_cmap(cmap)
-        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        colors = cmap(norm(range(np.sum(valid_mask))))
 
-        flow_lines = []
-        flow_lines_colors = []
-
-        flow_sources = []
-        flow_sources_colors = []
-        flow_targets = []
-
-        for i, xy1 in enumerate(valid_coords):
-            # Create a ConnectionPatch for each pair of points
-            color = mappable.to_rgba(i)
-
-            y1, x1 = xy1
-
-            delta_x = flow[0, -y1, x1].item()
-            delta_y = flow[1, -y1, x1].item()
-
-            y2_f = y1 - delta_y
-            x2_f = x1 + delta_x
-
-            flow_sources.append((x1, y1))
-            flow_sources_colors.append(color)
-
-            if (occlusion_mask[-y1, x1] <= occl_threshold and
-                    (segment_mask is None or segment_mask[-y1, x1]) > segment_threshold):
-
-                flow_lines.append([(x1, y1), (x2_f, y2_f)])
-                flow_lines_colors.append(color)
-                flow_targets.append((x2_f, y2_f))
-
-        lines = np.asarray(flow_lines)
-        lc = LineCollection(lines, colors=flow_lines_colors, linewidths=0.5, alpha=0.8)
+        # Create LineCollection for valid lines
+        lines = np.stack((x1, y1, x2_f, y2_f), axis=1).reshape(-1, 2, 2)
+        lc = LineCollection(lines, colors=colors, linewidths=0.5, alpha=0.8)
         ax2.add_collection(lc)
 
-        flow_sources = np.asarray(flow_sources).T
-        flow_targets = np.asarray(flow_targets).T
-        ax1.scatter(flow_sources[0], flow_sources[1], color=flow_sources_colors, marker=marker, alpha=0.8, s=1.5)
-        ax2.scatter(flow_targets[0], flow_targets[1], color=flow_lines_colors, marker=marker, alpha=0.8, s=1.5)
+        # Scatter plot for source and target points
+        ax1.scatter(x1, y1, color=colors, marker=marker, alpha=0.8, s=1.5)
+        ax2.scatter(x2_f, y2_f, color=colors, marker=marker, alpha=0.8, s=1.5)
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
