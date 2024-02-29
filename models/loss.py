@@ -1,3 +1,5 @@
+from typing import NamedTuple, Dict
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,6 +8,13 @@ from kornia.losses import total_variation
 from models.encoder import EncoderResult
 from tracker_config import TrackerConfig
 from utils import erode_segment_mask2
+
+
+class LossResult(NamedTuple):
+    losses_all: Dict
+    losses: Dict
+    loss: float
+    per_pixel_flow_loss: torch.Tensor
 
 
 class FMOLoss(nn.Module):
@@ -24,7 +33,7 @@ class FMOLoss(nn.Module):
                 observed_flow_uncertainties,
                 keyframes_encoder_result, last_keyframes_encoder_result,
                 return_end_point_errors=False,
-                custom_points_for_ransac=None):
+                custom_points_for_ransac=None) -> LossResult:
         """
         Forward pass of the model.
 
@@ -132,7 +141,10 @@ class FMOLoss(nn.Module):
         for ls in losses:
             if ls not in ['fl_obs_not_rend', 'fl_not_obs_rend', 'fl_obs_and_rend', 'fl_obs_or_rend']:
                 loss += losses[ls]
-        return losses_all, losses, loss, per_pixel_flow_loss
+
+        loss_result = LossResult(losses_all, losses, loss, per_pixel_flow_loss)
+
+        return loss_result
 
     def get_optical_flow_epes(self, observed_flow, observed_flow_occlusion, observed_flow_segmentation, rendered_flow,
                               rendered_flow_segmentation):
