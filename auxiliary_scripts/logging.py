@@ -13,6 +13,7 @@ import csv
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
+from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import ConnectionPatch
 from torch import nn
@@ -379,8 +380,17 @@ class WriteResults:
                 axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
                 axs[2, 1].set_title('Target Back')
 
-                self.plot_matched_lines(axs[0, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold, flow_backview, cmap='cool', marker='x',
-                                        segment_mask=seg_mask_back)
+                inliers_list = None
+                outliers_list = None
+                if frame_result.inliers is not None:
+                    inliers_list = frame_result.inliers[new_flow_arc]
+                if frame_result.outliers is not None:
+                    outliers_list = frame_result.outliers[new_flow_arc]
+
+                self.plot_matched_lines(axs[0, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
+                                        flow_backview, cmap='cool', marker='x', segment_mask=seg_mask_back,
+                                        inliers=inliers_list,
+                                        outliers=outliers_list)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
@@ -621,8 +631,8 @@ class WriteResults:
         return overlay_image.astype(image.dtype)
 
     @staticmethod
-    def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet',
-                           marker='o', segment_mask=None, segment_threshold=0.99):
+    def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
+                           segment_mask=None, segment_threshold=0.99, inliers=None, outliers=None):
         """
         Draws lines from source coordinates in ax1 to target coordinates in ax2.
         Args:
@@ -642,6 +652,13 @@ class WriteResults:
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
+        flow_lines = []
+        flow_lines_colors = []
+
+        flow_sources = []
+        flow_sources_colors = []
+        flow_targets = []
+
         for i, xy1 in enumerate(valid_coords):
             # Create a ConnectionPatch for each pair of points
             color = mappable.to_rgba(i)
@@ -654,17 +671,24 @@ class WriteResults:
             y2_f = y1 - delta_y
             x2_f = x1 + delta_x
 
-            ax1.scatter(x1, y1, color=color, marker=marker, alpha=0.8, s=1.5)
-            ax1.text(x1, y1, str(i), color='black', fontsize=1, ha='center', va='center')
+            flow_sources.append((x1, y1))
+            flow_sources_colors.append(color)
 
             if (occlusion_mask[-y1, x1] <= occl_threshold and
                     (segment_mask is None or segment_mask[-y1, x1]) > segment_threshold):
-                con = ConnectionPatch(xyA=(x1, y1), xyB=(x2_f, y2_f), coordsA="data", coordsB="data",
-                                      axesA=ax2, axesB=ax2, color=color, lw=0.5, alpha=0.8)
-                ax2.add_artist(con)
 
-                ax2.scatter(x2_f, y2_f, color=color, marker=marker, alpha=0.8, s=1.5)
-                ax2.text(x2_f, y2_f, str(i), color='black', fontsize=1, ha='center', va='center')
+                flow_lines.append([(x1, y1), (x2_f, y2_f)])
+                flow_lines_colors.append(color)
+                flow_targets.append((x2_f, y2_f))
+
+        lines = np.asarray(flow_lines)
+        lc = LineCollection(lines, colors=flow_lines_colors, linewidths=0.5, alpha=0.8)
+        ax2.add_collection(lc)
+
+        flow_sources = np.asarray(flow_sources).T
+        flow_targets = np.asarray(flow_targets).T
+        ax1.scatter(flow_sources[0], flow_sources[1], color=flow_sources_colors, marker=marker, alpha=0.8, s=1.5)
+        ax2.scatter(flow_targets[0], flow_targets[1], color=flow_lines_colors, marker=marker, alpha=0.8, s=1.5)
 
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
