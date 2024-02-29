@@ -12,10 +12,8 @@ import imageio
 import csv
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
-from matplotlib.patches import ConnectionPatch
 from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
@@ -33,7 +31,7 @@ from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    optical_flow_to_matched_coords
+    optical_flow_to_matched_coords, source_coords_to_target_coords, source_coords_to_target_coords_np
 
 
 class WriteResults:
@@ -645,10 +643,9 @@ class WriteResults:
         """
         # Assuming flow is [2, H, W] and source_coords is [2, N]
         y1, x1 = source_coords
-        delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].numpy(force=True)
+        flow_np = flow.numpy(force=True)
 
-        # Compute target coordinates
-        x2_f, y2_f = x1 + delta_x, y1 - delta_y
+        x2_f, y2_f = source_coords_to_target_coords_np(source_coords, flow_np)
 
         # Apply masks
         valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold

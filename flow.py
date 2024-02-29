@@ -189,6 +189,26 @@ def optical_flow_to_matched_coords(flow: torch.Tensor, step=1):
     return matched_coords
 
 
+def source_coords_to_target_coords(source_coords: torch.Tensor, flow: torch.Tensor):
+    y1, x1 = source_coords
+    delta_x, delta_y = flow[0, 0, :, -y1.to(torch.int), x1.to(torch.int)]
+
+    # Compute target coordinates
+    x2_f, y2_f = x1 + delta_x, y1 - delta_y
+
+    return x2_f, y2_f
+
+
+def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
+    y1, x1 = source_coords
+    delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
+
+    # Compute target coordinates
+    x2_f, y2_f = x1 + delta_x, y1 - delta_y
+
+    return x2_f, y2_f
+
+
 def tensor_image_to_mft_format(image_tensor):
     return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
 
