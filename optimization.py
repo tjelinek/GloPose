@@ -77,7 +77,7 @@ class EndPointErrorCostFunction(ceres.CostFunction):
         residuals[:] = function_eval_np[:]
 
         if jacobians is not None:
-            jacobian = compute_jacobian(parameters_tensor, self.cost_function).flatten()
+            jacobian = compute_jacobian_using_vmap(parameters_tensor, self.cost_function).flatten()
             jacobian_np_flat = jacobian.detach().cpu()
             jacobians[0][:] = jacobian_np_flat[:]
 
@@ -170,12 +170,14 @@ def lsq_lma_custom(
         fun = function
 
     if jac_function is None:
-        jac_fun = lambda p: compute_jacobian(p, f=fun)
+        jac_fun = lambda p: compute_jacobian_using_vmap(p, f=fun)
+        # jac_fun = lambda p: compute_jacobian(p, f=fun)
     else:
         jac_fun = lambda p: jac_function(p, *args)
 
     f = fun(p)
     import time
+    torch.cuda.synchronize()
     global_start_time = time.time()
     jac = jac_fun(p)
     g = torch.matmul(jac.T, f)
@@ -184,9 +186,13 @@ def lsq_lma_custom(
     v = 2
     p_list = [p]
     it_idx = 0
+
+    print(f"Jacobian size: {jac.shape}")
+
     while len(p_list) < max_iter:
+        torch.cuda.synchronize()
         time_start = time.process_time()
-        # print(f"Iter {it_idx} begin", int(torch.cuda.memory_allocated() / 1024))
+
         D = torch.eye(jac.shape[1], device=jac.device)
         D *= 1 if meth == 'lev' else torch.max(torch.maximum(H.diagonal(), D.diagonal()))
         h = -torch.linalg.lstsq(H + u * D, g, rcond=None, driver=None)[0]
@@ -210,11 +216,13 @@ def lsq_lma_custom(
         gcon = max(abs(g)) < gtol
         pcon = (h ** 2).sum() ** .5 < ptol * (ptol + (p ** 2).sum() ** .5)
         fcon = ((f_prev - f) ** 2).sum() < ((ftol * f) ** 2).sum() if rho > 0 else False
-        # print(f"Iter {it_idx} end  ", int(torch.cuda.memory_allocated() / 1024))
+
         it_idx += 1
+        torch.cuda.synchronize()
         print(f"Levenberg-Marquardt iteration {len(p_list)} took {time.process_time() - time_start}, rho {rho > 0}")
         if gcon or pcon or fcon:
             break
 
+    torch.cuda.synchronize()
     print(f"Whole Levenberg-Marquardt Duration {time.time() - global_start_time}")
     return p_list
