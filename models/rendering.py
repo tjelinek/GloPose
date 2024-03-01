@@ -52,9 +52,10 @@ class RenderingKaolin(nn.Module):
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
                                                                                 camera_up_direction)
 
-        self.intrinsics = kaolin.render.camera.PinholeIntrinsics.from_fov(width, height, fov, x0=width / 2, y0=height / 2,
-                                                                          fov_direction=kaolin.render.camera.CameraFOV.VERTICAL,
-                                                                          )
+        self.intrinsics = (
+            kaolin.render.camera.PinholeIntrinsics.from_fov(width, height, fov, x0=width / 2, y0=height / 2,
+                                                            fov_direction=kaolin.render.camera.CameraFOV.VERTICAL,
+                                                            ))
         camera_intrinsics = torch.Tensor([[self.intrinsics.focal_x, 0., self.intrinsics.x0],
                                           [0., self.intrinsics.focal_y, self.intrinsics.y0],
                                           [0., 0., 1.]])
