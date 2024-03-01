@@ -196,7 +196,7 @@ def source_coords_to_target_coords(source_coords: torch.Tensor, flow: torch.Tens
     # Compute target coordinates
     x2_f, y2_f = x1 + delta_x, y1 - delta_y
 
-    return x2_f, y2_f
+    return torch.stack([y2_f, x2_f], dim=0)
 
 
 def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
@@ -206,7 +206,7 @@ def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarra
     # Compute target coordinates
     x2_f, y2_f = x1 + delta_x, y1 - delta_y
 
-    return x2_f, y2_f
+    return np.stack([y2_f, x2_f], axis=0)
 
 
 def tensor_image_to_mft_format(image_tensor):
