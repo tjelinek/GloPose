@@ -545,16 +545,16 @@ class WriteResults:
 
         if total_points > max_points:
             random_sample = np.random.permutation(total_points)[:max_points]
-            source_coord = source_coords[:, random_sample]
+            source_coords = source_coords[:, random_sample]
 
-        y2_f, x2_f = source_coords_to_target_coords_np(source_coord, flow_frontview_np)
+        y2_f, x2_f = source_coords_to_target_coords_np(source_coords, flow_frontview_np)
         target_coords = np.vstack((x2_f, y2_f))
-        norm = Normalize(vmin=0, vmax=source_coord.shape[1] - 1)
+        norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
-        for i in range(0, source_coord.shape[1]):
+        for i in range(0, source_coords.shape[1]):
             color = mappable.to_rgba(i)
-            xyA = source_coord[:, i]  # Source point
+            xyA = source_coords[:, i]  # Source point
             xB, yB = target_coords[:, i]
 
             # Create a ConnectionPatch for each pair of sampled points
