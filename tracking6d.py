@@ -44,6 +44,8 @@ class FrameResult:
     renders: Any
     frame_losses: Any
     per_pixel_flow_error: Any
+    inliers: Dict
+    outliers: Dict
 
 
 class InferenceResult(NamedTuple):
