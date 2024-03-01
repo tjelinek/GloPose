@@ -14,7 +14,7 @@ from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
-from typing import Optional, Any, NamedTuple
+from typing import Optional, Any, NamedTuple, Dict
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
@@ -700,6 +700,7 @@ class Tracking6D:
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
 
+        inliers = outliers = None
         if self.config.preinitialization_method is not None:
             print("Pre-initializing the objects position")
         # First optimize the positional parameters first while preventing steps that increase the loss
@@ -707,7 +708,8 @@ class Tracking6D:
             self.run_levenberg_marquardt_method(observations, flow_observations, flow_frames, keyframes, flow_arcs,
                                                 frame_losses)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            self.essential_matrix_preinitialization(flow_arcs, observations, flow_observations, frame_losses)
+            inliers, outliers = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
+                                                                        flow_observations, frame_losses)
 
         elif self.config.preinitialization_method == 'gradient_descent':
             self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch, keyframes,
@@ -784,25 +786,27 @@ class Tracking6D:
                                    encoder_result=encoder_result,
                                    renders=renders,
                                    frame_losses=frame_losses,
-                                   per_pixel_flow_error=per_pixel_error)
+                                   per_pixel_flow_error=per_pixel_error,
+                                   inliers=inliers, outliers=outliers)
 
         return frame_result
 
-    def essential_matrix_preinitialization(self, flow_arcs, observations, flow_observations, frame_losses):
+    def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames, observations, flow_observations,
+                                           frame_losses):
         K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
 
         W = kaolin.render.camera.generate_transformation_matrix(camera_position=self.rendering.camera_trans,
                                                                 camera_up_direction=self.rendering.camera_up,
                                                                 look_at=self.rendering.obj_center)
 
-        inlier_points_list = []
-        outlier_points_list = []
+        inlier_points_list = {}
+        outlier_points_list = {}
 
         for flow_arc_idx, flow_arc in enumerate(flow_arcs):
             flow_source, flow_target = flow_arc
-            keyframes = [flow_source, flow_target]
-            flow_frames = [flow_source]
-            flow_arcs_ = [flow_arc]
+            keyframes_local = [flow_source, flow_target]
+            flow_frames_local = [flow_source]
+            flow_arcs_local = [flow_arc]
 
             not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
                                         self.config.occlusion_coef_threshold)
@@ -811,13 +815,13 @@ class Tracking6D:
 
             not_occluded_correspondences = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
 
-            optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[0, flow_arc_idx]
+            optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
 
             result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
                                                                self.rendering.width, self.rendering.height)
             r1, r2, t, inlier_points, outlier_points = result
-            inlier_points_list.append(inlier_points)
-            outlier_points_list.append(outlier_points)
+            inlier_points_list[flow_arc] = inlier_points
+            outlier_points_list[flow_arc] = outlier_points
 
             q1 = axis_angle_to_quaternion(r1)
             q2 = axis_angle_to_quaternion(r2)
@@ -831,17 +835,26 @@ class Tracking6D:
             self.encoder.translation_offsets[:, :, flow_target] = t_total
 
             self.encoder.quaternion_offsets[:, flow_target] = q1_total
-            res1 = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs_,
-                                    'deep_features')
+
+            # TODO consider inferring the loss for the optimized arc only
+            res1 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
+                                    flow_arcs_local, 'deep_features')
 
             self.encoder.quaternion_offsets[:, flow_target] = q2_total
-            res2 = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs_,
-                                    'deep_features')
+            res2 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
+                                    flow_arcs_local, 'deep_features')
 
             if res1.losses['flow_loss'] > res2.losses['flow_loss']:
                 self.encoder.quaternion_offsets[:, flow_target] = q2_total
             else:
                 self.encoder.quaternion_offsets[:, flow_target] = q1_total
+
+        inference_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
+                                            'deep_features')
+
+        self.best_model["losses"] = inference_result.losses_all
+        self.best_model["value"] = inference_result.joint_loss
+        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
         return inlier_points_list, outlier_points_list
 
