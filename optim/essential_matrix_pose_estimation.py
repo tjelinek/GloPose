@@ -2,14 +2,17 @@ import cv2
 import numpy as np
 import pygcransac
 import torch
-from kornia.geometry import rotation_matrix_to_angle_axis
+from kornia.geometry import rotation_matrix_to_axis_angle
+
+from flow import source_coords_to_target_coords
 
 
-def estimate_pose_using_dense_correspondences(dense_correspondences, dense_correspondences_mask,
-                                              camera_transformation_matrix, K1, K2, width, height):
+def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tensor,
+                                              dense_correspondences_mask: torch.Tensor,
+                                              camera_transformation_matrix, K1, K2, width: int, height: int):
 
     src_pts = torch.nonzero(dense_correspondences_mask)
-    dst_pts = dense_correspondences[:, src_pts[:, 0], src_pts[:, 1]].permute(1, 0) + src_pts
+    dst_pts = source_coords_to_target_coords(src_pts.permute(1, 0), dense_correspondences).permute(1, 0)
 
     src_pts_np = src_pts.numpy(force=True).astype(np.float64)
     dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
@@ -21,8 +24,8 @@ def estimate_pose_using_dense_correspondences(dense_correspondences, dense_corre
     outlier_src_pts = src_pts[torch.nonzero(~torch.from_numpy(mask), as_tuple=True)]
 
     R1, R2, t = cv2.decomposeEssentialMat(E)
-    r1 = rotation_matrix_to_angle_axis(torch.from_numpy(R1))
-    r2 = rotation_matrix_to_angle_axis(torch.from_numpy(R2))
+    r1 = rotation_matrix_to_axis_angle(torch.from_numpy(R1))
+    r2 = rotation_matrix_to_axis_angle(torch.from_numpy(R2))
 
     r1_deg = torch.rad2deg(r1) % 180
     r2_deg = torch.rad2deg(r2) % 180
@@ -46,8 +49,8 @@ def estimate_pose_using_dense_correspondences(dense_correspondences, dense_corre
     R1_world = T1_world[:, 0:3, 0:3]
     R2_world = T2_world[:, 0:3, 0:3]
 
-    r1_world = rotation_matrix_to_angle_axis(R1_world.contiguous())
-    r2_world = rotation_matrix_to_angle_axis(R2_world.contiguous())
+    r1_world = rotation_matrix_to_axis_angle(R1_world.contiguous())
+    r2_world = rotation_matrix_to_axis_angle(R2_world.contiguous())
 
     r1_world_deg = torch.rad2deg(r1_world) % 180
     r2_world_deg = torch.rad2deg(r2_world) % 180
