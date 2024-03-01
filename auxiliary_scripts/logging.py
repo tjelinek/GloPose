@@ -12,8 +12,10 @@ import imageio
 import csv
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
+from matplotlib.patches import ConnectionPatch
 from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
@@ -31,7 +33,7 @@ from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    optical_flow_to_matched_coords, source_coords_to_target_coords, source_coords_to_target_coords_np
+    source_coords_to_target_coords_np
 
 
 class WriteResults:
@@ -358,11 +360,23 @@ class WriteResults:
 
             # Plot lines on the target front and back view subplots
             occlusion_threshold = self.tracking_config.occlusion_coef_threshold
-            self.plot_matched_lines(axs[0, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
-                                    flow_frontview, cmap='spring', marker='o', segment_mask=seg_mask_front)
+
+            flow_frontview_np = flow_frontview.numpy(force=True)
+
+            if frame_result.inliers is not None:
+                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure inliers is (2, N)
+                self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
+
+            if frame_result.outliers is not None:
+                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure inliers is (2, N)
+                self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
+
+            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
+                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
 
             if self.tracking_config.matching_target_to_backview:
-                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source, flow_arc_target)
+                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source,
+                                                               flow_arc_target)
                 (occlusion_mask_back, seg_mask_back, target_back, template_back,
                  template_back_overlay, step, flow_backview) = values_backview
 
@@ -378,17 +392,9 @@ class WriteResults:
                 axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
                 axs[2, 1].set_title('Target Back')
 
-                inliers_list = None
-                outliers_list = None
-                if frame_result.inliers is not None:
-                    inliers_list = frame_result.inliers[new_flow_arc]
-                if frame_result.outliers is not None:
-                    outliers_list = frame_result.outliers[new_flow_arc]
-
-                self.plot_matched_lines(axs[0, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
-                                        flow_backview, cmap='cool', marker='x', segment_mask=seg_mask_back,
-                                        inliers=inliers_list,
-                                        outliers=outliers_list)
+                flow_backview_np = flow_backview.numpy(force=True)
+                self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
+                                        flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
@@ -532,6 +538,32 @@ class WriteResults:
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
 
+    @staticmethod
+    def draw_cross_axes_flow_matches(source_coords, flow_frontview_np, axs1, axs2, cmap):
+        max_points = 100
+        total_points = source_coords.shape[1]
+
+        source_coords_filtered = source_coords
+        if total_points > max_points:
+            random_sample = np.random.permutation(total_points)[:max_points]
+            source_coords_filtered = source_coords[:, random_sample]
+
+        y2_f, x2_f = source_coords_to_target_coords_np(source_coords_filtered, flow_frontview_np)
+        target_coords = np.vstack((x2_f, y2_f))
+        norm = Normalize(vmin=0, vmax=source_coords_filtered.shape[1] - 1)
+        cmap = plt.get_cmap(cmap)
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        for i in range(0, source_coords_filtered.shape[1]):
+            color = mappable.to_rgba(i)
+            xyA = source_coords_filtered[:, i]  # Source point
+            xB, yB = target_coords[:, i]
+
+            # Create a ConnectionPatch for each pair of sampled points
+            con = ConnectionPatch(xyA=(xyA[1], xyA[0]), xyB=(xB, yB),
+                                  coordsA='data', coordsB='data',
+                                  axesA=axs1, axesB=axs2, color=color, lw=0.99)
+            axs2.add_artist(con)
+
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
         flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
         flow_frontview = flow_observation_frontview.observed_flow
@@ -630,7 +662,7 @@ class WriteResults:
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
-                           segment_mask=None, segment_threshold=0.99, inliers=None, outliers=None):
+                           segment_mask=None, segment_threshold=0.99):
         """
         Draws lines from source coordinates in ax1 to target coordinates in ax2.
         Args:
@@ -643,9 +675,7 @@ class WriteResults:
         """
         # Assuming flow is [2, H, W] and source_coords is [2, N]
         y1, x1 = source_coords
-        flow_np = flow.numpy(force=True)
-
-        x2_f, y2_f = source_coords_to_target_coords_np(source_coords, flow_np)
+        y2_f, x2_f = source_coords_to_target_coords_np(source_coords, flow)
 
         # Apply masks
         valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold
