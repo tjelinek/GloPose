@@ -363,12 +363,12 @@ class WriteResults:
 
             flow_frontview_np = flow_frontview.numpy(force=True)
 
-            if frame_result.inliers is not None:
-                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure inliers is (2, N)
+            if frame_result.inliers is not None and False:
+                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
                 self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
 
             if frame_result.outliers is not None:
-                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure inliers is (2, N)
+                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
                 self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
@@ -543,25 +543,24 @@ class WriteResults:
         max_points = 100
         total_points = source_coords.shape[1]
 
-        source_coords_filtered = source_coords
         if total_points > max_points:
             random_sample = np.random.permutation(total_points)[:max_points]
-            source_coords_filtered = source_coords[:, random_sample]
+            source_coord = source_coords[:, random_sample]
 
-        y2_f, x2_f = source_coords_to_target_coords_np(source_coords_filtered, flow_frontview_np)
+        y2_f, x2_f = source_coords_to_target_coords_np(source_coord, flow_frontview_np)
         target_coords = np.vstack((x2_f, y2_f))
-        norm = Normalize(vmin=0, vmax=source_coords_filtered.shape[1] - 1)
+        norm = Normalize(vmin=0, vmax=source_coord.shape[1] - 1)
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
-        for i in range(0, source_coords_filtered.shape[1]):
+        for i in range(0, source_coord.shape[1]):
             color = mappable.to_rgba(i)
-            xyA = source_coords_filtered[:, i]  # Source point
+            xyA = source_coord[:, i]  # Source point
             xB, yB = target_coords[:, i]
 
             # Create a ConnectionPatch for each pair of sampled points
             con = ConnectionPatch(xyA=(xyA[1], xyA[0]), xyB=(xB, yB),
                                   coordsA='data', coordsB='data',
-                                  axesA=axs1, axesB=axs2, color=color, lw=0.99)
+                                  axesA=axs1, axesB=axs2, color=color, lw=0.5)
             axs2.add_artist(con)
 
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
