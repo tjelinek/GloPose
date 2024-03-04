@@ -363,7 +363,7 @@ class WriteResults:
 
             flow_frontview_np = flow_frontview.numpy(force=True)
 
-            if frame_result.inliers is not None and False:
+            if frame_result.inliers is not None:
                 inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
                 self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
 
@@ -540,7 +540,7 @@ class WriteResults:
 
     @staticmethod
     def draw_cross_axes_flow_matches(source_coords, flow_frontview_np, axs1, axs2, cmap):
-        max_points = 100
+        max_points = 30
         total_points = source_coords.shape[1]
 
         if total_points > max_points:
@@ -553,14 +553,18 @@ class WriteResults:
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
         for i in range(0, source_coords.shape[1]):
-            color = mappable.to_rgba(i)
+            color = mappable.to_rgba(source_coords.shape[1] / 2 + i / 2)
             xyA = source_coords[:, i]  # Source point
-            xB, yB = target_coords[:, i]
+            # xyA[0] = flow_frontview_np.shape[-2] - xyA[0]
+            xyA[1] = flow_frontview_np.shape[-1] - xyA[1]
+            yB, xB = target_coords[:, i]
+
+            yB = flow_frontview_np.shape[-1] - yB
 
             # Create a ConnectionPatch for each pair of sampled points
-            con = ConnectionPatch(xyA=(xyA[1], xyA[0]), xyB=(xB, yB),
+            con = ConnectionPatch(xyA=(xyA[0], xyA[1]), xyB=(xB, yB),
                                   coordsA='data', coordsB='data',
-                                  axesA=axs1, axesB=axs2, color=color, lw=0.5)
+                                  axesA=axs1, axesB=axs2, color=color, lw=0.25)
             axs2.add_artist(con)
 
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
