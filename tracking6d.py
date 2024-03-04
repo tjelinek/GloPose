@@ -820,21 +820,23 @@ class Tracking6D:
             optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
 
             result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
-                                                               self.rendering.width, self.rendering.height)
-            r1, r2, t, inlier_points, outlier_points = result
+                                                               self.rendering.width, self.rendering.height,
+                                                               method=self.config.essential_matrix_algorithm)
+            r1, r2, t1, t2, inlier_points, outlier_points = result
             inlier_points_list[flow_arc] = inlier_points
             outlier_points_list[flow_arc] = outlier_points
 
             q1 = axis_angle_to_quaternion(r1)
             q2 = axis_angle_to_quaternion(r2)
 
-            t_total = self.encoder.translation_offsets[:, :, flow_source] + t
+            t1_total = self.encoder.translation_offsets[:, :, flow_source] + t1
+            t2_total = self.encoder.translation_offsets[:, :, flow_source] + t2
 
             q_ref = self.encoder.quaternion_offsets[:, flow_source]
             q1_total = qmult(q_ref, q1)
             q2_total = qmult(q_ref, q2)
 
-            self.encoder.translation_offsets[:, :, flow_target] = t_total
+            self.encoder.translation_offsets[:, :, flow_target] = t1_total
 
             self.encoder.quaternion_offsets[:, flow_target] = q1_total
 
@@ -842,13 +844,16 @@ class Tracking6D:
             res1 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
                                     flow_arcs_local, 'deep_features')
 
+            self.encoder.translation_offsets[:, :, flow_target] = t2_total
             self.encoder.quaternion_offsets[:, flow_target] = q2_total
             res2 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
                                     flow_arcs_local, 'deep_features')
 
             if res1.losses['flow_loss'] > res2.losses['flow_loss']:
+                self.encoder.translation_offsets[:, :, flow_target] = t2_total
                 self.encoder.quaternion_offsets[:, flow_target] = q2_total
             else:
+                self.encoder.translation_offsets[:, :, flow_target] = t1_total
                 self.encoder.quaternion_offsets[:, flow_target] = q1_total
 
         inference_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
