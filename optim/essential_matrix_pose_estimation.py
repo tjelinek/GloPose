@@ -8,17 +8,33 @@ from flow import source_coords_to_target_coords
 
 
 def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tensor,
-                                              dense_correspondences_mask: torch.Tensor,
-                                              camera_transformation_matrix, K1, K2, width: int, height: int):
+                                              dense_correspondences_mask: torch.Tensor, camera_transformation_matrix,
+                                              K1, K2, width: int, height: int, ransac_conf=0.99, method='magsac++'):
 
+    # src and target in y, x order
     src_pts = torch.nonzero(dense_correspondences_mask)
     dst_pts = source_coords_to_target_coords(src_pts.permute(1, 0), dense_correspondences).permute(1, 0)
 
+    # Convert to x, y order
+    src_pts[:, [0, 1]] = src_pts[:, [1, 0]]
+    dst_pts[:, [0, 1]] = dst_pts[:, [1, 0]]
+    #
     src_pts_np = src_pts.numpy(force=True).astype(np.float64)
     dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
-    correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
 
-    E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, 1e-4)
+    if method == 'pygcransac':
+        correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
+        E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width,
+                                                 ransac_conf)
+    else:
+        methods = {'magsac++': cv2.USAC_MAGSAC,
+                   'ransac': cv2.RANSAC,
+                   '8point': cv2.USAC_FM_8PTS}
+
+        chosen_method = methods[method]
+        E, mask = cv2.findEssentialMat(src_pts_np, dst_pts_np, K1, method=chosen_method, threshold=1.,
+                                       prob=ransac_conf)
+        mask = mask[:, 0]
 
     inlier_src_pts = src_pts[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
     outlier_src_pts = src_pts[torch.nonzero(~torch.from_numpy(mask), as_tuple=True)]
@@ -45,7 +61,8 @@ def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tenso
     T1_world = W_inv @ T1 @ W_hom
     T2_world = W_inv @ T2 @ W_hom
 
-    t_world = T1_world[:, 3:, 0:3]
+    t1_world = T1_world[:, 3:, 0:3]
+    t2_world = T2_world[:, 3:, 0:3]
     R1_world = T1_world[:, 0:3, 0:3]
     R2_world = T2_world[:, 0:3, 0:3]
 
@@ -61,7 +78,12 @@ def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tenso
     print("r1_cam", r1_deg.round(decimals=3))
     print("r2_cam", r2_deg.round(decimals=3))
 
-    return r1_world, r2_world, t_world, inlier_src_pts, outlier_src_pts
+    r1_world[:, [0, 1]] = r1_world[:, [1, 0]]
+    r2_world[:, [0, 1]] = r2_world[:, [1, 0]]
+    t1_world[:, :, [0, 1]] = t1_world[:, :, [1, 0]]
+    t2_world[:, :, [0, 1]] = t2_world[:, :, [1, 0]]
+
+    return r1_world, r2_world, t1_world, t2_world, inlier_src_pts, outlier_src_pts
 
 
 def homogenize_transformation_matrix(T):
