@@ -9,7 +9,7 @@ def get_config() -> TrackerConfig:
 
     cfg.matching_target_to_backview = False
 
-    cfg.run_main_optimization_loop = True
+    cfg.run_main_optimization_loop = False
     cfg.preinitialization_method = 'essential_matrix_decomposition'
     cfg.gt_flow_source = 'FlowNetwork'
     cfg.essential_matrix_algorithm = 'magsac++'
