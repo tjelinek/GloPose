@@ -7,8 +7,7 @@ import numpy as np
 import torch
 import csv
 import pickle
-from kornia.geometry import quaternion_to_rotation_matrix
-from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_rotation_matrix
 from pathlib import Path
 
 from dataset_generators.scenarios import MovementScenario
@@ -212,7 +211,7 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
 
     initial_rotation_axis_angle = torch.from_numpy(deg_to_rad(movement_scenario.initial_rotation))
     initial_rotation_axis_angle = initial_rotation_axis_angle.cuda().to(torch.float32)
-    initial_rotation_quaternion = angle_axis_to_quaternion(initial_rotation_axis_angle, order=QuaternionCoeffOrder.WXYZ)
+    initial_rotation_quaternion = axis_angle_to_quaternion(initial_rotation_axis_angle)
 
     prev_encoder_result = None
     prev_rendering_rgb = None
@@ -236,8 +235,7 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
                                                     qnorm(rotation_quaternion_tensor[None]))[0].cuda()
         quaternions[0, frame_i] = composed_rotation_quaternion_tensor
 
-        rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor,
-                                                        order=QuaternionCoeffOrder.WXYZ)[None]
+        rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor)[None]
         current_translation = translations[:, :, frame_i, :][None]
         current_encoder_result = EncoderResult(translations=current_translation,
                                                quaternions=composed_rotation_quaternion_tensor[None, None],
@@ -308,7 +306,7 @@ def generate_optical_flow_illustration(ren_features, prev_ren_features, optical_
     optical_flow_[..., 1] = optical_flow_[..., 1] * optical_flow_.shape[-3]
     optical_flow_ = optical_flow_.numpy(force=True)
 
-    flow_illustration = visualize_flow_with_images(prev_ren_features_, ren_features_, optical_flow_)
+    flow_illustration = visualize_flow_with_images([prev_ren_features_], ren_features_, [optical_flow_])
     del optical_flow_
     optical_flow_illustration_destination = \
         save_destination.with_name(save_destination.stem +

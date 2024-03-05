@@ -65,7 +65,7 @@ def generate_textured_cube():
 
 
 def generate_rotating_objects():
-    rot_mags = {2}
+    rot_mags = {5, 10}
 
     for background_image_path in [None, 'dataset_generators/backgrounds/landscape_crop.jpg']:
         background_suffix = ''
@@ -76,6 +76,7 @@ def generate_rotating_objects():
 
             rot_gens = [
                 (dataset_generators.scenarios.generate_rotations_y, 'y'),
+                (dataset_generators.scenarios.generate_rotations_z, 'x'),
                 (dataset_generators.scenarios.generate_rotations_z, 'z'),
                 (dataset_generators.scenarios.generate_rotations_xy, 'xy'),
             ]
@@ -136,8 +137,8 @@ def generate_object_using_function(movement_scenario, background_image_path, obj
     optical_flow_absolute_path = synthetic_dataset_folder / obj_name / optical_flow_absolute_dir
     gt_tracking_log_file = synthetic_dataset_folder / obj_name / gt_tracking_log_dir / Path('gt_tracking_log.csv')
 
-    width = 800
-    height = 800
+    width = 1000
+    height = 1000
 
     if rendering_method == 'DIB-R':
         generate_rotating_and_translating_textured_object(config, movement_scenario, prototype_path, texture_path,
@@ -160,7 +161,7 @@ if __name__ == '__main__':
     config = load_config('./configs/config_deep.py')
 
     rendering_method = 'DIB-R'  # 'kubric' or 'DIB-R'
-    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjectsWorkshopDIB-R')
+    synthetic_dataset_folder = dataset_folder / Path('SyntheticObjects')
     rendering_dir = Path('renderings')
     segmentation_dir = Path('segmentations')
     optical_flow_relative_dir = Path('optical_flow_relative')
