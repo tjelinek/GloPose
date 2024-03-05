@@ -26,7 +26,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     args.append("--dataset-runner")
     args.append(runners[dataset])
     args.append("--experiment")
-    args.append(configuration_name)
+    args.append(str(Path(configuration_name).stem))
     args.append("--output-folder")
     args.append(output_folder)
     args.append("--sequences")
@@ -36,6 +36,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     print("Running sbatch job.batch with arguments:", args)
     print('----------------------------------------')
     subprocess.run(["sbatch", "scripts/job.batch"] + args)
+
 
 def create_unused_folder(output_folder: Path):
     if not os.path.exists(output_folder):
@@ -63,8 +64,18 @@ def main():
         # "config_deep_with_flow_all_frames_keyframes",
         # "config_deep_with_flow_gt_no_rgb",
         # "config_deep_with_flow_gt",
+        # "config_deep_with_flow_gt_only_frontview",
+        # "config_deep_with_flow_gt_with_backview",
         # "config_deep_with_flow_no_rgb",
-        "config_deep_with_flow",
+        # "config_deep_with_flow",
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_8point',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_magsac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_pygrancsac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_ransac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_8point',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_magsac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_pygransac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_ransac',
     ]
 
     sequences = {
