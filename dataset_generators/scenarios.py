@@ -1,7 +1,7 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 import torch
-from kornia.geometry.conversions import QuaternionCoeffOrder, angle_axis_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion
 from typing import List
 
 import numpy as np
@@ -9,11 +9,19 @@ import numpy as np
 from utils import deg_to_rad
 
 
+def default_initial_rotation():
+    return np.array([0., 0., 0.])
+
+
+def default_initial_translation():
+    return np.array([0., 0., 0.])
+
+
 @dataclass
 class MovementScenario:
     steps: int = 0
-    initial_rotation: np.ndarray = np.array([0.00, 0.00, 0.00])
-    initial_translation: np.ndarray = np.array([0.0, 0.0, 0.0])
+    initial_rotation: np.ndarray = field(default_factory=default_initial_rotation)
+    initial_translation: np.ndarray = field(default_factory=default_initial_translation)
     rotations: List[np.ndarray] = None
     translations: List[np.ndarray] = None
 
@@ -36,8 +44,7 @@ class MovementScenario:
 
         for rot_deg in self.rotations:
             rotations_radians = deg_to_rad(rot_deg)
-            rotation_quaternion = angle_axis_to_quaternion(torch.from_numpy(rotations_radians),
-                                                           order=QuaternionCoeffOrder.WXYZ).numpy()
+            rotation_quaternion = axis_angle_to_quaternion(torch.from_numpy(rotations_radians)).numpy()
             quaternions.append(rotation_quaternion)
 
         return quaternions
