@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 import pygcransac
 import torch
-from kornia.geometry import rotation_matrix_to_axis_angle
+from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, Rt_to_matrix4x4, \
+    matrix4x4_to_Rt, inverse_transformation, compose_transformations
 
 from flow import source_coords_to_target_coords
 
@@ -51,32 +52,8 @@ def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tenso
     W_cam_to_world = inverse_transformation(W_world_to_cam)
 
     # Get the transformation matrices in world space
-    T1_world = W_inv @ T1 @ W_hom
-    T2_world = W_inv @ T2 @ W_hom
-
-    t1_world = T1_world[:, 3:, 0:3]
-    t2_world = T2_world[:, 3:, 0:3]
-    R1_world = T1_world[:, 0:3, 0:3]
-    R2_world = T2_world[:, 0:3, 0:3]
-
-    r1_world = rotation_matrix_to_axis_angle(R1_world.contiguous())
-    r2_world = rotation_matrix_to_axis_angle(R2_world.contiguous())
-
-    r1_world_deg = torch.rad2deg(r1_world) % 180
-    r2_world_deg = torch.rad2deg(r2_world) % 180
-
-    print("Translation", t_world.squeeze().round(decimals=3))
-    print("r1", r1_world_deg.squeeze().round(decimals=3))
-    print("r2", r2_world_deg.squeeze().round(decimals=3))
-    print("r1_cam", r1_deg.round(decimals=3))
-    print("r2_cam", r2_deg.round(decimals=3))
-
-    r1_world[:, [0, 1]] = r1_world[:, [1, 0]]
-    r2_world[:, [0, 1]] = r2_world[:, [1, 0]]
-    t1_world[:, :, [0, 1]] = t1_world[:, :, [1, 0]]
-    t2_world[:, :, [0, 1]] = t2_world[:, :, [1, 0]]
-
-    return r1_world, r2_world, t1_world, t2_world, inlier_src_pts, outlier_src_pts
+    T_world = compose_transformations(W_cam_to_world, compose_transformations(T, W_world_to_cam))
+    R_world, t_world = matrix4x4_to_Rt(T_world)
 
     t_world = t_world.squeeze(-1)
     r_world = rotation_matrix_to_axis_angle(R_world.contiguous()).squeeze()

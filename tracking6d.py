@@ -803,6 +803,18 @@ class Tracking6D:
 
         W = Rt_to_matrix4x4(R, -t.unsqueeze(-1))
 
+        data = {
+            "sequence": self.config.sequence,
+            "flow_source": self.config.gt_flow_source,
+            "camera_intrinsics": K1.tolist(),
+            "field_of_view_rad": torch.pi / 4,
+            "image_width": self.rendering.width,
+            "image_height": self.rendering.height,
+            "camera_translation": self.rendering.camera_trans[0].numpy(force=True).tolist(),
+            "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True).tolist(),
+            "frames": []
+        }
+
         inlier_points_list = {}
         outlier_points_list = {}
 
@@ -825,6 +837,17 @@ class Tracking6D:
                                                                self.rendering.width, self.rendering.height,
                                                                method=self.config.essential_matrix_algorithm)
             r, t, inlier_points, outlier_points = result
+
+            # print('----------------------------------------')
+            # print(flow_arc)
+            # print("---t1_world", t1.squeeze().round(decimals=3))
+            # print("---t2_world", t2.squeeze().round(decimals=3))
+            # print("---r1_world", r1_world_deg.squeeze().round(decimals=3))
+            # print("---r2_world", r2_world_deg.squeeze().round(decimals=3))
+            # print("---r_gt", torch.rad2deg(self.gt_rotations[0, flow_target].round(decimals=3)))
+            # print("---t_gt", self.gt_translations[0, 0, flow_target].round(decimals=3))
+            # print('----------------------------------------')
+
             inlier_points_list[flow_arc] = inlier_points
             outlier_points_list[flow_arc] = outlier_points
 
