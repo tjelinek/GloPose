@@ -363,13 +363,20 @@ class WriteResults:
 
             flow_frontview_np = flow_frontview.numpy(force=True)
 
+            matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
             if frame_result.inliers is not None:
                 inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
                 self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
+                matching_text += f'inliers: {inliers.shape[1]}\n'
 
             if frame_result.outliers is not None:
                 outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
                 self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
+                matching_text += f'outliers: {outliers.shape[1]}'
+
+            axs[1, 0].text(0.95, 0.95, matching_text, transform=axs[1, 0].transAxes, fontsize=4,
+                           verticalalignment='top', horizontalalignment='right',
+                           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
                                     flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
@@ -540,32 +547,38 @@ class WriteResults:
 
     @staticmethod
     def draw_cross_axes_flow_matches(source_coords, flow_frontview_np, axs1, axs2, cmap):
-        max_points = 30
+        max_points = 15
         total_points = source_coords.shape[1]
 
         if total_points > max_points:
             random_sample = np.random.permutation(total_points)[:max_points]
             source_coords = source_coords[:, random_sample]
 
-        y2_f, x2_f = source_coords_to_target_coords_np(source_coords, flow_frontview_np)
-        target_coords = np.vstack((x2_f, y2_f))
+        target_coords = source_coords_to_target_coords_np(source_coords, flow_frontview_np)
+
         norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
         cmap = plt.get_cmap(cmap)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
+
         for i in range(0, source_coords.shape[1]):
             color = mappable.to_rgba(source_coords.shape[1] / 2 + i / 2)
-            xyA = source_coords[:, i]  # Source point
-            # xyA[0] = flow_frontview_np.shape[-2] - xyA[0]
-            xyA[1] = flow_frontview_np.shape[-1] - xyA[1]
-            yB, xB = target_coords[:, i]
 
-            yB = flow_frontview_np.shape[-1] - yB
+            yA, xA = source_coords[:, i]
+            yB, xB = target_coords[:, i]
+            yB = flow_frontview_np.shape[-2] - yB
+            yA = flow_frontview_np.shape[-2] - yA
 
             # Create a ConnectionPatch for each pair of sampled points
-            con = ConnectionPatch(xyA=(xyA[0], xyA[1]), xyB=(xB, yB),
+            axs1.plot(xA, yA, color=color, marker='X', markersize=0.5)
+            axs2.plot(xB, yB, color=color, marker='X', markersize=0.5)
+
+            con = ConnectionPatch(xyA=(xA, yA), xyB=(xB, yB),
                                   coordsA='data', coordsB='data',
-                                  axesA=axs1, axesB=axs2, color=color, lw=0.25)
+                                  axesA=axs1, axesB=axs2, color=color, lw=0.5)
             axs2.add_artist(con)
+
+            axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white')
+            axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
 
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
         flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
