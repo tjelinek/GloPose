@@ -11,7 +11,7 @@ import time
 import torch
 import torchvision.transforms as transforms
 from kaolin.io.utils import mesh_handler_naive_triangulate
-from kornia.geometry.conversions import axis_angle_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion, Rt_to_matrix4x4
 from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, Any, NamedTuple, Dict
@@ -19,7 +19,7 @@ from typing import Optional, Any, NamedTuple, Dict
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords
+    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -797,9 +797,11 @@ class Tracking6D:
                                            frame_losses):
         K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
 
-        W = kaolin.render.camera.generate_transformation_matrix(camera_position=self.rendering.camera_trans,
-                                                                camera_up_direction=self.rendering.camera_up,
-                                                                look_at=self.rendering.obj_center)
+        R, t = kaolin.render.camera.generate_rotate_translate_matrices(camera_position=self.rendering.camera_trans,
+                                                                       camera_up_direction=self.rendering.camera_up,
+                                                                       look_at=self.rendering.obj_center)
+
+        W = Rt_to_matrix4x4(R, -t.unsqueeze(-1))
 
         inlier_points_list = {}
         outlier_points_list = {}
@@ -822,23 +824,19 @@ class Tracking6D:
             result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
                                                                self.rendering.width, self.rendering.height,
                                                                method=self.config.essential_matrix_algorithm)
-            r1, r2, t1, t2, inlier_points, outlier_points = result
+            r, t, inlier_points, outlier_points = result
             inlier_points_list[flow_arc] = inlier_points
             outlier_points_list[flow_arc] = outlier_points
 
-            q1 = axis_angle_to_quaternion(r1)
-            q2 = axis_angle_to_quaternion(r2)
+            q = axis_angle_to_quaternion(r)
 
-            t1_total = self.encoder.translation_offsets[:, :, flow_source] + t1
-            t2_total = self.encoder.translation_offsets[:, :, flow_source] + t2
+            t_total = self.encoder.translation_offsets[:, :, flow_source] + t
 
             q_ref = self.encoder.quaternion_offsets[:, flow_source]
-            q1_total = qmult(q_ref, q1)
-            q2_total = qmult(q_ref, q2)
+            q_total = qmult(q_ref, q.unsqueeze(0))
 
-            self.encoder.translation_offsets[:, :, flow_target] = t1_total
-
-            self.encoder.quaternion_offsets[:, flow_target] = q1_total
+            self.encoder.translation_offsets[:, :, flow_target] = t_total
+            self.encoder.quaternion_offsets[:, flow_target] = q_total
 
             # TODO consider inferring the loss for the optimized arc only
             res1 = self.infer_model(observations, flow_observations, keyframes, flow_frames,

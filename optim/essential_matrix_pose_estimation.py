@@ -8,19 +8,18 @@ from flow import source_coords_to_target_coords
 
 
 def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tensor,
-                                              dense_correspondences_mask: torch.Tensor, camera_transformation_matrix,
+                                              dense_correspondences_mask: torch.Tensor, W_world_to_cam,
                                               K1, K2, width: int, height: int, ransac_conf=0.99, method='magsac++'):
-
     # src and target in y, x order
-    src_pts = torch.nonzero(dense_correspondences_mask)
+    src_pts = torch.nonzero(dense_correspondences_mask).to(torch.float32)
     dst_pts = source_coords_to_target_coords(src_pts.permute(1, 0), dense_correspondences).permute(1, 0)
 
     # Convert to x, y order
     src_pts[:, [0, 1]] = src_pts[:, [1, 0]]
     dst_pts[:, [0, 1]] = dst_pts[:, [1, 0]]
-    #
-    src_pts_np = src_pts.numpy(force=True).astype(np.float64)
-    dst_pts_np = dst_pts.numpy(force=True).astype(np.float64)
+
+    src_pts_np = src_pts.numpy(force=True)
+    dst_pts_np = dst_pts.numpy(force=True)
 
     if method == 'pygcransac':
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
@@ -39,23 +38,17 @@ def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tenso
     inlier_src_pts = src_pts[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
     outlier_src_pts = src_pts[torch.nonzero(~torch.from_numpy(mask), as_tuple=True)]
 
-    R1, R2, t = cv2.decomposeEssentialMat(E)
-    r1 = rotation_matrix_to_axis_angle(torch.from_numpy(R1))
-    r2 = rotation_matrix_to_axis_angle(torch.from_numpy(R2))
+    E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
+    K1_tensor = torch.from_numpy(K1).cuda()
+    K2_tensor = torch.from_numpy(K2).cuda()
+    mask_tensor = torch.from_numpy(mask).cuda()
+    R, t, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
+                                                                      src_pts, dst_pts, mask_tensor)
 
-    r1_deg = torch.rad2deg(r1) % 180
-    r2_deg = torch.rad2deg(r2) % 180
-
-    T1 = transformation_matrix(torch.from_numpy(R1).cuda(), torch.from_numpy(t).cuda())
-    T2 = transformation_matrix(torch.from_numpy(R2).cuda(), torch.from_numpy(t).cuda())
-
-    # W: World coords -> camera coords
-    W = camera_transformation_matrix
-
-    W_hom = homogenize_transformation_matrix(W)
+    T = Rt_to_matrix4x4(R.unsqueeze(0), t.unsqueeze(0))
 
     # Inverse of world -> camera matrix
-    W_inv = invert_transformation_matrix(W)
+    W_cam_to_world = inverse_transformation(W_world_to_cam)
 
     # Get the transformation matrices in world space
     T1_world = W_inv @ T1 @ W_hom
@@ -85,29 +78,10 @@ def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tenso
 
     return r1_world, r2_world, t1_world, t2_world, inlier_src_pts, outlier_src_pts
 
+    t_world = t_world.squeeze(-1)
+    r_world = rotation_matrix_to_axis_angle(R_world.contiguous()).squeeze()
 
-def homogenize_transformation_matrix(T):
-    T_hom = torch.zeros(1, 4, 4).cuda()
-    T_hom[:, 3, 3] = 1.
-    T_hom[:, :, :3] = T
-    return T_hom
+    r_world_deg = torch.rad2deg(r_world) % 180
 
 
-def invert_transformation_matrix(T):
-
-    T_rot = T[:, :3, :3]
-    T_trans = T[:, [3], :3]
-
-    T_inv = torch.zeros(1, 4, 4).cuda()
-    T_inv[0, 3, 3] = 1.0
-    T_inv[:, :3, :3] = T_rot.transpose(1, 2)
-    T_inv[:, 3:, :3] = (-T_rot.transpose(1, 2) @ T_trans.transpose(1, 2)).transpose(1, 2)
-    return T_inv
-
-
-def transformation_matrix(R, t):
-    T = torch.zeros(1, 4, 4).cuda()
-    T[:, 3, 3] = 1.
-    T[0, 0:3, 0:3] = R
-    T[0, 3:, 0:3] = t.T
-    return T
+    return r_world, t_world, inlier_src_pts, outlier_src_pts
