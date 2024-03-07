@@ -14,13 +14,13 @@ from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import axis_angle_to_quaternion, Rt_to_matrix4x4
 from pathlib import Path
 from torch.optim import lr_scheduler
-from typing import Optional, Any, NamedTuple, Dict
+from typing import Optional, Any, NamedTuple, Dict, List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords
-from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
+from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, Cameras
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
@@ -473,7 +473,6 @@ class Tracking6D:
             all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
 
             all_frame_observations_backview = None
-            all_flow_observations_backview = None
 
             flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
@@ -483,23 +482,19 @@ class Tracking6D:
                 all_flow_observations_backview: FlowObservation = \
                     (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
 
-                all_flow_observations = replace(
-                    all_flow_observations,
-                    observed_flow=torch.cat(
-                        [all_flow_observations.observed_flow, all_flow_observations_backview.observed_flow],
-                        dim=1),
-                    observed_flow_occlusion=torch.cat([all_flow_observations.observed_flow_occlusion,
-                                                       all_flow_observations_backview.observed_flow_occlusion], dim=1),
-                    observed_flow_segmentation=torch.cat([all_flow_observations.observed_flow_segmentation,
-                                                          all_flow_observations_backview.observed_flow_segmentation],
-                                                         dim=1),
-                    observed_flow_uncertainty=torch.cat([all_flow_observations.observed_flow_uncertainty,
-                                                         all_flow_observations_backview.observed_flow_uncertainty],
-                                                        dim=1)
-                )
+                multi_camera_observations = MultiCameraObservation.from_kwargs(
+                    frontview=all_frame_observations, backview=all_frame_observations_backview)
+                multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
+                    frontview=all_flow_observations, backview=all_flow_observations_backview)
+            else:
+                multi_camera_observations = MultiCameraObservation.from_kwargs(
+                    frontview=all_frame_observations)
+                multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
+                    frontview=all_flow_observations)
 
-            frame_result = self.apply(all_frame_observations, all_flow_observations, self.active_keyframes.keyframes,
-                                      self.active_keyframes.flow_frames, flow_arcs, frame_index=stepi)
+            frame_result = self.apply(multi_camera_observations, multi_camera_flow_observations,
+                                      self.active_keyframes.keyframes, self.active_keyframes.flow_frames,
+                                      flow_arcs, frame_index=stepi)
 
             encoder_result = frame_result.encoder_result
 
@@ -649,10 +644,14 @@ class Tracking6D:
 
         return observed_flow, occlusion, uncertainty
 
-    def apply(self, observations, flow_observations, keyframes, flow_frames, flow_arcs, frame_index) -> FrameResult:
+    def apply(self, observations: MultiCameraObservation, flow_observations: MultiCameraObservation,
+              keyframes: List, flow_frames: List, flow_arcs: List, frame_index: int) -> FrameResult:
 
         self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
         self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
+
+        stacked_observations: FrameObservation = observations.stack()
+        stacked_flow_observations: FlowObservation = flow_observations.stack()
 
         self.logged_sgd_quaternions = []
         self.logged_sgd_translations = []
@@ -697,8 +696,8 @@ class Tracking6D:
         loss_improvement_threshold = 1e-4
 
         # First inference just to log the results
-        infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        'deep_features')
+        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
+                                        flow_arcs, 'deep_features')
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
 
@@ -707,8 +706,8 @@ class Tracking6D:
             print("Pre-initializing the objects position")
         # First optimize the positional parameters first while preventing steps that increase the loss
         if self.config.preinitialization_method == 'levenberg-marquardt':
-            self.run_levenberg_marquardt_method(observations, flow_observations, flow_frames, keyframes, flow_arcs,
-                                                frame_losses)
+            self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations, flow_frames, keyframes,
+                                                flow_arcs, frame_losses)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
             inliers, outliers = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
                                                                         flow_observations, frame_losses)
@@ -732,9 +731,10 @@ class Tracking6D:
         if self.config.run_main_optimization_loop:
             for epoch in range(epoch, self.config.iterations):
 
-                infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                                'deep_features')
-                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+                infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
+                                                flow_arcs, 'cd')
+                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = (
+                    infer_result)
 
                 model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
                                                         losses, encoder_result)
@@ -780,8 +780,8 @@ class Tracking6D:
                                                         relative_mode=True)
 
         # Inferring the most up-to date state after the optimization is finished
-        infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        'deep_features')
+        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
+                                        flow_arcs, 'deep_features')
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
 
         frame_result = FrameResult(flow_render_result=rendered_flow_result,

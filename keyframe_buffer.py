@@ -1,12 +1,19 @@
 from bisect import insort
 from copy import deepcopy
-from typing import Tuple, List
+from enum import Enum
+from typing import Tuple, List, Dict, Union
 
 import numpy as np
 import torch
 import networkx as nx
 
 from dataclasses import dataclass, field
+
+
+class Cameras(Enum):
+
+    FRONTVIEW = 'frontview'
+    BACKVIEW = 'backview'
 
 
 @dataclass
@@ -56,6 +63,40 @@ class FlowObservation(Observation):
             concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
             setattr(concatenated_observations, attr_name, concatenated_attr)
         return concatenated_observations
+
+
+@dataclass
+class MultiCameraObservation:
+    cameras_observations: Dict[Cameras, Union[FrameObservation, FlowObservation]] = field(default_factory=dict)
+
+    @classmethod
+    def from_kwargs(cls, **kwargs) -> 'MultiCameraObservation':
+        observation_types = {type(obs) for obs in kwargs.values()}
+        if len(observation_types) != 1:
+            raise ValueError("Mixed observation types are not supported.")
+
+        cameras_observations_kwargs = {
+            Cameras[key.upper()]: value for key, value in kwargs.items() if key.upper() in Cameras.__members__
+        }
+        return cls(cameras_observations=cameras_observations_kwargs)
+
+    def stack(self) -> Union[FrameObservation, FlowObservation]:
+        observation_types = {type(obs) for obs in self.cameras_observations.values()}
+
+        if len(observation_types) > 1:
+            raise ValueError("Mixed observation types are not supported.")
+
+        observation_type = observation_types.pop()
+
+        sorted_observations = sorted(self.cameras_observations.items(), key=lambda item: item[0].value)
+        observations = [obs for _, obs in sorted_observations]
+
+        if observation_type == FrameObservation:
+            return FrameObservation.concatenate(*observations)
+        elif observation_type == FlowObservation:
+            return FlowObservation.concatenate(*observations)
+        else:
+            raise ValueError("Unknown observation type encountered.")
 
 
 @dataclass
