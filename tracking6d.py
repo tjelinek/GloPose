@@ -793,98 +793,86 @@ class Tracking6D:
 
         return frame_result
 
-    def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames, observations, flow_observations,
+    def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
+                                           observations: MultiCameraObservation,
+                                           flow_observations: MultiCameraObservation,
                                            frame_losses):
-        K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
 
+        K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
         R, t = kaolin.render.camera.generate_rotate_translate_matrices(camera_position=self.rendering.camera_trans,
                                                                        camera_up_direction=self.rendering.camera_up,
                                                                        look_at=self.rendering.obj_center)
 
         W = Rt_to_matrix4x4(R, -t.unsqueeze(-1))
 
-        data = {
-            "sequence": self.config.sequence,
-            "flow_source": self.config.gt_flow_source,
-            "camera_intrinsics": K1.tolist(),
-            "field_of_view_rad": torch.pi / 4,
-            "image_width": self.rendering.width,
-            "image_height": self.rendering.height,
-            "camera_translation": self.rendering.camera_trans[0].numpy(force=True).tolist(),
-            "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True).tolist(),
-            "frames": []
-        }
-
         inlier_points_list = {}
         outlier_points_list = {}
+        inlier_points_list_backview = {}
+        outlier_points_list_backview = {}
 
-        for flow_arc_idx, flow_arc in enumerate(flow_arcs):
-            flow_source, flow_target = flow_arc
-            keyframes_local = [flow_source, flow_target]
-            flow_frames_local = [flow_source]
-            flow_arcs_local = [flow_arc]
+        flow_arc = flow_arcs[-1]
+        flow_arc_idx = len(flow_arcs) - 1
 
-            not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
-                                        self.config.occlusion_coef_threshold)
-            segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
-                                        self.config.segmentation_mask_threshold)
+        flow_source, flow_target = flow_arc
 
-            not_occluded_correspondences = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+        front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
+        result = self.estimate_pose_using_optical_flow(K1, K2, W, front_flow_observations, flow_source,
+                                                       flow_arc_idx)
+        inlier_points, outlier_points, q_total, t_total = result
 
-            optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
+        inlier_points_list[flow_arc] = inlier_points
+        outlier_points_list[flow_arc] = outlier_points
+        inlier_ratio_frontview = len(inlier_points) / (len(inlier_points) + len(outlier_points))
 
-            result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
-                                                               self.rendering.width, self.rendering.height,
-                                                               method=self.config.essential_matrix_algorithm)
-            r, t, inlier_points, outlier_points = result
+        self.encoder.translation_offsets[:, :, flow_target] = t_total
+        self.encoder.quaternion_offsets[:, flow_target] = q_total
 
-            # print('----------------------------------------')
-            # print(flow_arc)
-            # print("---t1_world", t1.squeeze().round(decimals=3))
-            # print("---t2_world", t2.squeeze().round(decimals=3))
-            # print("---r1_world", r1_world_deg.squeeze().round(decimals=3))
-            # print("---r2_world", r2_world_deg.squeeze().round(decimals=3))
-            # print("---r_gt", torch.rad2deg(self.gt_rotations[0, flow_target].round(decimals=3)))
-            # print("---t_gt", self.gt_translations[0, 0, flow_target].round(decimals=3))
-            # print('----------------------------------------')
+        if self.config.matching_target_to_backview:
+            back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            inlier_points_list[flow_arc] = inlier_points
-            outlier_points_list[flow_arc] = outlier_points
+            result = self.estimate_pose_using_optical_flow(K1, K2, W, back_flow_observations, flow_source)
+            inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview = result
 
-            q = axis_angle_to_quaternion(r)
+            inlier_points_list_backview[flow_arc] = inlier_points_backview
+            outlier_points_list_backview[flow_arc] = outlier_points_backview
 
-            t_total = self.encoder.translation_offsets[:, :, flow_source] + t
+            inlier_ratio_backview = len(inlier_points_backview) / (len(inlier_points_backview) +
+                                                                   len(outlier_points_backview))
 
-            q_ref = self.encoder.quaternion_offsets[:, flow_source]
-            q_total = qmult(q_ref, q.unsqueeze(0))
+            if inlier_ratio_frontview < inlier_ratio_backview:
+                self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
+                self.encoder.quaternion_offsets[:, flow_target] = q_total_backview
 
-            self.encoder.translation_offsets[:, :, flow_target] = t_total
-            self.encoder.quaternion_offsets[:, flow_target] = q_total
+        stacked_flow_observation = flow_observations.stack()
+        stacked_frame_observation = observations.stack()
 
-            # TODO consider inferring the loss for the optimized arc only
-            res1 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
-                                    flow_arcs_local, 'deep_features')
-
-            self.encoder.translation_offsets[:, :, flow_target] = t2_total
-            self.encoder.quaternion_offsets[:, flow_target] = q2_total
-            res2 = self.infer_model(observations, flow_observations, keyframes, flow_frames,
-                                    flow_arcs_local, 'deep_features')
-
-            if res1.losses['flow_loss'] > res2.losses['flow_loss']:
-                self.encoder.translation_offsets[:, :, flow_target] = t2_total
-                self.encoder.quaternion_offsets[:, flow_target] = q2_total
-            else:
-                self.encoder.translation_offsets[:, :, flow_target] = t1_total
-                self.encoder.quaternion_offsets[:, flow_target] = q1_total
-
-        inference_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                            'deep_features')
+        inference_result = self.infer_model(stacked_frame_observation, stacked_flow_observation, keyframes, flow_frames,
+                                            flow_arcs, 'deep_features')
 
         self.best_model["losses"] = inference_result.losses_all
         self.best_model["value"] = inference_result.joint_loss
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
         return inlier_points_list, outlier_points_list
+
+    def estimate_pose_using_optical_flow(self, K1, K2, W, flow_observations, flow_source, flow_arc_idx):
+
+        not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
+                                    self.config.occlusion_coef_threshold)
+        segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
+                                    self.config.segmentation_mask_threshold)
+
+        not_occluded_correspondences = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+        optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
+        result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
+                                                           self.rendering.width, self.rendering.height,
+                                                           method=self.config.essential_matrix_algorithm)
+        r, t, inlier_points, outlier_points = result
+        q = axis_angle_to_quaternion(r)
+        t_total = self.encoder.translation_offsets[:, :, flow_source] + t
+        q_ref = self.encoder.quaternion_offsets[:, flow_source]
+        q_total = qmult(q_ref, q.unsqueeze(0))
+        return inlier_points, outlier_points, q_total, t_total
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
