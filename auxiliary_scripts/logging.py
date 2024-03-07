@@ -329,82 +329,43 @@ class WriteResults:
                             frame_result.per_pixel_flow_error)
 
         # FLOW BACKVIEW ERROR VISUALIZATION
-        for new_flow_arc in new_flow_arcs:
+        # K1 = K2 = renderer.camera_intrinsics.numpy(force=True)
+        #
+        # data = {
+        #     "sequence": self.tracking_config.sequence,
+        #     "flow_source": self.tracking_config.gt_flow_source,
+        #     "camera_intrinsics": K1.tolist(),
+        #     "field_of_view_rad": torch.pi / 4,
+        #     "image_width": renderer.width,
+        #     "image_height": renderer.height,
+        #     "camera_translation": renderer.camera_trans[0].numpy(force=True).tolist(),
+        #     "camera_rotation_matrix": renderer.camera_rot.numpy(force=True).tolist(),
+        #     "frames": []
+        # }
 
-            flow_arc_source, flow_arc_target = new_flow_arc
+        # src_pts = torch.nonzero(not_occluded_correspondences)
+        # dst_pts = source_coords_to_target_coords(src_pts.permute(1, 0), optical_flow).permute(1, 0)
+        #
+        # # Convert to x, y order
+        # src_pts[:, [0, 1]] = src_pts[:, [1, 0]]
+        # dst_pts[:, [0, 1]] = dst_pts[:, [1, 0]]
+        #
+        # frame_data = {
+        #     "frame_idx": flow_target,
+        #     "gt_translation_change": self.gt_translations[0, 0, flow_target].numpy(force=True).tolist(),
+        #     "gt_rotation_change_deg": torch.rad2deg(self.gt_rotations[0, flow_target]).numpy(
+        #         force=True).tolist(),
+        #     "source_points_xy": src_pts.numpy(force=True).tolist(),
+        #     "target_points_xy": dst_pts.numpy(force=True).tolist(),
+        # }
+        # data["frames"].append(frame_data)
 
-            values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
-            (occlusion_mask_front, seg_mask_front, target_front,
-             template_front, template_front_overlay, step, flow_frontview) = values_frontview
+        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result)
 
-            display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
-
-            fig, axs = plt.subplots(3, 2, figsize=(8, 8))
-
-            for ax in axs.flat:
-                ax.axis('off')
-
-            darkening_factor = 0.5
-            axs[0, 0].imshow(template_front * darkening_factor, extent=display_bounds)
-            axs[0, 0].set_title('Template Front')
-
-            axs[1, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
-            axs[1, 0].set_title('Template Front Occlusion')
-
-            axs[2, 0].imshow(target_front * darkening_factor, extent=display_bounds)
-            axs[2, 0].set_title('Target Front')
-
-            height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
-            x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
-            template_coords = np.stack((y, x), axis=0).reshape(2, -1)  # Shape: [2, height*width]
-
-            # Plot lines on the target front and back view subplots
-            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
-
-            flow_frontview_np = flow_frontview.numpy(force=True)
-
-            matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
-            if frame_result.inliers is not None:
-                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-                self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
-                matching_text += f'inliers: {inliers.shape[1]}\n'
-
-            if frame_result.outliers is not None:
-                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-                self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
-                matching_text += f'outliers: {outliers.shape[1]}'
-
-            axs[1, 0].text(0.95, 0.95, matching_text, transform=axs[1, 0].transAxes, fontsize=4,
-                           verticalalignment='top', horizontalalignment='right',
-                           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
-
-            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
-                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
-
-            if self.tracking_config.matching_target_to_backview:
-                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source,
-                                                               flow_arc_target)
-                (occlusion_mask_back, seg_mask_back, target_back, template_back,
-                 template_back_overlay, step, flow_backview) = values_backview
-
-                assert template_back_overlay.shape == template_front_overlay.shape
-                assert target_back.shape == target_front.shape
-
-                axs[0, 1].imshow(template_back * darkening_factor, extent=display_bounds)
-                axs[0, 1].set_title('Template Back')
-
-                axs[1, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
-                axs[1, 1].set_title('Template Back Occlusion')
-
-                axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
-                axs[2, 1].set_title('Target Back')
-
-                flow_backview_np = flow_backview.numpy(force=True)
-                self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
-                                        flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
-
-            destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
-            fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+        # if max(keyframes) == 36:
+        #     import json
+        #     with open(self.write_results.write_folder / 'correspondences.json', 'w') as file:
+        #         json.dump(data, file, indent=4)
 
         # FLOW BACKVIEW ERROR VISUALIZATION
 
@@ -544,6 +505,84 @@ class WriteResults:
             rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
+
+    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result):
+        for new_flow_arc in new_flow_arcs:
+
+            flow_arc_source, flow_arc_target = new_flow_arc
+
+            values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
+            (occlusion_mask_front, seg_mask_front, target_front,
+             template_front, template_front_overlay, step, flow_frontview) = values_frontview
+
+            display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
+
+            fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+            for ax in axs.flat:
+                ax.axis('off')
+
+            darkening_factor = 0.5
+            axs[0, 0].imshow(template_front * darkening_factor, extent=display_bounds)
+            axs[0, 0].set_title('Template Front')
+
+            axs[1, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
+            axs[1, 0].set_title('Template Front Occlusion')
+
+            axs[2, 0].imshow(target_front * darkening_factor, extent=display_bounds)
+            axs[2, 0].set_title('Target Front')
+
+            height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
+            x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
+            template_coords = np.stack((y, x), axis=0).reshape(2, -1)  # Shape: [2, height*width]
+
+            # Plot lines on the target front and back view subplots
+            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
+
+            flow_frontview_np = flow_frontview.numpy(force=True)
+
+            matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
+            if frame_result.inliers is not None:
+                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+                self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
+                matching_text += f'inliers: {inliers.shape[1]}\n'
+
+            if frame_result.outliers is not None:
+                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+                self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
+                matching_text += f'outliers: {outliers.shape[1]}'
+
+            axs[1, 0].text(0.95, 0.95, matching_text, transform=axs[1, 0].transAxes, fontsize=4,
+                           verticalalignment='top', horizontalalignment='right',
+                           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
+
+            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
+                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
+
+            if self.tracking_config.matching_target_to_backview:
+                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source,
+                                                               flow_arc_target)
+                (occlusion_mask_back, seg_mask_back, target_back, template_back,
+                 template_back_overlay, step, flow_backview) = values_backview
+
+                assert template_back_overlay.shape == template_front_overlay.shape
+                assert target_back.shape == target_front.shape
+
+                axs[0, 1].imshow(template_back * darkening_factor, extent=display_bounds)
+                axs[0, 1].set_title('Template Back')
+
+                axs[1, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
+                axs[1, 1].set_title('Template Back Occlusion')
+
+                axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
+                axs[2, 1].set_title('Target Back')
+
+                flow_backview_np = flow_backview.numpy(force=True)
+                self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
+                                        flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
+
+            destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
+            fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
 
     @staticmethod
     def draw_cross_axes_flow_matches(source_coords, flow_frontview_np, axs1, axs2, cmap):
