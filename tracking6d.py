@@ -862,10 +862,14 @@ class Tracking6D:
         segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
                                     self.config.segmentation_mask_threshold)
 
-        not_occluded_correspondences = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+        not_occluded_points_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
-        result = estimate_pose_using_dense_correspondences(optical_flow, not_occluded_correspondences, W, K1, K2,
-                                                           self.rendering.width, self.rendering.height,
+
+        src_pts_yx = torch.nonzero(not_occluded_points_mask).to(torch.float32)
+        dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
+
+        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W, K1,
+                                                           K2, self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
         r, t, inlier_points, outlier_points = result
         q = axis_angle_to_quaternion(r)

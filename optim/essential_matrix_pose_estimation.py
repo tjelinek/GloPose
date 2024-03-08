@@ -8,12 +8,8 @@ from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential
 from flow import source_coords_to_target_coords
 
 
-def estimate_pose_using_dense_correspondences(dense_correspondences: torch.Tensor,
-                                              dense_correspondences_mask: torch.Tensor, W_world_to_cam,
-                                              K1, K2, width: int, height: int, ransac_conf=0.99, method='magsac++'):
-    # src and target in y, x order
-    src_pts_yx = torch.nonzero(dense_correspondences_mask).to(torch.float32)
-    dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), dense_correspondences).permute(1, 0)
+def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to_cam, K1, K2,
+                                              width: int, height: int, ransac_conf=0.99, method='magsac++'):
 
     # Convert to x, y order
     src_pts_xy = src_pts_yx.clone()
