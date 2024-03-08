@@ -593,7 +593,8 @@ class WriteResults:
             random_sample = np.random.permutation(total_points)[:max_points]
             source_coords = source_coords[:, random_sample]
 
-        target_coords = source_coords_to_target_coords_np(source_coords, flow_frontview_np)
+        source_coords[0, :] = flow_np.shape[-2] - source_coords[0, :]
+        target_coords = source_coords_to_target_coords_np(source_coords, flow_np)
 
         norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
         cmap = plt.get_cmap(cmap)
@@ -604,8 +605,6 @@ class WriteResults:
 
             yA, xA = source_coords[:, i]
             yB, xB = target_coords[:, i]
-            yB = flow_frontview_np.shape[-2] - yB
-            yA = flow_frontview_np.shape[-2] - yA
 
             # Create a ConnectionPatch for each pair of sampled points
             axs1.plot(xA, yA, color=color, marker='X', markersize=0.5)

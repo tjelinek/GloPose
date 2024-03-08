@@ -830,7 +830,7 @@ class Tracking6D:
         if self.config.matching_target_to_backview:
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            result = self.estimate_pose_using_optical_flow(K1, K2, W, back_flow_observations, flow_source)
+            result = self.estimate_pose_using_optical_flow(K1, K2, W, back_flow_observations, flow_source, flow_arc_idx)
             inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview = result
 
             inlier_points_list_backview[flow_arc] = inlier_points_backview
