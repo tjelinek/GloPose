@@ -506,10 +506,26 @@ class WriteResults:
             rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
             self.all_proj.write(rendered_silhouette)
 
-    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result):
+    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
+                                     deep_encoder, renderer, renderer_backview):
+
         for new_flow_arc in new_flow_arcs:
 
             flow_arc_source, flow_arc_target = new_flow_arc
+
+            keyframes = [flow_arc_source, flow_arc_target]
+            flow_frames = [flow_arc_source, flow_arc_target]
+
+            encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                       flow_frames)
+
+            rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                     flow_arcs_indices=[(0, 1)])
+            rendered_flow_result_back = renderer_backview.compute_theoretical_flow(encoder_result,
+                                                                                   encoder_result_flow_frames,
+                                                                                   flow_arcs_indices=[(0, 1)])
+            rendered_flow = rendered_flow_result.theoretical_flow.numpy(force=True)
+            rendered_flow_back = rendered_flow_result_back.theoretical_flow.numpy(force=True)
 
             values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
             (occlusion_mask_front, seg_mask_front, target_front,
@@ -544,7 +560,8 @@ class WriteResults:
             matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
             if frame_result.inliers is not None:
                 inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-                self.draw_cross_axes_flow_matches(inliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Greens')
+                self.draw_cross_axes_flow_matches(inliers, seg_mask_front, flow_frontview_np, rendered_flow, axs[1, 0],
+                                                  axs[2, 0], 'Greens', 'Reds', 'inliers')
                 matching_text += f'inliers: {inliers.shape[1]}\n'
 
             if frame_result.outliers is not None:
@@ -584,27 +601,42 @@ class WriteResults:
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
 
-    @staticmethod
-    def draw_cross_axes_flow_matches(source_coords, flow_frontview_np, axs1, axs2, cmap):
-        max_points = 15
-        total_points = source_coords.shape[1]
+    def draw_cross_axes_flow_matches(self, source_coords, segment_mask, flow_np, flow_np_from_movement, axs1, axs2,
+                                     cmap_correct, cmap_incorrect, point_type, max_points=30):
+        outlier_pixel_threshold = 3
+
+        segment_mask = segment_mask >= self.tracking_config.segmentation_mask_threshold
+        foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
+
+        total_points = foreground_points.shape[1]
 
         if total_points > max_points:
-            random_sample = np.random.permutation(total_points)[:max_points]
-            source_coords = source_coords[:, random_sample]
+            random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
+            source_coords = foreground_points[:, random_sample]
 
         source_coords[0, :] = flow_np.shape[-2] - source_coords[0, :]
         target_coords = source_coords_to_target_coords_np(source_coords, flow_np)
+        target_coords_from_pred_movement = source_coords_to_target_coords_np(source_coords, flow_np_from_movement)
 
         norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
-        cmap = plt.get_cmap(cmap)
-        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        cmap_correct = plt.get_cmap(cmap_correct)
+        cmap_incorrect = plt.get_cmap(cmap_incorrect)
+        mappable_correct = ScalarMappable(norm=norm, cmap=cmap_correct)
+        mappable_incorrect = ScalarMappable(norm=norm, cmap=cmap_incorrect)
 
         for i in range(0, source_coords.shape[1]):
-            color = mappable.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
-            yA, xA = source_coords[:, i]
-            yB, xB = target_coords[:, i]
+            yxA = source_coords[:, i]
+            yxB = target_coords[:, i]
+            yxB_movement = target_coords_from_pred_movement[:, i]
+
+            yA, xA = yxA
+            yB, xB = yxB
+
+            color = mappable_correct.to_rgba(source_coords.shape[1] / 2 + i / 2)
+            if ((np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold and point_type == 'inliers') or
+                    (np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold and point_type == 'outliers')):
+                color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
             # Create a ConnectionPatch for each pair of sampled points
             axs1.plot(xA, yA, color=color, marker='X', markersize=0.5)
@@ -622,7 +654,7 @@ class WriteResults:
         flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
         flow_frontview = flow_observation_frontview.observed_flow
         occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
-        seg_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_segmentation)
+        seg_mask_front = flow_observation_frontview.observed_flow_segmentation.numpy(force=True)
         flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
         template_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_source)
         target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
@@ -734,7 +766,7 @@ class WriteResults:
         # Apply masks
         valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold
         if segment_mask is not None:
-            valid_mask &= segment_mask[-y1.astype(int), x1.astype(int), 0] > segment_threshold
+            valid_mask &= segment_mask[0, 0, 0, -y1.astype(int), x1.astype(int)] > segment_threshold
 
         # Filter coordinates and colors based on valid_mask
         x1, y1, x2_f, y2_f = x1[valid_mask], y1[valid_mask], x2_f[valid_mask], y2_f[valid_mask]
