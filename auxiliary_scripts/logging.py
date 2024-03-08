@@ -1019,15 +1019,13 @@ class WriteResults:
                     imageio.imwrite(rendering_path, target_rendered_image_np)
 
                 # Adjust (0, 1) range to pixel range
-                theoretical_flow = rendered_flow_result.theoretical_flow[0, -1].detach().clone().cpu()
-                theoretical_flow[0, ...] *= theoretical_flow.shape[-1]
-                theoretical_flow[1, ...] *= theoretical_flow.shape[-2]
+                theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
+                theoretical_flow = flow_unit_coords_to_image_coords(theoretical_flow).squeeze().detach().clone().cpu()
 
                 # Adjust (0, 1) range to pixel range
                 observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
+                observed_flow = flow_unit_coords_to_image_coords(observed_flow)
                 observed_flow = observed_flow.squeeze().detach().clone().cpu()
-                observed_flow[0, ...] *= observed_flow.shape[-1]
-                observed_flow[1, ...] *= observed_flow.shape[-2]
 
                 # Obtain flow and image illustrations
                 # theoretical_flow = self.write_tensor_into_bbox(theoretical_flow, bounding_box)
