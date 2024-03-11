@@ -6,6 +6,7 @@ from typing import Dict, Iterable, Tuple, List
 import os
 import math
 
+import h5py
 import torch
 import cv2
 import imageio
@@ -27,13 +28,14 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from utils import write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg
+from utils import write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg, \
+    get_not_occluded_foreground_points, points_height_first_format_to_width_first_format
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_np
+    source_coords_to_target_coords_np, source_coords_to_target_coords
 
 
 class WriteResults:
@@ -83,7 +85,30 @@ class WriteResults:
         self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
         self.tensorboard_log = None
 
+        self.correspondences_log_file = self.write_folder / 'correspondences.h5'
+        self.correspondences_log_write_common_data()
+
         self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
+
+    def correspondences_log_write_common_data(self):
+        data = {
+            "sequence": self.tracking_config.sequence,
+            "flow_source": self.tracking_config.gt_flow_source,
+            "camera_intrinsics": self.rendering.camera_intrinsics.numpy(force=True),
+            "field_of_view_rad": self.rendering.fov,
+            "image_width": self.rendering.width,
+            "image_height": self.rendering.height,
+            "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
+            "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
+            "frames": []
+        }
+
+        with h5py.File(self.correspondences_log_file, 'w') as f:
+            for key, value in data.items():
+                if isinstance(value, np.ndarray):
+                    f.create_dataset(key, data=value)
+                else:
+                    f.create_dataset(key, data=[value])
 
     def __del__(self):
         self.all_input.release()
@@ -336,48 +361,13 @@ class WriteResults:
                             frame_result.per_pixel_flow_error)
 
         # FLOW BACKVIEW ERROR VISUALIZATION
-        # K1 = K2 = renderer.camera_intrinsics.numpy(force=True)
-        #
-        # data = {
-        #     "sequence": self.tracking_config.sequence,
-        #     "flow_source": self.tracking_config.gt_flow_source,
-        #     "camera_intrinsics": K1.tolist(),
-        #     "field_of_view_rad": torch.pi / 4,
-        #     "image_width": renderer.width,
-        #     "image_height": renderer.height,
-        #     "camera_translation": renderer.camera_trans[0].numpy(force=True).tolist(),
-        #     "camera_rotation_matrix": renderer.camera_rot.numpy(force=True).tolist(),
-        #     "frames": []
-        # }
-
-        # src_pts = torch.nonzero(not_occluded_correspondences)
-        # dst_pts = source_coords_to_target_coords(src_pts.permute(1, 0), optical_flow).permute(1, 0)
-        #
-        # # Convert to x, y order
-        # src_pts[:, [0, 1]] = src_pts[:, [1, 0]]
-        # dst_pts[:, [0, 1]] = dst_pts[:, [1, 0]]
-        #
-        # frame_data = {
-        #     "frame_idx": flow_target,
-        #     "gt_translation_change": self.gt_translations[0, 0, flow_target].numpy(force=True).tolist(),
-        #     "gt_rotation_change_deg": torch.rad2deg(self.gt_rotations[0, flow_target]).numpy(
-        #         force=True).tolist(),
-        #     "source_points_xy": src_pts.numpy(force=True).tolist(),
-        #     "target_points_xy": dst_pts.numpy(force=True).tolist(),
-        # }
-        # data["frames"].append(frame_data)
-
-        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result)
-
-        # if max(keyframes) == 36:
-        #     import json
-        #     with open(self.write_results.write_folder / 'correspondences.json', 'w') as file:
-        #         json.dump(data, file, indent=4)
-
-        # FLOW BACKVIEW ERROR VISUALIZATION
+        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
+                                          deep_encoder, renderer, renderer_backview)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
+
+        self.dump_correspondences(active_keyframes, new_flow_arcs, gt_rotations, gt_translations)
 
         with torch.no_grad():
 
@@ -607,6 +597,44 @@ class WriteResults:
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+
+    def dump_correspondences(self, keyframes: KeyframeBuffer, new_flow_arcs, gt_rotations, gt_translations):
+
+        with h5py.File(self.correspondences_log_file, 'a') as f:
+
+            for flow_arc in new_flow_arcs:
+                source_frame, target_frame = flow_arc
+
+                flow_observation = keyframes.get_flows_between_frames(source_frame, target_frame)
+
+                src_pts_yx = get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
+                                                                flow_observation.observed_flow_segmentation,
+                                                                self.tracking_config.segmentation_mask_threshold,
+                                                                self.tracking_config.occlusion_coef_threshold)
+                dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0),
+                                                            flow_observation.observed_flow).permute(1, 0)
+
+                src_pts_xy = points_height_first_format_to_width_first_format(src_pts_yx)
+                dst_pts_xy = points_height_first_format_to_width_first_format(dst_pts_yx)
+
+                frame_data = {
+                    "flow_arc": flow_arc,
+                    "gt_translation": gt_translations[0, 0, target_frame].numpy(force=True),
+                    "gt_rotation_change": torch.rad2deg(gt_rotations[0, target_frame]).numpy(force=True),
+                    "source_points_xy": src_pts_xy.numpy(force=True),
+                    "target_points_xy": dst_pts_xy.numpy(force=True),
+                }
+
+                if 'correspondences' not in f:
+                    frames_grp = f.create_group('correspondences')
+                else:
+                    frames_grp = f['correspondences']
+
+                frame_grp_name = f'frame_{flow_arc}'
+                frame_grp = frames_grp.create_group(frame_grp_name)
+
+                for key, value in frame_data.items():
+                    frame_grp.create_dataset(key, data=value)
 
     def draw_cross_axes_flow_matches(self, source_coords, segment_mask, flow_np, flow_np_from_movement, axs1, axs2,
                                      cmap_correct, cmap_incorrect, point_type, max_points=30):
