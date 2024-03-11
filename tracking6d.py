@@ -391,7 +391,7 @@ class Tracking6D:
         our_losses = -np.ones((files.shape[0] - 1, 1))
 
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
-                                          tracking_config=self.config)
+                                          tracking_config=self.config, rendering=self.rendering)
 
         template_frame_observation = self.tracker.next(0)
         template_frame_observation_from_back = self.tracker_backview.next(0)

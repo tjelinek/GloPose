@@ -40,7 +40,11 @@ class WriteResults:
     Metrics = namedtuple('Metrics', ['loss', 'rotation', 'translation',
                                      'gt_rotation', 'gt_translation'])
 
-    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig):
+    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering):
+
+        self.image_height = shape[0]
+        self.image_width = shape[1]
+
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
                                          10, (shape[1], shape[0]), True)
         self.all_segm = cv2.VideoWriter(os.path.join(write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
@@ -50,6 +54,9 @@ class WriteResults:
         self.all_proj_filtered = cv2.VideoWriter(os.path.join(write_folder, 'all_proj_filtered.avi'),
                                                  cv2.VideoWriter_fourcc(*"MJPG"), 10,
                                                  (shape[1], shape[0]), True)
+
+        self.rendering: RenderingKaolin = rendering
+
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((num_frames - 1, 1))
