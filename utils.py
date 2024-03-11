@@ -267,3 +267,21 @@ def normalize_vertices(vertices: torch.Tensor):
     vertices *= magnification
 
     return vertices
+
+
+def get_not_occluded_foreground_points(observed_occlusion, observed_segmentation, occlusion_threshold,
+                                       segmentation_threshold):
+
+    not_occluded_binary_mask = (observed_occlusion <= occlusion_threshold)
+    segmentation_binary_mask = (observed_segmentation > segmentation_threshold)
+    not_occluded_points_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+    src_pts_yx = torch.nonzero(not_occluded_points_mask).to(torch.float32)
+
+    return src_pts_yx
+
+
+def points_height_first_format_to_width_first_format(src_pts_yx):
+    src_pts_xy = src_pts_yx.clone()
+    src_pts_xy[:, [0, 1]] = src_pts_yx[:, [1, 0]]
+
+    return src_pts_xy

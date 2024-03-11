@@ -33,7 +33,8 @@ from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult, \
+    get_not_occluded_foreground_points
 
 
 @dataclass
@@ -857,15 +858,12 @@ class Tracking6D:
 
     def estimate_pose_using_optical_flow(self, K1, K2, W, flow_observations, flow_source, flow_arc_idx):
 
-        not_occluded_binary_mask = (flow_observations.observed_flow_occlusion[:, [flow_arc_idx]] <=
-                                    self.config.occlusion_coef_threshold)
-        segmentation_binary_mask = (flow_observations.observed_flow_segmentation[:, [flow_arc_idx]] >
-                                    self.config.segmentation_mask_threshold)
+        src_pts_yx = get_not_occluded_foreground_points(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
+                                                        flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
+                                                        self.config.segmentation_mask_threshold,
+                                                        self.config.occlusion_coef_threshold)
 
-        not_occluded_points_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
-
-        src_pts_yx = torch.nonzero(not_occluded_points_mask).to(torch.float32)
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
 
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W, K1,
