@@ -206,7 +206,8 @@ class Tracking6D:
                                self.config.features_channels).to(self.device)
 
         if not self.config.optimize_texture and self.gt_texture is not None:
-            self.encoder.texture_map = self.gt_texture_features
+            self.encoder.texture_map = torch.nn.Parameter(self.gt_texture_features)
+            self.encoder.texture_map.requires_grad = False
 
         def set_encoder_poses(encoder, rotations, translations):
             rotation_quaternion = axis_angle_to_quaternion(rotations)
@@ -509,8 +510,9 @@ class Tracking6D:
 
             tex = None
             if self.config.features == 'deep':
-                self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
-                               multi_camera_observations, multi_camera_flow_observations, frame_result.frame_losses)
+                if self.config.optimize_texture:
+                    self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
+                                   multi_camera_observations, multi_camera_flow_observations, frame_result.frame_losses)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
@@ -589,7 +591,7 @@ class Tracking6D:
             observed_flow = observed_renderings.theoretical_flow.detach()
             observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
                                                      self.shape[-1], self.shape[-2])
-            # occlusion = observed_renderings.rendered_flow_occlusion.detach()
+            occlusion = observed_renderings.rendered_flow_occlusion.detach()
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
