@@ -341,6 +341,7 @@ class WriteResults:
             image[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
         return image_with_margins
 
+    @torch.no_grad()
     def write_results(self, bounding_box, our_losses, frame_i, encoder_result, tex, new_flow_arcs, frame_result,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
                       logged_sgd_translations, logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder,
@@ -368,139 +369,137 @@ class WriteResults:
 
         self.dump_correspondences(active_keyframes, new_flow_arcs, gt_rotations, gt_translations)
 
-        with torch.no_grad():
+        gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
+        gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
 
-            gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
-            gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
+        last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
+                                                                       ))[0, -1]
 
-            last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
-                                                                           ))[0, -1]
+        self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
+                                                    translation=logged_sgd_translations[-1][0, 0, -1],
+                                                    rotation=last_logged_sgd_rotation,
+                                                    gt_rotation=rad_to_deg(gt_rotation_current_frame),
+                                                    gt_translation=gt_translation_current_frame)
 
-            self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
-                                                        translation=logged_sgd_translations[-1][0, 0, -1],
-                                                        rotation=last_logged_sgd_rotation,
-                                                        gt_rotation=rad_to_deg(gt_rotation_current_frame),
-                                                        gt_translation=gt_translation_current_frame)
+        self.visualize_logged_metrics()
 
-            self.visualize_logged_metrics()
+        self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
+                                           frame_result.frame_losses, frame_i,
+                                           gt_rotation=gt_rotation_current_frame,
+                                           gt_translation=gt_translation_current_frame)
 
-            self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
-                                               frame_result.frame_losses, frame_i,
-                                               gt_rotation=gt_rotation_current_frame,
-                                               gt_translation=gt_translation_current_frame)
+        print(f"Keyframes: {active_keyframes.keyframes}, "
+              f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
 
-            print(f"Keyframes: {active_keyframes.keyframes}, "
-                  f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
+        self.tracking_log.write(f"Step {frame_i}:\n")
+        self.tracking_log.write(f"Keyframes: {active_keyframes.keyframes}\n")
 
-            self.tracking_log.write(f"Step {frame_i}:\n")
-            self.tracking_log.write(f"Keyframes: {active_keyframes.keyframes}\n")
+        self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
+        self.write_all_encoder_rotations(deep_encoder, max(active_keyframes.keyframes) + 1)
 
-            self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
-            self.write_all_encoder_rotations(deep_encoder, max(active_keyframes.keyframes) + 1)
+        if self.tracking_config.features == 'rgb':
+            tex = detached_result.texture_maps
 
-            if self.tracking_config.features == 'rgb':
-                tex = detached_result.texture_maps
+        feat_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                               detached_result.vertices, deep_encoder.face_features,
+                                               detached_result.texture_maps, detached_result.lights)
 
-            feat_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                                   detached_result.vertices, deep_encoder.face_features,
-                                                   detached_result.texture_maps, detached_result.lights)
+        feat_renders = feat_renders_result.rendered_image
 
-            feat_renders = feat_renders_result.rendered_image
+        rgb_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
+                                              detached_result.vertices, deep_encoder.face_features,
+                                              tex, detached_result.lights)
 
-            rgb_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                                  detached_result.vertices, deep_encoder.face_features,
-                                                  tex, detached_result.lights)
+        renders = rgb_renders_result.rendered_image
+        rendered_silhouette = rgb_renders_result.rendered_image_segmentation
 
-            renders = rgb_renders_result.rendered_image
-            rendered_silhouette = rgb_renders_result.rendered_image_segmentation
+        renders_crop = renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+        feat_renders_crop = feat_renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
 
-            renders_crop = renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-            feat_renders_crop = feat_renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+        self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
+                                       observed_segmentations[:, [-1]], frame_i)
 
-            self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-                                           observed_segmentations[:, [-1]], frame_i)
+        write_renders(feat_renders[:, :, :3], self.write_folder, self.tracking_config.max_keyframes + 1, ids=0)
+        write_renders(renders_crop, self.write_folder, self.tracking_config.max_keyframes + 1, ids=1)
 
-            write_renders(feat_renders[:, :, :3], self.write_folder, self.tracking_config.max_keyframes + 1, ids=0)
-            write_renders(renders_crop, self.write_folder, self.tracking_config.max_keyframes + 1, ids=1)
+        # write_renders(torch.cat((images[..., bounding_box[0]:bounding_box[1],
+        #                          bounding_box[2]:bounding_box[3]], feat_renders[:, :, :, -1:]), 3),
+        #                 self.write_folder, self.tracking_config.max_keyframes + 1, ids=2)
 
-            # write_renders(torch.cat((images[..., bounding_box[0]:bounding_box[1],
-            #                          bounding_box[2]:bounding_box[3]], feat_renders[:, :, :, -1:]), 3),
-            #                 self.write_folder, self.tracking_config.max_keyframes + 1, ids=2)
+        write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
+                       deep_encoder.face_features[0].cpu().numpy(),
+                       os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
+        save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
+        save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
 
-            write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
-                           deep_encoder.face_features[0].cpu().numpy(),
-                           os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
-            save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-            save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
+        with open(self.write_folder / "model.mtl", "r") as file:
+            lines = file.readlines()
 
-            with open(self.write_folder / "model.mtl", "r") as file:
-                lines = file.readlines()
+        # Replace the last line
+        lines[-1] = f"map_Kd tex_{frame_i}.png\n"
 
-            # Replace the last line
-            lines[-1] = f"map_Kd tex_{frame_i}.png\n"
+        # Write the result to a new file
+        with open(self.write_folder / f"model_{frame_i}.mtl", "w") as file:
+            file.writelines(lines)
 
-            # Write the result to a new file
-            with open(self.write_folder / f"model_{frame_i}.mtl", "w") as file:
-                file.writelines(lines)
+        renders_np = renders.numpy(force=True)
+        observed_images_numpy = observed_images.numpy(force=True)
+        observed_segmentations_numpy = observed_segmentations.numpy(force=True)
+        segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
 
-            renders_np = renders.numpy(force=True)
-            observed_images_numpy = observed_images.numpy(force=True)
-            observed_segmentations_numpy = observed_segmentations.numpy(force=True)
-            segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
+        write_video(renders_np, os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
+        write_video(observed_images_numpy, os.path.join(self.write_folder, 'input.avi'), fps=6)
 
-            write_video(renders_np, os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
-            write_video(observed_images_numpy, os.path.join(self.write_folder, 'input.avi'), fps=6)
+        write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
+        for tmpi in range(renders.shape[1]):
+            img = observed_images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
+            seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1],
+                  bounding_box[2]:bounding_box[3]].clone()
+            save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
+            seg[seg == 0] = 0.35
+            save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
+            save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1],
+                       bounding_box[2]:bounding_box[3]],
+                       os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
+            save_image(torch.cat((img, seg), 0),
+                       os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
+            save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
+                       os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
+            save_image(renders_crop[0, tmpi, 0, :],
+                       os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
+            save_image(feat_renders_crop[0, tmpi, 0, :],
+                       os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
-            write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
-            for tmpi in range(renders.shape[1]):
-                img = observed_images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-                seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1],
-                      bounding_box[2]:bounding_box[3]].clone()
-                save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
-                seg[seg == 0] = 0.35
-                save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-                save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1],
-                           bounding_box[2]:bounding_box[3]],
-                           os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
-                save_image(torch.cat((img, seg), 0),
-                           os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
-                save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
-                           os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
-                save_image(renders_crop[0, tmpi, 0, :],
-                           os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
-                save_image(feat_renders_crop[0, tmpi, 0, :],
-                           os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
+            segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
+            self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
+                                                          observed_segmentations[:, -1:, [-1]]).detach().cpu()
+            self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
+                                                     observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
-                segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
-                self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
-                                                              observed_segmentations[:, -1:, [-1]]).detach().cpu()
-                self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
-                                                         observed_segmentations[:, -1:, [-1]]).detach().cpu()
+        print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
+        np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
+                   delimiter='\n')
+        np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
+        np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
 
-            print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
-            np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
-                       delimiter='\n')
-            np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
-            np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
+        image_to_write = observed_images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
+        image_to_write = image_to_write.transpose(2, 3, 1, 0)
+        image_to_write = image_to_write[:, :, [2, 1, 0], -1]
+        image_to_write = (image_to_write * 255).astype(np.uint8)
+        self.all_input.write(image_to_write)
 
-            image_to_write = observed_images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
-            image_to_write = image_to_write.transpose(2, 3, 1, 0)
-            image_to_write = image_to_write[:, :, [2, 1, 0], -1]
-            image_to_write = (image_to_write * 255).astype(np.uint8)
-            self.all_input.write(image_to_write)
+        segmentation_to_write = (observed_images[0, :, :3] * observed_segmentations[0])
+        segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
+        segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
+        segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
+        segmentation_to_write = (segmentation_to_write * 255).astype(np.uint8)
+        self.all_segm.write(segmentation_to_write)
 
-            segmentation_to_write = (observed_images[0, :, :3] * observed_segmentations[0])
-            segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
-            segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
-            segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
-            segmentation_to_write = (segmentation_to_write * 255).astype(np.uint8)
-            self.all_segm.write(segmentation_to_write)
-
-            rendered_silhouette = renders[0, :, :3].detach().clamp(min=0, max=1).cpu().numpy()
-            rendered_silhouette = rendered_silhouette.transpose(2, 3, 1, 0)
-            rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
-            rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
-            self.all_proj.write(rendered_silhouette)
+        rendered_silhouette = renders[0, :, :3].detach().clamp(min=0, max=1).cpu().numpy()
+        rendered_silhouette = rendered_silhouette.transpose(2, 3, 1, 0)
+        rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
+        rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
+        self.all_proj.write(rendered_silhouette)
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
                                      deep_encoder, renderer, renderer_backview):
@@ -719,6 +718,7 @@ class WriteResults:
         return (occlusion_mask_front, seg_mask_front, target_front,
                 template_front, template_front_overlay, step, flow_frontview)
 
+    @staticmethod
     def add_loss_plot(self, ax_, frame_losses_, indices=None):
         if indices is None:
             indices = range(len(frame_losses_))
@@ -834,95 +834,95 @@ class WriteResults:
         ax1.scatter(x1, y1, color=colors, marker=marker, alpha=0.8, s=1.5)
         ax2.scatter(x2_f, y2_f, color=colors, marker=marker, alpha=0.8, s=1.5)
 
+    @torch.no_grad()
     def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
                          predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
                          gt_object_mask=None):
 
-        with torch.no_grad():
-            encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d.encoder, max(keyframes) + 1)
+        encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d.encoder, max(keyframes) + 1)
 
-            chamfer_dist = "NA"
-            iou_3d = "NA"
-            miou_2d = "NA"
-            last_iou_2d = "NA"
-            mTransAll = "NA"
-            mTransKF = "NA"
-            transLast = "NA"
-            mAngDiffAll = "NA"
-            mAngDiffKF = "NA"
-            angDiffLast = "NA"
+        chamfer_dist = "NA"
+        iou_3d = "NA"
+        miou_2d = "NA"
+        last_iou_2d = "NA"
+        mTransAll = "NA"
+        mTransKF = "NA"
+        transLast = "NA"
+        mAngDiffAll = "NA"
+        mAngDiffKF = "NA"
+        angDiffLast = "NA"
 
-            if gt_vertices is not None:
-                chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
+        if gt_vertices is not None:
+            chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
 
-            if gt_rotation is not None:
-                gt_quaternion = axis_angle_to_quaternion(gt_rotation)
+        if gt_rotation is not None:
+            gt_quaternion = axis_angle_to_quaternion(gt_rotation)
 
-                pred_quaternion_all_frames = encoder_result_all_frames.quaternions
-                gt_quaternion_all_frames = gt_quaternion[:, :stepi + 1]
+            pred_quaternion_all_frames = encoder_result_all_frames.quaternions
+            gt_quaternion_all_frames = gt_quaternion[:, :stepi + 1]
 
-                pred_quaternion_keyframes = predicted_quaternion
-                gt_quaternion_keyframes = gt_quaternion[:, keyframes]
+            pred_quaternion_keyframes = predicted_quaternion
+            gt_quaternion_keyframes = gt_quaternion[:, keyframes]
 
-                pred_quaternion_last = predicted_quaternion[None, :, -1]
-                gt_quaternion_last = gt_quaternion[None, :, stepi]
+            pred_quaternion_last = predicted_quaternion[None, :, -1]
+            gt_quaternion_last = gt_quaternion[None, :, stepi]
 
-                ang_diff_all_frames = quaternion_angular_difference(pred_quaternion_all_frames,
-                                                                    gt_quaternion_all_frames)
-                mAngDiffAll = float(ang_diff_all_frames.mean())
+            ang_diff_all_frames = quaternion_angular_difference(pred_quaternion_all_frames,
+                                                                gt_quaternion_all_frames)
+            mAngDiffAll = float(ang_diff_all_frames.mean())
 
-                ang_diff_keyframes = quaternion_angular_difference(pred_quaternion_keyframes,
-                                                                   gt_quaternion_keyframes)
-                mAngDiffKF = float(ang_diff_keyframes.mean())
+            ang_diff_keyframes = quaternion_angular_difference(pred_quaternion_keyframes,
+                                                               gt_quaternion_keyframes)
+            mAngDiffKF = float(ang_diff_keyframes.mean())
 
-                ang_diff_last_frame = quaternion_angular_difference(pred_quaternion_last,
-                                                                    gt_quaternion_last)
-                angDiffLast = float(ang_diff_last_frame.mean())
+            ang_diff_last_frame = quaternion_angular_difference(pred_quaternion_last,
+                                                                gt_quaternion_last)
+            angDiffLast = float(ang_diff_last_frame.mean())
 
-            if gt_translation is not None:
-                pred_translation_all_frames = encoder_result_all_frames.translations
-                gt_translation_all_frames = gt_translation[:, :, :stepi + 1]
+        if gt_translation is not None:
+            pred_translation_all_frames = encoder_result_all_frames.translations
+            gt_translation_all_frames = gt_translation[:, :, :stepi + 1]
 
-                pred_translation_keyframes = predicted_translation
-                gt_translation_keyframes = gt_translation[:, :, keyframes]
+            pred_translation_keyframes = predicted_translation
+            gt_translation_keyframes = gt_translation[:, :, keyframes]
 
-                pred_translation_last = predicted_translation[None, :, :, -1]
-                gt_translation_last = gt_translation[None, :, :, stepi]
+            pred_translation_last = predicted_translation[None, :, :, -1]
+            gt_translation_last = gt_translation[None, :, :, stepi]
 
-                # Compute L2 norm for all frames
-                translation_l2_diff_all_frames = torch.norm(pred_translation_all_frames - gt_translation_all_frames,
-                                                            dim=-1)
-                mTransAll = float(translation_l2_diff_all_frames.mean())
+            # Compute L2 norm for all frames
+            translation_l2_diff_all_frames = torch.norm(pred_translation_all_frames - gt_translation_all_frames,
+                                                        dim=-1)
+            mTransAll = float(translation_l2_diff_all_frames.mean())
 
-                # Compute L2 norm for keyframes
-                translation_l2_diff_keyframes = torch.norm(pred_translation_keyframes - gt_translation_keyframes,
-                                                           dim=-1)
-                mTransKF = float(translation_l2_diff_keyframes.mean())
+            # Compute L2 norm for keyframes
+            translation_l2_diff_keyframes = torch.norm(pred_translation_keyframes - gt_translation_keyframes,
+                                                       dim=-1)
+            mTransKF = float(translation_l2_diff_keyframes.mean())
 
-                # Compute L2 norm for the last frame
-                translation_l2_diff_last = torch.norm(pred_translation_last - gt_translation_last, dim=-1)
-                transLast = float(translation_l2_diff_last.mean())
+            # Compute L2 norm for the last frame
+            translation_l2_diff_last = torch.norm(pred_translation_last - gt_translation_last, dim=-1)
+            transLast = float(translation_l2_diff_last.mean())
 
-            if gt_object_mask is not None:
+        if gt_object_mask is not None:
 
-                ious = torch.zeros(gt_object_mask.shape[1])
-                for frame_i in range(gt_object_mask.shape[1]):
-                    frame_iou = 1 - iou_loss(predicted_mask[None, None, :, frame_i],
-                                             gt_object_mask[None, None, :, frame_i])
-                    ious[frame_i] = frame_iou
+            ious = torch.zeros(gt_object_mask.shape[1])
+            for frame_i in range(gt_object_mask.shape[1]):
+                frame_iou = 1 - iou_loss(predicted_mask[None, None, :, frame_i],
+                                         gt_object_mask[None, None, :, frame_i])
+                ious[frame_i] = frame_iou
 
-                last_iou_2d = float(frame_iou)
-                miou_2d = float(torch.mean(ious))
+            last_iou_2d = float(frame_iou)
+            miou_2d = float(torch.mean(ious))
 
-            # ["Frame", "mIoU", "lastIoU" "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
-            #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
-            row_results = [stepi, miou_2d, last_iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
-                           mAngDiffAll, mAngDiffKF, angDiffLast]
+        # ["Frame", "mIoU", "lastIoU" "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
+        #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
+        row_results = [stepi, miou_2d, last_iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
+                       mAngDiffAll, mAngDiffKF, angDiffLast]
 
-            row_results_rounded = [round(res, 3) if type(res) is float else res for res in row_results]
+        row_results_rounded = [round(res, 3) if type(res) is float else res for res in row_results]
 
-            self.metrics_writer.writerow(row_results_rounded)
-            self.metrics_log.flush()
+        self.metrics_writer.writerow(row_results_rounded)
+        self.metrics_log.flush()
 
     def visualize_rotations_per_epoch(self, logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i,
                                       gt_rotation=None, gt_translation=None):
@@ -1039,110 +1039,109 @@ class WriteResults:
     def visualize_theoretical_flow(self, bounding_box, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview,
                                    new_flow_arcs: List[Tuple[int, int]], rgb_encoder: Encoder, deep_encoder: Encoder,
                                    renderer: RenderingKaolin, renderer_backview):
-        with torch.no_grad():
-            for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
+        for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
-                source_frame = flow_arc[0]
-                target_frame = flow_arc[1]
+            source_frame = flow_arc[0]
+            target_frame = flow_arc[1]
 
-                # Get optical flow frames
-                keyframes = [source_frame, target_frame]
-                flow_frames = [source_frame, target_frame]
+            # Get optical flow frames
+            keyframes = [source_frame, target_frame]
+            flow_frames = [source_frame, target_frame]
 
-                # Compute estimated shape
-                encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                           flow_frames)
+            # Compute estimated shape
+            encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                       flow_frames)
 
-                # Get texture map
-                tex_rgb = nn.Sigmoid()(rgb_encoder.texture_map)
+            # Get texture map
+            tex_rgb = nn.Sigmoid()(rgb_encoder.texture_map)
 
-                # Render keyframe images
-                rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
-                                                    encoder_result.vertices, deep_encoder.face_features, tex_rgb,
-                                                    encoder_result.lights)
+            # Render keyframe images
+            rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
+                                                encoder_result.vertices, deep_encoder.face_features, tex_rgb,
+                                                encoder_result.lights)
 
-                rendering_rgb = rendering_result.rendered_image
+            rendering_rgb = rendering_result.rendered_image
 
-                rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                         flow_arcs_indices=[(0, 1)])
+            rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                     flow_arcs_indices=[(0, 1)])
 
-                rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
+            rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
 
-                # Extract current and previous rendered images
-                source_rendered_image_rgb = rendered_keyframe_images[0, -2]
-                target_rendered_image_rgb = rendered_keyframe_images[0, -1]
+            # Extract current and previous rendered images
+            source_rendered_image_rgb = rendered_keyframe_images[0, -2]
+            target_rendered_image_rgb = rendered_keyframe_images[0, -1]
 
-                # Prepare file paths
-                theoretical_flow_paths = self.write_folder / Path('flows')
-                renderings_path = self.write_folder / Path('renderings')
-                occlusion_maps_path = self.write_folder / Path('rendered_occlusions')
+            # Prepare file paths
+            theoretical_flow_paths = self.write_folder / Path('flows')
+            renderings_path = self.write_folder / Path('renderings')
+            occlusion_maps_path = self.write_folder / Path('rendered_occlusions')
 
-                theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
-                renderings_path.mkdir(exist_ok=True, parents=True)
-                occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+            theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
+            renderings_path.mkdir(exist_ok=True, parents=True)
+            occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
-                theoretical_flow_path = theoretical_flow_paths / Path(
-                    f"predicted_flow_{source_frame}_{target_frame}.png")
-                flow_difference_path = theoretical_flow_paths / Path(
-                    f"flow_difference_{source_frame}_{target_frame}.png")
-                rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
-                occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            theoretical_flow_path = theoretical_flow_paths / Path(
+                f"predicted_flow_{source_frame}_{target_frame}.png")
+            flow_difference_path = theoretical_flow_paths / Path(
+                f"flow_difference_{source_frame}_{target_frame}.png")
+            rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
+            occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
-                visualize_occlusions(occlusion_path, source_rendered_image_rgb,
-                                     rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
+            visualize_occlusions(occlusion_path, source_rendered_image_rgb,
+                                 rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
 
-                # Convert tensors to NumPy arrays
-                target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-                target_rendered_image_np = target_rendered_image_np.astype('uint8')
+            # Convert tensors to NumPy arrays
+            target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
+            target_rendered_image_np = target_rendered_image_np.astype('uint8')
 
-                # Save rendered images
-                if flow_arc_idx == 0:
-                    imageio.imwrite(rendering_path, target_rendered_image_np)
+            # Save rendered images
+            if flow_arc_idx == 0:
+                imageio.imwrite(rendering_path, target_rendered_image_np)
 
-                # Adjust (0, 1) range to pixel range
-                theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
-                theoretical_flow = flow_unit_coords_to_image_coords(theoretical_flow).squeeze().detach().clone().cpu()
+            # Adjust (0, 1) range to pixel range
+            theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
+            theoretical_flow = flow_unit_coords_to_image_coords(theoretical_flow).squeeze().detach().clone().cpu()
 
-                # Adjust (0, 1) range to pixel range
-                observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
-                observed_flow = flow_unit_coords_to_image_coords(observed_flow)
-                observed_flow = observed_flow.squeeze().detach().clone().cpu()
+            # Adjust (0, 1) range to pixel range
+            observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
+            observed_flow = flow_unit_coords_to_image_coords(observed_flow)
+            observed_flow = observed_flow.squeeze().detach().clone().cpu()
 
-                # Obtain flow and image illustrations
-                # theoretical_flow = self.write_tensor_into_bbox(theoretical_flow, bounding_box)
-                # observed_flow = self.write_tensor_into_bbox(observed_flow, bounding_box)
+            # Obtain flow and image illustrations
+            # theoretical_flow = self.write_tensor_into_bbox(theoretical_flow, bounding_box)
+            # observed_flow = self.write_tensor_into_bbox(observed_flow, bounding_box)
 
-                observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
-                theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
+            observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
+            theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
 
-                target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
-                source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
+            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
+            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
 
-                target_image_segmentation = target_frame_observation.observed_segmentation[
-                    0, 0, 0].detach().clone().cpu()
-                source_image_segmentation = source_frame_observation.observed_segmentation[
-                    0, 0, 0].detach().clone().cpu()
+            target_image_segmentation = target_frame_observation.observed_segmentation[
+                0, 0, 0].detach().clone().cpu()
+            source_image_segmentation = source_frame_observation.observed_segmentation[
+                0, 0, 0].detach().clone().cpu()
 
-                rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[
-                    0, 0, 0].detach().clone().cpu()
+            rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[
+                0, 0, 0].detach().clone().cpu()
 
-                # Visualize flow and flow difference
-                flow_illustration = visualize_flow_with_images([source_rendered_image_rgb],
-                                                               target_rendered_image_rgb, observed_flows=None,
-                                                               gt_flows=theoretical_flow_np,
-                                                               gt_silhouette_current=target_image_segmentation,
-                                                               gt_silhouettes_prev=[source_image_segmentation],
-                                                               flow_occlusion_masks=[rendered_flow_occlusion_mask])
+            # Visualize flow and flow difference
+            flow_illustration = visualize_flow_with_images([source_rendered_image_rgb],
+                                                           target_rendered_image_rgb, observed_flows=None,
+                                                           gt_flows=theoretical_flow_np,
+                                                           gt_silhouette_current=target_image_segmentation,
+                                                           gt_silhouettes_prev=[source_image_segmentation],
+                                                           flow_occlusion_masks=[rendered_flow_occlusion_mask])
 
-                flow_difference_illustration = compare_flows_with_images([source_rendered_image_rgb],
-                                                                         target_rendered_image_rgb,
-                                                                         [observed_flow_np], theoretical_flow_np,
-                                                                         gt_silhouette_current=target_image_segmentation,
-                                                                         gt_silhouette_prev=[source_image_segmentation])
+            flow_difference_illustration = compare_flows_with_images([source_rendered_image_rgb],
+                                                                     target_rendered_image_rgb,
+                                                                     [observed_flow_np], theoretical_flow_np,
+                                                                     gt_silhouette_current=target_image_segmentation,
+                                                                     gt_silhouette_prev=[source_image_segmentation])
 
-                # Save flow illustrations
-                imageio.imwrite(theoretical_flow_path, flow_illustration)
-                imageio.imwrite(flow_difference_path, flow_difference_illustration)
+            # Save flow illustrations
+            imageio.imwrite(theoretical_flow_path, flow_illustration)
+            imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
     def visualize_flow(self, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview, flow_arcs,
                        per_pixel_flow_error):
