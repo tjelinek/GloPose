@@ -586,7 +586,11 @@ class Tracking6D:
 
             encoder_result, enc_flow = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
 
-            observed_renderings = self.rendering.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
+            renderer = self.rendering
+            if backview:
+                renderer = self.rendering_backview
+
+            observed_renderings = renderer.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
 
             observed_flow = observed_renderings.theoretical_flow.detach()
             observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
