@@ -479,7 +479,7 @@ class Tracking6D:
 
             if self.config.matching_target_to_backview:
                 all_frame_observations_backview: FrameObservation = \
-                    (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
+                    (self.active_keyframes_backview.get_observations_for_all_keyframes(bounding_box=b0))
                 all_flow_observations_backview: FlowObservation = \
                     (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
 
@@ -508,7 +508,7 @@ class Tracking6D:
             tex = None
             if self.config.features == 'deep':
                 self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
-                               all_frame_observations, all_flow_observations, frame_result.frame_losses)
+                               multi_camera_observations, multi_camera_flow_observations, frame_result.frame_losses)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
@@ -811,8 +811,8 @@ class Tracking6D:
         inlier_points_list_backview = {}
         outlier_points_list_backview = {}
 
-        flow_arc = flow_arcs[-1]
-        flow_arc_idx = len(flow_arcs) - 1
+        flow_arc = (0, len(keyframes) - 1)
+        flow_arc_idx = flow_arcs.index(flow_arc)
 
         flow_source, flow_target = flow_arc
 
@@ -1161,19 +1161,34 @@ class Tracking6D:
         if self.config.matching_target_to_backview:
             renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
 
-            rendered_flow_result = rendered_flow_result._replace(theoretical_flow=torch.cat(
-                [rendered_flow_result.theoretical_flow,
-                 rendered_flow_result_backview.theoretical_flow],
-                dim=1),
-                rendered_flow_segmentation=torch.cat(
-                    [rendered_flow_result.rendered_flow_segmentation,
-                     rendered_flow_result_backview.rendered_flow_segmentation],
-                    dim=1),
-                rendered_flow_occlusion=torch.cat(
-                    [rendered_flow_result.rendered_flow_occlusion,
-                     rendered_flow_result_backview.rendered_flow_occlusion],
-                    dim=1)
-            )
+            flow_rendering = FlowObservation(observed_flow=rendered_flow_result.theoretical_flow,
+                                             observed_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
+                                             observed_flow_occlusion=rendered_flow_result.rendered_flow_occlusion)
+
+            flow_rendering_back = FlowObservation(observed_flow=rendered_flow_result_backview.theoretical_flow,
+                                                  observed_flow_segmentation=rendered_flow_result_backview.
+                                                  rendered_flow_segmentation,
+                                                  observed_flow_occlusion=rendered_flow_result_backview.
+                                                  rendered_flow_occlusion)
+
+            multicam_observation = MultiCameraObservation.from_kwargs(frontview=flow_rendering,
+                                                                      backview=flow_rendering_back)
+            stacked_ren = multicam_observation.stack()
+
+            rendered_flow_result = RenderedFlowResult(theoretical_flow=stacked_ren.observed_flow,
+                                                      rendered_flow_segmentation=stacked_ren.observed_flow_segmentation,
+                                                      rendered_flow_occlusion=stacked_ren.observed_flow_occlusion)
+
+            frame_rendering = FrameObservation(observed_image=renders, observed_segmentation=rendered_silhouettes)
+            frame_rendering_back = FrameObservation(observed_image=renders_backview,
+                                                    observed_segmentation=rendered_silhouettes_backview)
+
+            multicam_rendering = MultiCameraObservation.from_kwargs(frontview=frame_rendering,
+                                                                    backview=frame_rendering_back)
+            stacked_frame_rendering = multicam_rendering.stack()
+
+            renders = stacked_frame_rendering.observed_image
+            rendered_silhouettes = stacked_frame_rendering.observed_segmentation
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function
@@ -1227,8 +1242,8 @@ class Tracking6D:
         dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
         self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
 
-    def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
-                  flow_observations: FlowObservation, frame_losses):
+    def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: MultiCameraObservation,
+                  flow_observations: MultiCameraObservation, frame_losses):
         start_time = time.time()
 
         self.best_model["value"] = 100
@@ -1238,10 +1253,13 @@ class Tracking6D:
         model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
 
+        stacked_observations = observations.stack()
+        stacked_flow_observations = flow_observations.stack()
+
         print("Texture optimization")
         epoch = 0
         for epoch in range(self.config.rgb_iters):
-            infer_result = self.infer_model(observations, flow_observations, keyframes=keyframes,
+            infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes=keyframes,
                                             flow_frames=flow_frames, flow_arcs=flow_arcs, encoder_type='rgb')
 
             encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result

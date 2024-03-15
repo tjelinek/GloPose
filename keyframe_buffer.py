@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 
 
 class Cameras(Enum):
-
     FRONTVIEW = 'frontview'
     BACKVIEW = 'backview'
 
@@ -29,23 +28,29 @@ class Observation:
 
         return copy
 
+    @staticmethod
+    def concatenate(*observations):
+
+        assert all(type(observation) is type(observations[0]) for observation in observations)
+        observation_type = type(observations[0])
+        concatenated_observations = observation_type()
+
+        for attr_name, attr_type in observation_type.__annotations__.items():
+            check_for_none = (getattr(observation, attr_name) is None for observation in observations)
+            if any(check_for_none):
+                assert all(check_for_none)
+            else:
+                concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
+                setattr(concatenated_observations, attr_name, concatenated_attr)
+
+        return concatenated_observations
+
 
 @dataclass
 class FrameObservation(Observation):
     observed_image: torch.Tensor = None
     observed_image_features: torch.Tensor = None
     observed_segmentation: torch.Tensor = None
-
-    @staticmethod
-    def concatenate(*observations):
-        concatenated_observations = FrameObservation()
-
-        for attr_name, attr_type in FrameObservation.__annotations__.items():
-            to_concatenate = [getattr(observation, attr_name) for observation in observations]
-            concatenated_attr = torch.cat(to_concatenate, dim=1)
-            setattr(concatenated_observations, attr_name, concatenated_attr)
-
-        return concatenated_observations
 
 
 @dataclass
@@ -54,15 +59,6 @@ class FlowObservation(Observation):
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
     observed_flow_uncertainty: torch.Tensor = None
-
-    @staticmethod
-    def concatenate(*observations: 'FlowObservation') -> 'FlowObservation':
-        concatenated_observations = FlowObservation()
-
-        for attr_name, attr_type in FlowObservation.__annotations__.items():
-            concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
-            setattr(concatenated_observations, attr_name, concatenated_attr)
-        return concatenated_observations
 
 
 @dataclass
@@ -235,4 +231,3 @@ class KeyframeBuffer:
         self.G = kept_graph
 
         return deleted_buffer
-
