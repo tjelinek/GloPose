@@ -5,18 +5,15 @@ import torch
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, Rt_to_matrix4x4, \
     matrix4x4_to_Rt, inverse_transformation, compose_transformations
 
-from flow import source_coords_to_target_coords
+from utils import tensor_index_to_coordinates_xy
 
 
 def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to_cam, K1, K2,
                                               width: int, height: int, ransac_conf=0.99, method='magsac++'):
 
     # Convert to x, y order
-    src_pts_xy = src_pts_yx.clone()
-    dst_pts_xy = dst_pts_yx.clone()
-    src_pts_xy[:, [0, 1]] = src_pts_yx[:, [1, 0]]
-    dst_pts_xy[:, [0, 1]] = dst_pts_yx[:, [1, 0]]
-    # dst_pts_xy[:, 0] = height - dst_pts_xy[:, 0]
+    src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+    dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
     # TODO When converting to numpy, I may need to change the source coord to its mirror in the y axis
 
     src_pts_np = src_pts_xy.numpy(force=True)

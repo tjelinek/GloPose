@@ -29,7 +29,7 @@ from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from utils import write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg, \
-    get_not_occluded_foreground_points, points_height_first_format_to_width_first_format
+    get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
@@ -100,7 +100,6 @@ class WriteResults:
             "image_height": self.rendering.height,
             "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
             "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
-            "frames": []
         }
 
         with h5py.File(self.correspondences_log_file, 'w') as f:
@@ -510,6 +509,10 @@ class WriteResults:
 
             flow_arc_source, flow_arc_target = new_flow_arc
 
+            if flow_arc_source != 0:
+                continue
+                # TODO not the most elegant thing to do
+
             keyframes = [flow_arc_source, flow_arc_target]
             flow_frames = [flow_arc_source, flow_arc_target]
 
@@ -554,21 +557,9 @@ class WriteResults:
 
             flow_frontview_np = flow_frontview.numpy(force=True)
 
-            matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
-            if frame_result.inliers is not None:
-                inliers = frame_result.inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-                self.draw_cross_axes_flow_matches(inliers, seg_mask_front, flow_frontview_np, rendered_flow, axs[1, 0],
-                                                  axs[2, 0], 'Greens', 'Reds', 'inliers')
-                matching_text += f'inliers: {inliers.shape[1]}\n'
-
-            if frame_result.outliers is not None:
-                outliers = frame_result.outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-                self.draw_cross_axes_flow_matches(outliers, flow_frontview_np, axs[1, 0], axs[2, 0], 'Reds')
-                matching_text += f'outliers: {outliers.shape[1]}'
-
-            axs[1, 0].text(0.95, 0.95, matching_text, transform=axs[1, 0].transAxes, fontsize=4,
-                           verticalalignment='top', horizontalalignment='right',
-                           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
+            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
+                                                     rendered_flow, seg_mask_front, occlusion_mask_front,
+                                                     frame_result.inliers, frame_result.outliers)
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
                                     flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
@@ -592,11 +583,33 @@ class WriteResults:
                 axs[2, 1].set_title('Target Back')
 
                 flow_backview_np = flow_backview.numpy(force=True)
+
+                self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], new_flow_arc, flow_backview_np,
+                                                         rendered_flow_back, seg_mask_back, occlusion_mask_back,
+                                                         frame_result.inliers_back, frame_result.outliers_back)
+
                 self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
                                         flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
 
             destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+
+    def visualize_inliers_outliers_matching(self, ax_source, axs_target, new_flow_arc, flow_np, rendered_flow, seg_mask,
+                                            occlusion, inliers, outliers):
+        matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
+        if inliers is not None:
+            inliers = inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+            self.draw_cross_axes_flow_matches(inliers, seg_mask, occlusion, flow_np, rendered_flow,
+                                              ax_source, axs_target, 'Greens', 'Reds', 'inliers')
+            matching_text += f'inliers: {inliers.shape[1]}\n'
+        if outliers is not None:
+            outliers = outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+            # self.draw_cross_axes_flow_matches(outliers, seg_mask_front, flow_frontview_np, rendered_flow, axs[1, 0],
+            #                                   axs[2, 0], 'Blues', 'Oranges', 'outliers')
+            matching_text += f'outliers: {outliers.shape[1]}'
+        ax_source.text(0.95, 0.95, matching_text, transform=ax_source.transAxes, fontsize=4,
+                       verticalalignment='top', horizontalalignment='right',
+                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
 
     def dump_correspondences(self, keyframes: KeyframeBuffer, new_flow_arcs, gt_rotations, gt_translations):
 
@@ -614,8 +627,8 @@ class WriteResults:
                 dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0),
                                                             flow_observation.observed_flow).permute(1, 0)
 
-                src_pts_xy = points_height_first_format_to_width_first_format(src_pts_yx)
-                dst_pts_xy = points_height_first_format_to_width_first_format(dst_pts_yx)
+                src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+                dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
 
                 frame_data = {
                     "flow_arc": flow_arc,
@@ -636,11 +649,11 @@ class WriteResults:
                 for key, value in frame_data.items():
                     frame_grp.create_dataset(key, data=value)
 
-    def draw_cross_axes_flow_matches(self, source_coords, segment_mask, flow_np, flow_np_from_movement, axs1, axs2,
-                                     cmap_correct, cmap_incorrect, point_type, max_points=30):
+    def draw_cross_axes_flow_matches(self, source_coords, segment_mask, occlusion_mask, flow_np, flow_np_from_movement,
+                                     axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
         outlier_pixel_threshold = 3
 
-        segment_mask = segment_mask >= self.tracking_config.segmentation_mask_threshold
+        segment_mask = (segment_mask >= self.tracking_config.segmentation_mask_threshold)
         foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
 
         total_points = foreground_points.shape[1]
@@ -669,7 +682,8 @@ class WriteResults:
             yB, xB = yxB
 
             color = mappable_correct.to_rgba(source_coords.shape[1] / 2 + i / 2)
-            if ((np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold and point_type == 'inliers') or
+            if ((np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold or
+                 occlusion_mask[-yA, xA] >= self.tracking_config.occlusion_coef_threshold and point_type == 'inliers') or
                     (np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold and point_type == 'outliers')):
                 color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 

@@ -280,8 +280,17 @@ def get_not_occluded_foreground_points(observed_occlusion, observed_segmentation
     return src_pts_yx
 
 
-def points_height_first_format_to_width_first_format(src_pts_yx):
+def tensor_index_to_coordinates_xy(src_pts_yx):
     src_pts_xy = src_pts_yx.clone()
     src_pts_xy[:, [0, 1]] = src_pts_yx[:, [1, 0]]
 
     return src_pts_xy
+
+
+def coordinates_xy_to_tensor_index(src_pts_xy):
+    src_pts_yx = src_pts_xy.clone()
+    src_pts_xy[..., [0, 1]] = src_pts_xy[..., [1, 0]]
+    src_pts_yx[..., 0] = -src_pts_yx[..., 0]
+
+    return src_pts_yx
+
