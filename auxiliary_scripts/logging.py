@@ -719,7 +719,7 @@ class WriteResults:
                 template_front, template_front_overlay, step, flow_frontview)
 
     @staticmethod
-    def add_loss_plot(self, ax_, frame_losses_, indices=None):
+    def add_loss_plot(ax_, frame_losses_, indices=None):
         if indices is None:
             indices = range(len(frame_losses_))
         ax_loss = ax_.twinx()
