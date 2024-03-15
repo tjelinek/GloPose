@@ -47,6 +47,8 @@ class FrameResult:
     per_pixel_flow_error: Any
     inliers: Dict
     outliers: Dict
+    inliers_back: Dict
+    outliers_back: Dict
 
 
 class InferenceResult(NamedTuple):
@@ -702,7 +704,7 @@ class Tracking6D:
         encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
 
-        inliers = outliers = None
+        inliers = outliers = inliers_back = outliers_back = None
         if self.config.preinitialization_method is not None:
             print("Pre-initializing the objects position")
         # First optimize the positional parameters first while preventing steps that increase the loss
@@ -710,8 +712,9 @@ class Tracking6D:
             self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations, flow_frames, keyframes,
                                                 flow_arcs, frame_losses)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            inliers, outliers = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                                        flow_observations, frame_losses)
+            result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
+                                                             flow_observations, frame_losses)
+            inliers, outliers, inliers_back, outliers_back = result
 
         elif self.config.preinitialization_method == 'gradient_descent':
             self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch, keyframes,
@@ -790,7 +793,8 @@ class Tracking6D:
                                    renders=renders,
                                    frame_losses=frame_losses,
                                    per_pixel_flow_error=per_pixel_error,
-                                   inliers=inliers, outliers=outliers)
+                                   inliers=inliers, outliers=outliers,
+                                   inliers_back=inliers_back, outliers_back=outliers_back)
 
         return frame_result
 
@@ -854,7 +858,7 @@ class Tracking6D:
         self.best_model["value"] = inference_result.joint_loss
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
-        return inlier_points_list, outlier_points_list
+        return inlier_points_list, outlier_points_list, inlier_points_list_backview, outlier_points_list_backview
 
     def estimate_pose_using_optical_flow(self, K1, K2, W, flow_observations, flow_source, flow_arc_idx):
 
