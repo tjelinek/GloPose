@@ -742,7 +742,7 @@ class Tracking6D:
             for epoch in range(epoch, self.config.iterations):
 
                 infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
-                                                flow_arcs, 'cd')
+                                                flow_arcs, 'deep_features')
                 encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = (
                     infer_result)
 
