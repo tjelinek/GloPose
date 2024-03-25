@@ -13,7 +13,7 @@ from utils import erode_segment_mask2
 class LossResult(NamedTuple):
     losses_all: Dict
     losses: Dict
-    loss: float
+    loss: torch.Tensor
     per_pixel_flow_loss: torch.Tensor
 
 

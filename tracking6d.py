@@ -1,7 +1,7 @@
 import math
 import copy
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import imageio
 import kaolin
@@ -26,7 +26,7 @@ from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
-from models.loss import FMOLoss, iou_loss
+from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
@@ -53,10 +53,7 @@ class FrameResult:
 
 class InferenceResult(NamedTuple):
     encoder_result: EncoderResult
-    joint_loss: Any
-    losses: Any
-    losses_all: Any
-    per_pixel_error: torch.Tensor
+    loss_result: LossResult
     renders: torch.Tensor
     rendered_flow_result: RenderedFlowResult
 
@@ -157,7 +154,7 @@ class Tracking6D:
         if self.config.features == 'deep':
             self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.shape)
 
-        self.best_model = {"value": 100,
+        self.best_model = {"value": 100.,
                            "face_features": self.encoder.face_features.detach().clone(),
                            "faces": self.faces,
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
@@ -705,31 +702,42 @@ class Tracking6D:
         loss_improvement_threshold = 1e-4
 
         # First inference just to log the results
-        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
-                                        flow_arcs, 'deep_features')
-        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
-        self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss, losses, encoder_result)
+        infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
+                                                         flow_frames, flow_arcs, 'deep_features')
+
+        encoder_result, loss_result, renders, rendered_flow_result = infer_result
+        loss_result: LossResult = loss_result
+        self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss, loss_result.losses,
+                                   encoder_result)
 
         inliers = outliers = inliers_back = outliers_back = None
         if self.config.preinitialization_method is not None:
             print("Pre-initializing the objects position")
-        # First optimize the positional parameters first while preventing steps that increase the loss
-        if self.config.preinitialization_method == 'levenberg-marquardt':
-            self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations, flow_frames, keyframes,
-                                                flow_arcs, frame_losses)
-        elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                             flow_observations, frame_losses)
-            inliers, outliers, inliers_back, outliers_back = result
+            # First optimize the positional parameters first while preventing steps that increase the loss
+            if self.config.preinitialization_method == 'levenberg-marquardt':
+                infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
+                                                                   flow_frames, keyframes, flow_arcs, frame_losses)
+            elif self.config.preinitialization_method == 'essential_matrix_decomposition':
+                result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
+                                                                 flow_observations)
+                infer_result, inliers, outliers, inliers_back, outliers_back = result
 
-        elif self.config.preinitialization_method == 'gradient_descent':
-            self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch, keyframes,
-                                                            flow_frames, flow_arcs, frame_losses,
-                                                            loss_improvement_threshold)
-        elif self.config.preinitialization_method == 'coordinate_descent':
-            self.gradient_descent_with_linear_lr_schedule(observations, flow_observations, epoch, frame_losses,
-                                                          keyframes, flow_frames, flow_arcs, loss_improvement_threshold,
-                                                          no_improvements)
+            elif self.config.preinitialization_method == 'gradient_descent':
+                infer_result = self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch,
+                                                                               keyframes, flow_frames, flow_arcs,
+                                                                               frame_losses, loss_improvement_threshold)
+            elif self.config.preinitialization_method == 'coordinate_descent':
+                infer_result = self.gradient_descent_with_linear_lr_schedule(observations, flow_observations, epoch,
+                                                                             frame_losses, keyframes, flow_frames,
+                                                                             flow_arcs, loss_improvement_threshold,
+                                                                             no_improvements)
+            else:
+                raise ValueError("Unknown pre-init method.")
+
+            joint_loss = infer_result.loss_result.loss.mean()
+            self.best_model["losses"] = infer_result.loss_result.losses_all
+            self.best_model["value"] = joint_loss
+            self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -743,15 +751,15 @@ class Tracking6D:
 
                 infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
                                                 flow_arcs, 'deep_features')
-                encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = (
-                    infer_result)
+                encoder_result, loss_result, renders, rendered_flow_result = infer_result
+                loss_result: LossResult = loss_result
 
-                model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, joint_loss,
-                                                        losses, encoder_result)
+                model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
+                                                        loss_result.losses, encoder_result)
                 if abs(model_loss - self.best_model["value"]) > 1e-3:
                     iters_without_change = 0
                     self.best_model["value"] = model_loss
-                    self.best_model["losses"] = losses_all
+                    self.best_model["losses"] = loss_result.losses_all
                     self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
                 else:
                     iters_without_change += 1
@@ -766,7 +774,7 @@ class Tracking6D:
                             iters_without_change > self.config.break_sgd_after_iters_with_no_change:
                         break
                 if epoch < self.config.iterations - 1:
-                    joint_loss = joint_loss.mean()
+                    joint_loss = loss_result.loss.mean()
                     self.optimizer_all_parameters.zero_grad()
 
                     self.optimizer_positional_parameters.zero_grad()
@@ -792,13 +800,14 @@ class Tracking6D:
         # Inferring the most up-to date state after the optimization is finished
         infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
                                         flow_arcs, 'deep_features')
-        encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+        encoder_result, loss_result, renders, rendered_flow_result = infer_result
+        loss_result: LossResult = loss_result
 
         frame_result = FrameResult(flow_render_result=rendered_flow_result,
                                    encoder_result=encoder_result,
                                    renders=renders,
                                    frame_losses=frame_losses,
-                                   per_pixel_flow_error=per_pixel_error,
+                                   per_pixel_flow_error=loss_result.per_pixel_flow_loss,
                                    inliers=inliers, outliers=outliers,
                                    inliers_back=inliers_back, outliers_back=outliers_back)
 
@@ -806,8 +815,7 @@ class Tracking6D:
 
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
-                                           flow_observations: MultiCameraObservation,
-                                           frame_losses):
+                                           flow_observations: MultiCameraObservation):
 
         K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
         R, t = kaolin.render.camera.generate_rotate_translate_matrices(camera_position=self.rendering.camera_trans,
@@ -860,11 +868,8 @@ class Tracking6D:
         inference_result = self.infer_model(stacked_frame_observation, stacked_flow_observation, keyframes, flow_frames,
                                             flow_arcs, 'deep_features')
 
-        self.best_model["losses"] = inference_result.losses_all
-        self.best_model["value"] = inference_result.joint_loss
-        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-
-        return inlier_points_list, outlier_points_list, inlier_points_list_backview, outlier_points_list_backview
+        return (inference_result, inlier_points_list, outlier_points_list, inlier_points_list_backview,
+                outlier_points_list_backview)
 
     def estimate_pose_using_optical_flow(self, K1, K2, W, flow_observations, flow_source, flow_arc_idx):
 
@@ -993,9 +998,10 @@ class Tracking6D:
 
             infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                             'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
 
-            joint_loss = joint_loss.mean()
+            joint_loss = loss_result.loss.mean()
             self.optimizer_positional_parameters.zero_grad()
             joint_loss.backward()
 
@@ -1044,9 +1050,10 @@ class Tracking6D:
 
             infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                             'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
 
-            joint_loss = joint_loss.mean()
+            joint_loss = loss_result.loss.mean()
 
             self.optimizer_rotational_parameters.zero_grad()
             joint_loss.backward()
@@ -1054,9 +1061,11 @@ class Tracking6D:
 
             infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                             'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
 
-            joint_loss = joint_loss.mean()
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
+
+            joint_loss = loss_result.loss.mean()
 
             self.optimizer_translational_parameters.zero_grad()
             joint_loss.backward()
@@ -1064,8 +1073,9 @@ class Tracking6D:
 
             infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                             'deep_features')
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
-            joint_loss = joint_loss.mean()
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
+            joint_loss = loss_result.loss.mean()
 
             loss_improvement = best_loss - joint_loss
 
@@ -1272,13 +1282,14 @@ class Tracking6D:
             infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes=keyframes,
                                             flow_frames=flow_frames, flow_arcs=flow_arcs, encoder_type='rgb')
 
-            encoder_result, joint_loss, losses, losses_all, per_pixel_error, renders, rendered_flow_result = infer_result
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
 
             if epoch % self.config.training_print_status_frequency == 0:
                 self.log_inference_results(self.best_model["value"], epoch, frame_losses,
                                            joint_loss, losses, encoder_result)
 
-            joint_loss = joint_loss.mean()
+            joint_loss = loss_result.loss.mean()
             self.rgb_optimizer.zero_grad()
             joint_loss.backward(retain_graph=True)
             self.rgb_optimizer.step()
