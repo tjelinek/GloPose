@@ -1016,10 +1016,10 @@ class Tracking6D:
                 for param_group in self.optimizer_positional_parameters.param_groups:
                     param_group['lr'] /= 2.0
             elif 0 <= loss_improvement <= loss_improvement_threshold:
-                model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, losses,
+                model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, loss_result.losses,
                                                         encoder_result)
                 self.best_model["value"] = model_loss
-                self.best_model["losses"] = losses_all
+                self.best_model["losses"] = loss_result.losses_all
                 self.optimizer_positional_parameters.step()
                 epoch += 1
                 no_improvements += 1
