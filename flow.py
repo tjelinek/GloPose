@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
 from cfg import DEVICE
+from utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 
 
 def compare_flows_with_images(image1, image2, flow_up, flow_up_prime,
@@ -207,6 +208,21 @@ def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarra
     x2_f, y2_f = x1 + delta_x, y1 - delta_y
 
     return np.stack([y2_f, x2_f], axis=0)
+
+
+def get_non_occluded_foreground_correspondences(observed_flow_occlusion, observed_flow_segmentation, observed_flow,
+                                                segmentation_mask_threshold: float, occlusion_coef_threshold: float):
+
+    src_pts_yx = get_not_occluded_foreground_points(observed_flow_occlusion, observed_flow_segmentation,
+                                                    segmentation_mask_threshold, occlusion_coef_threshold)
+
+    dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0),
+                                                observed_flow).permute(1, 0)
+
+    src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+    dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
+
+    return src_pts_xy, dst_pts_xy
 
 
 def tensor_image_to_mft_format(image_tensor):

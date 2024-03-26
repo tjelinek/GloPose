@@ -28,14 +28,14 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from utils import write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg, \
-    get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
+from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
+                   coordinates_xy_to_tensor_index)
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_np, source_coords_to_target_coords
+    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences
 
 
 class WriteResults:
@@ -85,7 +85,8 @@ class WriteResults:
         self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
         self.tensorboard_log = None
 
-        self.correspondences_log_file = self.write_folder / 'correspondences.h5'
+        self.correspondences_log_file = self.write_folder / (f'correspondences_{self.tracking_config.sequence}'
+                                                             f'_flow_{self.tracking_config.gt_flow_source}.h5')
         self.correspondences_log_write_common_data()
 
         self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
@@ -100,6 +101,8 @@ class WriteResults:
             "image_height": self.rendering.height,
             "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
             "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
+            "frontview_backview_camera_relative_translation": np.asarray([0., 0., 0.]),
+            "frontview_backview_camera_relative_rotation": self.rendering.backview_rot.numpy(force=True),
         }
 
         with h5py.File(self.correspondences_log_file, 'w') as f:
@@ -367,7 +370,8 @@ class WriteResults:
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
 
-        self.dump_correspondences(active_keyframes, new_flow_arcs, gt_rotations, gt_translations)
+        self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
+                                  gt_translations)
 
         gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
         gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
@@ -610,31 +614,56 @@ class WriteResults:
                        verticalalignment='top', horizontalalignment='right',
                        bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
 
-    def dump_correspondences(self, keyframes: KeyframeBuffer, new_flow_arcs, gt_rotations, gt_translations):
+    def dump_correspondences(self, keyframes: KeyframeBuffer, keyframes_backview: KeyframeBuffer, new_flow_arcs, gt_rotations,
+                             gt_translations):
 
         with h5py.File(self.correspondences_log_file, 'a') as f:
 
             for flow_arc in new_flow_arcs:
                 source_frame, target_frame = flow_arc
 
-                flow_observation = keyframes.get_flows_between_frames(source_frame, target_frame)
+                flow_observation_frontview = keyframes.get_flows_between_frames(source_frame, target_frame)
+                flow_observation_backview = keyframes_backview.get_flows_between_frames(source_frame, target_frame)
 
-                src_pts_yx = get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
-                                                                flow_observation.observed_flow_segmentation,
+                src_pts_xy_frontview, dst_pts_xy_frontview =\
+                    get_non_occluded_foreground_correspondences(flow_observation_frontview.observed_flow_occlusion,
+                                                                flow_observation_frontview.observed_flow_segmentation,
+                                                                flow_observation_frontview.observed_flow,
                                                                 self.tracking_config.segmentation_mask_threshold,
                                                                 self.tracking_config.occlusion_coef_threshold)
-                dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0),
-                                                            flow_observation.observed_flow).permute(1, 0)
 
-                src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
-                dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
+                src_pts_xy_backview, dst_pts_xy_backview = \
+                    get_non_occluded_foreground_correspondences(flow_observation_backview.observed_flow_occlusion,
+                                                                flow_observation_backview.observed_flow_segmentation,
+                                                                flow_observation_backview.observed_flow,
+                                                                self.tracking_config.segmentation_mask_threshold,
+                                                                self.tracking_config.occlusion_coef_threshold)
+
+                src_pts_yx_frontview = coordinates_xy_to_tensor_index(src_pts_xy_frontview).to(torch.long)
+                src_pts_yx_backview = coordinates_xy_to_tensor_index(src_pts_xy_frontview).to(torch.long)
+
+                occlusion_score_frontview = (
+                    flow_observation_frontview.observed_flow_occlusion[
+                        ..., src_pts_yx_frontview[:, 0], src_pts_yx_frontview[:, 1]
+                    ].squeeze()
+                )
+
+                occlusion_score_backview = (
+                    flow_observation_backview.observed_flow_occlusion[
+                        ..., src_pts_yx_backview[:, 0], src_pts_yx_backview[:, 1]
+                    ].squeeze()
+                )
 
                 frame_data = {
                     "flow_arc": flow_arc,
                     "gt_translation": gt_translations[0, 0, target_frame].numpy(force=True),
                     "gt_rotation_change": torch.rad2deg(gt_rotations[0, target_frame]).numpy(force=True),
-                    "source_points_xy": src_pts_xy.numpy(force=True),
-                    "target_points_xy": dst_pts_xy.numpy(force=True),
+                    "source_points_xy_frontview": src_pts_xy_frontview.numpy(force=True),
+                    "target_points_xy_frontview": dst_pts_xy_frontview.numpy(force=True),
+                    "frontview_matching_occlusion": occlusion_score_frontview.numpy(force=True),
+                    "source_points_xy_backview": src_pts_xy_backview.numpy(force=True),
+                    "target_points_xy_backview": dst_pts_xy_backview.numpy(force=True),
+                    "backview_matching_occlusion": occlusion_score_backview.numpy(force=True),
                 }
 
                 if 'correspondences' not in f:

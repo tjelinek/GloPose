@@ -289,8 +289,7 @@ def tensor_index_to_coordinates_xy(src_pts_yx):
 
 def coordinates_xy_to_tensor_index(src_pts_xy):
     src_pts_yx = src_pts_xy.clone()
-    src_pts_xy[..., [0, 1]] = src_pts_xy[..., [1, 0]]
-    src_pts_yx[..., 0] = -src_pts_yx[..., 0]
+    src_pts_yx[:, [0, 1]] = src_pts_xy[:, [1, 0]]
 
     return src_pts_yx
 
