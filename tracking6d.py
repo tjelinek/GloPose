@@ -1244,10 +1244,8 @@ class Tracking6D:
                                             observed_flow_uncertainties=flow_observations.observed_flow_uncertainty,
                                             keyframes_encoder_result=encoder_result,
                                             last_keyframes_encoder_result=self.last_encoder_result)
-        losses_all, losses, joint_loss, per_pixel_error = loss_result
 
-        result = InferenceResult(encoder_result, joint_loss, losses, losses_all,
-                                 per_pixel_error, renders, rendered_flow_result)
+        result = InferenceResult(encoder_result, loss_result, renders, rendered_flow_result)
 
         return result
 
