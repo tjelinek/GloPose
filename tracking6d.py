@@ -822,7 +822,11 @@ class Tracking6D:
                                                                        camera_up_direction=self.rendering.camera_up,
                                                                        look_at=self.rendering.obj_center)
 
-        W = Rt_to_matrix4x4(R, -t.unsqueeze(-1))
+        # correction of the camera system assumed by epipolar geometry to my
+        # t[:, 0] = 1.
+        # t[:, 2] = 0.
+
+        W_front = Rt_to_matrix4x4(R, t.unsqueeze(-1))
 
         inlier_points_list = {}
         outlier_points_list = {}
@@ -835,7 +839,7 @@ class Tracking6D:
         flow_source, flow_target = flow_arc
 
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        result = self.estimate_pose_using_optical_flow(K1, K2, W, front_flow_observations, flow_source,
+        result = self.estimate_pose_using_optical_flow(K1, K2, W_front, front_flow_observations, flow_source,
                                                        flow_arc_idx)
         inlier_points, outlier_points, q_total, t_total = result
 
@@ -847,9 +851,20 @@ class Tracking6D:
         self.encoder.quaternion_offsets[:, flow_target] = q_total
 
         if self.config.matching_target_to_backview:
+            R, t = kaolin.render.camera.generate_rotate_translate_matrices(
+                camera_position=self.rendering_backview.camera_trans,
+                camera_up_direction=self.rendering_backview.camera_up,
+                look_at=self.rendering_backview.obj_center)
+
+            # t[:, 0] = -1.
+            # t[:, 2] = 0.
+
+            W_back = Rt_to_matrix4x4(R, t.unsqueeze(-1))
+
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            result = self.estimate_pose_using_optical_flow(K1, K2, W, back_flow_observations, flow_source, flow_arc_idx)
+            result = self.estimate_pose_using_optical_flow(K1, K2, W_back, back_flow_observations, flow_source,
+                                                           flow_arc_idx)
             inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview = result
 
             inlier_points_list_backview[flow_arc] = inlier_points_backview
