@@ -28,6 +28,15 @@ class Observation:
 
         return copy
 
+    def get_memory_size(self):
+        memory_used = 0.0
+        for attr_name, attr_type in self.__annotations__.items():
+            attr = getattr(self, attr_name)
+            if isinstance(attr, torch.Tensor):
+                memory_used += attr.numel() * attr.element_size()
+
+        return memory_used
+
     @staticmethod
     def concatenate(*observations):
 
@@ -134,6 +143,20 @@ class KeyframeBuffer:
         indices_buffer2.extend([buffer2.keyframes.index(k) for k in all_keyframes if k in buffer2.keyframes])
 
         return merged_buffer, indices_buffer1, indices_buffer2
+
+    def get_memory_size(self):
+        memory_used = 0.0
+        for _, attrs in self.G.nodes(data=True):
+            for key, value in attrs.items():
+                if isinstance(value, Observation):
+                    memory_used += value.get_memory_size()
+
+        for _, _, attrs in self.G.edges(data=True):
+            for key, value in attrs.items():
+                if isinstance(value, Observation):
+                    memory_used += value.get_memory_size()
+
+        return memory_used
 
     def add_new_keyframe_observation(self, frame_observation: FrameObservation, keyframe_index: int) -> None:
 
