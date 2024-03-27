@@ -543,6 +543,7 @@ class Tracking6D:
                 #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
 
+            print("10--torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
 
             angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
             # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
@@ -711,32 +712,13 @@ class Tracking6D:
 
         inliers = outliers = inliers_back = outliers_back = None
         if self.config.preinitialization_method is not None:
-            print("Pre-initializing the objects position")
-            # First optimize the positional parameters first while preventing steps that increase the loss
-            if self.config.preinitialization_method == 'levenberg-marquardt':
-                infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
-                                                                   flow_frames, keyframes, flow_arcs, frame_losses)
-            elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-                result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                                 flow_observations)
-                infer_result, inliers, outliers, inliers_back, outliers_back = result
+            inliers, inliers_back, outliers, outliers_back = self.run_preinitializations(flow_arcs, flow_frames,
+                                                                                         flow_observations,
+                                                                                         frame_losses, keyframes,
+                                                                                         observations,
+                                                                                         stacked_flow_observations,
+                                                                                         stacked_observations)
 
-            elif self.config.preinitialization_method == 'gradient_descent':
-                infer_result = self.coordinate_descent_with_linear_lr_schedule(observations, flow_observations, epoch,
-                                                                               keyframes, flow_frames, flow_arcs,
-                                                                               frame_losses, loss_improvement_threshold)
-            elif self.config.preinitialization_method == 'coordinate_descent':
-                infer_result = self.gradient_descent_with_linear_lr_schedule(observations, flow_observations, epoch,
-                                                                             frame_losses, keyframes, flow_frames,
-                                                                             flow_arcs, loss_improvement_threshold,
-                                                                             no_improvements)
-            else:
-                raise ValueError("Unknown pre-init method.")
-
-            joint_loss = infer_result.loss_result.loss.mean()
-            self.best_model["losses"] = infer_result.loss_result.losses_all
-            self.best_model["value"] = joint_loss
-            self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -811,6 +793,30 @@ class Tracking6D:
                                    inliers_back=inliers_back, outliers_back=outliers_back)
 
         return frame_result
+
+    @torch.no_grad()
+    def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
+                               stacked_flow_observations, stacked_observations):
+
+        inliers = outliers = inliers_back = outliers_back = None
+
+        print("Pre-initializing the objects position")
+
+        if self.config.preinitialization_method == 'levenberg-marquardt':
+            infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
+                                                               flow_frames, keyframes, flow_arcs, frame_losses)
+        elif self.config.preinitialization_method == 'essential_matrix_decomposition':
+            result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
+                                                             flow_observations)
+            infer_result, inliers, outliers, inliers_back, outliers_back = result
+        else:
+            raise ValueError("Unknown pre-init method.")
+
+        joint_loss = infer_result.loss_result.loss.mean()
+        self.best_model["losses"] = infer_result.loss_result.losses_all
+        self.best_model["value"] = joint_loss
+        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+        return inliers, inliers_back, outliers, outliers_back
 
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
