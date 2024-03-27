@@ -200,12 +200,11 @@ class RenderingKaolin(nn.Module):
 
         theoretical_flow = ren_outputs_1[..., :2]
 
-        theoretical_flow_new = theoretical_flow.clone()  # Create a new tensor with the same values
-        theoretical_flow_new[..., 0] = theoretical_flow[..., 0] * 0.5
-        theoretical_flow_new[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
+        theoretical_flow[..., 0] = theoretical_flow[..., 0] * 0.5
+        theoretical_flow[..., 1] = -theoretical_flow[..., 1] * 0.5  # Correction for transform into image
 
-        theoretical_flow = theoretical_flow_new.permute(0, 3, 1, 2).unsqueeze(0)  # torch.Size([1, N, 2, H, W])
-        flow_render_mask = ren_mask_1.unsqueeze(1).unsqueeze(0)                   # torch.Size([1, N, 1, H, W])
+        theoretical_flow = theoretical_flow.permute(0, 3, 1, 2).unsqueeze(0)  # torch.Size([1, N, 2, H, W])
+        flow_render_mask = ren_mask_1.unsqueeze(1).unsqueeze(0)  # torch.Size([1, N, 1, H, W])
         occlusion_mask = ren_outputs_1[..., 2].detach().unsqueeze(1).unsqueeze(0)  # torch.Size([1, N, 1, H, W])
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
