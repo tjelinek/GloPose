@@ -702,13 +702,16 @@ class Tracking6D:
         loss_improvement_threshold = 1e-4
 
         # First inference just to log the results
-        infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
-                                                         flow_frames, flow_arcs, 'deep_features')
+        with torch.no_grad():
+            infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
+                                                             flow_frames, flow_arcs, 'deep_features')
 
-        encoder_result, loss_result, renders, rendered_flow_result = infer_result
-        loss_result: LossResult = loss_result
-        self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss, loss_result.losses,
-                                   encoder_result)
+            encoder_result, loss_result, renders, rendered_flow_result = infer_result
+            loss_result: LossResult = loss_result
+
+            self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
+                                       loss_result.losses, encoder_result)
+
 
         inliers = outliers = inliers_back = outliers_back = None
         if self.config.preinitialization_method is not None:
@@ -779,8 +782,9 @@ class Tracking6D:
                                                         relative_mode=True)
 
         # Inferring the most up-to date state after the optimization is finished
-        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
-                                        flow_arcs, 'deep_features')
+        with torch.no_grad():
+            infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
+                                            flow_arcs, 'deep_features')
         encoder_result, loss_result, renders, rendered_flow_result = infer_result
         loss_result: LossResult = loss_result
 
