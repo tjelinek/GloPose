@@ -513,37 +513,36 @@ class Tracking6D:
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
-                with torch.no_grad():
-                    new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
+                new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
 
-                    self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
-                                                     encoder_result=encoder_result, tex=tex,
-                                                     new_flow_arcs=new_flow_arcs, frame_result=frame_result,
-                                                     active_keyframes=self.active_keyframes,
-                                                     active_keyframes_backview=self.active_keyframes_backview,
-                                                     logged_sgd_translations=self.logged_sgd_translations,
-                                                     logged_sgd_quaternions=self.logged_sgd_quaternions,
-                                                     deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                                     renderer=self.rendering, renderer_backview=self.rendering_backview,
-                                                     best_model=self.best_model, observations=all_frame_observations,
-                                                     observations_backview=all_frame_observations_backview,
-                                                     gt_encoder=self.gt_encoder, gt_rotations=self.gt_rotations,
-                                                     gt_translations=self.gt_translations)
+                self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
+                                                 encoder_result=encoder_result, tex=tex,
+                                                 new_flow_arcs=new_flow_arcs, frame_result=frame_result,
+                                                 active_keyframes=self.active_keyframes,
+                                                 active_keyframes_backview=self.active_keyframes_backview,
+                                                 logged_sgd_translations=self.logged_sgd_translations,
+                                                 logged_sgd_quaternions=self.logged_sgd_quaternions,
+                                                 deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
+                                                 renderer=self.rendering, renderer_backview=self.rendering_backview,
+                                                 best_model=self.best_model, observations=all_frame_observations,
+                                                 observations_backview=all_frame_observations_backview,
+                                                 gt_encoder=self.gt_encoder, gt_rotations=self.gt_rotations,
+                                                 gt_translations=self.gt_translations)
 
-                    gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
-                        if self.gt_mesh_prototype is not None else None
-                    # self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
-                    #                                     keyframes=self.active_keyframes.keyframes,
-                    #                                     predicted_vertices=encoder_result.vertices,
-                    #                                     predicted_quaternion=encoder_result.quaternions,
-                    #                                     predicted_translation=encoder_result.translations,
-                    #                                     predicted_mask=frame_result.renders[:, :, 0, -1, ...],
-                    #                                     gt_vertices=gt_mesh_vertices,
-                    #                                     gt_rotation=self.gt_rotations,
-                    #                                     gt_translation=self.gt_translations,
-                    #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
+                gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
+                    if self.gt_mesh_prototype is not None else None
+                # self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
+                #                                     keyframes=self.active_keyframes.keyframes,
+                #                                     predicted_vertices=encoder_result.vertices,
+                #                                     predicted_quaternion=encoder_result.quaternions,
+                #                                     predicted_translation=encoder_result.translations,
+                #                                     predicted_mask=frame_result.renders[:, :, 0, -1, ...],
+                #                                     gt_vertices=gt_mesh_vertices,
+                #                                     gt_rotation=self.gt_rotations,
+                #                                     gt_translation=self.gt_translations,
+                #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
-                    # Visualize flow we get from the video
+
 
             angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
             # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
