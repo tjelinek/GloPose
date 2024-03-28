@@ -842,7 +842,7 @@ class Tracking6D:
         inlier_points_list_backview = {}
         outlier_points_list_backview = {}
 
-        flow_arc = (0, len(keyframes) - 1)
+        flow_arc = (0, max(keyframes))
         flow_arc_idx = flow_arcs.index(flow_arc)
 
         flow_source, flow_target = flow_arc
