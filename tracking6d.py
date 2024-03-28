@@ -1,3 +1,4 @@
+import gc
 import math
 import copy
 
@@ -403,6 +404,11 @@ class Tracking6D:
 
         for stepi in range(1, self.config.input_frames):
 
+            if stepi % 10 == 0:
+                print(f"Keyframe memory: {self.active_keyframes.get_memory_size() / (1024 ** 3)}GB")
+                gc.collect()
+                torch.cuda.empty_cache()
+
             if type(self.tracker) is SyntheticDataGeneratingTracker:
                 next_tracker_frame = stepi  # Index of a frame
             else:
@@ -542,9 +548,6 @@ class Tracking6D:
                 #                                     gt_translation=self.gt_translations,
                 #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
-
-            print("10--torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
-
             angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
             # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
             print("Angles:", angles)
@@ -561,12 +564,25 @@ class Tracking6D:
                     self.flow_tracks_inits.append(stepi)
                     self.long_flow_provider.need_to_init = True
 
-            while self.active_keyframes.G.number_of_edges() > self.config.max_keyframes:
-                edges = sorted(list(self.active_keyframes.G.edges))
-                self.active_keyframes.G.remove_edge(*edges[0])
+            if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
+                nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:-self.config.max_keyframes]
+                remaining_keyframes = sorted(list(set(self.active_keyframes.keyframes) - set(nodes_to_remove)))
+                remaining_flow_frames = sorted(list(set(self.active_keyframes.flow_frames) - set(nodes_to_remove)))
+
+                self.active_keyframes.G.remove_nodes_from(nodes_to_remove)
+                self.active_keyframes.keyframes = copy.deepcopy(remaining_keyframes)
+                self.active_keyframes.flow_frames = copy.deepcopy(remaining_flow_frames)
+
                 if self.config.matching_target_to_backview:
-                    self.active_keyframes_backview.G.remove_edge(*edges[0])
-                print(f"Removed edge {edges[0]}")
+                    self.active_keyframes_backview.G.remove_nodes_from(nodes_to_remove)
+                    self.active_keyframes_backview.keyframes = copy.deepcopy(remaining_keyframes)
+                    self.active_keyframes_backview.flow_frames = copy.deepcopy(remaining_flow_frames)
+                print(f"Removed nodes {nodes_to_remove}")
+
+            del all_frame_observations
+            del all_flow_observations
+            del all_frame_observations_backview
+            del all_flow_observations_backview
 
         return self.best_model
 
