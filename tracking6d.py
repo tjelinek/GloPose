@@ -853,6 +853,8 @@ class Tracking6D:
         outlier_points_list = {}
         inlier_points_list_backview = {}
         outlier_points_list_backview = {}
+        triangulated_points_frontview = {}
+        triangulated_points_backview = {}
 
         flow_arc = (0, max(keyframes))
         flow_arc_idx = flow_arcs.index(flow_arc)
@@ -862,10 +864,12 @@ class Tracking6D:
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
         result = self.estimate_pose_using_optical_flow(K1, K2, W_front, front_flow_observations, flow_source,
                                                        flow_arc_idx)
-        inlier_points, outlier_points, q_total, t_total, triangulated_points_frontview = result
+        inlier_points, outlier_points, q_total, t_total, triangulation_frontview = result
 
         inlier_points_list[flow_arc] = inlier_points
         outlier_points_list[flow_arc] = outlier_points
+        triangulated_points_frontview[flow_arc] = triangulation_frontview
+
         inlier_ratio_frontview = len(inlier_points) / (len(inlier_points) + len(outlier_points))
 
         self.encoder.translation_offsets[:, :, flow_target] = t_total
@@ -887,10 +891,11 @@ class Tracking6D:
             result = self.estimate_pose_using_optical_flow(K1, K2, W_back, back_flow_observations, flow_source,
                                                            flow_arc_idx)
             (inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview,
-             triangulated_points_backview) = result
+             triangulation_backview) = result
 
             inlier_points_list_backview[flow_arc] = inlier_points_backview
             outlier_points_list_backview[flow_arc] = outlier_points_backview
+            triangulated_points_backview[flow_arc] = triangulation_backview
 
             inlier_ratio_backview = len(inlier_points_backview) / (len(inlier_points_backview) +
                                                                    len(outlier_points_backview))
