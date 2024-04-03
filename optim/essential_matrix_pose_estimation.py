@@ -58,4 +58,4 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to
     r_world_deg = torch.rad2deg(r_world) % 180
 
 
-    return r_world, t_world, inlier_src_pts, outlier_src_pts
+    return r_world, t_world, inlier_src_pts, outlier_src_pts, triangulated_points

@@ -2,7 +2,7 @@ import gc
 import math
 import copy
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import imageio
 import kaolin
@@ -40,16 +40,17 @@ from utils import consecutive_quaternions_angular_difference, normalize_vertices
 
 @dataclass
 class FrameResult:
-    flow_render_result: RenderedFlowResult
-    encoder_result: EncoderResult
-    # TODO add typing
-    renders: Any
-    frame_losses: Any
-    per_pixel_flow_error: Any
-    inliers: Dict
-    outliers: Dict
-    inliers_back: Dict
-    outliers_back: Dict
+    flow_render_result: RenderedFlowResult = None
+    encoder_result: EncoderResult = None
+    renders: Any = None
+    frame_losses: Any = None
+    per_pixel_flow_error: Any = None
+    inliers: Dict = None
+    outliers: Dict = None
+    inliers_back: Dict = None
+    outliers_back: Dict = None
+    triangulated_points_frontview: Dict = None
+    triangulated_points_backview: Dict = None
 
 
 class InferenceResult(NamedTuple):
@@ -669,6 +670,8 @@ class Tracking6D:
     def apply(self, observations: MultiCameraObservation, flow_observations: MultiCameraObservation,
               keyframes: List, flow_frames: List, flow_arcs: List, frame_index: int) -> FrameResult:
 
+        frame_result = FrameResult()
+
         self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
         self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
 
@@ -728,16 +731,9 @@ class Tracking6D:
             self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
                                        loss_result.losses, encoder_result)
 
-
-        inliers = outliers = inliers_back = outliers_back = None
         if self.config.preinitialization_method is not None:
-            inliers, inliers_back, outliers, outliers_back = self.run_preinitializations(flow_arcs, flow_frames,
-                                                                                         flow_observations,
-                                                                                         frame_losses, keyframes,
-                                                                                         observations,
-                                                                                         stacked_flow_observations,
-                                                                                         stacked_observations)
-
+            self.run_preinitializations(flow_arcs, flow_frames, flow_observations, frame_losses, keyframes,
+                                        observations, stacked_flow_observations, stacked_observations, frame_result)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -804,21 +800,15 @@ class Tracking6D:
         encoder_result, loss_result, renders, rendered_flow_result = infer_result
         loss_result: LossResult = loss_result
 
-        frame_result = FrameResult(flow_render_result=rendered_flow_result,
-                                   encoder_result=encoder_result,
-                                   renders=renders,
-                                   frame_losses=frame_losses,
-                                   per_pixel_flow_error=loss_result.per_pixel_flow_loss,
-                                   inliers=inliers, outliers=outliers,
-                                   inliers_back=inliers_back, outliers_back=outliers_back)
+        frame_result = replace(frame_result, flow_render_result=rendered_flow_result, encoder_result=encoder_result,
+                               renders=renders, frame_losses=frame_losses,
+                               per_pixel_flow_error=loss_result.per_pixel_flow_loss)
 
         return frame_result
 
     @torch.no_grad()
     def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
-                               stacked_flow_observations, stacked_observations):
-
-        inliers = outliers = inliers_back = outliers_back = None
+                               stacked_flow_observations, stacked_observations, frame_result: FrameResult):
 
         print("Pre-initializing the objects position")
 
@@ -828,7 +818,14 @@ class Tracking6D:
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
             result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
                                                              flow_observations)
-            infer_result, inliers, outliers, inliers_back, outliers_back = result
+            (infer_result, inliers, outliers, inliers_back, outliers_back, triangulated_points_frontview,
+             triangulated_points_backview) = result
+            frame_result.inliers = inliers
+            frame_result.inliers_back = inliers_back
+            frame_result.outliers = outliers
+            frame_result.outliers_back = outliers_back
+            frame_result.triangulated_points_frontview = triangulated_points_frontview
+            frame_result.triangulated_points_backview = triangulated_points_backview
         else:
             raise ValueError("Unknown pre-init method.")
 
@@ -836,7 +833,6 @@ class Tracking6D:
         self.best_model["losses"] = infer_result.loss_result.losses_all
         self.best_model["value"] = joint_loss
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-        return inliers, inliers_back, outliers, outliers_back
 
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
@@ -866,7 +862,7 @@ class Tracking6D:
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
         result = self.estimate_pose_using_optical_flow(K1, K2, W_front, front_flow_observations, flow_source,
                                                        flow_arc_idx)
-        inlier_points, outlier_points, q_total, t_total = result
+        inlier_points, outlier_points, q_total, t_total, triangulated_points_frontview = result
 
         inlier_points_list[flow_arc] = inlier_points
         outlier_points_list[flow_arc] = outlier_points
@@ -890,7 +886,8 @@ class Tracking6D:
 
             result = self.estimate_pose_using_optical_flow(K1, K2, W_back, back_flow_observations, flow_source,
                                                            flow_arc_idx)
-            inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview = result
+            (inlier_points_backview, outlier_points_backview, q_total_backview, t_total_backview,
+             triangulated_points_backview) = result
 
             inlier_points_list_backview[flow_arc] = inlier_points_backview
             outlier_points_list_backview[flow_arc] = outlier_points_backview
@@ -909,7 +906,7 @@ class Tracking6D:
                                             flow_arcs, 'deep_features')
 
         return (inference_result, inlier_points_list, outlier_points_list, inlier_points_list_backview,
-                outlier_points_list_backview)
+                outlier_points_list_backview, triangulated_points_frontview, triangulated_points_backview)
 
     def estimate_pose_using_optical_flow(self, K1, K2, W, flow_observations, flow_source, flow_arc_idx):
 
@@ -924,12 +921,12 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W, K1,
                                                            K2, self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
-        r, t, inlier_points, outlier_points = result
+        r, t, inlier_points, outlier_points, triangulated_points = result
         q = axis_angle_to_quaternion(r)
         t_total = self.encoder.translation_offsets[:, :, flow_source] + t
         q_ref = self.encoder.quaternion_offsets[:, flow_source]
         q_total = qmult(q_ref, q.unsqueeze(0))
-        return inlier_points, outlier_points, q_total, t_total
+        return inlier_points, outlier_points, q_total, t_total, triangulated_points
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
