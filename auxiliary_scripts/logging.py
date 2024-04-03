@@ -22,7 +22,7 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
-from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
+from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion, matrix4x4_to_Rt
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
@@ -71,10 +71,12 @@ class WriteResults:
         self.flows_path = self.write_folder / Path('flows')
         self.gt_imgs_path = self.write_folder / Path('gt_imgs')
         self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
+        self.rerun_log_path = self.write_folder / Path('rerun')
 
         self.flows_path.mkdir(exist_ok=True, parents=True)
         self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
         self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
+        self.rerun_log_path.mkdir(exist_ok=True, parents=True)
 
         self.metrics_writer = csv.writer(self.metrics_log)
 
@@ -92,6 +94,8 @@ class WriteResults:
         self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
 
     def correspondences_log_write_common_data(self):
+        R_back, t_back = matrix4x4_to_Rt(self.rendering.T_frontview_to_backview)
+
         data = {
             "sequence": self.tracking_config.sequence,
             "flow_source": self.tracking_config.gt_flow_source,
@@ -102,7 +106,7 @@ class WriteResults:
             "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
             "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
             "frontview_backview_camera_relative_translation": np.asarray([0., 0., 0.]),
-            "frontview_backview_camera_relative_rotation": self.rendering.backview_rot.numpy(force=True),
+            "frontview_backview_camera_relative_rotation": R_back.squeeze().numpy(force=True),
         }
 
         with h5py.File(self.correspondences_log_file, 'w') as f:
