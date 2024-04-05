@@ -293,3 +293,9 @@ def coordinates_xy_to_tensor_index(src_pts_xy):
 
     return src_pts_yx
 
+
+def homogenize_3x4_transformation_matrix(T_3x4):
+    T_4x4 = torch.eye(4, dtype=T_3x4.dtype).to(T_3x4.device).expand(*T_3x4.shape[:-2], 4, 4)
+    T_4x4[..., :3, :] = T_3x4
+
+    return T_4x4
