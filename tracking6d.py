@@ -35,7 +35,7 @@ from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, S
                            BaseTracker)
 from tracker_config import TrackerConfig
 from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult, \
-    get_not_occluded_foreground_points
+    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix
 
 
 @dataclass
