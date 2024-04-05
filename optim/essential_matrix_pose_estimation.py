@@ -10,7 +10,6 @@ from utils import tensor_index_to_coordinates_xy
 
 def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, width: int, height: int,
                                               ransac_conf=0.99, method='magsac++'):
-
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
@@ -32,15 +31,12 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, wi
                                        prob=ransac_conf)
         mask = mask[:, 0]
 
-    inlier_src_pts = src_pts_yx[torch.nonzero(torch.from_numpy(mask), as_tuple=True)]
-    outlier_src_pts = src_pts_yx[torch.nonzero(~torch.from_numpy(mask), as_tuple=True)]
-
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
     K1_tensor = torch.from_numpy(K1).cuda()
     K2_tensor = torch.from_numpy(K2).cuda()
     mask_tensor = torch.from_numpy(mask).cuda()
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
-                                                                      src_pts_yx, dst_pts_yx, mask_tensor)
+                                                                          src_pts_yx, dst_pts_yx, mask_tensor)
 
     t_cam = t_cam.squeeze()
 
@@ -53,4 +49,4 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, wi
     print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
     print('----------------------------------------')
 
-    return r_cam, t_cam, inlier_src_pts, outlier_src_pts, triangulated_points
+    return r_cam, t_cam, mask_tensor, triangulated_points

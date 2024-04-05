@@ -53,6 +53,15 @@ class FrameResult:
     triangulated_points_backview: Dict = None
 
 
+@dataclass
+class EssentialMatrixData:
+    camera_rotations = {}
+    camera_translations = {}
+    source_points = {}
+    target_points = {}
+    inlier_mask = {}
+
+
 class InferenceResult(NamedTuple):
     encoder_result: EncoderResult
     loss_result: LossResult
@@ -857,7 +866,7 @@ class Tracking6D:
         flow_source, flow_target = flow_arc
 
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_source, flow_arc_idx, flow_arc)
+        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc)
         inlier_points, outlier_points, inlier_ratio_frontview, q_total, t_total, triangulation_frontview = result
 
         inlier_points_list[flow_arc] = inlier_points
@@ -871,7 +880,7 @@ class Tracking6D:
 
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_source, flow_arc_idx, flow_arc)
+            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc)
             (inlier_points_backview, outlier_points_backview, inlier_ratio_backview, q_total_backview,
              t_total_backview, triangulation_backview) = result
 
@@ -892,7 +901,7 @@ class Tracking6D:
         return (inference_result, inlier_points_list, outlier_points_list, inlier_points_list_backview,
                 outlier_points_list_backview, triangulated_points_frontview, triangulated_points_backview)
 
-    def estimate_pose_using_optical_flow(self, flow_observations, flow_source, flow_arc_idx, flow_arc, backview=False):
+    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, backview=False):
 
         K1 = K2 = self.rendering.camera_intrinsics.numpy(force=True)
 
@@ -917,18 +926,26 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2,
                                                            self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
-        r, t, inlier_points, outlier_points, triangulated_points = result
+        r, t, inlier_mask, triangulated_points = result
+
+        inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
+        inlier_src_pts = src_pts_yx[inlier_indices]
+        outlier_src_pts = src_pts_yx[inlier_indices]
 
         if backview:
-            self.camera_rotations_backview[flow_arc] = t
-            self.camera_translations_backview[flow_arc] = r
+            essential_matrix_data = self.essential_matrix_data_backview
         else:
-            self.camera_rotations_frontview[flow_arc] = t
-            self.camera_translations_frontview[flow_arc] = r
+            essential_matrix_data = self.essential_matrix_data_frontview
 
-        inlier_ratio = len(inlier_points) / (len(inlier_points) + len(outlier_points))
+        essential_matrix_data.camera_rotations[flow_arc] = r
+        essential_matrix_data.camera_translations[flow_arc] = t
+        essential_matrix_data.source_points[flow_arc] = src_pts_yx
+        essential_matrix_data.target_points[flow_arc] = dst_pts_yx
+        essential_matrix_data.inlier_mask[flow_arc] = inlier_mask
 
-        return inlier_points, outlier_points, inlier_ratio, r, t, triangulated_points
+        inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
+
+        return inlier_src_pts, outlier_src_pts, inlier_ratio, r, t, triangulated_points
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
