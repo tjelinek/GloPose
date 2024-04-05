@@ -117,6 +117,12 @@ class Tracking6D:
         # Tracker
         self.tracker: Optional[BaseTracker] = None
 
+        # Camera poses recovery
+        self.camera_rotations_frontview = []
+        self.camera_rotations_backview = []
+        self.camera_translations_frontview = []
+        self.camera_translations_backview = []
+
         # Other utilities and flags
         self.write_results = None
         self.logged_sgd_translations = []
@@ -894,11 +900,11 @@ class Tracking6D:
         if backview:
             camera_translation = -camera_translation
 
-        W_front_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=camera_translation,
-                                                                          camera_up_direction=self.rendering.camera_up,
-                                                                          look_at=self.rendering.obj_center)
+        W_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=camera_translation,
+                                                                    camera_up_direction=self.rendering.camera_up,
+                                                                    look_at=self.rendering.obj_center)
 
-        W = homogenize_3x4_transformation_matrix(W_front_4x3.permute(0, 2, 1))
+        W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
         src_pts_yx = get_not_occluded_foreground_points(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
                                                         flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
@@ -908,18 +914,21 @@ class Tracking6D:
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
 
-        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W, K1, K2,
+        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2,
                                                            self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
         r, t, inlier_points, outlier_points, triangulated_points = result
-        q = axis_angle_to_quaternion(r)
-        t_total = self.encoder.translation_offsets[:, :, flow_source] + t
-        q_ref = self.encoder.quaternion_offsets[:, flow_source]
-        q_total = qmult(q_ref, q.unsqueeze(0))
+
+        if backview:
+            self.camera_rotations_backview[flow_arc] = t
+            self.camera_translations_backview[flow_arc] = r
+        else:
+            self.camera_rotations_frontview[flow_arc] = t
+            self.camera_translations_frontview[flow_arc] = r
 
         inlier_ratio = len(inlier_points) / (len(inlier_points) + len(outlier_points))
 
-        return inlier_points, outlier_points, inlier_ratio, q_total, t_total, triangulated_points
+        return inlier_points, outlier_points, inlier_ratio, r, t, triangulated_points
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):

@@ -8,7 +8,7 @@ from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essentia
 from utils import tensor_index_to_coordinates_xy
 
 
-def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to_cam1, K1, K2, width: int, height: int,
+def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, width: int, height: int,
                                               ransac_conf=0.99, method='magsac++'):
 
     # Convert to x, y order
@@ -41,6 +41,8 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to
     mask_tensor = torch.from_numpy(mask).cuda()
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
                                                                       src_pts_yx, dst_pts_yx, mask_tensor)
+
+    t_cam = t_cam.squeeze()
 
     r_cam = rotation_matrix_to_axis_angle(R.contiguous()).squeeze()
 
