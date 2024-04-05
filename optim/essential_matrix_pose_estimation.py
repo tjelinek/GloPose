@@ -2,27 +2,26 @@ import cv2
 import numpy as np
 import pygcransac
 import torch
-from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, Rt_to_matrix4x4, \
-    matrix4x4_to_Rt, inverse_transformation, compose_transformations
+from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essential_choose_solution,
+                             euler_from_quaternion, axis_angle_to_quaternion)
 
 from utils import tensor_index_to_coordinates_xy
 
 
-def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to_cam, K1, K2,
-                                              width: int, height: int, ransac_conf=0.99, method='magsac++'):
+def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to_cam1, K1, K2, width: int, height: int,
+                                              ransac_conf=0.99, method='magsac++'):
 
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
-    # TODO When converting to numpy, I may need to change the source coord to its mirror in the y axis
 
     src_pts_np = src_pts_xy.numpy(force=True)
     dst_pts_np = dst_pts_xy.numpy(force=True)
 
     if method == 'pygcransac':
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
-        E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width,
-                                                 ransac_conf)
+        # , sampler_id=1
+        E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, ransac_conf)
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
@@ -40,22 +39,16 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, W_world_to
     K1_tensor = torch.from_numpy(K1).cuda()
     K2_tensor = torch.from_numpy(K2).cuda()
     mask_tensor = torch.from_numpy(mask).cuda()
-    R, t, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
+    R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
                                                                       src_pts_yx, dst_pts_yx, mask_tensor)
 
-    T = Rt_to_matrix4x4(R.unsqueeze(0), t.unsqueeze(0))
+    r_cam = rotation_matrix_to_axis_angle(R.contiguous()).squeeze()
 
-    # Inverse of world -> camera matrix
-    W_cam_to_world = inverse_transformation(W_world_to_cam)
+    r_cam_deg = torch.rad2deg(torch.stack(euler_from_quaternion(*axis_angle_to_quaternion(r_cam))))
 
-    # Get the transformation matrices in world space
-    T_world = compose_transformations(W_cam_to_world, compose_transformations(T, W_world_to_cam))
-    R_world, t_world = matrix4x4_to_Rt(T_world)
+    print('----------------------------------------')
+    print("---t_cam", t_cam.squeeze().round(decimals=3))
+    print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
+    print('----------------------------------------')
 
-    t_world = t_world.squeeze(-1)
-    r_world = rotation_matrix_to_axis_angle(R_world.contiguous()).squeeze()
-
-    r_world_deg = torch.rad2deg(r_world) % 180
-
-
-    return r_world, t_world, inlier_src_pts, outlier_src_pts, triangulated_points
+    return r_cam, t_cam, inlier_src_pts, outlier_src_pts, triangulated_points
