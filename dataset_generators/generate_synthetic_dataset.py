@@ -76,7 +76,7 @@ def generate_rotating_objects():
 
             rot_gens = [
                 (dataset_generators.scenarios.generate_rotations_y, 'y'),
-                (dataset_generators.scenarios.generate_rotations_z, 'x'),
+                (dataset_generators.scenarios.generate_rotations_x, 'x'),
                 (dataset_generators.scenarios.generate_rotations_z, 'z'),
                 (dataset_generators.scenarios.generate_rotations_xy, 'xy'),
             ]
