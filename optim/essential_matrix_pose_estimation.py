@@ -21,25 +21,24 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     if method == 'pygcransac':
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
         # , sampler_id=1
-        K1 = K1.numpy(force=True)
-        K2 = K2.numpy(force=True)
-        E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, ransac_conf)
+        K1_np = K1.numpy(force=True)
+        K2_np = K2.numpy(force=True)
+        E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width, ransac_conf)
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
                    '8point': cv2.USAC_FM_8PTS}
 
         chosen_method = methods[method]
-        E, mask = cv2.findEssentialMat(src_pts_np, dst_pts_np, K1, method=chosen_method, threshold=1.,
+        K1_np = K1.numpy(force=True)
+        E, mask = cv2.findEssentialMat(src_pts_np, dst_pts_np, K1_np, method=chosen_method, threshold=1.,
                                        prob=ransac_conf)
-        mask = mask[:, 0]
+        mask = mask[:, 0].astype(np.bool_)
 
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
-    K1_tensor = torch.from_numpy(K1).cuda()
-    K2_tensor = torch.from_numpy(K2).cuda()
     mask_tensor = torch.from_numpy(mask).cuda()
-    R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1_tensor, K2_tensor,
-                                                                          src_pts_yx, dst_pts_yx, mask_tensor)
+    R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_yx, dst_pts_yx,
+                                                                          mask_tensor)
 
     t_cam = t_cam.squeeze()
 
