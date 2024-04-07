@@ -8,7 +8,8 @@ from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essentia
 from utils import tensor_index_to_coordinates_xy
 
 
-def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, width: int, height: int,
+def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
+                                              K2: torch.Tensor, width: int, height: int,
                                               ransac_conf=0.99, method='magsac++'):
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
@@ -20,6 +21,8 @@ def estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, wi
     if method == 'pygcransac':
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
         # , sampler_id=1
+        K1 = K1.numpy(force=True)
+        K2 = K2.numpy(force=True)
         E, mask = pygcransac.findEssentialMatrix(correspondences, K1, K2, height, width, height, width, ransac_conf)
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
