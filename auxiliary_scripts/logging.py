@@ -854,7 +854,7 @@ class WriteResults:
         x1, y1, x2_f, y2_f = x1[valid_mask], y1[valid_mask], x2_f[valid_mask], y2_f[valid_mask]
 
         # Normalize and map colors
-        norm = Normalize(vmin=0, vmax=np.sum(valid_mask) - 1)
+        norm = Normalize(vmin=0, vmax=np.sum(valid_mask))
         cmap = plt.get_cmap(cmap)
         colors = cmap(norm(range(np.sum(valid_mask))))
 
