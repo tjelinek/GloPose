@@ -7,13 +7,13 @@ from pathlib import Path
 class Datasets(Enum):
     SyntheticObjects = "SyntheticObjects"
     GoogleScannedObjects = "GoogleScannedObjects"
-    photo360 = "360photo"
+    # photo360 = "360photo"
 
 
 runners = {
     Datasets.SyntheticObjects: "run_SyntheticObjects.py",
     Datasets.GoogleScannedObjects: "run_GoogleScannedObjects.py",
-    Datasets.photo360: "run_360.py"
+    # Datasets.photo360: "run_360.py"
 }
 
 
@@ -68,36 +68,41 @@ def main():
         # "config_deep_with_flow_gt_with_backview",
         # "config_deep_with_flow_no_rgb",
         # "config_deep_with_flow",
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_8point',
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_magsac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_8point',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_magsac',
         'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_pygrancsac',
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_ransac',
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_8point',
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_magsac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_ransac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_8point',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_magsac',
         'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_pygransac',
-        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_ransac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_ransac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_pygrancsac',
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_pygransac'
     ]
 
     sequences = {
-        # Datasets.SyntheticObjects: [
-        #     'Textured_Sphere_5_y',
-        #     'Translating_Textured_Sphere',
-        #     'Textured_Sphere_5_xy',
-        #     'Rotating_Translating_Textured_Sphere_5_y',
-        #     'Rotating_Translating_Textured_Sphere_5_xy',
-        #     'Rotating_Contra_Translating_Textured_Sphere_5_y',
-        #     'Rotating_Contra_Translating_Textured_Sphere_5_xy',
-        #     '8_Colored_Sphere_5_x',
-        #     '6_Colored_Cube_5_z'
-        # ],
+        Datasets.SyntheticObjects: [
+            'Textured_Sphere_5_y',
+            'Textured_Sphere_5_z',
+            'Textured_Sphere_5_x',
+            # 'Textured_Sphere_10_y',
+            'Translating_Textured_Sphere',
+            'Textured_Sphere_5_xy',
+            # 'Rotating_Translating_Textured_Sphere_5_y',
+            # 'Rotating_Translating_Textured_Sphere_5_xy',
+            # 'Rotating_Contra_Translating_Textured_Sphere_5_y',
+            'Rotating_Contra_Translating_Textured_Sphere_5_xy',
+            # '8_Colored_Sphere_5_x',
+            # '6_Colored_Cube_5_z'
+        ],
         Datasets.GoogleScannedObjects: [
             'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
-            'Twinlab_Nitric_Fuel',
-        #     'Squirrel',
-        #     'STACKING_BEAR',
-        #     'Schleich_Allosaurus',
-        #     'Threshold_Ramekin_White_Porcelain',
-        #     'Tag_Dishtowel_Green'
+            # 'Twinlab_Nitric_Fuel',
+            'Squirrel',
+            # 'STACKING_BEAR',
+            'Schleich_Allosaurus',
+            #     'Threshold_Ramekin_White_Porcelain',
+            #     'Tag_Dishtowel_Green'
         ],
         # Datasets.photo360: [
         #     "09"
