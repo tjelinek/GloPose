@@ -23,7 +23,8 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         # , sampler_id=1
         K1_np = K1.numpy(force=True)
         K2_np = K2.numpy(force=True)
-        E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width, ransac_conf)
+        E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
+                                                 ransac_conf, threshold=1.)
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
