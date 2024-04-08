@@ -597,8 +597,9 @@ class Tracking6D:
 
             del all_frame_observations
             del all_flow_observations
-            del all_frame_observations_backview
-            del all_flow_observations_backview
+            if self.config.matching_target_to_backview:
+                del all_frame_observations_backview
+                del all_flow_observations_backview
 
         return self.best_model
 
