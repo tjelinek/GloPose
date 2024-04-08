@@ -607,19 +607,21 @@ class WriteResults:
         if inliers is not None:
             inliers = inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(inliers, seg_mask, occlusion, flow_np, rendered_flow,
-                                              ax_source, axs_target, 'Greens', 'Reds', 'inliers')
+                                              ax_source, axs_target, 'Greens', 'Reds', 'inliers',
+                                              max_points=20)
             matching_text += f'inliers: {inliers.shape[1]}\n'
         if outliers is not None:
             outliers = outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-            # self.draw_cross_axes_flow_matches(outliers, seg_mask_front, flow_frontview_np, rendered_flow, axs[1, 0],
-            #                                   axs[2, 0], 'Blues', 'Oranges', 'outliers')
+            # self.draw_cross_axes_flow_matches(outliers, seg_mask, occlusion, flow_np, rendered_flow, ax_source,
+            #                                   axs_target, 'Blues', 'Oranges', 'outliers',
+            #                                   max_points=10)
             matching_text += f'outliers: {outliers.shape[1]}'
         ax_source.text(0.95, 0.95, matching_text, transform=ax_source.transAxes, fontsize=4,
                        verticalalignment='top', horizontalalignment='right',
                        bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
 
-    def dump_correspondences(self, keyframes: KeyframeBuffer, keyframes_backview: KeyframeBuffer, new_flow_arcs, gt_rotations,
-                             gt_translations):
+    def dump_correspondences(self, keyframes: KeyframeBuffer, keyframes_backview: KeyframeBuffer, new_flow_arcs,
+                             gt_rotations, gt_translations):
 
         with h5py.File(self.correspondences_log_file, 'a') as f:
 
@@ -629,7 +631,7 @@ class WriteResults:
                 flow_observation_frontview = keyframes.get_flows_between_frames(source_frame, target_frame)
                 flow_observation_backview = keyframes_backview.get_flows_between_frames(source_frame, target_frame)
 
-                src_pts_xy_frontview, dst_pts_xy_frontview =\
+                src_pts_xy_frontview, dst_pts_xy_frontview = \
                     get_non_occluded_foreground_correspondences(flow_observation_frontview.observed_flow_occlusion,
                                                                 flow_observation_frontview.observed_flow_segmentation,
                                                                 flow_observation_frontview.observed_flow,
@@ -688,11 +690,11 @@ class WriteResults:
         segment_mask = (segment_mask >= self.tracking_config.segmentation_mask_threshold)
         foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
 
-        total_points = foreground_points.shape[1]
+        total_points = source_coords.shape[1]
 
         if total_points > max_points:
             random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
-            source_coords = foreground_points[:, random_sample]
+            source_coords = source_coords[:, random_sample]
 
         source_coords[0, :] = flow_np.shape[-2] - source_coords[0, :]
         target_coords = source_coords_to_target_coords_np(source_coords, flow_np)
@@ -706,7 +708,7 @@ class WriteResults:
 
         for i in range(0, source_coords.shape[1]):
 
-            yxA = source_coords[:, i]
+            yxA = source_coords[:, i].astype(np.int32)
             yxB = target_coords[:, i]
             yxB_movement = target_coords_from_pred_movement[:, i]
 
