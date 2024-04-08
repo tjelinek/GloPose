@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
-from matplotlib.patches import ConnectionPatch
+from matplotlib.patches import ConnectionPatch, Patch
 from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
@@ -567,6 +567,10 @@ class WriteResults:
             self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
                                                      rend_flow, seg_mask_front, occlusion_mask_front,
                                                      frame_result.inliers, frame_result.outliers)
+
+            legend_elements = [Patch(facecolor='green', edgecolor='green', label='Predicted inliers'),
+                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers')]
+            axs[2, 0].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5), fontsize='small')
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
                                     flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
