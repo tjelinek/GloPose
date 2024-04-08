@@ -526,13 +526,13 @@ class WriteResults:
             encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
                                                                                                        flow_frames)
 
-            rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                     flow_arcs_indices=[(0, 1)])
-            rendered_flow_result_back = renderer_backview.compute_theoretical_flow(encoder_result,
-                                                                                   encoder_result_flow_frames,
-                                                                                   flow_arcs_indices=[(0, 1)])
-            rendered_flow = rendered_flow_result.theoretical_flow.numpy(force=True)
-            rendered_flow_back = rendered_flow_result_back.theoretical_flow.numpy(force=True)
+            rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                  flow_arcs_indices=[(0, 1)])
+            rendered_flow_res_back = renderer_backview.compute_theoretical_flow(encoder_result,
+                                                                                encoder_result_flow_frames,
+                                                                                flow_arcs_indices=[(0, 1)])
+            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow).numpy(force=True)
+            rend_flow_back = flow_unit_coords_to_image_coords(rendered_flow_res_back.theoretical_flow).numpy(force=True)
 
             values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
             (occlusion_mask_front, seg_mask_front, target_front,
@@ -565,7 +565,7 @@ class WriteResults:
             flow_frontview_np = flow_frontview.numpy(force=True)
 
             self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
-                                                     rendered_flow, seg_mask_front, occlusion_mask_front,
+                                                     rend_flow, seg_mask_front, occlusion_mask_front,
                                                      frame_result.inliers, frame_result.outliers)
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
@@ -592,7 +592,7 @@ class WriteResults:
                 flow_backview_np = flow_backview.numpy(force=True)
 
                 self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], new_flow_arc, flow_backview_np,
-                                                         rendered_flow_back, seg_mask_back, occlusion_mask_back,
+                                                         rend_flow_back, seg_mask_back, occlusion_mask_back,
                                                          frame_result.inliers_back, frame_result.outliers_back)
 
                 self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
@@ -612,9 +612,9 @@ class WriteResults:
             matching_text += f'inliers: {inliers.shape[1]}\n'
         if outliers is not None:
             outliers = outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
-            # self.draw_cross_axes_flow_matches(outliers, seg_mask, occlusion, flow_np, rendered_flow, ax_source,
-            #                                   axs_target, 'Blues', 'Oranges', 'outliers',
-            #                                   max_points=10)
+            self.draw_cross_axes_flow_matches(outliers, seg_mask, occlusion, flow_np, rendered_flow, ax_source,
+                                              axs_target, 'Blues', 'Oranges', 'outliers',
+                                              max_points=10)
             matching_text += f'outliers: {outliers.shape[1]}'
         ax_source.text(0.95, 0.95, matching_text, transform=ax_source.transAxes, fontsize=4,
                        verticalalignment='top', horizontalalignment='right',
@@ -685,7 +685,7 @@ class WriteResults:
 
     def draw_cross_axes_flow_matches(self, source_coords, segment_mask, occlusion_mask, flow_np, flow_np_from_movement,
                                      axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
-        outlier_pixel_threshold = 3
+        outlier_pixel_threshold = 5
 
         segment_mask = (segment_mask >= self.tracking_config.segmentation_mask_threshold)
         foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
@@ -714,24 +714,34 @@ class WriteResults:
 
             yA, xA = yxA
             yB, xB = yxB
+            yB_movement, xB_movement = yxB_movement
 
             color = mappable_correct.to_rgba(source_coords.shape[1] / 2 + i / 2)
-            if ((np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold or
-                 occlusion_mask[-yA, xA] >= self.tracking_config.occlusion_coef_threshold and point_type == 'inliers') or
-                    (np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold and point_type == 'outliers')):
-                color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
+            alpha = 1.0
+            if point_type == 'inliers':
+                if (np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold or
+                        occlusion_mask[-yA, xA] >= self.tracking_config.occlusion_coef_threshold):
+                    color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
+
+                    axs2.plot(xB_movement, yB_movement, color=color, marker='+', markersize=0.5)
+                    axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
+
+            elif point_type == 'outliers':
+                if np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold:
+                    alpha = 0.0
+                    color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
             # Create a ConnectionPatch for each pair of sampled points
-            axs1.plot(xA, yA, color=color, marker='X', markersize=0.5)
-            axs2.plot(xB, yB, color=color, marker='X', markersize=0.5)
+            axs1.plot(xA, yA, color=color, marker='X', markersize=0.5, alpha=alpha)
+            axs2.plot(xB, yB, color=color, marker='X', markersize=0.5, alpha=alpha)
 
             con = ConnectionPatch(xyA=(xA, yA), xyB=(xB, yB),
                                   coordsA='data', coordsB='data',
-                                  axesA=axs1, axesB=axs2, color=color, lw=0.5)
+                                  axesA=axs1, axesB=axs2, color=color, lw=0.5, alpha=alpha)
             axs2.add_artist(con)
 
-            axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white')
-            axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
+            axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
+            axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
 
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
         flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
