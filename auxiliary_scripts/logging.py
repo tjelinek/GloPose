@@ -369,7 +369,7 @@ class WriteResults:
 
         # FLOW BACKVIEW ERROR VISUALIZATION
         self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                          deep_encoder, renderer, renderer_backview)
+                                          deep_encoder, renderer, renderer_backview, gt_encoder)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -510,7 +510,7 @@ class WriteResults:
         self.all_proj.write(rendered_silhouette)
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                     deep_encoder, renderer, renderer_backview):
+                                     deep_encoder, renderer, renderer_backview, gt_encoder):
 
         for new_flow_arc in new_flow_arcs:
 
@@ -523,8 +523,8 @@ class WriteResults:
             keyframes = [flow_arc_source, flow_arc_target]
             flow_frames = [flow_arc_source, flow_arc_target]
 
-            encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                       flow_frames)
+            encoder_result, encoder_result_flow_frames = gt_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                     flow_frames)
 
             rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                                   flow_arcs_indices=[(0, 1)])
@@ -541,6 +541,15 @@ class WriteResults:
             display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
 
             fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+            flow_source_label = self.tracking_config.gt_flow_source
+            if flow_source_label == 'FlowNetwork':
+                flow_source_label = self.tracking_config.long_flow_model
+
+            heading_text = (f"Frames {new_flow_arc}\n"
+                            f"Flow: {flow_source_label}")
+            axs[0, 0].text(1.05, 1, heading_text, transform=axs[0, 0].transAxes, verticalalignment='top',
+                           fontsize='medium')
 
             for ax in axs.flat:
                 ax.axis('off')
@@ -568,8 +577,10 @@ class WriteResults:
                                                      rend_flow, seg_mask_front, occlusion_mask_front,
                                                      frame_result.inliers, frame_result.outliers)
 
-            legend_elements = [Patch(facecolor='green', edgecolor='green', label='Predicted inliers'),
-                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers')]
+            legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
+                               Patch(facecolor='red', edgecolor='red', label='FP inliers'),
+                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers'),]
+
             axs[2, 0].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5), fontsize='small')
 
             self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
@@ -730,7 +741,7 @@ class WriteResults:
                     axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
 
             elif point_type == 'outliers':
-                if np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold:
+                if np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold:
                     alpha = 0.0
                     color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
