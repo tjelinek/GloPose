@@ -2,7 +2,7 @@ import gc
 import math
 import copy
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 import imageio
 import kaolin
@@ -15,9 +15,10 @@ from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
-from typing import Optional, Any, NamedTuple, Dict, List
+from typing import Optional, NamedTuple, List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
+from auxiliary_scripts.data_structures import FrameResult, EssentialMatrixData
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords
@@ -36,30 +37,6 @@ from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, S
 from tracker_config import TrackerConfig
 from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult, \
     get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix
-
-
-@dataclass
-class FrameResult:
-    flow_render_result: RenderedFlowResult = None
-    encoder_result: EncoderResult = None
-    renders: Any = None
-    frame_losses: Any = None
-    per_pixel_flow_error: Any = None
-    inliers: Dict = None
-    outliers: Dict = None
-    inliers_back: Dict = None
-    outliers_back: Dict = None
-    triangulated_points_frontview: Dict = None
-    triangulated_points_backview: Dict = None
-
-
-@dataclass
-class EssentialMatrixData:
-    camera_rotations = {}
-    camera_translations = {}
-    source_points = {}
-    target_points = {}
-    inlier_mask = {}
 
 
 class InferenceResult(NamedTuple):
