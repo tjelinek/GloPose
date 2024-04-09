@@ -408,7 +408,9 @@ class Tracking6D:
         our_losses = -np.ones((files.shape[0] - 1, 1))
 
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
-                                          tracking_config=self.config, rendering=self.rendering)
+                                          tracking_config=self.config, rendering=self.rendering,
+                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
+                                          rgb_encoder=self.rgb_encoder)
 
         template_frame_observation = self.tracker.next(0)
         template_frame_observation_from_back = self.tracker_backview.next(0)
@@ -538,18 +540,15 @@ class Tracking6D:
                 new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
 
                 self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
-                                                 encoder_result=encoder_result, tex=tex,
-                                                 new_flow_arcs=new_flow_arcs, frame_result=frame_result,
-                                                 active_keyframes=self.active_keyframes,
+                                                 encoder_result=encoder_result, tex=tex, new_flow_arcs=new_flow_arcs,
+                                                 frame_result=frame_result, active_keyframes=self.active_keyframes,
                                                  active_keyframes_backview=self.active_keyframes_backview,
                                                  logged_sgd_translations=self.logged_sgd_translations,
                                                  logged_sgd_quaternions=self.logged_sgd_quaternions,
-                                                 deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                                 renderer=self.rendering, renderer_backview=self.rendering_backview,
-                                                 best_model=self.best_model, observations=all_frame_observations,
+                                                 renderer_backview=self.rendering_backview, best_model=self.best_model,
+                                                 observations=all_frame_observations,
                                                  observations_backview=all_frame_observations_backview,
-                                                 gt_encoder=self.gt_encoder, gt_rotations=self.gt_rotations,
-                                                 gt_translations=self.gt_translations)
+                                                 gt_rotations=self.gt_rotations, gt_translations=self.gt_translations)
 
                 gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                     if self.gt_mesh_prototype is not None else None

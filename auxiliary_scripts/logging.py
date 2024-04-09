@@ -42,7 +42,8 @@ class WriteResults:
     Metrics = namedtuple('Metrics', ['loss', 'rotation', 'translation',
                                      'gt_rotation', 'gt_translation'])
 
-    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering):
+    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, gt_encoder,
+                 deep_encoder, rgb_encoder):
 
         self.image_height = shape[0]
         self.image_width = shape[1]
@@ -58,6 +59,9 @@ class WriteResults:
                                                  (shape[1], shape[0]), True)
 
         self.rendering: RenderingKaolin = rendering
+        self.gt_encoder: Encoder = gt_encoder
+        self.deep_encoder: Encoder = deep_encoder
+        self.rgb_encoder: Encoder = rgb_encoder
 
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
@@ -351,25 +355,23 @@ class WriteResults:
     @torch.no_grad()
     def write_results(self, bounding_box, our_losses, frame_i, encoder_result, tex, new_flow_arcs, frame_result,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
-                      logged_sgd_translations, logged_sgd_quaternions, deep_encoder: Encoder, rgb_encoder: Encoder,
-                      renderer: RenderingKaolin, renderer_backview, best_model, observations: FrameObservation,
-                      observations_backview: FrameObservation, gt_encoder: Encoder, gt_rotations, gt_translations):
+                      logged_sgd_translations, logged_sgd_quaternions, renderer_backview, best_model,
+                      observations: FrameObservation, observations_backview: FrameObservation, gt_rotations,
+                      gt_translations):
 
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
 
         self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
-                                        keyframe_buffer_backview=active_keyframes_backview, new_flow_arcs=new_flow_arcs,
-                                        rgb_encoder=rgb_encoder, deep_encoder=deep_encoder, renderer=renderer,
-                                        renderer_backview=renderer_backview)
+                                        new_flow_arcs=new_flow_arcs)
 
         self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs,
                             frame_result.per_pixel_flow_error)
 
         # FLOW BACKVIEW ERROR VISUALIZATION
         self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                          deep_encoder, renderer, renderer_backview, gt_encoder)
+                                          self.rendering, renderer_backview)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -403,20 +405,20 @@ class WriteResults:
         self.tracking_log.write(f"Keyframes: {active_keyframes.keyframes}\n")
 
         self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
-        self.write_all_encoder_rotations(deep_encoder, max(active_keyframes.keyframes) + 1)
+        self.write_all_encoder_rotations(self.deep_encoder, max(active_keyframes.keyframes) + 1)
 
         if self.tracking_config.features == 'rgb':
             tex = detached_result.texture_maps
 
-        feat_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                               detached_result.vertices, deep_encoder.face_features,
-                                               detached_result.texture_maps, detached_result.lights)
+        feat_renders_result = self.rendering.forward(detached_result.translations, detached_result.quaternions,
+                                                     detached_result.vertices, self.deep_encoder.face_features,
+                                                     detached_result.texture_maps, detached_result.lights)
 
         feat_renders = feat_renders_result.rendered_image
 
-        rgb_renders_result = renderer.forward(detached_result.translations, detached_result.quaternions,
-                                              detached_result.vertices, deep_encoder.face_features,
-                                              tex, detached_result.lights)
+        rgb_renders_result = self.rendering.forward(detached_result.translations, detached_result.quaternions,
+                                                    detached_result.vertices, self.deep_encoder.face_features,
+                                                    tex, detached_result.lights)
 
         renders = rgb_renders_result.rendered_image
         rendered_silhouette = rgb_renders_result.rendered_image_segmentation
@@ -435,7 +437,7 @@ class WriteResults:
         #                 self.write_folder, self.tracking_config.max_keyframes + 1, ids=2)
 
         write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
-                       deep_encoder.face_features[0].cpu().numpy(),
+                       self.deep_encoder.face_features[0].cpu().numpy(),
                        os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
         save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
         save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
@@ -510,7 +512,7 @@ class WriteResults:
         self.all_proj.write(rendered_silhouette)
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                     deep_encoder, renderer, renderer_backview, gt_encoder):
+                                     renderer, renderer_backview):
 
         for new_flow_arc in new_flow_arcs:
 
@@ -523,8 +525,8 @@ class WriteResults:
             keyframes = [flow_arc_source, flow_arc_target]
             flow_frames = [flow_arc_source, flow_arc_target]
 
-            encoder_result, encoder_result_flow_frames = gt_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                     flow_frames)
+            encoder_result, encoder_result_flow_frames = self.gt_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                          flow_frames)
 
             rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                                   flow_arcs_indices=[(0, 1)])
@@ -579,7 +581,7 @@ class WriteResults:
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
-                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers'),]
+                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers'), ]
 
             axs[2, 0].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5), fontsize='small')
 
@@ -645,7 +647,7 @@ class WriteResults:
 
                 flow_observation_frontview = keyframes.get_flows_between_frames(source_frame, target_frame)
 
-                dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview =\
+                dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview = \
                     self.get_correspondences_from_observations(flow_observation_frontview)
 
                 if self.tracking_config.matching_target_to_backview:
@@ -1095,9 +1097,8 @@ class WriteResults:
         encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_theoretical_flow(self, bounding_box, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview,
-                                   new_flow_arcs: List[Tuple[int, int]], rgb_encoder: Encoder, deep_encoder: Encoder,
-                                   renderer: RenderingKaolin, renderer_backview):
+    def visualize_theoretical_flow(self, bounding_box, keyframe_buffer: KeyframeBuffer,
+                                   new_flow_arcs: List[Tuple[int, int]]):
         for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
             source_frame = flow_arc[0]
@@ -1108,21 +1109,21 @@ class WriteResults:
             flow_frames = [source_frame, target_frame]
 
             # Compute estimated shape
-            encoder_result, encoder_result_flow_frames = deep_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                       flow_frames)
+            encoder_result, encoder_result_flow_frames = self.deep_encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                                            flow_frames)
 
             # Get texture map
-            tex_rgb = nn.Sigmoid()(rgb_encoder.texture_map)
+            tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             # Render keyframe images
-            rendering_result = renderer.forward(encoder_result.translations, encoder_result.quaternions,
-                                                encoder_result.vertices, deep_encoder.face_features, tex_rgb,
-                                                encoder_result.lights)
+            rendering_result = self.rendering.forward(encoder_result.translations, encoder_result.quaternions,
+                                                      encoder_result.vertices, self.deep_encoder.face_features, tex_rgb,
+                                                      encoder_result.lights)
 
             rendering_rgb = rendering_result.rendered_image
 
-            rendered_flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                     flow_arcs_indices=[(0, 1)])
+            rendered_flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                                           flow_arcs_indices=[(0, 1)])
 
             rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
 
