@@ -48,6 +48,7 @@ class WriteResults:
 
         self.image_height = shape[0]
         self.image_width = shape[1]
+        self.sequence_length: int = num_frames
 
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
                                          10, (shape[1], shape[0]), True)
@@ -64,6 +65,8 @@ class WriteResults:
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
 
+        self.past_frame_results: Dict = {}
+
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((num_frames - 1, 1))
@@ -77,11 +80,13 @@ class WriteResults:
         self.gt_imgs_path = self.write_folder / Path('gt_imgs')
         self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
         self.rerun_log_path = self.write_folder / Path('rerun')
+        self.matchings_path = self.write_folder / Path('matchings')
 
         self.flows_path.mkdir(exist_ok=True, parents=True)
         self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
         self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
+        self.matchings_path.mkdir(exist_ok=True, parents=True)
 
         self.metrics_writer = csv.writer(self.metrics_log)
 
@@ -360,6 +365,8 @@ class WriteResults:
                       observations: FrameObservation, observations_backview: FrameObservation, gt_rotations,
                       gt_translations):
 
+        self.analyze_ransac_matchings(frame_i, frame_result, new_flow_arcs)
+
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
@@ -511,6 +518,15 @@ class WriteResults:
         rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
         rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
         self.all_proj.write(rendered_silhouette)
+
+    def analyze_ransac_matchings(self, frame_i, frame_result: FrameResult, new_flow_arcs):
+
+        self.past_frame_results[new_flow_arcs[-1]] = frame_result
+
+        if frame_i + 1 >= 10:
+            for i in range(self.sequence_length):
+
+                frame_flow = frame_result.flow_render_result
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
                                      renderer, renderer_backview):
