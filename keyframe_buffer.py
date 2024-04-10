@@ -1,6 +1,5 @@
 from bisect import insort
 from copy import deepcopy
-from enum import Enum
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
@@ -9,10 +8,7 @@ import networkx as nx
 
 from dataclasses import dataclass, field
 
-
-class Cameras(Enum):
-    FRONTVIEW = 'frontview'
-    BACKVIEW = 'backview'
+from auxiliary_scripts.data_structures import Cameras
 
 
 @dataclass

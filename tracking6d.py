@@ -18,11 +18,11 @@ from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.data_structures import FrameResult, EssentialMatrixData
+from auxiliary_scripts.data_structures import FrameResult, EssentialMatrixData, Cameras
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords
-from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, Cameras
+from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
@@ -103,11 +103,9 @@ class Tracking6D:
         # Tracker
         self.tracker: Optional[BaseTracker] = None
 
-        # Camera poses recovery
-        self.camera_rotations_frontview = []
-        self.camera_rotations_backview = []
-        self.camera_translations_frontview = []
-        self.camera_translations_backview = []
+        # Essential matrix preinitialization
+        self.essential_matrix_data_frontview = EssentialMatrixData()
+        self.essential_matrix_data_backview = EssentialMatrixData()
 
         # Other utilities and flags
         self.write_results = None
@@ -808,16 +806,8 @@ class Tracking6D:
             infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
                                                                flow_frames, keyframes, flow_arcs, frame_losses)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                             flow_observations)
-            (infer_result, inliers, outliers, inliers_back, outliers_back, triangulated_points_frontview,
-             triangulated_points_backview) = result
-            frame_result.inliers = inliers
-            frame_result.inliers_back = inliers_back
-            frame_result.outliers = outliers
-            frame_result.outliers_back = outliers_back
-            frame_result.triangulated_points_frontview = triangulated_points_frontview
-            frame_result.triangulated_points_backview = triangulated_points_backview
+            infer_result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
+                                                                   flow_observations, frame_result)
         else:
             raise ValueError("Unknown pre-init method.")
 
@@ -828,7 +818,7 @@ class Tracking6D:
 
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
-                                           flow_observations: MultiCameraObservation):
+                                           flow_observations: MultiCameraObservation, frame_result: FrameResult):
 
         inlier_points_list = {}
         outlier_points_list = {}
