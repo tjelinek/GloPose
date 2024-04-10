@@ -269,15 +269,36 @@ def normalize_vertices(vertices: torch.Tensor):
     return vertices
 
 
+def get_foreground_and_segment_mask(observed_occlusion, observed_segmentation, occlusion_threshold,
+                                    segmentation_threshold):
+    not_occluded_binary_mask = (observed_occlusion <= occlusion_threshold)
+    segmentation_binary_mask = (observed_segmentation > segmentation_threshold)
+    not_occluded_foreground_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+
+    return not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask
+
+
 def get_not_occluded_foreground_points(observed_occlusion, observed_segmentation, occlusion_threshold,
                                        segmentation_threshold):
 
-    not_occluded_binary_mask = (observed_occlusion <= occlusion_threshold)
-    segmentation_binary_mask = (observed_segmentation > segmentation_threshold)
-    not_occluded_points_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
-    src_pts_yx = torch.nonzero(not_occluded_points_mask).to(torch.float32)
+    _, _, not_occluded_foreground_mask = get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
+                                                                         occlusion_threshold, segmentation_threshold)
+
+    src_pts_yx = torch.nonzero(not_occluded_foreground_mask).to(torch.float32)
 
     return src_pts_yx
+
+
+def print_cuda_occupied_memory(device='cuda:0'):
+    # Set the device
+    torch.cuda.set_device(device)
+
+    # Get the current memory usage and the total memory.
+    allocated_memory = torch.cuda.memory_allocated(device)
+    reserved_memory = torch.cuda.memory_reserved(device)
+
+    print(f"Allocated Memory: {allocated_memory / 1024 ** 2:.2f} MB")
+    print(f"Reserved Memory: {reserved_memory / 1024 ** 2:.2f} MB")
 
 
 def tensor_index_to_coordinates_xy(src_pts_yx):
