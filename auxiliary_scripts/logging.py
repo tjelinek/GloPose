@@ -528,7 +528,8 @@ class WriteResults:
             'ransac_predicted_inliers': [],
             'correctly_predicted_inliers': [],
             'correctly_predicted_flows': [],
-            'actually_occluded': []
+            'actually_occluded': [],
+            'model_obtained_from': []
         }
 
         for i in range(1, delim):
@@ -555,9 +556,8 @@ class WriteResults:
             correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
             fg_points_num = float(getattr(processed_frame_result, f'observed_flow_segmentation_{view}')[flow_arc].sum())
             predicted_occluded_num = float(getattr(processed_frame_result, f'observed_flow_fg_occlusion_{view}')[flow_arc].sum())
-            actually_occluded_num = float(gt_flow_res.rendered_flow_occlusion.sum())
-
-            # breakpoint()
+            actually_occluded_num = float((gt_flow_res.rendered_flow_occlusion >
+                                          self.tracking_config.occlusion_coef_threshold).sum())
 
             results['correctly_predicted_flows'].append(correct_flows_num)
             results['ransac_predicted_inliers'].append(predicted_inliers_num)
@@ -565,6 +565,7 @@ class WriteResults:
             results['foreground_points'].append(fg_points_num)
             results['predicted_as_occluded'].append(predicted_occluded_num)
             results['actually_occluded'].append(actually_occluded_num)
+            results['model_obtained_from'].append(processed_frame_result.source_of_matching)
 
         return results
 
@@ -580,8 +581,17 @@ class WriteResults:
             axs[0].set_title('Front View')
             axs[1].set_title('Back View')
             for i, metric in enumerate(front_results.keys()):
+                if metric == 'model_obtained_from':
+                    continue
                 axs[0].plot(front_results[metric], label=metric)
                 axs[1].plot(back_results[metric], label=metric)
+
+            for ax, results in zip(axs, [front_results, back_results]):
+                ylim = ax.get_ylim()
+                for i, is_foreground in enumerate(front_results['model_obtained_from']):
+                    if not is_foreground:
+                        ax.fill_betweenx(ylim, i - 0.5, i + 0.5, color='yellow', alpha=0.3)
+
             for ax in axs:
                 ax.legend(loc='upper right')
                 ax.set_xlabel('Frame')
@@ -884,8 +894,9 @@ class WriteResults:
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
-        axs[0].set_xticks(list(frame_indices))
-        axs[1].set_xticks(list(frame_indices))
+        ticks = list(frame_indices) if len(list(frame_indices)) < 30 else list(frame_indices)[::2]
+        axs[0].set_xticks(ticks)
+        axs[1].set_xticks(ticks)
 
         for i, axis_label in enumerate(['X-axis', 'Y-axis', 'Z-axis']):
             axs[0].plot(frame_indices, rotations[:, i], label=f'{axis_label} Rotation', color=colors[i])
