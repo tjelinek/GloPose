@@ -836,29 +836,13 @@ class Tracking6D:
         flow_source, flow_target = flow_arc
 
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc)
+        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc, frame_result)
         (src_pts_yx_front, dst_pts_yx_front, inlier_mask_front, inlier_points, outlier_points, inlier_ratio_frontview,
          q_total, t_total, triangulation_frontview) = result
 
         inlier_points_list[flow_arc] = inlier_points
         outlier_points_list[flow_arc] = outlier_points
         triangulated_points_frontview[flow_arc] = triangulation_frontview
-
-        res = get_foreground_and_segment_mask(front_flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
-                                              front_flow_observations.observed_flow_segmentation[:,
-                                              [flow_arc_idx]],
-                                              self.config.occlusion_coef_threshold,
-                                              self.config.segmentation_mask_threshold)
-        not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
-
-        frame_result.observed_flow_segmentation_front[flow_arc] = segmentation_binary_mask.cpu()
-        frame_result.observed_flow_fg_occlusion_front[flow_arc] = (~not_occluded_foreground_mask * segmentation_binary_mask).cpu()
-
-        frame_result.inliers_front[flow_arc] = inlier_points
-        frame_result.outliers_front[flow_arc] = outlier_points
-        frame_result.set_attributes(triangulated_points_frontview=triangulated_points_frontview,
-                                    src_pts_yx_front=src_pts_yx_front, dst_pts_yx_front=dst_pts_yx_front,
-                                    inliers_mask_front=inlier_mask_front)
 
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
         self.encoder.quaternion_offsets[:, flow_target] = q_total
@@ -867,7 +851,7 @@ class Tracking6D:
 
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc,
+            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc, frame_result,
                                                            backview=True)
             (src_pts_yx_back, dst_pts_yx_back, inlier_mask_back, inlier_points_backview, outlier_points_backview,
              inlier_ratio_backview, q_total_backview, t_total_backview, triangulation_backview) = result
@@ -875,23 +859,6 @@ class Tracking6D:
             inlier_points_list_backview[flow_arc] = inlier_points_backview
             outlier_points_list_backview[flow_arc] = outlier_points_backview
             triangulated_points_backview[flow_arc] = triangulation_backview
-
-            backview_flow_observation = flow_observations.cameras_observations[Cameras.BACKVIEW]
-            res = get_foreground_and_segment_mask(backview_flow_observation.observed_flow_occlusion[:, [flow_arc_idx]],
-                                                  backview_flow_observation.observed_flow_segmentation[:,
-                                                  [flow_arc_idx]],
-                                                  self.config.occlusion_coef_threshold,
-                                                  self.config.segmentation_mask_threshold)
-            not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
-
-            frame_result.observed_flow_segmentation_back[flow_arc] = segmentation_binary_mask.cpu()
-            frame_result.observed_flow_fg_occlusion_back[flow_arc] = (~not_occluded_foreground_mask * segmentation_binary_mask).cpu()
-
-            frame_result.inliers_back[flow_arc] = inlier_points_backview
-            frame_result.outliers_back[flow_arc] = outlier_points_backview
-            frame_result.set_attributes(triangulated_points_backview=triangulated_points_backview,
-                                        src_pts_yx_back=src_pts_yx_back, dst_pts_yx_back=dst_pts_yx_back,
-                                        inliers_mask_back=inlier_mask_back)
 
             if inlier_ratio_frontview < inlier_ratio_backview:
                 self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
@@ -905,7 +872,8 @@ class Tracking6D:
 
         return inference_result
 
-    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, backview=False):
+    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, frame_result: FrameResult,
+                                         backview=False):
 
         K1 = K2 = self.rendering.camera_intrinsics
 
@@ -951,8 +919,33 @@ class Tracking6D:
 
         quat = axis_angle_to_quaternion(rot[None]).squeeze()
 
+        self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
+                               inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview)
+
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)
+
+    def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
+                          inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview):
+        res = get_foreground_and_segment_mask(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
+                                              flow_observations.observed_flow_segmentation[:,
+                                              [flow_arc_idx]],
+                                              self.config.occlusion_coef_threshold,
+                                              self.config.segmentation_mask_threshold)
+        not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
+        frame_result.observed_flow_segmentation_front[flow_arc] = segmentation_binary_mask.cpu()
+        frame_result.observed_flow_fg_occlusion_front[flow_arc] = (
+                ~not_occluded_foreground_mask * segmentation_binary_mask).cpu()
+        frame_result.inliers_front[flow_arc] = inlier_src_pts
+        frame_result.outliers_front[flow_arc] = outlier_src_pts
+        if backview:
+            frame_result.set_attributes(triangulated_points_backview=triangulated_points,
+                                        src_pts_yx_back=src_pts_yx, dst_pts_yx_back=dst_pts_yx,
+                                        inliers_mask_back=inlier_mask)
+        else:
+            frame_result.set_attributes(triangulated_points_frontview=triangulated_points,
+                                        src_pts_yx_front=src_pts_yx, dst_pts_yx_front=dst_pts_yx,
+                                        inliers_mask_front=inlier_mask)
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
