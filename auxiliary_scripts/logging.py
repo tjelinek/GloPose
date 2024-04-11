@@ -520,14 +520,75 @@ class WriteResults:
         rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
         self.all_proj.write(rendered_silhouette)
 
+    def measure_ransac_stats(self, delim, view: str = 'front'):
+        correct_threshold = 2.0
+        results = {
+            'foreground_points': [],
+            'predicted_as_occluded': [],
+            'ransac_predicted_inliers': [],
+            'correctly_predicted_inliers': [],
+            'correctly_predicted_flows': [],
+            'actually_occluded': []
+        }
+
+        for i in range(1, delim):
+            flow_arc = (0, i)
+            processed_frame_result: FrameResult = self.past_frame_results[flow_arc]
+            if view == 'front':
+                renderer = self.rendering
+            else:
+                renderer = self.rendering_backview
+
+            gt_flow_res = self.render_flow_for_frame(renderer, self.gt_encoder, 0, i)
+            gt_flow = flow_unit_coords_to_image_coords(gt_flow_res.theoretical_flow)
+
+            src_pts_yx = getattr(processed_frame_result, f'src_pts_yx_{view}')
+            dst_pts_yx = getattr(processed_frame_result, f'dst_pts_yx_{view}')
+            inlier_mask = getattr(processed_frame_result, f'inliers_mask_{view}')
+
+            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
+
+            correct_flows = (torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, axis=-1) < correct_threshold)
+
+            correct_flows_num = float(correct_flows.sum())
+            predicted_inliers_num = float(inlier_mask.sum())
+            correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
+            fg_points_num = float(getattr(processed_frame_result, f'observed_flow_segmentation_{view}')[flow_arc].sum())
+            predicted_occluded_num = float(getattr(processed_frame_result, f'observed_flow_fg_occlusion_{view}')[flow_arc].sum())
+            actually_occluded_num = float(gt_flow_res.rendered_flow_occlusion.sum())
+
+            # breakpoint()
+
+            results['correctly_predicted_flows'].append(correct_flows_num)
+            results['ransac_predicted_inliers'].append(predicted_inliers_num)
+            results['correctly_predicted_inliers'].append(correct_inliers_num)
+            results['foreground_points'].append(fg_points_num)
+            results['predicted_as_occluded'].append(predicted_occluded_num)
+            results['actually_occluded'].append(actually_occluded_num)
+
+        return results
+
     def analyze_ransac_matchings(self, frame_i, frame_result: FrameResult, new_flow_arcs):
 
         self.past_frame_results[new_flow_arcs[-1]] = frame_result
 
-        if frame_i + 1 >= 10:
-            for i in range(self.sequence_length):
+        if (frame_i >= 10 and frame_i % 10 == 0) or frame_i >= self.sequence_length - 1:
+            front_results = self.measure_ransac_stats(frame_i, 'front')
+            back_results = self.measure_ransac_stats(frame_i, 'back')
 
-                frame_flow = frame_result.flow_render_result
+            fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+            axs[0].set_title('Front View')
+            axs[1].set_title('Back View')
+            for i, metric in enumerate(front_results.keys()):
+                axs[0].plot(front_results[metric], label=metric)
+                axs[1].plot(back_results[metric], label=metric)
+            for ax in axs:
+                ax.legend(loc='upper right')
+                ax.set_xlabel('Frame')
+                ax.set_ylabel('Count')
+            plt.tight_layout()
+            plt.savefig(self.ransac_path / 'ransac_stats.svg')
+            plt.close()
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs,
                                      frame_result: FrameResult, renderer, renderer_backview):
