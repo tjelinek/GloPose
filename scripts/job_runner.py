@@ -68,16 +68,14 @@ def main():
         # "config_deep_with_flow_gt_with_backview",
         # "config_deep_with_flow_no_rgb",
         # "config_deep_with_flow",
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_8point',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_magsac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_pygrancsac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_flownet_ransac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_8point',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_magsac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_pygransac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_only_frontview_synthetic_ransac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_8point',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_8point',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_magsac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_magsac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_ransac',
+        # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_ransac',
         'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_pygrancsac',
-        'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_pygransac'
+        'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_pygransac',
     ]
 
     sequences = {
@@ -87,11 +85,11 @@ def main():
             'Textured_Sphere_5_x',
             # 'Textured_Sphere_10_y',
             'Translating_Textured_Sphere',
-            'Textured_Sphere_5_xy',
-            # 'Rotating_Translating_Textured_Sphere_5_y',
+            # 'Textured_Sphere_5_xy',
+            'Rotating_Translating_Textured_Sphere_5_y',
             # 'Rotating_Translating_Textured_Sphere_5_xy',
             # 'Rotating_Contra_Translating_Textured_Sphere_5_y',
-            'Rotating_Contra_Translating_Textured_Sphere_5_xy',
+            # 'Rotating_Contra_Translating_Textured_Sphere_5_xy',
             # '8_Colored_Sphere_5_x',
             # '6_Colored_Cube_5_z'
         ],
