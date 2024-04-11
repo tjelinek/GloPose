@@ -889,8 +889,8 @@ class Tracking6D:
 
         src_pts_yx = get_not_occluded_foreground_points(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
                                                         flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
-                                                        self.config.segmentation_mask_threshold,
-                                                        self.config.occlusion_coef_threshold)
+                                                        self.config.occlusion_coef_threshold,
+                                                        self.config.segmentation_mask_threshold)
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
