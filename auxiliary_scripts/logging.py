@@ -43,8 +43,8 @@ class WriteResults:
     Metrics = namedtuple('Metrics', ['loss', 'rotation', 'translation',
                                      'gt_rotation', 'gt_translation'])
 
-    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, rgb_encoder):
+    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, rendering_backview,
+                 gt_encoder, deep_encoder, rgb_encoder):
 
         self.image_height = shape[0]
         self.image_width = shape[1]
