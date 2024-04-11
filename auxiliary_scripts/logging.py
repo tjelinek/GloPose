@@ -528,8 +528,8 @@ class WriteResults:
 
                 frame_flow = frame_result.flow_render_result
 
-    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                     renderer, renderer_backview):
+    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs,
+                                     frame_result: FrameResult, renderer, renderer_backview):
 
         for new_flow_arc in new_flow_arcs:
 
@@ -539,17 +539,10 @@ class WriteResults:
                 continue
                 # TODO not the most elegant thing to do
 
-            keyframes = [flow_arc_source, flow_arc_target]
-            flow_frames = [flow_arc_source, flow_arc_target]
+            rendered_flow_res = self.render_flow_for_frame(renderer, self.gt_encoder, flow_arc_source, flow_arc_target)
+            rendered_flow_res_back = self.render_flow_for_frame(renderer_backview, self.gt_encoder, flow_arc_source,
+                                                                flow_arc_target)
 
-            encoder_result, encoder_result_flow_frames = self.gt_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                          flow_frames)
-
-            rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                  flow_arcs_indices=[(0, 1)])
-            rendered_flow_res_back = renderer_backview.compute_theoretical_flow(encoder_result,
-                                                                                encoder_result_flow_frames,
-                                                                                flow_arcs_indices=[(0, 1)])
             rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow).numpy(force=True)
             rend_flow_back = flow_unit_coords_to_image_coords(rendered_flow_res_back.theoretical_flow).numpy(force=True)
 
@@ -594,7 +587,7 @@ class WriteResults:
 
             self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
                                                      rend_flow, seg_mask_front, occlusion_mask_front,
-                                                     frame_result.inliers, frame_result.outliers)
+                                                     frame_result.inliers_front, frame_result.outliers_front)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
@@ -632,7 +625,7 @@ class WriteResults:
                 self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
                                         flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
 
-            destination_path = self.flows_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
+            destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, new_flow_arc, flow_np, rendered_flow, seg_mask,
