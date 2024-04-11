@@ -4,7 +4,7 @@ import pygcransac
 import torch
 from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essential_choose_solution,
                              euler_from_quaternion, axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
-                             Rt_to_matrix4x4, relative_transformation)
+                             Rt_to_matrix4x4, relative_transformation, triangulate_points)
 
 from utils import tensor_index_to_coordinates_xy
 
@@ -57,7 +57,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     return r_cam, t_cam, mask_tensor, triangulated_points
 
 
-def triangulate_points(essential_matrix_data, flow_arc, K1):
+def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     flow_source, flow_target = flow_arc
 
     flow_arc_prev = (flow_source, flow_target - 1)
