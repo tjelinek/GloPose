@@ -42,17 +42,14 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     mask_tensor = torch.from_numpy(mask).cuda()
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_yx, dst_pts_yx,
                                                                           mask_tensor)
-
     t_cam = t_cam.squeeze()
-
     r_cam = rotation_matrix_to_axis_angle(R.contiguous()).squeeze()
 
-    r_cam_deg = torch.rad2deg(torch.stack(euler_from_quaternion(*axis_angle_to_quaternion(r_cam))))
-
-    print('----------------------------------------')
-    print("---t_cam", t_cam.squeeze().round(decimals=3))
-    print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
-    print('----------------------------------------')
+    # r_cam_deg = torch.rad2deg(torch.stack(euler_from_quaternion(*axis_angle_to_quaternion(r_cam))))
+    # print('----------------------------------------')
+    # print("---t_cam", t_cam.squeeze().round(decimals=3))
+    # print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
+    # print('----------------------------------------')
 
     return r_cam, t_cam, mask_tensor, triangulated_points
 
