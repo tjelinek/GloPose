@@ -11,7 +11,7 @@ from utils import tensor_index_to_coordinates_xy
 
 def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
                                               K2: torch.Tensor, width: int, height: int,
-                                              ransac_conf=0.99, method='magsac++'):
+                                              ransac_conf=0.9999, method='magsac++'):
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
@@ -25,7 +25,8 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         K1_np = K1.numpy(force=True)
         K2_np = K2.numpy(force=True)
         E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
-                                                 ransac_conf, threshold=1.)
+                                                 ransac_conf, threshold=0.01, min_iters=10000)
+
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
