@@ -927,25 +927,28 @@ class Tracking6D:
 
     def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
                           inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview):
+
         res = get_foreground_and_segment_mask(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
                                               flow_observations.observed_flow_segmentation[:,
                                               [flow_arc_idx]],
                                               self.config.occlusion_coef_threshold,
                                               self.config.segmentation_mask_threshold)
         not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
-        frame_result.observed_flow_segmentation_front[flow_arc] = segmentation_binary_mask.cpu()
-        frame_result.observed_flow_fg_occlusion_front[flow_arc] = (
-                ~not_occluded_foreground_mask * segmentation_binary_mask).cpu()
-        frame_result.inliers_front[flow_arc] = inlier_src_pts
-        frame_result.outliers_front[flow_arc] = outlier_src_pts
-        if backview:
-            frame_result.set_attributes(triangulated_points_backview=triangulated_points,
-                                        src_pts_yx_back=src_pts_yx, dst_pts_yx_back=dst_pts_yx,
-                                        inliers_mask_back=inlier_mask)
-        else:
-            frame_result.set_attributes(triangulated_points_frontview=triangulated_points,
-                                        src_pts_yx_front=src_pts_yx, dst_pts_yx_front=dst_pts_yx,
-                                        inliers_mask_front=inlier_mask)
+
+        view_prefix = 'back' if backview else 'front'
+
+        getattr(frame_result, f'observed_flow_segmentation_{view_prefix}')[flow_arc] = segmentation_binary_mask.cpu()
+        getattr(frame_result, f'observed_flow_fg_occlusion_{view_prefix}')[flow_arc] = (
+            (~not_occluded_foreground_mask * segmentation_binary_mask).cpu())
+
+        getattr(frame_result, f'inliers_{view_prefix}')[flow_arc] = inlier_src_pts
+        getattr(frame_result, f'outliers_{view_prefix}')[flow_arc] = outlier_src_pts
+        frame_result.set_attributes(**{
+            f'triangulated_points_{view_prefix}view': triangulated_points,
+            f'src_pts_yx_{view_prefix}': src_pts_yx,
+            f'dst_pts_yx_{view_prefix}': dst_pts_yx,
+            f'inliers_mask_{view_prefix}': inlier_mask
+        })
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
