@@ -36,7 +36,7 @@ from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences
+    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords
 
 
 class WriteResults:
@@ -61,6 +61,7 @@ class WriteResults:
                                                  (shape[1], shape[0]), True)
 
         self.rendering: RenderingKaolin = rendering
+        self.rendering_backview: RenderingKaolin = rendering_backview
         self.gt_encoder: Encoder = gt_encoder
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
@@ -80,13 +81,13 @@ class WriteResults:
         self.gt_imgs_path = self.write_folder / Path('gt_imgs')
         self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
         self.rerun_log_path = self.write_folder / Path('rerun')
-        self.matchings_path = self.write_folder / Path('matchings')
+        self.ransac_path = self.write_folder / Path('ransac')
 
         self.flows_path.mkdir(exist_ok=True, parents=True)
         self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
         self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
-        self.matchings_path.mkdir(exist_ok=True, parents=True)
+        self.ransac_path.mkdir(exist_ok=True, parents=True)
 
         self.metrics_writer = csv.writer(self.metrics_log)
 
@@ -627,6 +628,16 @@ class WriteResults:
 
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+
+    @staticmethod
+    def render_flow_for_frame(renderer, encoder, flow_arc_source, flow_arc_target):
+        keyframes = [flow_arc_source, flow_arc_target]
+        flow_frames = [flow_arc_source, flow_arc_target]
+        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                              flow_frames)
+        rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                              flow_arcs_indices=[(0, 1)])
+        return rendered_flow_res
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, new_flow_arc, flow_np, rendered_flow, seg_mask,
                                             occlusion, inliers, outliers):
