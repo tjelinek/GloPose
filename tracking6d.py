@@ -34,11 +34,11 @@ from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import (PrecomputedTracker, CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
+from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, qmult, \
-    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix
+from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, \
+    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix, get_foreground_and_segment_mask
 
 
 class InferenceResult(NamedTuple):
