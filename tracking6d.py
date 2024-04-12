@@ -898,11 +898,24 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2,
                                                            self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
-        r, t, inlier_mask, triangulated_points = result
 
-        inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
-        inlier_src_pts = src_pts_yx[inlier_indices]
-        outlier_src_pts = src_pts_yx[inlier_indices]
+        rot, t, inlier_mask, triangulated_points = result
+        R = axis_angle_to_rotation_matrix(rot[None])
+
+        T_RANSAC = inverse_transformation(Rt_to_matrix4x4(R, t[None, :, None]))
+
+        # T_o2_to_o1 = T_w_to_c0 @ T_RANSAC @ (T_w_to_c0)^-1
+        T_o2_to_o1 = compose_transformations(compose_transformations(W_4x4, T_RANSAC),
+                                             inverse_transformation(W_4x4))
+
+        R, t = matrix4x4_to_Rt(T_o2_to_o1)
+        rot = rotation_matrix_to_axis_angle(R).squeeze()
+        t = t.squeeze()
+
+        common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
+        outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
+        inlier_src_pts = src_pts_yx[common_inlier_indices]
+        outlier_src_pts = src_pts_yx[outlier_indices]
 
         if backview:
             essential_matrix_data = self.essential_matrix_data_backview
