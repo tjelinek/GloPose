@@ -707,7 +707,7 @@ class WriteResults:
                 flow_backview_np = flow_backview.numpy(force=True)
 
                 self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], new_flow_arc, flow_backview_np,
-                                                         rend_flow_back, seg_mask_back, occlusion_mask_back,
+                                                         rend_flow_back_np, seg_mask_back, occlusion_mask_back,
                                                          frame_result.inliers_back, frame_result.outliers_back)
 
                 self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
@@ -715,6 +715,52 @@ class WriteResults:
 
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+
+    def visualize_outliers_distribution(self, frame_result, new_flow_arc, gt_flow):
+
+        inlier_list = torch.nonzero(frame_result.inliers_mask_front)[:, 0]
+        outlier_list = torch.nonzero(~frame_result.inliers_mask_front)[:, 0]
+
+        src_pts_front = frame_result.src_pts_yx_front
+        dst_pts_front = frame_result.dst_pts_yx_front
+        dst_pts_gt_flow_front = source_coords_to_target_coords(src_pts_front.T, gt_flow).T
+
+        src_pts_front_inliers = src_pts_front[inlier_list]
+        src_pts_front_outliers = src_pts_front[outlier_list]
+
+        dst_pts_front_inliers = src_pts_front[inlier_list]
+        dst_pts_front_outliers = dst_pts_front[outlier_list]
+        dst_pts_front_inliers_gt = dst_pts_gt_flow_front[inlier_list]
+        dst_pts_front_outliers_gt = dst_pts_gt_flow_front[outlier_list]
+
+        errors_inliers = dst_pts_front_inliers - dst_pts_front_inliers_gt
+        errors_outliers = dst_pts_front_outliers - dst_pts_front_outliers_gt
+
+        if len(outlier_list) == 0 or len(inlier_list) == 0:
+            return
+
+        # Randomly select one inlier and its error
+        random_idx = np.random.choice(len(outlier_list))
+        matching_error = errors_outliers[random_idx]
+        # Compute cosine similarity and Euclidean distances
+        cosine_similarities = [
+            torch.nn.functional.cosine_similarity(matching_error.unsqueeze(0), err.unsqueeze(0), dim=1).item()
+            for err in errors_outliers]
+        error_magnitudes = torch.linalg.norm(errors_outliers, dim=1).numpy(force=True)
+        euclidean_distances = [torch.norm(src_pts_front[outlier_list[random_idx]] - src_pts_front[outlier_list[i]],
+                                          dim=0).item()
+                               for i in range(len(outlier_list))]
+
+        fig, ax = plt.subplots()
+        scatter = ax.scatter(euclidean_distances, cosine_similarities, c=error_magnitudes, cmap='Greys',
+                             alpha=0.4)
+        colorbar = plt.colorbar(scatter, ax=ax)
+        colorbar.set_label('Error Magnitude [Pixels]')
+        ax.set_xlabel('Euclidean Distance from Randomly Selected Outlier')
+        ax.set_ylabel('Cosine Similarity to Outlier Error')
+        ax.set_title('Outlier Error Correlation to Randomly Selected Outlier')
+        plt.savefig(self.ransac_path / f'outliers_spatial_correlation_frame_{new_flow_arc[1]}')
+        plt.close()
 
     @staticmethod
     def render_flow_for_frame(renderer, encoder, flow_arc_source, flow_arc_target):
