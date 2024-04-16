@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from itertools import product
 
 from typing import Dict, Iterable, Tuple, List
@@ -522,15 +522,7 @@ class WriteResults:
 
     def measure_ransac_stats(self, delim, view: str = 'front'):
         correct_threshold = 2.0
-        results = {
-            'foreground_points': [],
-            'predicted_as_occluded': [],
-            'ransac_predicted_inliers': [],
-            'correctly_predicted_inliers': [],
-            'correctly_predicted_flows': [],
-            'actually_occluded': [],
-            'model_obtained_from': []
-        }
+        results = defaultdict(list)
 
         for i in range(1, delim):
             flow_arc = (0, i)
@@ -551,21 +543,24 @@ class WriteResults:
 
             correct_flows = (torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, axis=-1) < correct_threshold)
 
+            fg_points_num = float(getattr(processed_frame_result, f'observed_flow_segmentation_{view}')[flow_arc].sum())
+            pred_visible_num = fg_points_num - float(getattr(processed_frame_result,
+                                                             f'observed_flow_fg_occlusion_{view}')[flow_arc].sum())
             correct_flows_num = float(correct_flows.sum())
             predicted_inliers_num = float(inlier_mask.sum())
             correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
-            fg_points_num = float(getattr(processed_frame_result, f'observed_flow_segmentation_{view}')[flow_arc].sum())
-            predicted_occluded_num = float(getattr(processed_frame_result, f'observed_flow_fg_occlusion_{view}')[flow_arc].sum())
-            actually_occluded_num = float((gt_flow_res.rendered_flow_occlusion >
-                                          self.tracking_config.occlusion_coef_threshold).sum())
+            actually_visible_num = fg_points_num - float((gt_flow_res.rendered_flow_occlusion >
+                                                          self.tracking_config.occlusion_coef_threshold).sum())
+            pred_inlier_ratio = predicted_inliers_num / pred_visible_num
 
-            results['correctly_predicted_flows'].append(correct_flows_num)
-            results['ransac_predicted_inliers'].append(predicted_inliers_num)
-            results['correctly_predicted_inliers'].append(correct_inliers_num)
-            results['foreground_points'].append(fg_points_num)
-            results['predicted_as_occluded'].append(predicted_occluded_num)
-            results['actually_occluded'].append(actually_occluded_num)
+            # results['foreground_points'].append(fg_points_num / fg_points_num)
+            results['visible'].append(actually_visible_num / fg_points_num)
+            results['predicted_as_visible'].append(pred_visible_num / fg_points_num)
+            results['correctly_predicted_flows'].append(correct_flows_num / fg_points_num)
+            results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
+            results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
             results['model_obtained_from'].append(processed_frame_result.source_of_matching)
+            results['inlier_ratio'].append(pred_inlier_ratio)
 
         return results
 
@@ -577,14 +572,27 @@ class WriteResults:
             front_results = self.measure_ransac_stats(frame_i, 'front')
             back_results = self.measure_ransac_stats(frame_i, 'back')
 
-            fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+            fig, axs = plt.subplots(1, 2, figsize=(15, 6), sharey=True)
             axs[0].set_title('Front View')
             axs[1].set_title('Back View')
-            for i, metric in enumerate(front_results.keys()):
-                if metric == 'model_obtained_from':
-                    continue
-                axs[0].plot(front_results[metric], label=metric)
-                axs[1].plot(back_results[metric], label=metric)
+            handles, labels = [], []
+
+            for ax, results in zip(axs, [front_results, back_results]):
+
+                ax.set_xticks(range(0, frame_i, 5))
+                ax.set_yticks(np.arange(0., 1.05, 0.1))
+
+                for i, metric in enumerate(results.keys()):
+                    if metric == 'model_obtained_from':
+                        continue
+                    if metric == 'inlier_ratio':
+                        line, = ax.plot(results[metric], label=metric, linestyle='dashed')
+                    else:
+                        line, = ax.plot(results[metric], label=metric)
+
+                    if ax == axs[0]:
+                        handles.append(line)
+                        labels.append(metric)
 
             for ax, results in zip(axs, [front_results, back_results]):
                 ylim = ax.get_ylim()
@@ -593,10 +601,14 @@ class WriteResults:
                         ax.fill_betweenx(ylim, i - 0.5, i + 0.5, color='yellow', alpha=0.3)
 
             for ax in axs:
-                ax.legend(loc='upper right')
-                ax.set_xlabel('Frame')
-                ax.set_ylabel('Count')
-            plt.tight_layout()
+                ax.set_xlabel('Rotation [deg]')
+                ax.set_ylabel('Percentage')
+
+            fig.legend(handles, labels, loc='upper right')
+
+            plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
+            plt.tight_layout(rect=[0, 0, 0.8, 1])
+
             plt.savefig(self.ransac_path / 'ransac_stats.svg')
             plt.close()
 
@@ -615,8 +627,10 @@ class WriteResults:
             rendered_flow_res_back = self.render_flow_for_frame(renderer_backview, self.gt_encoder, flow_arc_source,
                                                                 flow_arc_target)
 
-            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow).numpy(force=True)
-            rend_flow_back = flow_unit_coords_to_image_coords(rendered_flow_res_back.theoretical_flow).numpy(force=True)
+            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow)
+            rend_flow_np = rend_flow.numpy(force=True)
+            rend_flow_back = flow_unit_coords_to_image_coords(rendered_flow_res_back.theoretical_flow)
+            rend_flow_back_np = rend_flow_back.numpy(force=True)
 
             values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
             (occlusion_mask_front, seg_mask_front, target_front,
@@ -658,8 +672,10 @@ class WriteResults:
             flow_frontview_np = flow_frontview.numpy(force=True)
 
             self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
-                                                     rend_flow, seg_mask_front, occlusion_mask_front,
+                                                     rend_flow_np, seg_mask_front, occlusion_mask_front,
                                                      frame_result.inliers_front, frame_result.outliers_front)
+
+            self.visualize_outliers_distribution(frame_result, new_flow_arc, rend_flow)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
