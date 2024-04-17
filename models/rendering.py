@@ -5,6 +5,7 @@ import kaolin
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
+from kornia.geometry import Rt_to_matrix4x4
 from kornia.morphology import erosion
 
 import cfg
@@ -36,21 +37,37 @@ RenderingResult = namedtuple('RenderingResult', ['rendered_image',
 class RenderingKaolin(nn.Module):
     def __init__(self, config: TrackerConfig, faces: torch.Tensor, width: int, height: int):
         super().__init__()
+
         self.config = config
         self.height = height
         self.width = width
 
-        self. fov = torch.pi / 4  # 45 degrees
-        camera_proj = kaolin.render.camera.generate_perspective_projection(self.fov,  # field of view 45 degrees
-                                                                           self.width / self.height)
+        self.backview = False
+
+        R_frontview_to_backview = torch.Tensor([[-1., 0., 0.],
+                                                [0., -1., 0.],
+                                                [0., 0., 1.]]).cuda().unsqueeze(0)
+        t_frontview_to_backview = -torch.Tensor(self.config.camera_position).unsqueeze(-1).expand(1, 3, 1).cuda()
+
+        self.T_frontview_to_backview = Rt_to_matrix4x4(R_frontview_to_backview, t_frontview_to_backview)
+
+        self.fov = torch.pi / 4  # 45 degrees
+        camera_proj = kaolin.render.camera.generate_perspective_projection(self.fov, self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
         self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
+        self.register_buffer('camera_trans_backview', -torch.Tensor(self.config.camera_position)[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
         camera_up_direction = torch.Tensor((0, 1, 0))[None]
         self.register_buffer('camera_up', camera_up_direction)
 
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
                                                                                 camera_up_direction)
+        camera_rot_backview, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans_backview,
+                                                                                         self.obj_center,
+                                                                                         camera_up_direction)
+
+        self.register_buffer('camera_rot', camera_rot)
+        self.register_buffer('camera_rot_backview', camera_rot_backview)
 
         self.intrinsics = (
             kaolin.render.camera.PinholeIntrinsics.from_fov(width, height, self.fov, x0=width / 2, y0=height / 2,
@@ -61,8 +78,6 @@ class RenderingKaolin(nn.Module):
                                           [0., 0., 1.]])
 
         self.register_buffer('camera_intrinsics', camera_intrinsics)
-
-        self.register_buffer('camera_rot', camera_rot)
         self.set_faces(faces)
         kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).cuda()
         self.register_buffer('kernel', kernel)
@@ -127,8 +142,7 @@ class RenderingKaolin(nn.Module):
                                            rendered_face_normals=rendered_object_face_normals_camera_coords)
         return rendering_result
 
-    def compute_theoretical_flow(self, encoder_out_pose_2, encoder_out_pose_1, flow_arcs_indices) \
-            -> RenderedFlowResult:
+    def compute_theoretical_flow(self, encoder_out_pose_2, encoder_out_pose_1, flow_arcs_indices) -> RenderedFlowResult:
         """
         Computes the theoretical flow between consecutive frames.
 
@@ -150,8 +164,12 @@ class RenderingKaolin(nn.Module):
         batch_size = translation_vector_1_batch.shape[0]
         vertices_1 = encoder_out_pose_1.vertices
 
-        batched_tensors = self.get_batched_tensors_for_rendering(batch_size, vertices_1)
+        batched_tensors = self.get_batched_tensors_for_flow_rendering(batch_size, vertices_1)
         camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch = batched_tensors
+
+        batched_tensors_backview = self.get_batched_tensors_for_flow_rendering(batch_size, vertices_1,
+                                                                               backview=self.backview)
+        camera_rot_batch_backview, camera_trans_batch_backview, _, _, _ = batched_tensors_backview
 
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
         vertices_1_batch = kaolin.render.camera.rotate_translate_points(vertices_1_batch,
@@ -164,8 +182,8 @@ class RenderingKaolin(nn.Module):
 
         prepared_vertices_1 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_1_batch, faces=self.faces,
                                                                         camera_proj=self.camera_proj,
-                                                                        camera_rot=camera_rot_batch,
-                                                                        camera_trans=camera_trans_batch)
+                                                                        camera_rot=camera_rot_batch_backview,
+                                                                        camera_trans=camera_trans_batch_backview)
         face_vertices_cam_1, face_vertices_image_1, face_normals_1 = prepared_vertices_1
 
         prepared_vertices_2 = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices_2_batch, faces=self.faces,
@@ -209,12 +227,17 @@ class RenderingKaolin(nn.Module):
 
         return RenderedFlowResult(theoretical_flow, flow_render_mask, occlusion_mask)
 
-    def get_batched_tensors_for_rendering(self, batch_size, vertices_1):
+    def get_batched_tensors_for_flow_rendering(self, batch_size, vertices_1, backview=False):
         vertices_1_batch = vertices_1.repeat(batch_size, 1, 1)
         vertices_2_batch = vertices_1_batch
         obj_center_batch = self.obj_center.repeat(batch_size, 1)
         camera_rot_batch = self.camera_rot.repeat(batch_size, 1, 1)
         camera_trans_batch = self.camera_trans.repeat(batch_size, 1)
+
+        if backview:
+            camera_rot_batch[:] = self.camera_rot_backview
+            camera_trans_batch[:] = self.camera_trans_backview
+
         return camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch
 
     def get_occlusion_mask_using_rendered_coordinates(self, rendered_pose1_with_pose2_coordinates,
@@ -285,7 +308,7 @@ class RenderingKaolin(nn.Module):
         batch_size = translation_vector_1_batch.shape[0]
         vertices_1 = encoder_out_frame_1.vertices
 
-        batched_tensors = self.get_batched_tensors_for_rendering(batch_size, vertices_1)
+        batched_tensors = self.get_batched_tensors_for_flow_rendering(batch_size, vertices_1)
         camera_rot_batch, camera_trans_batch, obj_center_batch, vertices_1_batch, vertices_2_batch = batched_tensors
 
         rendered_vertices_frame = rendered_vertices_frame_1_batched.permute(0, 1, 3, 4, 2)
@@ -383,6 +406,9 @@ class RenderingKaolin(nn.Module):
         # Prepare the vertices for rendering by computing their camera coordinates, image coordinates, and face normals
         camera_rot_batched = self.camera_rot.repeat(translation_vector.shape[0], 1, 1)
         camera_trans_batched = self.camera_trans.repeat(translation_vector.shape[0], 1)
+        if self.backview:
+            camera_rot_batched[0] = self.camera_rot_backview[0]
+            camera_trans_batched[0] = self.camera_trans_backview[0]
 
         prepared_vertices = kaolin.render.mesh.utils.prepare_vertices(vertices=vertices,
                                                                       faces=self.faces,
@@ -442,8 +468,8 @@ class RenderingKaolin(nn.Module):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi])
 
-            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix,
-                                                          translation_vector, unit_vertices)
+            rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector,
+                                                          unit_vertices)
 
             coord = torch.round((1 - rendering_result.ren_mesh_vertices_features) * self.config.texture_size).to(int)
             coord[coord >= self.config.texture_size] = self.config.texture_size - 1
