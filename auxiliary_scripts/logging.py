@@ -67,6 +67,7 @@ class WriteResults:
         self.rgb_encoder: Encoder = rgb_encoder
 
         self.past_frame_results: Dict = {}
+        self.past_frame_renderings: Dict = {}
 
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
@@ -366,11 +367,12 @@ class WriteResults:
                       observations: FrameObservation, observations_backview: FrameObservation, gt_rotations,
                       gt_translations):
 
-        self.analyze_ransac_matchings(frame_i, frame_result, new_flow_arcs)
-
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
+
+        self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
+                                               observations_backview.observed_image[:, [-1]].cpu())
 
         self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                         new_flow_arcs=new_flow_arcs)
@@ -401,6 +403,8 @@ class WriteResults:
                                                     gt_translation=gt_translation_current_frame)
 
         self.visualize_logged_metrics()
+
+        self.analyze_ransac_matchings(frame_i, frame_result, new_flow_arcs)
 
         self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
                                            frame_result.frame_losses, frame_i,
