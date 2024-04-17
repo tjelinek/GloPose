@@ -68,7 +68,7 @@ class TrackerConfig:
     loss_fl_obs_and_rend_weight: float = None
     loss_fl_not_obs_rend_weight: float = None
     loss_fl_obs_not_rend_weight: float = None
-    occlusion_coef_threshold = 0.9  # Above this value, points will be considered as occluded
+    occlusion_coef_threshold = 0.95  # Above this value, points will be considered as occluded
     segmentation_mask_threshold = 0.99
 
     # Additional settings
@@ -114,9 +114,14 @@ class TrackerConfig:
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 0
-    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent', 'essential_matrix_decomposition' or None
-    preinitialization_method: str = None
+    # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent',
+    #                                   'essential_matrix_decomposition' or None
+    preinitialization_method: str = 'essential_matrix_decomposition'
+    feed_only_inlier_flow: bool = False
+    # preinitialization_method: str = None
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
+    essential_matrix_algorithm: str = 'pygcransac'
+    # essential_matrix_algorithm: str = 'ransac'
     use_custom_jacobian: bool = False
     flow_sgd: bool = True
     flow_sgd_n_samples: int = 100
