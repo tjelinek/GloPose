@@ -963,9 +963,15 @@ class WriteResults:
         ax_loss.spines.right.set_position(("axes", 1.15))
         ax_loss.legend(loc='upper left')
 
-    def visualize_logged_metrics(self):
-        fig, axs = plt.subplots(2, 1, figsize=(12, 15))
-        fig.subplots_adjust(hspace=0.4)
+    def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
+
+        custom = True
+        if rotation_ax is None and translation_ax:
+            custom = True
+            fig, axs = plt.subplots(2, 1, figsize=(12, 15))
+            fig.subplots_adjust(hspace=0.4)
+            rotation_ax, translation_ax = axs
+
         frame_indices = sorted(self.logged_metrics.keys())
         losses = [self.logged_metrics[frame].loss for frame in frame_indices]
         rotations = np.array([self.logged_metrics[frame].rotation.numpy(force=True) for frame in frame_indices])
@@ -976,35 +982,38 @@ class WriteResults:
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
-        ticks = list(frame_indices) if len(list(frame_indices)) < 30 else list(frame_indices)[::2]
-        axs[0].set_xticks(ticks)
-        axs[1].set_xticks(ticks)
+        ticks = list(frame_indices) if len(list(frame_indices)) < 30 else list(frame_indices)[::5]
 
-        for i, axis_label in enumerate(['X-axis', 'Y-axis', 'Z-axis']):
-            axs[0].plot(frame_indices, rotations[:, i], label=f'{axis_label} Rotation', color=colors[i])
-            axs[0].plot(frame_indices, gt_rotations[:, i], '--', label=f'GT {axis_label} Rotation', alpha=0.5,
-                        color=colors[i])
-        axs[0].set_title('Rotation per Frame')
-        axs[0].set_xlabel('Frame Index')
-        axs[0].set_ylabel('Rotation')
-        axs[0].legend(loc='lower right')
-        # Plot Translation
-        for i, axis_label in enumerate(['X-axis', 'Y-axis', 'Z-axis']):
-            axs[1].plot(frame_indices, translations[:, i], label=f'{axis_label} Translation', color=colors[i])
-            axs[1].plot(frame_indices, gt_translations[:, i], '--', label=f'GT {axis_label} Translation', alpha=0.5,
-                        color=colors[i])
-        axs[1].set_title('Translation per Frame')
-        axs[1].set_xlabel('Frame Index')
-        axs[1].set_ylabel('Translation')
-        axs[1].legend(loc='lower right')
+        def plot_motion(ax, frame_indices, data, gt_data, labels, title, ylabel):
+            if ax is not None:
+                ax.set_xticks(ticks)
+                for i, axis_label in enumerate(labels):
+                    ax.plot(frame_indices, data[:, i], label=f'{axis_label}', color=colors[i])
+                    ax.plot(frame_indices, gt_data[:, i], '--', label=f'GT {axis_label}', alpha=0.5, color=colors[i])
+                ax.set_title(title)
+                ax.set_xlabel('Frame Index')
+                ax.set_ylabel(ylabel)
+                ax.legend(loc='lower right')
 
-        self.add_loss_plot(axs[0], losses, indices=frame_indices)
-        self.add_loss_plot(axs[1], losses, indices=frame_indices)
+        plot_motion(rotation_ax, frame_indices, rotations, gt_rotations,
+                    ['X-axis Rotation', 'Y-axis Rotation', 'Z-axis Rotation'],
+                    'Rotation per Frame', 'Rotation')
+
+        plot_motion(translation_ax, frame_indices, translations, gt_translations,
+                    ['X-axis Translation', 'Y-axis Translation', 'Z-axis Translation'],
+                    'Translation per Frame', 'Translation')
+
+        if plot_losses is True:
+            if rotation_ax is not None:
+                self.add_loss_plot(rotation_ax, losses, indices=frame_indices)
+            if translation_ax is not None:
+                self.add_loss_plot(translation_ax, losses, indices=frame_indices)
 
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
         fig_path = Path(self.write_folder) / Path('rotations_by_epoch') / f'pose_per_frame.svg'
-        plt.savefig(fig_path)
-        plt.close()
+        if not custom:
+            plt.savefig(fig_path)
+            plt.close()
 
     @staticmethod
     def convert_observation_to_numpy(observation):
