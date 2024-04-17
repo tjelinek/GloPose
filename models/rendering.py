@@ -342,7 +342,18 @@ class RenderingKaolin(nn.Module):
 
         return flow_result
 
-    def rotations_translations_batched(self, encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
+    @staticmethod
+    def render_flow_for_frame(renderer, encoder, flow_arc_source, flow_arc_target):
+        keyframes = [flow_arc_source, flow_arc_target]
+        flow_frames = [flow_arc_source, flow_arc_target]
+        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes,
+                                                                                              flow_frames)
+        rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                              flow_arcs_indices=[(0, 1)])
+        return rendered_flow_res
+
+    @staticmethod
+    def rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
 
         indices_pose_1_list = [frame_i_prev for frame_i_prev, _ in flow_arcs_indices]
         indices_pose_2_list = [frame_i for _, frame_i in flow_arcs_indices]

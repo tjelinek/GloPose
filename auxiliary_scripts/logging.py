@@ -536,7 +536,7 @@ class WriteResults:
             else:
                 renderer = self.rendering_backview
 
-            gt_flow_res = self.render_flow_for_frame(renderer, self.gt_encoder, 0, i)
+            gt_flow_res = RenderingKaolin.render_flow_for_frame(renderer, self.gt_encoder, 0, i)
             gt_flow = flow_unit_coords_to_image_coords(gt_flow_res.theoretical_flow)
 
             src_pts_yx = getattr(processed_frame_result, f'src_pts_yx_{view}')
@@ -656,8 +656,8 @@ class WriteResults:
                 continue
                 # TODO not the most elegant thing to do
 
-            rendered_flow_res = self.render_flow_for_frame(renderer, self.gt_encoder, flow_arc_source, flow_arc_target)
-            rendered_flow_res_back = self.render_flow_for_frame(renderer_backview, self.gt_encoder, flow_arc_source,
+            rendered_flow_res = RenderingKaolin.render_flow_for_frame(renderer, self.gt_encoder, flow_arc_source, flow_arc_target)
+            rendered_flow_res_back = RenderingKaolin.render_flow_for_frame(renderer_backview, self.gt_encoder, flow_arc_source,
                                                                 flow_arc_target)
 
             rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow)
@@ -814,16 +814,6 @@ class WriteResults:
         ax.set_title(f'{flow_source_text} - RANSAC Outliers Error Correlations')
         plt.savefig(self.ransac_path / f'outliers_spatial_correlation_frame_{new_flow_arc[1]}')
         plt.close()
-
-    @staticmethod
-    def render_flow_for_frame(renderer, encoder, flow_arc_source, flow_arc_target):
-        keyframes = [flow_arc_source, flow_arc_target]
-        flow_frames = [flow_arc_source, flow_arc_target]
-        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                              flow_frames)
-        rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                              flow_arcs_indices=[(0, 1)])
-        return rendered_flow_res
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, new_flow_arc, flow_np, rendered_flow, seg_mask,
                                             occlusion, inliers, outliers):
