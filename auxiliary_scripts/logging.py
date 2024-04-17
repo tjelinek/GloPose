@@ -524,11 +524,11 @@ class WriteResults:
         rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
         self.all_proj.write(rendered_silhouette)
 
-    def measure_ransac_stats(self, delim, view: str = 'front'):
+    def measure_ransac_stats(self, frame_i, view: str = 'front'):
         correct_threshold = 2.0
         results = defaultdict(list)
 
-        for i in range(1, delim):
+        for i in range(1, frame_i + 1):
             flow_arc = (0, i)
             processed_frame_result: FrameResult = self.past_frame_results[flow_arc]
             if view == 'front':
@@ -605,10 +605,10 @@ class WriteResults:
 
             for ax, results in zip(axs, [front_results, back_results]):
 
-                xs = np.arange(1, frame_i)
-                step = 1 if frame_i <= 30 else 5
-                x_ticks = np.arange(1, frame_i, step)
-                x_labels = np.arange(1, frame_i, step)
+                xs = np.arange(1, frame_i + 1)
+                step = 1 if frame_i < 30 else 5
+                x_ticks = np.arange(1, frame_i + 1, step)
+                x_labels = np.arange(1, frame_i + 1, step)
 
                 ax.set_xticks(x_ticks)
                 ax.set_xticklabels(x_labels)
@@ -1028,13 +1028,16 @@ class WriteResults:
                 ax.set_ylabel(ylabel)
                 ax.legend(loc='lower right')
 
+        flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
+            else self.tracking_config.long_flow_model
+
         plot_motion(rotation_ax, frame_indices, rotations, gt_rotations,
                     ['X-axis Rotation', 'Y-axis Rotation', 'Z-axis Rotation'],
-                    'Rotation per Frame', 'Rotation')
+                    f'Rotation per Frame {flow_source_text}', 'Rotation')
 
         plot_motion(translation_ax, frame_indices, translations, gt_translations,
                     ['X-axis Translation', 'Y-axis Translation', 'Z-axis Translation'],
-                    'Translation per Frame', 'Translation')
+                    f'Translation per Frame {flow_source_text}', 'Translation')
 
         if plot_losses is True:
             if rotation_ax is not None:
