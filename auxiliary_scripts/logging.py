@@ -12,7 +12,7 @@ import cv2
 import imageio
 import csv
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, gridspec
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
@@ -564,7 +564,7 @@ class WriteResults:
             results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
             results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
             results['model_obtained_from'].append(processed_frame_result.source_of_matching)
-            results['inlier_ratio'].append(pred_inlier_ratio)
+            results['ransac_inlier_ratio'].append(pred_inlier_ratio)
 
         return results
 
@@ -576,23 +576,52 @@ class WriteResults:
             front_results = self.measure_ransac_stats(frame_i, 'front')
             back_results = self.measure_ransac_stats(frame_i, 'back')
 
-            fig, axs = plt.subplots(1, 2, figsize=(15, 6), sharey=True)
+            fig = plt.figure(figsize=(20, 10))
+            gs = gridspec.GridSpec(2, 3, figure=fig)
+
+            axs = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[0, 2]),
+                   fig.add_subplot(gs[1, 2])]
+
+            self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
+                                          translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
+
             axs[0].set_title('Front View')
             axs[1].set_title('Back View')
+            axs[2].set_title('Template Front')
+            axs[3].set_title('Template Back')
+
+            template_image_f, template_image_b = self.past_frame_renderings[1]
+            template_image_f = template_image_f[0, 0].permute(1, 2, 0).numpy(force=True)
+            template_image_b = template_image_b[0, 0].permute(1, 2, 0).numpy(force=True)
+
+            axs[2].imshow(template_image_f, aspect='equal')
+            axs[3].imshow(template_image_b, aspect='equal')
+
             handles, labels = [], []
+
+            for ax in [axs[2], axs[3]]:
+                ax.xaxis.set_visible(False)
+                ax.yaxis.set_visible(False)
 
             for ax, results in zip(axs, [front_results, back_results]):
 
-                ax.set_xticks(range(0, frame_i, 5))
+                xs = np.arange(1, frame_i)
+                step = 1 if frame_i <= 30 else 5
+                x_ticks = np.arange(1, frame_i, step)
+                x_labels = np.arange(1, frame_i, step)
+
+                ax.set_xticks(x_ticks)
+                ax.set_xticklabels(x_labels)
+
                 ax.set_yticks(np.arange(0., 1.05, 0.1))
 
                 for i, metric in enumerate(results.keys()):
                     if metric == 'model_obtained_from':
                         continue
-                    if metric == 'inlier_ratio':
-                        line, = ax.plot(results[metric], label=metric, linestyle='dashed')
+                    if metric == 'ransac_inlier_ratio':
+                        line, = ax.plot(xs, results[metric], label=metric, linestyle='dashed')
                     else:
-                        line, = ax.plot(results[metric], label=metric)
+                        line, = ax.plot(xs, results[metric], label=metric)
 
                     if ax == axs[0]:
                         handles.append(line)
@@ -605,13 +634,13 @@ class WriteResults:
                         ax.fill_betweenx(ylim, i - 0.5, i + 0.5, color='yellow', alpha=0.3)
 
             for ax in axs:
-                ax.set_xlabel('Rotation [deg]')
+                ax.set_xlabel('Frame')
                 ax.set_ylabel('Percentage')
 
-            fig.legend(handles, labels, loc='upper right')
+            fig.legend(handles, labels, loc='upper left')
 
             plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
-            plt.tight_layout(rect=[0, 0, 0.8, 1])
+            plt.tight_layout(rect=[0.13, 0, 1, 1])
 
             plt.savefig(self.ransac_path / 'ransac_stats.svg')
             plt.close()
