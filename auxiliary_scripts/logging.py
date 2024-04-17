@@ -736,12 +736,16 @@ class WriteResults:
         errors_inliers = dst_pts_front_inliers - dst_pts_front_inliers_gt
         errors_outliers = dst_pts_front_outliers - dst_pts_front_outliers_gt
 
+        dst_pts_front_outliers_random = dst_pts_front_outliers[np.random.permutation(dst_pts_front_outliers.shape[0])]
+        errors_outliers_random = dst_pts_front_outliers_random - dst_pts_front_outliers_gt
+
         if len(outlier_list) == 0 or len(inlier_list) == 0:
             return
 
         # Randomly select one inlier and its error
         random_idx = np.random.choice(len(outlier_list))
         matching_error = errors_outliers[random_idx]
+        matching_error_random = errors_outliers_random[random_idx]
         # Compute cosine similarity and Euclidean distances
         cosine_similarities = [
             torch.nn.functional.cosine_similarity(matching_error.unsqueeze(0), err.unsqueeze(0), dim=1).item()
@@ -751,14 +755,30 @@ class WriteResults:
                                           dim=0).item()
                                for i in range(len(outlier_list))]
 
+        cosine_similarities_random = [
+            torch.nn.functional.cosine_similarity(matching_error_random.unsqueeze(0), err.unsqueeze(0), dim=1).item()
+            for err in errors_outliers_random]
+        error_magnitudes_random = torch.linalg.norm(errors_outliers_random, dim=1).numpy(force=True)
+
         fig, ax = plt.subplots()
+        scatter = ax.scatter(euclidean_distances, cosine_similarities_random, c=error_magnitudes_random, cmap='Blues',
+                             alpha=0.2)
         scatter = ax.scatter(euclidean_distances, cosine_similarities, c=error_magnitudes, cmap='Greys',
                              alpha=0.4)
+
+        flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
+            else self.tracking_config.long_flow_model
+
+        legend_elements = [Patch(facecolor='grey', edgecolor='grey', label=f'{flow_source_text} Dense Matching'),
+                           Patch(facecolor='blue', edgecolor='blue', label='Random Matching Baseline'), ]
+
+        ax.legend(handles=legend_elements, loc='lower right', fontsize='small')
+
         colorbar = plt.colorbar(scatter, ax=ax)
-        colorbar.set_label('Error Magnitude [Pixels]')
+        colorbar.set_label('Reprojection Error Magnitude [Pixels]')
         ax.set_xlabel('Euclidean Distance from Randomly Selected Outlier')
-        ax.set_ylabel('Cosine Similarity to Outlier Error')
-        ax.set_title('Outlier Error Correlation to Randomly Selected Outlier')
+        ax.set_ylabel('Cosine Similarity to Random Outlier Reprojection Error')
+        ax.set_title(f'{flow_source_text} - RANSAC Outliers Error Correlations')
         plt.savefig(self.ransac_path / f'outliers_spatial_correlation_frame_{new_flow_arc[1]}')
         plt.close()
 
