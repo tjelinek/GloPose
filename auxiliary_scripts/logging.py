@@ -106,7 +106,6 @@ class WriteResults:
         self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
 
     def correspondences_log_write_common_data(self):
-        R_back, t_back = matrix4x4_to_Rt(self.rendering.T_frontview_to_backview)
 
         data = {
             "sequence": self.tracking_config.sequence,
@@ -117,8 +116,8 @@ class WriteResults:
             "image_height": self.rendering.height,
             "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
             "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
-            "frontview_backview_camera_relative_translation": np.asarray([0., 0., 0.]),
-            "frontview_backview_camera_relative_rotation": R_back.squeeze().numpy(force=True),
+            "camera_translation_backview": self.rendering.camera_trans_backview[0].numpy(force=True),
+            "camera_rotation_backview": self.rendering.camera_rot_backview.numpy(force=True),
         }
 
         with h5py.File(self.correspondences_log_file, 'w') as f:
