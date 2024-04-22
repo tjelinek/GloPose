@@ -891,11 +891,25 @@ class Tracking6D:
                                                         flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
                                                         self.config.occlusion_coef_threshold,
                                                         self.config.segmentation_mask_threshold)
+        confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
+                                                                    src_pts_yx[:, 1].to(torch.long)]
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
 
-        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2,
+        if self.config.ransac_feed_only_inlier_flow:
+            renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
+            gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+            gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
+            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
+            dst_pts_epe = torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, dim=1)
+            ok_pts_indices = torch.nonzero(dst_pts_epe < self.config.ransac_feed_only_inlier_flow_epe_threshold)
+
+            dst_pts_yx = dst_pts_yx[ok_pts_indices]
+            src_pts_yx = src_pts_yx[ok_pts_indices]
+            confidences = confidences[ok_pts_indices]
+
+        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, confidences, K1, K2,
                                                            self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
 
@@ -935,17 +949,6 @@ class Tracking6D:
         outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
         inlier_src_pts = src_pts_yx[common_inlier_indices]
         outlier_src_pts = src_pts_yx[outlier_indices]
-
-        if backview:
-            essential_matrix_data = self.essential_matrix_data_backview
-        else:
-            essential_matrix_data = self.essential_matrix_data_frontview
-
-        essential_matrix_data.camera_rotations[flow_arc] = rot
-        essential_matrix_data.camera_translations[flow_arc] = t
-        essential_matrix_data.source_points[flow_arc] = src_pts_yx
-        essential_matrix_data.target_points[flow_arc] = dst_pts_yx
-        essential_matrix_data.inlier_mask[flow_arc] = inlier_mask
 
         inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
 
