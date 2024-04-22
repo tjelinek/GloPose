@@ -168,8 +168,8 @@ def normalize_flow_to_unit_range(observed_flow: torch.Tensor) -> torch.Tensor:
     observed_flow = observed_flow.clone()
     width = observed_flow.shape[-1]
     height = observed_flow.shape[-2]
-    observed_flow[:, 0, :, :] /= width
-    observed_flow[:, 1, :, :] /= height
+    observed_flow[:, :, 0, ...] /= width
+    observed_flow[:, :, 1, ...] /= height
 
     return observed_flow
 
@@ -179,8 +179,8 @@ def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor) -> torch.Tenso
     observed_flow = observed_flow.clone()
     width = observed_flow.shape[-1]
     height = observed_flow.shape[-2]
-    observed_flow[:, 0, :, :] *= width
-    observed_flow[:, 1, :, :] *= height
+    observed_flow[:, :, 0, ...] *= width
+    observed_flow[:, :, 1, ...] *= height
 
     return observed_flow
 
