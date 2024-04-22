@@ -117,7 +117,11 @@ class TrackerConfig:
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent',
     #                                   'essential_matrix_decomposition' or None
     preinitialization_method: str = 'essential_matrix_decomposition'
-    feed_only_inlier_flow: bool = False
+    ransac_feed_only_inlier_flow: bool = False
+    ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
+    ransac_fit_E_on_inliers_outside_ransac: bool = False
+    ransac_outlier_threshold: float = 0.01
+    ransac_confidence: float = 0.9999
     # preinitialization_method: str = None
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     essential_matrix_algorithm: str = 'pygcransac'
