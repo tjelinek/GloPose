@@ -655,10 +655,9 @@ class WriteResults:
                 continue
                 # TODO not the most elegant thing to do
 
-            rendered_flow_res = renderer.render_flow_for_frame(renderer, self.gt_encoder, flow_arc_source,
-                                                               flow_arc_target)
-            rendered_flow_res_back = renderer_backview.render_flow_for_frame(renderer_backview, self.gt_encoder,
-                                                                             flow_arc_source, flow_arc_target)
+            rendered_flow_res = renderer.render_flow_for_frame(self.gt_encoder, flow_arc_source, flow_arc_target)
+            rendered_flow_res_back = renderer_backview.render_flow_for_frame(self.gt_encoder, flow_arc_source,
+                                                                             flow_arc_target)
 
             rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow)
             rend_flow_np = rend_flow.numpy(force=True)
