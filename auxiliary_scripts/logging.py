@@ -36,7 +36,8 @@ from helpers.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords
+    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
+    get_correct_correspondences_mask
 
 
 class WriteResults:
@@ -845,21 +846,23 @@ class WriteResults:
                 flow_observation_frontview.observed_flow = flow_unit_coords_to_image_coords(
                     flow_observation_frontview.observed_flow)
 
-                dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview = \
-                    self.get_correspondences_from_observations(flow_observation_frontview)
+                dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview, gt_inliers_frontview = \
+                    self.get_correspondences_from_observations(flow_observation_frontview, source_frame, target_frame)
 
                 if self.tracking_config.matching_target_to_backview:
                     flow_observation_backview = keyframes_backview.get_flows_between_frames(source_frame, target_frame)
                     flow_observation_backview.observed_flow = flow_unit_coords_to_image_coords(
                         flow_observation_backview.observed_flow)
 
-                    dst_pts_xy_backview, occlusion_score_backview, src_pts_xy_backview = \
-                        self.get_correspondences_from_observations(flow_observation_backview)
+                    dst_pts_xy_backview, occlusion_score_backview, src_pts_xy_backview, gt_inliers_backview = \
+                        self.get_correspondences_from_observations(flow_observation_backview, source_frame,
+                                                                   target_frame)
 
                 else:
                     dst_pts_xy_backview = torch.zeros_like(dst_pts_xy_frontview)
                     occlusion_score_backview = torch.zeros_like(occlusion_score_frontview)
                     src_pts_xy_backview = torch.zeros_like(src_pts_xy_frontview)
+                    gt_inliers_backview = torch.zeros_like(gt_inliers_frontview)
 
                 frame_data = {
                     "flow_arc": flow_arc,
@@ -867,9 +870,11 @@ class WriteResults:
                     "gt_rotation_change": torch.rad2deg(gt_rotations[0, target_frame]).numpy(force=True),
                     "source_points_xy_frontview": src_pts_xy_frontview.numpy(force=True),
                     "target_points_xy_frontview": dst_pts_xy_frontview.numpy(force=True),
+                    "gt_inliers_frontview": gt_inliers_frontview.numpy(force=True),
                     "frontview_matching_occlusion": occlusion_score_frontview.numpy(force=True),
                     "source_points_xy_backview": src_pts_xy_backview.numpy(force=True),
                     "target_points_xy_backview": dst_pts_xy_backview.numpy(force=True),
+                    "gt_inliers_backview": gt_inliers_backview.numpy(force=True),
                     "backview_matching_occlusion": occlusion_score_backview.numpy(force=True),
                 }
 
@@ -884,20 +889,31 @@ class WriteResults:
                 for key, value in frame_data.items():
                     frame_grp.create_dataset(key, data=value)
 
-    def get_correspondences_from_observations(self, flow_observation_frontview):
+    def get_correspondences_from_observations(self, flow_observation: FlowObservation, source_frame: int,
+                                              target_frame: int):
         src_pts_xy_frontview, dst_pts_xy_frontview = \
-            get_non_occluded_foreground_correspondences(flow_observation_frontview.observed_flow_occlusion,
-                                                        flow_observation_frontview.observed_flow_segmentation,
-                                                        flow_observation_frontview.observed_flow,
+            get_non_occluded_foreground_correspondences(flow_observation.observed_flow_occlusion,
+                                                        flow_observation.observed_flow_segmentation,
+                                                        flow_observation.observed_flow,
                                                         self.tracking_config.segmentation_mask_threshold,
                                                         self.tracking_config.occlusion_coef_threshold)
         src_pts_yx_frontview = coordinates_xy_to_tensor_index(src_pts_xy_frontview).to(torch.long)
         occlusion_score_frontview = (
-            flow_observation_frontview.observed_flow_occlusion[
+            flow_observation.observed_flow_occlusion[
                 ..., src_pts_yx_frontview[:, 0], src_pts_yx_frontview[:, 1]
             ].squeeze()
         )
-        return dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview
+
+        gt_flow_observation_frontview = self.rendering.render_flow_for_frame(self.gt_encoder, source_frame,
+                                                                             target_frame)
+
+        threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
+        inlier_indices = get_correct_correspondences_mask(gt_flow_observation_frontview,
+                                                          src_pts_xy_frontview[:, [1, 0]],
+                                                          dst_pts_xy_frontview[:, [1, 0]],
+                                                          threshold)
+
+        return dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview, inlier_indices
 
     def draw_cross_axes_flow_matches(self, source_coords, segment_mask, occlusion_mask, flow_np, flow_np_from_movement,
                                      axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
