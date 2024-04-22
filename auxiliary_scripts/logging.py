@@ -843,12 +843,16 @@ class WriteResults:
                 source_frame, target_frame = flow_arc
 
                 flow_observation_frontview = keyframes.get_flows_between_frames(source_frame, target_frame)
+                flow_observation_frontview.observed_flow = flow_unit_coords_to_image_coords(
+                    flow_observation_frontview.observed_flow)
 
                 dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview = \
                     self.get_correspondences_from_observations(flow_observation_frontview)
 
                 if self.tracking_config.matching_target_to_backview:
                     flow_observation_backview = keyframes_backview.get_flows_between_frames(source_frame, target_frame)
+                    flow_observation_backview.observed_flow = flow_unit_coords_to_image_coords(
+                        flow_observation_backview.observed_flow)
 
                     dst_pts_xy_backview, occlusion_score_backview, src_pts_xy_backview = \
                         self.get_correspondences_from_observations(flow_observation_backview)
