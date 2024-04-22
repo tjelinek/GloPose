@@ -365,14 +365,13 @@ class RenderingKaolin(nn.Module):
 
         return flow_result
 
-    @staticmethod
-    def render_flow_for_frame(renderer, encoder, flow_arc_source, flow_arc_target):
+    def render_flow_for_frame(self, encoder, flow_arc_source, flow_arc_target) -> RenderedFlowResult:
         keyframes = [flow_arc_source, flow_arc_target]
         flow_frames = [flow_arc_source, flow_arc_target]
         encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes,
                                                                                               flow_frames)
-        rendered_flow_res = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                              flow_arcs_indices=[(0, 1)])
+        rendered_flow_res = self.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
+                                                          flow_arcs_indices=[(0, 1)])
         return rendered_flow_res
 
     @staticmethod
