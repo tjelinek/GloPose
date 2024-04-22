@@ -6,6 +6,7 @@ from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essentia
                              euler_from_quaternion, axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
                              Rt_to_matrix4x4, relative_transformation, triangulate_points)
 
+from auxiliary_scripts.data_structures import FrameResult
 from utils import tensor_index_to_coordinates_xy
 
 
@@ -25,7 +26,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         K1_np = K1.numpy(force=True)
         K2_np = K2.numpy(force=True)
         E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
-                                                 ransac_conf, threshold=0.01, min_iters=10000)
+                                                 ransac_conf, threshold=0.1)
 
     else:
         methods = {'magsac++': cv2.USAC_MAGSAC,
@@ -39,6 +40,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         mask = mask[:, 0].astype(np.bool_)
 
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
+
     mask_tensor = torch.from_numpy(mask).cuda()
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_yx, dst_pts_yx,
                                                                           mask_tensor)
@@ -61,35 +63,19 @@ def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
 
     inlier_mask1 = essential_matrix_data.inlier_mask[flow_arc_prev]
     inlier_mask2 = essential_matrix_data.inlier_mask[flow_arc]
-    common_inlier_mask = (inlier_mask1 & inlier_mask2)
-    common_inlier_indices = torch.nonzero(common_inlier_mask, as_tuple=True)
 
-    inliers_src_pts1 = essential_matrix_data.source_points[flow_arc][common_inlier_indices]
-    inliers_dst_pts1 = essential_matrix_data.target_points[flow_arc][common_inlier_indices]
+    # extend_inlier_mask1(inlier_mask1, inlier_mask2, src_pts_yx_current, src_pts_yx_prev)
+
+    # common_inlier_mask = (inlier_mask1 & inlier_mask2)
+    # common_inlier_indices = torch.nonzero(common_inlier_mask, as_tuple=True)
+
+    inliers_src_pts1 = essential_matrix_data.source_points[flow_arc_prev][inlier_mask1]
+    inliers_dst_pts1 = essential_matrix_data.target_points[flow_arc_prev][inlier_mask1]
     inliers_src_pts2 = inliers_dst_pts1
-    inliers_dst_pts2 = essential_matrix_data.target_points[flow_arc_prev][common_inlier_indices]
+    inliers_dst_pts2 = essential_matrix_data.target_points[flow_arc][inlier_mask2]
 
-    R_1i = axis_angle_to_rotation_matrix(essential_matrix_data.camera_rotations[flow_arc_prev].unsqueeze(0))
-    t_1i = essential_matrix_data.camera_translations[flow_arc_prev].unsqueeze(0).unsqueeze(-1)
-
-    R_1j = axis_angle_to_rotation_matrix(essential_matrix_data.camera_rotations[flow_arc].unsqueeze(0))
-    t_1j = essential_matrix_data.camera_translations[flow_arc].unsqueeze(0).unsqueeze(-1)
-
-    T_1i = Rt_to_matrix4x4(R_1i, t_1i)
-    T_1j = Rt_to_matrix4x4(R_1j, t_1j)
-    T_ij = relative_transformation(T_1i, T_1j)
-
-    # T_13x4 = R
-    T_1i3x4 = T_1i[..., :3, :4][0]
-    T_1j3x4 = T_1i[..., :3, :4][0]
-    T_ij3x4 = T_ij[..., :3, :4][0]
-
-    P_1i_3x4 = torch.mm(K1, T_1i3x4)
-    P_1j_3x4 = torch.mm(K1, T_1i3x4)
-    P_ij3x4 = torch.mm(K1, T_ij3x4)
-
-    triangulated_points_1 = triangulate_points(P_1i_3x4, inliers_src_pts1, inliers_dst_pts1)
-    triangulated_points_2 = triangulate_points(P_ij3x4, inliers_src_pts2, inliers_dst_pts2)
+    triangulated_points_1 = essential_matrix_data.triangulated_points[flow_arc_prev]
+    triangulated_points_2 = essential_matrix_data.triangulated_points[flow_arc]
 
     N_point = triangulated_points_1.shape[0]
 
@@ -103,4 +89,22 @@ def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     pts1_ij = triangulated_points_2[random_pairs_indices[:, 0]]
     pts2_ij = triangulated_points_2[random_pairs_indices[:, 1]]
 
-    ratio = torch.linalg.norm(triangulated_points_1 - t)
+    # breakpoint()
+    ratio = torch.linalg.norm(triangulated_points_1 - triangulated_points_2)
+
+
+def extend_inlier_mask1(inlier_mask1, inlier_mask2, src_pts_yx_current, src_pts_yx_prev):
+    all_points = torch.cat((src_pts_yx_prev, src_pts_yx_current), dim=0)
+    unique_points, inverse_indices = torch.unique(all_points, return_inverse=True, dim=0)
+
+    breakpoint()
+    occurrences = torch.bincount(inverse_indices)
+    duplicates = occurrences > 1
+    is_common = duplicates[inverse_indices[len(src_pts_yx_prev):]]
+    inlier_mask_1_extended = torch.zeros(len(unique_points), dtype=torch.bool)
+    inlier_mask_1_extended[:len(src_pts_yx_prev)] = inlier_mask1
+    inlier_mask_1_extended[len(src_pts_yx_prev):][is_common] = inlier_mask2[
+        src_pts_yx_current[inverse_indices[len(src_pts_yx_prev):]] == unique_points[is_common]]
+
+    breakpoint()
+    return inlier_mask_1_extended
