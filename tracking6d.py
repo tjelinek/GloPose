@@ -900,6 +900,25 @@ class Tracking6D:
                                                            method=self.config.essential_matrix_algorithm)
 
         rot, t, inlier_mask, triangulated_points = result
+
+        if backview:
+            essential_matrix_data = self.essential_matrix_data_backview
+        else:
+            essential_matrix_data = self.essential_matrix_data_frontview
+
+        essential_matrix_data.camera_rotations[flow_arc] = rot
+        essential_matrix_data.camera_translations[flow_arc] = t
+        essential_matrix_data.source_points[flow_arc] = src_pts_yx
+        essential_matrix_data.target_points[flow_arc] = dst_pts_yx
+        essential_matrix_data.inlier_mask[flow_arc] = inlier_mask
+        essential_matrix_data.triangulated_points[flow_arc] = triangulated_points
+
+        # if flow_arc[1] > 1:
+        #
+        #     data_suffix = 'back' if backview else 'front'
+        #
+        #     relative_scale_recovery(essential_matrix_data, flow_arc, K1)
+
         R = axis_angle_to_rotation_matrix(rot[None])
 
         T_RANSAC = inverse_transformation(Rt_to_matrix4x4(R, t[None, :, None]))
