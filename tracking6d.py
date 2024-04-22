@@ -23,7 +23,8 @@ from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.data_structures import FrameResult, EssentialMatrixData, Cameras
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords
+    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
+    get_correct_correspondences_mask
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -900,11 +901,8 @@ class Tracking6D:
         if self.config.ransac_feed_only_inlier_flow:
             renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
             gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
-            gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
-            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
-            dst_pts_epe = torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, dim=1)
-            ok_pts_indices = torch.nonzero(dst_pts_epe < self.config.ransac_feed_only_inlier_flow_epe_threshold)
-
+            ok_pts_indices = get_correct_correspondences_mask(gt_flow_observation, src_pts_yx, dst_pts_yx,
+                                                              self.config.ransac_feed_only_inlier_flow_epe_threshold)
             dst_pts_yx = dst_pts_yx[ok_pts_indices]
             src_pts_yx = src_pts_yx[ok_pts_indices]
             confidences = confidences[ok_pts_indices]
