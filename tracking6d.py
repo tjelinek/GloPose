@@ -907,6 +907,14 @@ class Tracking6D:
             src_pts_yx = src_pts_yx[ok_pts_indices]
             confidences = confidences[ok_pts_indices]
 
+        if self.config.ransac_distant_pixels_sampling:
+            random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
+            random_permutation_indices = random_src_pts_permutation[:min(self.config.ransac_distant_pixels_sample_size,
+                                                                         src_pts_yx.shape[0])]
+            dst_pts_yx = dst_pts_yx[random_permutation_indices]
+            src_pts_yx = src_pts_yx[random_permutation_indices]
+            confidences = confidences[random_permutation_indices]
+
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, confidences, K1, K2,
                                                            self.rendering.width, self.rendering.height,
                                                            method=self.config.essential_matrix_algorithm)
