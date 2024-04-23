@@ -1,7 +1,6 @@
 import glob
 import numpy as np
 import os
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -21,8 +20,10 @@ def main():
     else:
         sequences = [
             'Textured_Sphere_5_y',
+            'Textured_Cube_5_y',
+            'Textured_Sphere_5_z',
             'Translating_Textured_Sphere',
-            'Textured_Sphere_5_xy',
+            'Textured_Sphere_10_xy',
             'Rotating_Translating_Textured_Sphere_5_y',
             'Rotating_Translating_Textured_Sphere_5_xy',
             'Rotating_Contra_Translating_Textured_Sphere_5_y',
@@ -39,6 +40,9 @@ def main():
         elif 'Textured_Sphere' in sequence:
             gt_mesh_path = Path('prototypes/sphere.obj')
             gt_texture_path = Path('prototypes/tex.png')
+        elif 'Textured_Cube' in sequence:
+            gt_mesh_path = Path('prototypes/textured-cube/textured-cube.obj')
+            gt_texture_path = Path('prototypes/textured-cube/tex.png')
         else:
             gt_texture_path = None
             gt_mesh_path = None

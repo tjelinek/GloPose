@@ -76,6 +76,7 @@ def main():
         'only_ok_flows_thresholds/thresh_05_and_sample_100',
         'only_ok_flows_thresholds/thresh_1_and_sample_1000',
         'only_ok_flows_thresholds/thresh_05_and_sample_1000',
+        # 'only_ok_flows_thresholds/thresh_3',
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_8point',
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_8point',
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_magsac',
