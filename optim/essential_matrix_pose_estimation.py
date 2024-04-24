@@ -14,7 +14,7 @@ from utils import tensor_index_to_coordinates_xy
 def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
                                               K2: torch.Tensor, width: int, height: int, confidences=None,
                                               ransac_conf=0.9999, method='magsac++',
-                                              eight_point_on_inliers=False):
+                                              inliers_refinement_method=None):
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
@@ -49,7 +49,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
 
     mask_tensor = torch.from_numpy(mask).cuda()
 
-    if eight_point_on_inliers:
+    if inliers_refinement_method == '8point':
 
         src_pts_yx_inliers = src_pts_yx[mask_tensor]
         dst_pts_yx_inliers = dst_pts_yx[mask_tensor]
@@ -58,6 +58,9 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
                                                           method='8POINT')
         E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
         E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
+
+    elif inliers_refinement_method == 'bundle_adjustment':
+        raise NotImplementedError("This is not implemented yet")
 
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
 

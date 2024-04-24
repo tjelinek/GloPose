@@ -911,6 +911,19 @@ class Tracking6D:
             if self.config.ransac_confidences_from_occlusion:
                 confidences = confidences[ok_pts_indices]
 
+        if self.config.ransac_feed_gt_flow_percentage > 0:
+            renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
+            gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+            gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
+
+            n_points = src_pts_yx.shape[0]
+            n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
+            indices_permutation = torch.randperm(n_points)
+            indices_to_be_injected = indices_permutation[:n_points_injected]
+
+            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
+            dst_pts_yx[indices_to_be_injected] = dst_pts_yx_gt_flow[indices_to_be_injected]
+
         if self.config.ransac_distant_pixels_sampling:
             random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
             random_permutation_indices = random_src_pts_permutation[:min(self.config.ransac_distant_pixels_sample_size,
@@ -923,7 +936,7 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
                                                            self.rendering.height, confidences,
                                                            method=self.config.essential_matrix_algorithm,
-                                                           eight_point_on_inliers=self.config.ransac_8point_on_inliers)
+                                                           inliers_refinement_method=self.config.inlier_pose_method)
 
         rot, t, inlier_mask, triangulated_points = result
 
