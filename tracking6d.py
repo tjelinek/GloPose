@@ -892,8 +892,11 @@ class Tracking6D:
                                                         flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
                                                         self.config.occlusion_coef_threshold,
                                                         self.config.segmentation_mask_threshold)
-        confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
-                                                                    src_pts_yx[:, 1].to(torch.long)]
+        if self.config.ransac_confidences_from_occlusion:
+            confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
+                                                                        src_pts_yx[:, 1].to(torch.long)]
+        else:
+            confidences = None
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
@@ -905,7 +908,8 @@ class Tracking6D:
                                                               self.config.ransac_feed_only_inlier_flow_epe_threshold)
             dst_pts_yx = dst_pts_yx[ok_pts_indices]
             src_pts_yx = src_pts_yx[ok_pts_indices]
-            confidences = confidences[ok_pts_indices]
+            if self.config.ransac_confidences_from_occlusion:
+                confidences = confidences[ok_pts_indices]
 
         if self.config.ransac_distant_pixels_sampling:
             random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
@@ -913,11 +917,13 @@ class Tracking6D:
                                                                          src_pts_yx.shape[0])]
             dst_pts_yx = dst_pts_yx[random_permutation_indices]
             src_pts_yx = src_pts_yx[random_permutation_indices]
-            confidences = confidences[random_permutation_indices]
+            if self.config.ransac_confidences_from_occlusion:
+                confidences = confidences[random_permutation_indices]
 
-        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, confidences, K1, K2,
-                                                           self.rendering.width, self.rendering.height,
-                                                           method=self.config.essential_matrix_algorithm)
+        result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
+                                                           self.rendering.height, confidences,
+                                                           method=self.config.essential_matrix_algorithm,
+                                                           eight_point_on_inliers=self.config.ransac_8point_on_inliers)
 
         rot, t, inlier_mask, triangulated_points = result
 

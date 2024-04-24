@@ -119,8 +119,10 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
     ransac_feed_only_inlier_flow: bool = False
     ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
-    ransac_distant_pixels_sampling: bool = True
-    ransac_distant_pixels_sample_size: int = 100
+    ransac_distant_pixels_sampling: bool = False
+    ransac_confidences_from_occlusion: bool = False
+    ransac_8point_on_inliers: bool = True
+    ransac_distant_pixels_sample_size: int = 1000
     ransac_fit_E_on_inliers_outside_ransac: bool = False
     ransac_outlier_threshold: float = 0.01
     ransac_confidence: float = 0.9999
