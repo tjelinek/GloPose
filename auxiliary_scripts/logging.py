@@ -371,6 +371,18 @@ class WriteResults:
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
 
+        gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
+        gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
+
+        last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
+                                                                       ))[0, -1]
+
+        self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
+                                                    translation=logged_sgd_translations[-1][0, 0, -1],
+                                                    rotation=last_logged_sgd_rotation,
+                                                    gt_rotation=rad_to_deg(gt_rotation_current_frame),
+                                                    gt_translation=gt_translation_current_frame)
+
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
                                                observations_backview.observed_image[:, [-1]].cpu())
 
@@ -389,18 +401,6 @@ class WriteResults:
 
         self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
                                   gt_translations)
-
-        gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
-        gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
-
-        last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
-                                                                       ))[0, -1]
-
-        self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
-                                                    translation=logged_sgd_translations[-1][0, 0, -1],
-                                                    rotation=last_logged_sgd_rotation,
-                                                    gt_rotation=rad_to_deg(gt_rotation_current_frame),
-                                                    gt_translation=gt_translation_current_frame)
 
         self.visualize_logged_metrics()
 
