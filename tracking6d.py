@@ -908,24 +908,25 @@ class Tracking6D:
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
+        gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
+        dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
 
         if self.config.ransac_feed_only_inlier_flow:
             ok_pts_indices = get_correct_correspondences_mask(gt_flow_observation, src_pts_yx, dst_pts_yx,
                                                               self.config.ransac_feed_only_inlier_flow_epe_threshold)
             dst_pts_yx = dst_pts_yx[ok_pts_indices]
             src_pts_yx = src_pts_yx[ok_pts_indices]
+            dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[ok_pts_indices]
             if self.config.ransac_confidences_from_occlusion:
                 confidences = confidences[ok_pts_indices]
 
         if self.config.ransac_feed_gt_flow_percentage > 0:
-            gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
 
             n_points = src_pts_yx.shape[0]
             n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
             indices_permutation = torch.randperm(n_points)
             indices_to_be_injected = indices_permutation[:n_points_injected]
 
-            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
             dst_pts_yx[indices_to_be_injected] = dst_pts_yx_gt_flow[indices_to_be_injected]
 
         if self.config.ransac_distant_pixels_sampling:
@@ -934,6 +935,7 @@ class Tracking6D:
                                                                          src_pts_yx.shape[0])]
             dst_pts_yx = dst_pts_yx[random_permutation_indices]
             src_pts_yx = src_pts_yx[random_permutation_indices]
+            dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[random_permutation_indices]
             if self.config.ransac_confidences_from_occlusion:
                 confidences = confidences[random_permutation_indices]
 
@@ -981,13 +983,14 @@ class Tracking6D:
         inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
 
         self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
-                               inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview)
+                               dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points,
+                               frame_result, backview)
 
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)
 
     def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
-                          inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview):
+                          dst_pts_yx_gt, inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview):
 
         res = get_foreground_and_segment_mask(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
                                               flow_observations.observed_flow_segmentation[:,
@@ -1008,6 +1011,7 @@ class Tracking6D:
             f'triangulated_points_{view_prefix}view': triangulated_points,
             f'src_pts_yx_{view_prefix}': src_pts_yx,
             f'dst_pts_yx_{view_prefix}': dst_pts_yx,
+            f'dst_pts_yx_{view_prefix}_gt': dst_pts_yx_gt,
             f'inliers_mask_{view_prefix}': inlier_mask
         })
 
