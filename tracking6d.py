@@ -970,6 +970,7 @@ class Tracking6D:
 
         R, t = matrix4x4_to_Rt(T_o2_to_o1)
         rot = rotation_matrix_to_axis_angle(R).squeeze()
+        quat = axis_angle_to_quaternion(rot[None]).squeeze()
         t = t.squeeze()
 
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
@@ -978,8 +979,6 @@ class Tracking6D:
         outlier_src_pts = src_pts_yx[outlier_indices]
 
         inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
-
-        quat = axis_angle_to_quaternion(rot[None]).squeeze()
 
         self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
                                inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview)
