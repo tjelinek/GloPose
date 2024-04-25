@@ -28,7 +28,7 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from auxiliary_scripts.data_structures import FrameResult
+from auxiliary_scripts.data_structures import FrameResult, DataGraph
 from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
                    coordinates_xy_to_tensor_index)
 from models.rendering import infer_normalized_renderings, RenderingKaolin
@@ -45,11 +45,13 @@ class WriteResults:
                                      'gt_rotation', 'gt_translation'])
 
     def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, rendering_backview,
-                 gt_encoder, deep_encoder, rgb_encoder):
+                 gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph):
 
         self.image_height = shape[0]
         self.image_width = shape[1]
         self.sequence_length: int = num_frames
+
+        self.data_graph: DataGraph = data_graph
 
         self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
                                          10, (shape[1], shape[0]), True)

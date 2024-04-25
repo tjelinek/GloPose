@@ -395,9 +395,9 @@ class Tracking6D:
 
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
                                           tracking_config=self.config, rendering=self.rendering,
-                                          rendering_backview=self.rendering_backview,
-                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
-                                          rgb_encoder=self.rgb_encoder)
+                                          rendering_backview=self.rendering_backview, gt_encoder=self.gt_encoder,
+                                          deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
+                                          data_graph=self.data_graph)
 
         template_frame_observation = self.tracker.next(0)
         template_frame_observation_from_back = self.tracker_backview.next(0)
