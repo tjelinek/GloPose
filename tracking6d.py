@@ -100,6 +100,9 @@ class Tracking6D:
         self.active_keyframes: Optional[KeyframeBuffer] = None
         self.active_keyframes_backview: Optional[KeyframeBuffer] = None
 
+        # Data graph
+        self.data_graph: Optional[DataGraph] = None
+
         # Flow tracks
         self.flow_tracks_inits = [0]
 
@@ -132,6 +135,11 @@ class Tracking6D:
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
+
+        self.used_cameras = [Cameras.FRONTVIEW]
+        if self.config.matching_target_to_backview:
+            self.used_cameras.append(Cameras.BACKVIEW)
+        self.data_graph = DataGraph(used_cameras=self.used_cameras)
 
         if self.config.generate_synthetic_observations_if_possible:
             assert self.gt_translations is not None and self.gt_rotations is not None
@@ -401,6 +409,8 @@ class Tracking6D:
 
         for stepi in range(1, self.config.input_frames):
 
+            self.data_graph.add_new_frame(stepi)
+
             if stepi % 10 == 0:
                 print(f"Keyframe memory: {self.active_keyframes.get_memory_size() / (1024 ** 3)}GB")
                 gc.collect()
@@ -439,9 +449,13 @@ class Tracking6D:
                     self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
                                                        occlusions, uncertainties, flow_source_frame, flow_target_frame)
 
+                    self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+
                 if self.long_flow_provider is not None:
                     long_flow_arc = (self.flow_tracks_inits[-1], stepi)
                     flow_source_frame, flow_target_frame = long_flow_arc
+
+                    self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
 
                     observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
                                                                                  mode='long')
