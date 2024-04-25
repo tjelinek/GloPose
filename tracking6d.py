@@ -385,11 +385,8 @@ class Tracking6D:
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
-    def run_tracking(self, files, bboxes):
+    def run_tracking(self, files):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
-        if type(bboxes) is dict:
-            sorted_bb_keys = sorted(list(bboxes.keys()))
-            bboxes = {i: bboxes[sorted_bb_keys[i]] for i, key in zip(range(len(bboxes)), sorted_bb_keys)}
 
         our_losses = -np.ones((files.shape[0] - 1, 1))
 
