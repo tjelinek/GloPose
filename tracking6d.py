@@ -888,9 +888,17 @@ class Tracking6D:
 
         W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
-        src_pts_yx = get_not_occluded_foreground_points(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
-                                                        flow_observations.observed_flow_segmentation[:, [flow_arc_idx]],
-                                                        self.config.occlusion_coef_threshold,
+        occlusions = flow_observations.observed_flow_occlusion[:, [flow_arc_idx]]
+        segmentation = flow_observations.observed_flow_segmentation[:, [flow_arc_idx]]
+
+        renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
+        gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+
+        if self.config.ransac_use_gt_occlusions_and_segmentation:
+            occlusions = gt_flow_observation.rendered_flow_occlusion
+            segmentation = gt_flow_observation.rendered_flow_segmentation
+
+        src_pts_yx = get_not_occluded_foreground_points(occlusions, segmentation, self.config.occlusion_coef_threshold,
                                                         self.config.segmentation_mask_threshold)
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
@@ -902,8 +910,6 @@ class Tracking6D:
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
 
         if self.config.ransac_feed_only_inlier_flow:
-            renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
-            gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
             ok_pts_indices = get_correct_correspondences_mask(gt_flow_observation, src_pts_yx, dst_pts_yx,
                                                               self.config.ransac_feed_only_inlier_flow_epe_threshold)
             dst_pts_yx = dst_pts_yx[ok_pts_indices]
@@ -912,8 +918,6 @@ class Tracking6D:
                 confidences = confidences[ok_pts_indices]
 
         if self.config.ransac_feed_gt_flow_percentage > 0:
-            renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
-            gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
             gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
 
             n_points = src_pts_yx.shape[0]
@@ -934,9 +938,7 @@ class Tracking6D:
                 confidences = confidences[random_permutation_indices]
 
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
-                                                           self.rendering.height, confidences,
-                                                           method=self.config.essential_matrix_algorithm,
-                                                           inliers_refinement_method=self.config.inlier_pose_method)
+                                                           self.rendering.height, self.config, confidences)
 
         rot, t, inlier_mask, triangulated_points = result
 

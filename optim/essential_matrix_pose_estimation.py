@@ -3,18 +3,15 @@ import kornia
 import numpy as np
 import pygcransac
 import torch
-from kornia.geometry import (rotation_matrix_to_axis_angle, motion_from_essential_choose_solution,
-                             euler_from_quaternion, axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
-                             Rt_to_matrix4x4, relative_transformation, triangulate_points)
+from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution
 
-from auxiliary_scripts.data_structures import FrameResult
+from tracker_config import TrackerConfig
 from utils import tensor_index_to_coordinates_xy
 
 
 def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
-                                              K2: torch.Tensor, width: int, height: int, confidences=None,
-                                              ransac_conf=0.9999, method='magsac++',
-                                              inliers_refinement_method=None):
+                                              K2: torch.Tensor, width: int, height: int, ransac_config: TrackerConfig,
+                                              confidences=None):
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
@@ -25,31 +22,37 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     K1_np = K1.numpy(force=True)
     K2_np = K2.numpy(force=True)
 
-    if method == 'pygcransac':
+    E_method = ransac_config.essential_matrix_algorithm
+    ransac_confidence = ransac_config.ransac_confidence
+    if E_method == 'pygcransac':
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
 
         if confidences is not None:
             confidences_np = torch.numpy(confidences)
-            E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np,K2_np, height, width, height, width,
+            E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
                                                      confidences_np, threshold=0.1, min_iters=10000)
         else:
             E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
-                                                     ransac_conf, threshold=0.1, min_iters=10000)
+                                                     ransac_confidence, threshold=0.1, min_iters=10000)
 
-    else:
+    elif E_method is not None:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
                    '8point': cv2.USAC_FM_8PTS}
+        if E_method not in methods:
+            raise ValueError("Unknown RANSAC method")
 
-        chosen_method = methods[method]
+        chosen_method = methods[E_method]
         K1_np = K1.numpy(force=True)
         E, mask = cv2.findEssentialMat(src_pts_np, dst_pts_np, K1_np, method=chosen_method, threshold=1.,
-                                       prob=ransac_conf)
+                                       prob=ransac_confidence)
         mask = mask[:, 0].astype(np.bool_)
+    else:
+        mask = np.ones(src_pts_yx.shape[0], dtype=np.bool_)
 
     mask_tensor = torch.from_numpy(mask).cuda()
 
-    if inliers_refinement_method == '8point':
+    if ransac_config.inlier_pose_method == '8point':
 
         src_pts_yx_inliers = src_pts_yx[mask_tensor]
         dst_pts_yx_inliers = dst_pts_yx[mask_tensor]
@@ -59,8 +62,10 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
         E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
 
-    elif inliers_refinement_method == 'bundle_adjustment':
+    elif ransac_config.inlier_pose_method == 'bundle_adjustment':
         raise NotImplementedError("This is not implemented yet")
+    else:
+        assert E_method is not None  # At least one pose estimation method must run.
 
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
 
