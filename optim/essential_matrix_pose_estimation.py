@@ -54,8 +54,8 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
 
     if ransac_config.inlier_pose_method == '8point':
 
-        src_pts_yx_inliers = src_pts_yx[mask_tensor]
-        dst_pts_yx_inliers = dst_pts_yx[mask_tensor]
+        src_pts_yx_inliers = src_pts_xy[mask_tensor]
+        dst_pts_yx_inliers = dst_pts_xy[mask_tensor]
 
         F_mat = kornia.geometry.epipolar.find_fundamental(src_pts_yx_inliers[None], dst_pts_yx_inliers[None],
                                                           method='8POINT')
