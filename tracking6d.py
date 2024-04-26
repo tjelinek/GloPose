@@ -719,18 +719,16 @@ class Tracking6D:
 
         # First inference just to log the results
         with torch.no_grad():
-            infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
-                                                             flow_frames, flow_arcs, 'deep_features')
-
-            encoder_result, loss_result, renders, rendered_flow_result = infer_result
-            loss_result: LossResult = loss_result
-
-            self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
-                                       loss_result.losses, encoder_result, frame_index)
+            self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
+                                             stacked_flow_observations, stacked_observations)
 
         if self.config.preinitialization_method is not None:
             self.run_preinitializations(flow_arcs, flow_frames, flow_observations, frame_losses, keyframes,
                                         observations, stacked_flow_observations, stacked_observations)
+
+            epoch += 1
+            self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
+                                             stacked_flow_observations, stacked_observations)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -802,8 +800,20 @@ class Tracking6D:
         data_graph_common_frame_data.frame_losses = frame_losses
         data_graph_common_frame_data.encoder_result = encoder_result
 
+        self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
+                                         stacked_flow_observations, stacked_observations)
+
         replace(data_graph_frame_data, flow_render_result=rendered_flow_result,
                 renders=renders, per_pixel_flow_error=loss_result.per_pixel_flow_loss)
+
+    def infer_model_and_log_results(self, flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
+                                    stacked_flow_observations, stacked_observations):
+        infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
+                                                         flow_frames, flow_arcs, 'deep_features')
+        encoder_result, loss_result, renders, rendered_flow_result = infer_result
+        loss_result: LossResult = loss_result
+        self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
+                                   loss_result.losses, encoder_result, frame_index)
 
     @torch.no_grad()
     def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
@@ -907,28 +917,34 @@ class Tracking6D:
 
         W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
-        occlusions = flow_observations.observed_flow_occlusion[:, [flow_arc_idx]]
-        segmentation = flow_observations.observed_flow_segmentation[:, [flow_arc_idx]]
-
         renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
         gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
 
         if self.config.ransac_use_gt_occlusions_and_segmentation:
             occlusions = gt_flow_observation.rendered_flow_occlusion
             segmentation = gt_flow_observation.rendered_flow_segmentation
+            observed_flow = gt_flow_observation.theoretical_flow
+        else:
+            occlusions = flow_observations.observed_flow_occlusion[:, [flow_arc_idx]]
+            segmentation = flow_observations.observed_flow_segmentation[:, [flow_arc_idx]]
+            observed_flow = flow_observations.observed_flow[:, [flow_arc_idx]]
+        segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
 
         src_pts_yx, observed_visible_fg_points_mask = (
             get_not_occluded_foreground_points(occlusions, segmentation,
                                                self.config.occlusion_coef_threshold,
                                                self.config.segmentation_mask_threshold))
 
+        _, gt_visible_fg_points_mask = (get_not_occluded_foreground_points(
+            gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
+            self.config.occlusion_coef_threshold, self.config.segmentation_mask_threshold))
+
         if self.config.ransac_confidences_from_occlusion:
-            confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
-                                                                        src_pts_yx[:, 1].to(torch.long)]
+            confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
         else:
             confidences = None
 
-        optical_flow = flow_unit_coords_to_image_coords(flow_observations.observed_flow)[:, [flow_arc_idx]]
+        optical_flow = flow_unit_coords_to_image_coords(observed_flow)
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
         gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
@@ -991,23 +1007,17 @@ class Tracking6D:
 
         inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
 
-        self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, observed_visible_fg_points_mask,
-                               gt_flow_observation, inlier_mask, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow,
-                               inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio)
+        self.log_ransac_result(flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
+                               gt_visible_fg_points_mask, gt_flow_observation, inlier_mask, src_pts_yx, dst_pts_yx,
+                               dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points, backview,
+                               inlier_ratio)
 
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)
 
-    def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, observed_visible_fg_points_mask,
-                          gt_flow: RenderedFlowResult, inlier_mask, src_pts_yx, dst_pts_yx, dst_pts_yx_gt,
-                          inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio):
-
-        res = get_foreground_and_segment_mask(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
-                                              flow_observations.observed_flow_segmentation[:,
-                                              [flow_arc_idx]],
-                                              self.config.occlusion_coef_threshold,
-                                              self.config.segmentation_mask_threshold)
-        not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
+    def log_ransac_result(self, flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
+                          gt_visible_fg_points_mask, gt_flow: RenderedFlowResult, inlier_mask, src_pts_yx, dst_pts_yx,
+                          dst_pts_yx_gt, inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio):
 
         gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow.theoretical_flow.detach().cpu(),
                                          rendered_flow_segmentation=gt_flow.rendered_flow_segmentation.detach().cpu(),
@@ -1020,6 +1030,7 @@ class Tracking6D:
         arc_data.gt_flow_result = gt_flow_cpu
         arc_data.observed_flow_segmentation = segmentation_binary_mask.cpu()
         arc_data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
+        arc_data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         arc_data.ransac_inliers = inlier_src_pts.cpu()
         arc_data.ransac_outliers = outlier_src_pts.cpu()
         arc_data.triangulated_points = triangulated_points.cpu()
@@ -1116,8 +1127,6 @@ class Tracking6D:
                 self.encoder.quaternion_offsets[0, keyframes, :] = encoder_result.quaternions[0, :].detach()
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-            self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result,
-                                       flow_arcs[-1][1], write_all=True)
 
         for field_name in loss_coefs_names:
             if field_name != "loss_flow_weight":

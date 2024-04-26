@@ -526,11 +526,11 @@ class WriteResults:
             correct_flows = (torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, axis=-1) < correct_threshold)
 
             fg_points_num = float(processed_arc_data.observed_flow_segmentation.sum())
-            pred_visible_num = fg_points_num - float(observed_non_occluded_fg_points.sum())
+            pred_visible_num = float(observed_non_occluded_fg_points.sum())
             correct_flows_num = float(correct_flows.sum())
             predicted_inliers_num = float(inlier_mask.sum())
             correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
-            actually_visible_num = fg_points_num - float(processed_arc_data.observed_visible_fg_points_mask.sum())
+            actually_visible_num = float(processed_arc_data.observed_visible_fg_points_mask.sum())
 
             # results['foreground_points'].append(fg_points_num / fg_points_num)
             results['visible'].append(actually_visible_num / fg_points_num)
@@ -989,9 +989,9 @@ class WriteResults:
 
     def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
 
-        custom = True
-        if rotation_ax is None and translation_ax:
-            custom = True
+        using_own_axes = False
+        if rotation_ax is None and translation_ax is None:
+            using_own_axes = True
             fig, axs = plt.subplots(2, 1, figsize=(12, 15))
             fig.subplots_adjust(hspace=0.4)
             rotation_ax, translation_ax = axs
@@ -1057,7 +1057,7 @@ class WriteResults:
 
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
         fig_path = Path(self.write_folder) / Path('rotations_by_epoch') / f'pose_per_frame.svg'
-        if not custom:
+        if using_own_axes:
             plt.savefig(fig_path)
             plt.close()
 
