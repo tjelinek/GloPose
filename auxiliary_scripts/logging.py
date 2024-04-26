@@ -587,6 +587,7 @@ class WriteResults:
                 ax.set_xticklabels(x_labels)
 
                 ax.set_yticks(np.arange(0., 1.05, 0.1))
+                ax.set_ylim([0, 1.05])
 
                 for i, metric in enumerate(results.keys()):
                     if metric == 'model_obtained_from':
