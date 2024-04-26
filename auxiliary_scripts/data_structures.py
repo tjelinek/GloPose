@@ -1,17 +1,13 @@
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List
 
 import networkx as nx
 import torch
 
+from auxiliary_scripts.cameras import Cameras
+from keyframe_buffer import FlowObservation
 from models.encoder import EncoderResult
 from models.rendering import RenderedFlowResult
-
-
-class Cameras(Enum):
-    FRONTVIEW = 'frontview'
-    BACKVIEW = 'backview'
 
 
 @dataclass
@@ -44,8 +40,8 @@ class CameraSpecificFrameData:
 @dataclass
 class CrossFrameData:
 
-    flow_render_result: RenderedFlowResult = None
     gt_flow_result: RenderedFlowResult = None
+    observed_flow: FlowObservation = None
 
     src_pts_yx: torch.Tensor = None
     dst_pts_yx: torch.Tensor = None

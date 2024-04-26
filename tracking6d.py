@@ -20,7 +20,8 @@ from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.data_structures import Cameras, DataGraph
+from auxiliary_scripts.data_structures import DataGraph
+from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \

@@ -28,7 +28,8 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from auxiliary_scripts.data_structures import DataGraph, Cameras
+from auxiliary_scripts.data_structures import DataGraph
+from auxiliary_scripts.cameras import Cameras
 from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
                    coordinates_xy_to_tensor_index)
 from models.rendering import infer_normalized_renderings, RenderingKaolin

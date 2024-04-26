@@ -8,7 +8,7 @@ import networkx as nx
 
 from dataclasses import dataclass, field
 
-from auxiliary_scripts.data_structures import Cameras
+from auxiliary_scripts.cameras import Cameras
 
 
 @dataclass
@@ -49,6 +49,29 @@ class Observation:
                 setattr(concatenated_observations, attr_name, concatenated_attr)
 
         return concatenated_observations
+
+    def filter_frames(self, frames_indices: List) -> 'Observation':
+
+        new_observation = type(self)()
+
+        for attr_name, attr_type in self.__annotations__.items():
+            value = getattr(self, attr_name)
+            if value is not None:
+                setattr(new_observation, attr_name, value[:, frames_indices, :])
+
+        return new_observation
+
+    def send_to_device(self, device: str) -> 'Observation':
+
+        new_observation = type(self)()
+
+        for attr_name, attr_type in self.__annotations__.items():
+            value: torch.Tensor = getattr(self, attr_name)
+            if value is not None:
+                setattr(new_observation, attr_name, value.to(device))
+
+        return new_observation
+
 
 
 @dataclass
