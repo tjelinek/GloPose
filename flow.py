@@ -228,8 +228,8 @@ def get_correct_correspondences_mask(gt_flow_observation, src_pts_yx, dst_pts_yx
 def get_non_occluded_foreground_correspondences(observed_flow_occlusion, observed_flow_segmentation, observed_flow,
                                                 segmentation_mask_threshold: float, occlusion_coef_threshold: float):
 
-    src_pts_yx = get_not_occluded_foreground_points(observed_flow_occlusion, observed_flow_segmentation,
-                                                    segmentation_mask_threshold, occlusion_coef_threshold)
+    src_pts_yx, _ = get_not_occluded_foreground_points(observed_flow_occlusion, observed_flow_segmentation,
+                                                       segmentation_mask_threshold, occlusion_coef_threshold)
 
     dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0),
                                                 observed_flow).permute(1, 0)

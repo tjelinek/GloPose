@@ -286,7 +286,7 @@ def get_not_occluded_foreground_points(observed_occlusion, observed_segmentation
 
     src_pts_yx = torch.nonzero(not_occluded_foreground_mask).to(torch.float32)
 
-    return src_pts_yx
+    return src_pts_yx, not_occluded_foreground_mask
 
 
 def print_cuda_occupied_memory(device='cuda:0'):

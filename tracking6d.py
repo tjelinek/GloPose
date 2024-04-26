@@ -20,7 +20,7 @@ from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List
 
 from OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.data_structures import FrameResult, EssentialMatrixData, Cameras, DataGraph
+from auxiliary_scripts.data_structures import Cameras, DataGraph
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
@@ -108,10 +108,6 @@ class Tracking6D:
 
         # Tracker
         self.tracker: Optional[BaseTracker] = None
-
-        # Essential matrix preinitialization
-        self.essential_matrix_data_frontview = EssentialMatrixData()
-        self.essential_matrix_data_backview = EssentialMatrixData()
 
         # Other utilities and flags
         self.write_results = None
@@ -404,25 +400,27 @@ class Tracking6D:
         self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
         self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
 
-        for stepi in range(1, self.config.input_frames):
+        for frame_i in range(1, self.config.input_frames):
 
-            self.data_graph.add_new_frame(stepi)
+            self.data_graph.add_new_frame(frame_i)
+            self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[:, frame_i]
+            self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[:, :, frame_i]
 
-            if stepi % 10 == 0:
+            if frame_i % 10 == 0:
                 print(f"Keyframe memory: {self.active_keyframes.get_memory_size() / (1024 ** 3)}GB")
                 gc.collect()
                 torch.cuda.empty_cache()
 
             if type(self.tracker) is SyntheticDataGeneratingTracker:
-                next_tracker_frame = stepi  # Index of a frame
+                next_tracker_frame = frame_i  # Index of a frame
             else:
-                next_tracker_frame = files[stepi]  # Name of file
+                next_tracker_frame = files[frame_i]  # Name of file
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
             new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
 
-            self.active_keyframes.add_new_keyframe_observation(new_frame_observation, stepi)
-            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, stepi)
+            self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
+            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, frame_i)
 
             start = time.time()
 
@@ -431,11 +429,11 @@ class Tracking6D:
 
             with torch.no_grad():
                 if self.config.add_flow_arcs_strategy == 'all-previous':
-                    short_flow_arcs = {(flow_source, stepi) for flow_source in
+                    short_flow_arcs = {(flow_source, frame_i) for flow_source in
                                        set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
-                                       if flow_source < stepi}
+                                       if flow_source < frame_i}
                 elif self.config.add_flow_arcs_strategy == 'single-previous':
-                    short_flow_arcs = {(stepi - 1, stepi)}
+                    short_flow_arcs = {(frame_i - 1, frame_i)}
                 elif self.config.add_flow_arcs_strategy is None:
                     short_flow_arcs = set()
 
@@ -449,7 +447,7 @@ class Tracking6D:
                     self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
 
                 if self.long_flow_provider is not None:
-                    long_flow_arc = (self.flow_tracks_inits[-1], stepi)
+                    long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
                     flow_source_frame, flow_target_frame = long_flow_arc
 
                     self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
@@ -507,34 +505,29 @@ class Tracking6D:
                 multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
                     frontview=all_flow_observations)
 
-            frame_result = self.apply(multi_camera_observations, multi_camera_flow_observations,
-                                      self.active_keyframes.keyframes, self.active_keyframes.flow_frames,
-                                      flow_arcs, frame_index=stepi)
-
-            encoder_result = frame_result.encoder_result
+            self.apply(multi_camera_observations, multi_camera_flow_observations, self.active_keyframes.keyframes,
+                       self.active_keyframes.flow_frames, flow_arcs, frame_index=frame_i)
 
             silh_losses = np.array(self.best_model["losses"]["silh"])
 
-            our_losses[stepi - 1] = silh_losses[-1]
-            print('Elapsed time in seconds: ', time.time() - start, "Frame ", stepi, "out of",
+            our_losses[frame_i - 1] = silh_losses[-1]
+            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
             tex = None
             if self.config.features == 'deep':
                 if self.config.optimize_texture:
                     self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
-                                   multi_camera_observations, multi_camera_flow_observations, frame_result.frame_losses)
+                                   multi_camera_observations, multi_camera_flow_observations)
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
-                new_flow_arcs = [arc for arc in flow_arcs if arc[1] == stepi]
+                new_flow_arcs = [arc for arc in flow_arcs if arc[1] == frame_i]
 
-                self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=stepi,
-                                                 encoder_result=encoder_result, tex=tex, new_flow_arcs=new_flow_arcs,
-                                                 frame_result=frame_result, active_keyframes=self.active_keyframes,
+                self.write_results.write_results(bounding_box=b0, our_losses=our_losses, frame_i=frame_i,
+                                                 tex=tex, new_flow_arcs=new_flow_arcs,
+                                                 active_keyframes=self.active_keyframes,
                                                  active_keyframes_backview=self.active_keyframes_backview,
-                                                 logged_sgd_translations=self.logged_sgd_translations,
-                                                 logged_sgd_quaternions=self.logged_sgd_quaternions,
                                                  renderer_backview=self.rendering_backview, best_model=self.best_model,
                                                  observations=all_frame_observations,
                                                  observations_backview=all_frame_observations_backview,
@@ -553,12 +546,13 @@ class Tracking6D:
                 #                                     gt_translation=self.gt_translations,
                 #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
 
-            angles = consecutive_quaternions_angular_difference(encoder_result.quaternions)
-            # angles = consecutive_quaternions_angular_difference2(encoder_result.quaternions)
+            angles = consecutive_quaternions_angular_difference(
+                self.data_graph.get_frame_data(frame_i).encoder_result.quaternions)
+
             print("Angles:", angles)
 
             if self.config.points_fraction_visible_new_track is not None:
-                longest_flow = self.active_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], stepi)
+                longest_flow = self.active_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], frame_i)
                 last_observed_segmentation = longest_flow.observed_flow_segmentation[:, -1:, -1:]
                 last_observed_occlusion = longest_flow.observed_flow_occlusion[:, -1:]
                 fraction_points_visible = float(iou_loss(last_observed_segmentation, last_observed_occlusion))
@@ -566,7 +560,7 @@ class Tracking6D:
                 print(f"Fraction points not occluded {fraction_points_visible} flow tracks beginnings at "
                       f"{self.flow_tracks_inits}")
                 if fraction_points_visible < self.config.points_fraction_visible_new_track:
-                    self.flow_tracks_inits.append(stepi)
+                    self.flow_tracks_inits.append(frame_i)
                     self.long_flow_provider.need_to_init = True
 
             if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
@@ -673,9 +667,7 @@ class Tracking6D:
         return observed_flow, occlusion, uncertainty
 
     def apply(self, observations: MultiCameraObservation, flow_observations: MultiCameraObservation,
-              keyframes: List, flow_frames: List, flow_arcs: List, frame_index: int) -> FrameResult:
-
-        frame_result = FrameResult()
+              keyframes: List, flow_frames: List, flow_arcs: List, frame_index: int) -> None:
 
         self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
         self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
@@ -734,11 +726,11 @@ class Tracking6D:
             loss_result: LossResult = loss_result
 
             self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
-                                       loss_result.losses, encoder_result)
+                                       loss_result.losses, encoder_result, frame_index)
 
         if self.config.preinitialization_method is not None:
             self.run_preinitializations(flow_arcs, flow_frames, flow_observations, frame_losses, keyframes,
-                                        observations, stacked_flow_observations, stacked_observations, frame_result)
+                                        observations, stacked_flow_observations, stacked_observations)
 
         self.encoder.load_state_dict(self.best_model["encoder"])
 
@@ -756,7 +748,7 @@ class Tracking6D:
                 loss_result: LossResult = loss_result
 
                 model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
-                                                        loss_result.losses, encoder_result)
+                                                        loss_result.losses, encoder_result, frame_index)
                 if abs(model_loss - self.best_model["value"]) > 1e-3:
                     iters_without_change = 0
                     self.best_model["value"] = model_loss
@@ -803,17 +795,19 @@ class Tracking6D:
             infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
                                             flow_arcs, 'deep_features')
         encoder_result, loss_result, renders, rendered_flow_result = infer_result
-        loss_result: LossResult = loss_result
 
-        frame_result = replace(frame_result, flow_render_result=rendered_flow_result, encoder_result=encoder_result,
-                               renders=renders, frame_losses=frame_losses,
-                               per_pixel_flow_error=loss_result.per_pixel_flow_loss)
+        data_graph_frame_data = self.data_graph.get_camera_specific_frame_data(frame_index)
+        data_graph_common_frame_data = self.data_graph.get_frame_data(frame_index)
 
-        return frame_result
+        data_graph_common_frame_data.frame_losses = frame_losses
+        data_graph_common_frame_data.encoder_result = encoder_result
+
+        replace(data_graph_frame_data, flow_render_result=rendered_flow_result,
+                renders=renders, per_pixel_flow_error=loss_result.per_pixel_flow_loss)
 
     @torch.no_grad()
     def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
-                               stacked_flow_observations, stacked_observations, frame_result: FrameResult):
+                               stacked_flow_observations, stacked_observations):
 
         print("Pre-initializing the objects position")
 
@@ -822,7 +816,7 @@ class Tracking6D:
                                                                flow_frames, keyframes, flow_arcs, frame_losses)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
             infer_result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                                   flow_observations, frame_result)
+                                                                   flow_observations)
         else:
             raise ValueError("Unknown pre-init method.")
 
@@ -833,7 +827,7 @@ class Tracking6D:
 
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
-                                           flow_observations: MultiCameraObservation, frame_result: FrameResult):
+                                           flow_observations: MultiCameraObservation):
 
         inlier_points_list = {}
         outlier_points_list = {}
@@ -848,7 +842,7 @@ class Tracking6D:
         flow_source, flow_target = flow_arc
 
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc, frame_result)
+        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc)
         (src_pts_yx_front, dst_pts_yx_front, inlier_mask_front, inlier_points, outlier_points, inlier_ratio_frontview,
          q_total, t_total, triangulation_frontview) = result
 
@@ -858,12 +852,16 @@ class Tracking6D:
 
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
         self.encoder.quaternion_offsets[:, flow_target] = q_total
+        self.data_graph.get_edge_observations(flow_source, flow_target,
+                                              Cameras.BACKVIEW).is_source_of_matching = True
+        self.data_graph.get_edge_observations(flow_source, flow_target,
+                                              Cameras.FRONTVIEW).is_source_of_matching = False
 
         if self.config.matching_target_to_backview:
 
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
-            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc, frame_result,
+            result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc,
                                                            backview=True)
             (src_pts_yx_back, dst_pts_yx_back, inlier_mask_back, inlier_points_backview, outlier_points_backview,
              inlier_ratio_backview, q_total_backview, t_total_backview, triangulation_backview) = result
@@ -884,8 +882,7 @@ class Tracking6D:
 
         return inference_result
 
-    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, frame_result: FrameResult,
-                                         backview=False):
+    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, backview=False):
 
         K1 = K2 = self.rendering.camera_intrinsics
 
@@ -909,8 +906,11 @@ class Tracking6D:
             occlusions = gt_flow_observation.rendered_flow_occlusion
             segmentation = gt_flow_observation.rendered_flow_segmentation
 
-        src_pts_yx = get_not_occluded_foreground_points(occlusions, segmentation, self.config.occlusion_coef_threshold,
-                                                        self.config.segmentation_mask_threshold)
+        src_pts_yx, observed_visible_fg_points_mask = (
+            get_not_occluded_foreground_points(occlusions, segmentation,
+                                               self.config.occlusion_coef_threshold,
+                                               self.config.segmentation_mask_threshold))
+
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - flow_observations.observed_flow_occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long),
                                                                         src_pts_yx[:, 1].to(torch.long)]
@@ -932,7 +932,6 @@ class Tracking6D:
                 confidences = confidences[ok_pts_indices]
 
         if self.config.ransac_feed_gt_flow_percentage > 0:
-
             n_points = src_pts_yx.shape[0]
             n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
             indices_permutation = torch.randperm(n_points)
@@ -954,18 +953,6 @@ class Tracking6D:
                                                            self.rendering.height, self.config, confidences)
 
         rot, t, inlier_mask, triangulated_points = result
-
-        if backview:
-            essential_matrix_data = self.essential_matrix_data_backview
-        else:
-            essential_matrix_data = self.essential_matrix_data_frontview
-
-        essential_matrix_data.camera_rotations[flow_arc] = rot
-        essential_matrix_data.camera_translations[flow_arc] = t
-        essential_matrix_data.source_points[flow_arc] = src_pts_yx
-        essential_matrix_data.target_points[flow_arc] = dst_pts_yx
-        essential_matrix_data.inlier_mask[flow_arc] = inlier_mask
-        essential_matrix_data.triangulated_points[flow_arc] = triangulated_points
 
         # if flow_arc[1] > 1:
         #
@@ -993,15 +980,16 @@ class Tracking6D:
 
         inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
 
-        self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
-                               dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points,
-                               frame_result, backview)
+        self.log_ransac_result(flow_arc, flow_arc_idx, flow_observations, observed_visible_fg_points_mask,
+                               gt_flow_observation, inlier_mask, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow,
+                               inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio)
 
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)
 
-    def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, inlier_mask, src_pts_yx, dst_pts_yx,
-                          dst_pts_yx_gt, inlier_src_pts, outlier_src_pts, triangulated_points, frame_result, backview):
+    def log_ransac_result(self, flow_arc, flow_arc_idx, flow_observations, observed_visible_fg_points_mask,
+                          gt_flow: RenderedFlowResult, inlier_mask, src_pts_yx, dst_pts_yx, dst_pts_yx_gt,
+                          inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio):
 
         res = get_foreground_and_segment_mask(flow_observations.observed_flow_occlusion[:, [flow_arc_idx]],
                                               flow_observations.observed_flow_segmentation[:,
@@ -1010,21 +998,25 @@ class Tracking6D:
                                               self.config.segmentation_mask_threshold)
         not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = res
 
-        view_prefix = 'back' if backview else 'front'
+        gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow.theoretical_flow.detach().cpu(),
+                                         rendered_flow_segmentation=gt_flow.rendered_flow_segmentation.detach().cpu(),
+                                         rendered_flow_occlusion=gt_flow.rendered_flow_occlusion.detach().cpu())
 
-        getattr(frame_result, f'observed_flow_segmentation_{view_prefix}')[flow_arc] = segmentation_binary_mask.cpu()
-        getattr(frame_result, f'observed_flow_fg_occlusion_{view_prefix}')[flow_arc] = (
-            (~not_occluded_foreground_mask * segmentation_binary_mask).cpu())
+        camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
 
-        getattr(frame_result, f'inliers_{view_prefix}')[flow_arc] = inlier_src_pts
-        getattr(frame_result, f'outliers_{view_prefix}')[flow_arc] = outlier_src_pts
-        frame_result.set_attributes(**{
-            f'triangulated_points_{view_prefix}view': triangulated_points,
-            f'src_pts_yx_{view_prefix}': src_pts_yx,
-            f'dst_pts_yx_{view_prefix}': dst_pts_yx,
-            f'dst_pts_yx_{view_prefix}_gt': dst_pts_yx_gt,
-            f'inliers_mask_{view_prefix}': inlier_mask
-        })
+        arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
+
+        arc_data.gt_flow_result = gt_flow_cpu
+        arc_data.observed_flow_segmentation = segmentation_binary_mask.cpu()
+        arc_data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
+        arc_data.ransac_inliers = inlier_src_pts.cpu()
+        arc_data.ransac_outliers = outlier_src_pts.cpu()
+        arc_data.triangulated_points = triangulated_points.cpu()
+        arc_data.src_pts_yx = src_pts_yx.cpu()
+        arc_data.dst_pts_yx = dst_pts_yx.cpu()
+        arc_data.dst_pts_yx_gt = dst_pts_yx_gt.cpu()
+        arc_data.inliers_mask = inlier_mask.cpu()
+        arc_data.inlier_ratio = inlier_ratio
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
@@ -1114,7 +1106,7 @@ class Tracking6D:
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
             self.log_inference_results(joint_loss, epoch, frame_losses, joint_loss, losses, encoder_result,
-                                       write_all=True)
+                                       flow_arcs[-1][1], write_all=True)
 
         for field_name in loss_coefs_names:
             if field_name != "loss_flow_weight":
@@ -1152,7 +1144,7 @@ class Tracking6D:
                     param_group['lr'] /= 2.0
             elif 0 <= loss_improvement <= loss_improvement_threshold:
                 model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, loss_result.losses,
-                                                        encoder_result)
+                                                        encoder_result, flow_arcs[-1][1])
                 self.best_model["value"] = model_loss
                 self.best_model["losses"] = loss_result.losses_all
                 self.optimizer_positional_parameters.step()
@@ -1175,11 +1167,13 @@ class Tracking6D:
                 elif param_group['name'] == 'trans':
                     param_group['lr'] *= self.config.translation_learning_rate_coef
 
-    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result,
+    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):
 
-        self.logged_sgd_translations.append(encoder_result.translations.detach().clone())
-        self.logged_sgd_quaternions.append(encoder_result.quaternions.detach().clone())
+        frame_data = self.data_graph.get_frame_data(frame_i)
+        frame_data.quaternions_during_optimization.append(encoder_result.quaternions.detach().clone())
+        frame_data.translations_during_optimization.append(encoder_result.translations.detach().clone())
+
         joint_loss = joint_loss.detach().clone()
 
         frame_losses.append(float(joint_loss))
@@ -1307,7 +1301,7 @@ class Tracking6D:
         self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
 
     def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: MultiCameraObservation,
-                  flow_observations: MultiCameraObservation, frame_losses):
+                  flow_observations: MultiCameraObservation):
         start_time = time.time()
 
         self.best_model["value"] = 100

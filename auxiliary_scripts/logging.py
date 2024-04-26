@@ -1,4 +1,4 @@
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from itertools import product
 
 from typing import Dict, Iterable, Tuple, List
@@ -22,13 +22,13 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
-from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion, matrix4x4_to_Rt
+from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from auxiliary_scripts.data_structures import FrameResult, DataGraph
+from auxiliary_scripts.data_structures import DataGraph, Cameras
 from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
                    coordinates_xy_to_tensor_index)
 from models.rendering import infer_normalized_renderings, RenderingKaolin
@@ -41,8 +41,6 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 
 
 class WriteResults:
-    Metrics = namedtuple('Metrics', ['loss', 'rotation', 'translation',
-                                     'gt_rotation', 'gt_translation'])
 
     def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, rendering_backview,
                  gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph):
@@ -69,7 +67,6 @@ class WriteResults:
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
 
-        self.past_frame_results: Dict = {}
         self.past_frame_renderings: Dict = {}
 
         self.tracking_config: TrackerConfig = tracking_config
@@ -105,8 +102,6 @@ class WriteResults:
         self.correspondences_log_file = self.write_folder / (f'correspondences_{self.tracking_config.sequence}'
                                                              f'_flow_{self.tracking_config.gt_flow_source}.h5')
         self.correspondences_log_write_common_data()
-
-        self.logged_metrics: Dict[int, WriteResults.Metrics] = {}
 
     def correspondences_log_write_common_data(self):
 
@@ -363,27 +358,16 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, bounding_box, our_losses, frame_i, encoder_result, tex, new_flow_arcs, frame_result,
+    def write_results(self, bounding_box, our_losses, frame_i, tex, new_flow_arcs,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
-                      logged_sgd_translations, logged_sgd_quaternions, renderer_backview, best_model,
-                      observations: FrameObservation, observations_backview: FrameObservation, gt_rotations,
-                      gt_translations):
+                      renderer_backview, best_model, observations: FrameObservation,
+                      observations_backview: FrameObservation, gt_rotations, gt_translations):
+
+        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
 
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
-
-        gt_rotation_current_frame = gt_rotations[:, frame_i].squeeze()
-        gt_translation_current_frame = gt_translations[:, :, frame_i].squeeze()
-
-        last_logged_sgd_rotation = rad_to_deg(quaternion_to_axis_angle(logged_sgd_quaternions[-1].detach().cpu(),
-                                                                       ))[0, -1]
-
-        self.logged_metrics[frame_i] = self.Metrics(loss=frame_result.frame_losses[-1],
-                                                    translation=logged_sgd_translations[-1][0, 0, -1],
-                                                    rotation=last_logged_sgd_rotation,
-                                                    gt_rotation=rad_to_deg(gt_rotation_current_frame),
-                                                    gt_translation=gt_translation_current_frame)
 
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
                                                observations_backview.observed_image[:, [-1]].cpu())
@@ -391,12 +375,11 @@ class WriteResults:
         self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                         new_flow_arcs=new_flow_arcs)
 
-        self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs,
-                            frame_result.per_pixel_flow_error)
+        self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs, None)
 
         # FLOW BACKVIEW ERROR VISUALIZATION
-        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, frame_result,
-                                          self.rendering, renderer_backview)
+        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, self.rendering,
+                                          renderer_backview)
 
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -406,12 +389,9 @@ class WriteResults:
 
         self.visualize_logged_metrics()
 
-        self.analyze_ransac_matchings(frame_i, frame_result, new_flow_arcs)
+        self.analyze_ransac_matchings(frame_i)
 
-        self.visualize_rotations_per_epoch(logged_sgd_translations, logged_sgd_quaternions,
-                                           frame_result.frame_losses, frame_i,
-                                           gt_rotation=gt_rotation_current_frame,
-                                           gt_translation=gt_translation_current_frame)
+        self.visualize_rotations_per_epoch(frame_i)
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
@@ -532,32 +512,25 @@ class WriteResults:
 
         for i in range(1, frame_i + 1):
             flow_arc = (0, i)
-            processed_frame_result: FrameResult = self.past_frame_results[flow_arc]
-            if view == 'front':
-                renderer = self.rendering
-            else:
-                renderer = self.rendering_backview
 
-            gt_flow_res = renderer.render_flow_for_frame(self.gt_encoder, 0, i)
-            gt_flow = flow_unit_coords_to_image_coords(gt_flow_res.theoretical_flow)
+            camera = Cameras.FRONTVIEW if view == 'front' else Cameras.BACKVIEW
+            processed_arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
-            src_pts_yx = getattr(processed_frame_result, f'src_pts_yx_{view}')
-            dst_pts_yx = getattr(processed_frame_result, f'dst_pts_yx_{view}')
-            inlier_mask = getattr(processed_frame_result, f'inliers_mask_{view}')
+            dst_pts_yx = processed_arc_data.dst_pts_yx
+            pred_inlier_ratio = processed_arc_data.inlier_ratio
+            inlier_mask = processed_arc_data.inliers_mask
+            observed_non_occluded_fg_points = processed_arc_data.observed_visible_fg_points_mask
 
-            dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
+            dst_pts_yx_gt_flow = processed_arc_data.dst_pts_yx_gt
 
             correct_flows = (torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, axis=-1) < correct_threshold)
 
-            fg_points_num = float(getattr(processed_frame_result, f'observed_flow_segmentation_{view}')[flow_arc].sum())
-            pred_visible_num = fg_points_num - float(getattr(processed_frame_result,
-                                                             f'observed_flow_fg_occlusion_{view}')[flow_arc].sum())
+            fg_points_num = float(processed_arc_data.observed_flow_segmentation.sum())
+            pred_visible_num = fg_points_num - float(observed_non_occluded_fg_points.sum())
             correct_flows_num = float(correct_flows.sum())
             predicted_inliers_num = float(inlier_mask.sum())
             correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
-            actually_visible_num = fg_points_num - float((gt_flow_res.rendered_flow_occlusion >
-                                                          self.tracking_config.occlusion_coef_threshold).sum())
-            pred_inlier_ratio = predicted_inliers_num / pred_visible_num
+            actually_visible_num = fg_points_num - float(processed_arc_data.observed_visible_fg_points_mask.sum())
 
             # results['foreground_points'].append(fg_points_num / fg_points_num)
             results['visible'].append(actually_visible_num / fg_points_num)
@@ -565,14 +538,12 @@ class WriteResults:
             results['correctly_predicted_flows'].append(correct_flows_num / fg_points_num)
             results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
             results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
-            results['model_obtained_from'].append(processed_frame_result.source_of_matching)
+            results['model_obtained_from'].append(not processed_arc_data.is_source_of_matching)
             results['ransac_inlier_ratio'].append(pred_inlier_ratio)
 
         return results
 
-    def analyze_ransac_matchings(self, frame_i, frame_result: FrameResult, new_flow_arcs):
-
-        self.past_frame_results[new_flow_arcs[-1]] = frame_result
+    def analyze_ransac_matchings(self, frame_i):
 
         if (frame_i >= 10 and frame_i % 10 == 0) or frame_i >= self.sequence_length - 1:
             front_results = self.measure_ransac_stats(frame_i, 'front')
@@ -633,7 +604,7 @@ class WriteResults:
                 ylim = ax.get_ylim()
                 for i, is_foreground in enumerate(front_results['model_obtained_from']):
                     if not is_foreground:
-                        ax.fill_betweenx(ylim, i - 0.5, i + 0.5, color='yellow', alpha=0.3)
+                        ax.fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
 
             for ax in axs:
                 ax.set_xlabel('Frame')
@@ -647,12 +618,17 @@ class WriteResults:
             plt.savefig(self.ransac_path / 'ransac_stats.svg')
             plt.close()
 
-    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs,
-                                     frame_result: FrameResult, renderer, renderer_backview):
+    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, renderer,
+                                     renderer_backview):
 
         for new_flow_arc in new_flow_arcs:
 
             flow_arc_source, flow_arc_target = new_flow_arc
+
+            new_flow_arc_data_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                            camera=Cameras.FRONTVIEW)
+            new_flow_arc_data_back = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                           camera=Cameras.BACKVIEW)
 
             if flow_arc_source != 0:
                 continue
@@ -706,11 +682,12 @@ class WriteResults:
 
             flow_frontview_np = flow_frontview.numpy(force=True)
 
-            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], new_flow_arc, flow_frontview_np,
+            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
                                                      rend_flow_np, seg_mask_front, occlusion_mask_front,
-                                                     frame_result.inliers_front, frame_result.outliers_front)
+                                                     new_flow_arc_data_front.ransac_inliers,
+                                                     new_flow_arc_data_front.ransac_outliers)
 
-            self.visualize_outliers_distribution(frame_result, new_flow_arc, rend_flow)
+            self.visualize_outliers_distribution(new_flow_arc, rend_flow.cpu())
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
@@ -741,9 +718,10 @@ class WriteResults:
 
                 flow_backview_np = flow_backview.numpy(force=True)
 
-                self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], new_flow_arc, flow_backview_np,
+                self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], flow_backview_np,
                                                          rend_flow_back_np, seg_mask_back, occlusion_mask_back,
-                                                         frame_result.inliers_back, frame_result.outliers_back)
+                                                         new_flow_arc_data_back.ransac_inliers,
+                                                         new_flow_arc_data_back.ransac_outliers)
 
                 self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
                                         flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
@@ -751,13 +729,15 @@ class WriteResults:
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
 
-    def visualize_outliers_distribution(self, frame_result, new_flow_arc, gt_flow):
+    def visualize_outliers_distribution(self, new_flow_arc, gt_flow):
 
-        inlier_list = torch.nonzero(frame_result.inliers_mask_front)[:, 0]
-        outlier_list = torch.nonzero(~frame_result.inliers_mask_front)[:, 0]
+        new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
 
-        src_pts_front = frame_result.src_pts_yx_front
-        dst_pts_front = frame_result.dst_pts_yx_front
+        inlier_list = torch.nonzero(new_flow_arc_data.inliers_mask)[:, 0]
+        outlier_list = torch.nonzero(~new_flow_arc_data.inliers_mask)[:, 0]
+
+        src_pts_front = new_flow_arc_data.src_pts_yx
+        dst_pts_front = new_flow_arc_data.dst_pts_yx
         dst_pts_gt_flow_front = source_coords_to_target_coords(src_pts_front.T, gt_flow).T
 
         src_pts_front_inliers = src_pts_front[inlier_list]
@@ -817,17 +797,17 @@ class WriteResults:
         plt.savefig(self.ransac_path / f'outliers_spatial_correlation_frame_{new_flow_arc[1]}')
         plt.close()
 
-    def visualize_inliers_outliers_matching(self, ax_source, axs_target, new_flow_arc, flow_np, rendered_flow, seg_mask,
+    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, seg_mask,
                                             occlusion, inliers, outliers):
         matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
         if inliers is not None:
-            inliers = inliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+            inliers = inliers.numpy(force=True).T  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(inliers, seg_mask, occlusion, flow_np, rendered_flow,
                                               ax_source, axs_target, 'Greens', 'Reds', 'inliers',
                                               max_points=20)
             matching_text += f'inliers: {inliers.shape[1]}\n'
         if outliers is not None:
-            outliers = outliers[new_flow_arc].numpy(force=True).T  # Ensure shape is (2, N)
+            outliers = outliers.numpy(force=True).T  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(outliers, seg_mask, occlusion, flow_np, rendered_flow, ax_source,
                                               axs_target, 'Blues', 'Oranges', 'outliers',
                                               max_points=10)
@@ -922,7 +902,7 @@ class WriteResults:
         outlier_pixel_threshold = 5
 
         segment_mask = (segment_mask >= self.tracking_config.segmentation_mask_threshold)
-        foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
+        # foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
 
         total_points = source_coords.shape[1]
 
@@ -1016,24 +996,43 @@ class WriteResults:
             fig.subplots_adjust(hspace=0.4)
             rotation_ax, translation_ax = axs
 
-        frame_indices = sorted(self.logged_metrics.keys())
-        losses = [self.logged_metrics[frame].loss for frame in frame_indices]
-        rotations = np.array([self.logged_metrics[frame].rotation.numpy(force=True) for frame in frame_indices])
-        translations = np.array([self.logged_metrics[frame].translation.numpy(force=True) for frame in frame_indices])
-        gt_rotations = np.array([self.logged_metrics[frame].gt_rotation.numpy(force=True) for frame in frame_indices])
-        gt_translations = np.array([self.logged_metrics[frame].gt_translation.numpy(force=True)
-                                    for frame in frame_indices])
+        frame_indices = sorted(self.data_graph.G.nodes)[1:]
+        losses = [self.data_graph.get_frame_data(frame).frame_losses for frame in frame_indices]
+
+        rotations = []
+        translations = []
+        gt_rotations = []
+        gt_translations = []
+
+        for frame in frame_indices:
+            frame_data = self.data_graph.get_frame_data(frame)
+            last_quaternion = quaternion_to_axis_angle(frame_data.quaternions_during_optimization[-1])
+            last_rotation = np.rad2deg(last_quaternion[0, -1].numpy(force=True))
+            last_translation = frame_data.translations_during_optimization[-1][0, 0, -1].numpy(force=True)
+            rotations.append(last_rotation)
+            translations.append(last_translation)
+
+            frame_data = self.data_graph.get_frame_data(frame)
+            gt_rotation = np.rad2deg(frame_data.gt_rot_axis_angle.squeeze().numpy(force=True))
+            gt_translation = frame_data.gt_translation.squeeze().numpy(force=True)
+            gt_rotations.append(gt_rotation)
+            gt_translations.append(gt_translation)
+
+        rotations = np.array(rotations)
+        translations = np.array(translations)
+        gt_rotations = np.array(gt_rotations)
+        gt_translations = np.array(gt_translations)
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
         ticks = list(frame_indices) if len(list(frame_indices)) < 30 else list(frame_indices)[::5]
 
-        def plot_motion(ax, frame_indices, data, gt_data, labels, title, ylabel):
+        def plot_motion(ax, frame_indices_, data, gt_data, labels, title, ylabel):
             if ax is not None:
                 ax.set_xticks(ticks)
                 for i, axis_label in enumerate(labels):
-                    ax.plot(frame_indices, data[:, i], label=f'{axis_label}', color=colors[i])
-                    ax.plot(frame_indices, gt_data[:, i], '--', label=f'GT {axis_label}', alpha=0.5, color=colors[i])
+                    ax.plot(frame_indices_, data[:, i], label=f'{axis_label}', color=colors[i])
+                    ax.plot(frame_indices_, gt_data[:, i], '--', label=f'GT {axis_label}', alpha=0.5, color=colors[i])
                 ax.set_title(title)
                 ax.set_xlabel('Frame Index')
                 ax.set_ylabel(ylabel)
@@ -1216,8 +1215,15 @@ class WriteResults:
         self.metrics_writer.writerow(row_results_rounded)
         self.metrics_log.flush()
 
-    def visualize_rotations_per_epoch(self, logged_sgd_translations, logged_sgd_quaternions, frame_losses, frame_i,
-                                      gt_rotation=None, gt_translation=None):
+    def visualize_rotations_per_epoch(self, frame_i):
+        frame_data = self.data_graph.get_frame_data(frame_i)
+        logged_sgd_translations = frame_data.translations_during_optimization
+        logged_sgd_quaternions = frame_data.quaternions_during_optimization
+        frame_losses = frame_data.frame_losses
+
+        gt_rotation = frame_data.gt_rot_axis_angle
+        gt_translation = frame_data.gt_translation
+
         fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(10, 12))  # Adjusted for two subplots, one above the other
         fig.subplots_adjust(left=0.25, right=0.85, hspace=0.5)
 
@@ -1237,7 +1243,7 @@ class WriteResults:
             # Plot GT rotations if provided
             if gt_rotation is not None:
                 gt_rotation_deg = rad_to_deg(gt_rotation)
-                gt_rotation_values = gt_rotation_deg.numpy(force=True)[i].repeat(len(rotation_tensors))
+                gt_rotation_values = gt_rotation_deg.numpy(force=True).repeat(len(rotation_tensors))
                 ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values, linestyle='dashed',
                          label=f"GT {axis_labels[i]}", alpha=0.5, color=colors[i])
 
@@ -1252,7 +1258,7 @@ class WriteResults:
             ax3.plot(range(len(translation_tensors)), values, label=translation_axis_labels[i], color=colors[i])
             # Plot GT translations if provided
             if gt_translation is not None:
-                gt_translation_values = gt_translation.numpy(force=True)[i].repeat(len(translation_tensors))
+                gt_translation_values = gt_translation.squeeze().numpy(force=True).repeat(len(translation_tensors))
                 ax3.plot(range(gt_translation_values.shape[0]), gt_translation_values, linestyle='dashed',
                          label=f"GT {translation_axis_labels[i]}", alpha=0.5, color=colors[i])
 

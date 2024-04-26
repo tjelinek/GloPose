@@ -15,31 +15,23 @@ class Cameras(Enum):
 
 
 @dataclass
-class FrameResult:
-    flow_render_result: RenderedFlowResult = None
-    encoder_result: EncoderResult = None
-    renders: Any = None
+class CommonFrameData:
+    gt_rot_axis_angle: torch.Tensor = None
+    gt_translation: torch.Tensor = None
+
+    translations_during_optimization: List = field(default_factory=list)
+    quaternions_during_optimization: List = field(default_factory=list)
+
     frame_losses: Any = None
+    encoder_result: EncoderResult = None
+
+
+@dataclass
+class CameraSpecificFrameData:
+
+    flow_render_result: RenderedFlowResult = None
+    renders: Any = None
     per_pixel_flow_error: Any = None
-    src_pts_yx_front: torch.Tensor = None
-    dst_pts_yx_front: torch.Tensor = None
-    dst_pts_yx_front_gt: torch.Tensor = None
-    inliers_mask_front: torch.Tensor = None
-    observed_flow_segmentation_front: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    observed_flow_fg_occlusion_front: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    inliers_front: Dict = field(default_factory=dict)
-    outliers_front: Dict = field(default_factory=dict)
-    src_pts_yx_back: torch.Tensor = None
-    dst_pts_yx_back: torch.Tensor = None
-    dst_pts_yx_back_gt: torch.Tensor = None
-    inliers_mask_back: torch.Tensor = None
-    inliers_back: Dict = field(default_factory=dict)
-    outliers_back: Dict = field(default_factory=dict)
-    observed_flow_segmentation_back: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    observed_flow_fg_occlusion_back: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    triangulated_points_frontview: Dict = None
-    triangulated_points_backview: Dict = None
-    source_of_matching: bool = True
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
@@ -53,38 +45,21 @@ class FrameResult:
 class CrossFrameData:
 
     flow_render_result: RenderedFlowResult = None
-    encoder_result: EncoderResult = None
-    renders: Any = None
-    frame_losses: Any = None
-    per_pixel_flow_error: Any = None
-    src_pts_yx_front: torch.Tensor = None
-    dst_pts_yx_front: torch.Tensor = None
-    inliers_mask_front: torch.Tensor = None
-    observed_flow_segmentation_front: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    observed_flow_fg_occlusion_front: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    inliers_front: Dict = field(default_factory=dict)
-    outliers_front: Dict = field(default_factory=dict)
-    src_pts_yx_back: torch.Tensor = None
-    dst_pts_yx_back: torch.Tensor = None
-    inliers_mask_back: torch.Tensor = None
-    inliers_back: Dict = field(default_factory=dict)
-    outliers_back: Dict = field(default_factory=dict)
-    observed_flow_segmentation_back: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    observed_flow_fg_occlusion_back: Dict[Tuple, torch.Tensor] = field(default_factory=dict)
-    triangulated_points_frontview: Dict = None
-    triangulated_points_backview: Dict = None
-    source_of_matching: bool = True
+    gt_flow_result: RenderedFlowResult = None
 
+    src_pts_yx: torch.Tensor = None
+    dst_pts_yx: torch.Tensor = None
+    dst_pts_yx_gt: torch.Tensor = None
 
+    inliers_mask: torch.Tensor = None
+    observed_flow_segmentation: torch.Tensor = None
+    observed_visible_fg_points_mask: torch.Tensor = None
+    ransac_inliers: torch.Tensor = None
+    ransac_outliers: torch.Tensor = None
+    triangulated_points: Dict = None
+    inlier_ratio: float = None
 
-@dataclass
-class EssentialMatrixData:
-    camera_rotations = {}
-    camera_translations = {}
-    source_points = {}
-    target_points = {}
-    inlier_mask = {}
-    triangulated_points = {}
+    is_source_of_matching: bool = True
 
 
 @dataclass
@@ -95,7 +70,9 @@ class DataGraph:
     def add_new_frame(self, frame_idx: int) -> None:
         assert not self.G.has_node(frame_idx)
 
-        self.G.add_node(frame_idx, frame_observations={camera: FrameResult() for camera in self.used_cameras})
+        self.G.add_node(frame_idx,
+                        camera_specific_frame_data={camera: CameraSpecificFrameData() for camera in self.used_cameras},
+                        frame_data=CommonFrameData())
 
     def add_new_arc(self, source_frame_idx: int, target_frame_idx: int) -> None:
         assert not self.G.has_edge(source_frame_idx, target_frame_idx)
@@ -103,13 +80,19 @@ class DataGraph:
         self.G.add_edge(source_frame_idx, target_frame_idx,
                         edge_observations={camera: CrossFrameData() for camera in self.used_cameras})
 
-    def get_frame_observations(self, frame_idx: int, camera: Cameras = Cameras.FRONTVIEW) -> FrameResult:
+    def get_camera_specific_frame_data(self, frame_idx: int, camera: Cameras = Cameras.FRONTVIEW) \
+            -> CameraSpecificFrameData:
         assert self.G.has_node(frame_idx)
 
-        return self.G.nodes[frame_idx]['frame_observations'][camera]
+        return self.G.nodes[frame_idx]['camera_specific_frame_data'][camera]
+
+    def get_frame_data(self, frame_idx: int) -> CommonFrameData:
+        assert self.G.has_node(frame_idx)
+
+        return self.G.nodes[frame_idx]['frame_data']
 
     def get_edge_observations(self, source_frame_idx: int, target_frame_idx,
                               camera: Cameras = Cameras.FRONTVIEW) -> CrossFrameData:
         assert self.G.has_edge(source_frame_idx, target_frame_idx)
 
-        return self.G.get_edge_data(source_frame_idx, target_frame_idx)['frame_observations'][camera]
+        return self.G.get_edge_data(source_frame_idx, target_frame_idx)['edge_observations'][camera]
