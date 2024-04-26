@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List
 
 import networkx as nx
 import torch
@@ -54,6 +54,7 @@ class CrossFrameData:
     inliers_mask: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_visible_fg_points_mask: torch.Tensor = None
+    gt_visible_fg_points_mask: torch.Tensor = None
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
     triangulated_points: Dict = None
