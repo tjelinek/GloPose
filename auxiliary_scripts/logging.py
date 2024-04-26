@@ -363,8 +363,6 @@ class WriteResults:
                       renderer_backview, best_model, observations: FrameObservation,
                       observations_backview: FrameObservation, gt_rotations, gt_translations):
 
-        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
-
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
@@ -372,15 +370,17 @@ class WriteResults:
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
                                                observations_backview.observed_image[:, [-1]].cpu())
 
-        self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
-                                        new_flow_arcs=new_flow_arcs)
+        if frame_i % self.tracking_config.write_results_frequency == 0:
+            self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
+                                            new_flow_arcs=new_flow_arcs)
 
-        self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs, None)
+            self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs, None)
 
-        # FLOW BACKVIEW ERROR VISUALIZATION
-        self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs, self.rendering,
-                                          renderer_backview)
+            self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs,
+                                              self.rendering, renderer_backview)
+            self.visualize_rotations_per_epoch(frame_i)
 
+        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
 
@@ -390,8 +390,6 @@ class WriteResults:
         self.visualize_logged_metrics()
 
         self.analyze_ransac_matchings(frame_i)
-
-        self.visualize_rotations_per_epoch(frame_i)
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
@@ -733,6 +731,7 @@ class WriteResults:
     def visualize_outliers_distribution(self, new_flow_arc, gt_flow):
 
         new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
+        gt_flow = new_flow_arc_data.gt_flow_result.theoretical_flow
 
         inlier_list = torch.nonzero(new_flow_arc_data.inliers_mask)[:, 0]
         outlier_list = torch.nonzero(~new_flow_arc_data.inliers_mask)[:, 0]

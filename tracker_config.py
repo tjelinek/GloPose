@@ -15,6 +15,7 @@ class TrackerConfig:
     features_channels = 64
     verbose: bool = True
     write_results: bool = True
+    write_results_frequency: int = 5
     write_intermediate: bool = False
     visualize_loss_landscape: bool = False
     loss_landscape_visualization_frequency: int = 18
