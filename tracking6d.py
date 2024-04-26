@@ -33,7 +33,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
+from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, relative_scale_recovery
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
@@ -852,6 +852,9 @@ class Tracking6D:
 
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
         self.encoder.quaternion_offsets[:, flow_target] = q_total
+        # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
+        #                                                         q_total[None])
+
         self.data_graph.get_edge_observations(flow_source, flow_target,
                                               Cameras.BACKVIEW).is_source_of_matching = True
         self.data_graph.get_edge_observations(flow_source, flow_target,
@@ -870,9 +873,17 @@ class Tracking6D:
             outlier_points_list_backview[flow_arc] = outlier_points_backview
             triangulated_points_backview[flow_arc] = triangulation_backview
 
-            if inlier_ratio_frontview < inlier_ratio_backview:
-                self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
+            if False and inlier_ratio_frontview < inlier_ratio_backview:
+                # self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
+                # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
+                #                                                         q_total_backview[None])
                 self.encoder.quaternion_offsets[:, flow_target] = q_total_backview
+
+                self.data_graph.get_edge_observations(flow_source, flow_target,
+                                                      Cameras.BACKVIEW).is_source_of_matching = True
+                self.data_graph.get_edge_observations(flow_source, flow_target,
+                                                      Cameras.FRONTVIEW).is_source_of_matching = False
+                print(f"-----------------BACKVIEW MATCHING FRAME {flow_target}")
 
         stacked_flow_observation = flow_observations.stack()
         stacked_frame_observation = observations.stack()
@@ -1323,9 +1334,9 @@ class Tracking6D:
             encoder_result, loss_result, renders, rendered_flow_result = infer_result
             loss_result: LossResult = loss_result
 
-            if epoch % self.config.training_print_status_frequency == 0:
-                self.log_inference_results(self.best_model["value"], epoch, frame_losses,
-                                           joint_loss, losses, encoder_result)
+            # if epoch % self.config.training_print_status_frequency == 0:
+            #     self.log_inference_results(self.best_model["value"], epoch, frame_losses,
+            #                                joint_loss, losses, encoder_result)
 
             joint_loss = loss_result.loss.mean()
             self.rgb_optimizer.zero_grad()

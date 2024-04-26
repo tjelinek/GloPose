@@ -269,8 +269,8 @@ def normalize_vertices(vertices: torch.Tensor):
     return vertices
 
 
-def get_foreground_and_segment_mask(observed_occlusion, observed_segmentation, occlusion_threshold,
-                                    segmentation_threshold):
+def get_foreground_and_segment_mask(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
+                                    occlusion_threshold: float, segmentation_threshold: float):
     not_occluded_binary_mask = (observed_occlusion <= occlusion_threshold)
     segmentation_binary_mask = (observed_segmentation > segmentation_threshold)
     not_occluded_foreground_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
