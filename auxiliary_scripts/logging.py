@@ -891,7 +891,9 @@ class WriteResults:
                                                                              target_frame)
 
         threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
-        inlier_indices = get_correct_correspondences_mask(gt_flow_observation_frontview,
+
+        gt_flow_frontview = flow_unit_coords_to_image_coords(gt_flow_observation_frontview.theoretical_flow)
+        inlier_indices = get_correct_correspondences_mask(gt_flow_frontview,
                                                           src_pts_xy_frontview[:, [1, 0]],
                                                           dst_pts_xy_frontview[:, [1, 0]],
                                                           threshold)
