@@ -919,16 +919,23 @@ class Tracking6D:
         W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
         renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
-        gt_flow_observation = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+        gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+
+        camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
+        arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
+
+        flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
+        arc_data.observed_flow = flow_observation_current_frame.send_to_device('cpu')
 
         if self.config.ransac_use_gt_occlusions_and_segmentation:
             occlusions = gt_flow_observation.rendered_flow_occlusion
             segmentation = gt_flow_observation.rendered_flow_segmentation
-            observed_flow = gt_flow_observation.theoretical_flow
         else:
-            occlusions = flow_observations.observed_flow_occlusion[:, [flow_arc_idx]]
-            segmentation = flow_observations.observed_flow_segmentation[:, [flow_arc_idx]]
-            observed_flow = flow_observations.observed_flow[:, [flow_arc_idx]]
+            occlusions = flow_observation_current_frame.observed_flow_occlusion
+            segmentation = flow_observation_current_frame.observed_flow_segmentation
+
+        optical_flow = flow_unit_coords_to_image_coords(flow_observation_current_frame.observed_flow)
+
         segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
 
         src_pts_yx, observed_visible_fg_points_mask = (
@@ -940,18 +947,17 @@ class Tracking6D:
             gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
             self.config.occlusion_coef_threshold, self.config.segmentation_mask_threshold))
 
+        dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
+        gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
+        dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
+
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
         else:
             confidences = None
 
-        optical_flow = flow_unit_coords_to_image_coords(observed_flow)
-        dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
-        gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
-        dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
-
         if self.config.ransac_feed_only_inlier_flow:
-            ok_pts_indices = get_correct_correspondences_mask(gt_flow_observation, src_pts_yx, dst_pts_yx,
+            ok_pts_indices = get_correct_correspondences_mask(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
                                                               self.config.ransac_feed_only_inlier_flow_epe_threshold)
             dst_pts_yx = dst_pts_yx[ok_pts_indices]
             src_pts_yx = src_pts_yx[ok_pts_indices]
@@ -1018,15 +1024,19 @@ class Tracking6D:
 
     def log_ransac_result(self, flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
                           gt_visible_fg_points_mask, gt_flow: RenderedFlowResult, inlier_mask, src_pts_yx, dst_pts_yx,
-                          dst_pts_yx_gt, inlier_src_pts, outlier_src_pts, triangulated_points, backview, inlier_ratio):
+                          dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points, backview,
+                          inlier_ratio):
 
         gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow.theoretical_flow.detach().cpu(),
                                          rendered_flow_segmentation=gt_flow.rendered_flow_segmentation.detach().cpu(),
                                          rendered_flow_occlusion=gt_flow.rendered_flow_occlusion.detach().cpu())
 
         camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
-
         arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
+
+        arc_data.src_pts_yx = src_pts_yx.cpu()
+        arc_data.dst_pts_yx = dst_pts_yx.cpu()
+        arc_data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
 
         arc_data.gt_flow_result = gt_flow_cpu
         arc_data.observed_flow_segmentation = segmentation_binary_mask.cpu()
@@ -1035,9 +1045,6 @@ class Tracking6D:
         arc_data.ransac_inliers = inlier_src_pts.cpu()
         arc_data.ransac_outliers = outlier_src_pts.cpu()
         arc_data.triangulated_points = triangulated_points.cpu()
-        arc_data.src_pts_yx = src_pts_yx.cpu()
-        arc_data.dst_pts_yx = dst_pts_yx.cpu()
-        arc_data.dst_pts_yx_gt = dst_pts_yx_gt.cpu()
         arc_data.inliers_mask = inlier_mask.cpu()
         arc_data.inlier_ratio = inlier_ratio
 

@@ -506,30 +506,41 @@ class WriteResults:
         self.all_proj.write(rendered_silhouette)
 
     def measure_ransac_stats(self, frame_i, view: str = 'front'):
-        correct_threshold = 2.0
+        correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
             flow_arc = (0, i)
 
             camera = Cameras.FRONTVIEW if view == 'front' else Cameras.BACKVIEW
-            processed_arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
+            arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
-            dst_pts_yx = processed_arc_data.dst_pts_yx
-            pred_inlier_ratio = processed_arc_data.inlier_ratio
-            inlier_mask = processed_arc_data.inliers_mask
-            observed_non_occluded_fg_points = processed_arc_data.observed_visible_fg_points_mask
+            pred_inlier_ratio = arc_data.inlier_ratio
+            inlier_mask = arc_data.inliers_mask
 
-            dst_pts_yx_gt_flow = processed_arc_data.dst_pts_yx_gt
+            observed_flow_image = flow_unit_coords_to_image_coords(arc_data.observed_flow.observed_flow)
+            gt_flow_image = flow_unit_coords_to_image_coords(arc_data.gt_flow_result.theoretical_flow)
 
-            correct_flows = (torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, axis=-1) < correct_threshold)
+            src_pts_visible_yx = arc_data.observed_visible_fg_points_mask.nonzero()
+            dst_pts_visible_yx = source_coords_to_target_coords(src_pts_visible_yx.permute(1, 0),
+                                                                observed_flow_image).permute(1, 0)
+            dst_pts_visible_yx_gt = source_coords_to_target_coords(src_pts_visible_yx.permute(1, 0),
+                                                                   gt_flow_image).permute(1, 0)
 
-            fg_points_num = float(processed_arc_data.observed_flow_segmentation.sum())
-            pred_visible_num = float(observed_non_occluded_fg_points.sum())
+            correct_flows_epe = torch.linalg.norm(dst_pts_visible_yx - dst_pts_visible_yx_gt, dim=1)
+
+            correct_flows = (correct_flows_epe < correct_threshold)
+
+            inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
+                                               arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
+            correct_inliers = inliers_errors < correct_threshold
+
+            fg_points_num = float(arc_data.observed_flow_segmentation.sum())
+            pred_visible_num = float(arc_data.observed_visible_fg_points_mask.sum())
             correct_flows_num = float(correct_flows.sum())
             predicted_inliers_num = float(inlier_mask.sum())
-            correct_inliers_num = float(correct_flows[torch.nonzero(inlier_mask)].sum())
-            actually_visible_num = float(processed_arc_data.observed_visible_fg_points_mask.sum())
+            correct_inliers_num = float(correct_inliers.sum())
+            actually_visible_num = float(arc_data.gt_visible_fg_points_mask.sum())
 
             # results['foreground_points'].append(fg_points_num / fg_points_num)
             results['visible'].append(actually_visible_num / fg_points_num)
@@ -537,7 +548,7 @@ class WriteResults:
             results['correctly_predicted_flows'].append(correct_flows_num / fg_points_num)
             results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
             results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
-            results['model_obtained_from'].append(not processed_arc_data.is_source_of_matching)
+            results['model_obtained_from'].append(not arc_data.is_source_of_matching)
             results['ransac_inlier_ratio'].append(pred_inlier_ratio)
 
         return results
