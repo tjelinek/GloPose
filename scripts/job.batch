@@ -51,5 +51,5 @@ echo "Log dir: ${output_folder}/${experiment}.log"
 echo "Output folder: ${output_folder}"
 echo "Experiment: ${experiment}"
 
-ml timm/0.9.12-foss-2023a-CUDA-12.1.1 kornia/0.7.2-foss-2023a-CUDA-12.1.1 PyTorch3D/0.7.5-foss-2023a-CUDA-12.1.1 OpenCV/4.8.1-foss-2023a-CUDA-12.1.1-contrib scikit-image/0.22.0-foss-2023a kaolin/0.15.0-foss-2023a-CUDA-12.1.1 pycolmap/0.6.1-foss-2023a-CUDA-12.1.1 pyceres/2.1-foss-2023a-CUDA-12.1.1 tensorboard/2.15.1-foss-2023a scikit-image/0.22.0-foss-2023a rerun/0.14.1-foss-2023a wandb/0.16.1-GCC-12.3.0
+ml timm/0.9.12-foss-2023a-CUDA-12.1.1 kornia/0.7.2-foss-2023a-CUDA-12.1.1 PyTorch3D/0.7.5-foss-2023a-CUDA-12.1.1 OpenCV/4.8.1-foss-2023a-CUDA-12.1.1-contrib scikit-image/0.22.0-foss-2023a kaolin/0.15.0-foss-2023a-CUDA-12.1.1 pycolmap/0.6.1-foss-2023a-CUDA-12.1.1 pyceres/2.1-foss-2023a-CUDA-12.1.1 tensorboard/2.15.1-foss-2023a scikit-image/0.22.0-foss-2023a rerun/0.14.1-foss-2023a wandb/0.16.1-GCC-12.3.0 Seaborn/0.13.0-foss-2023a
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" >> "${output_folder}/${experiment}.log" 2>&1

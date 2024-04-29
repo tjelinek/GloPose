@@ -23,7 +23,7 @@ class TrackerConfig:
 
     # Frame and keyframe settings
     input_frames: int = 0
-    max_keyframes: int = 8
+    max_keyframes: int = 2
     all_frames_keyframes: bool = False
     fmo_steps: int = 1
 
@@ -35,7 +35,7 @@ class TrackerConfig:
 
     # Camera settings
     camera_position: Tuple[float] = (0, 0, 5.0)
-    max_width: int = 500
+    max_width: int = 250
     image_downsample: float = 1.0
 
     # Learning rates
@@ -47,9 +47,9 @@ class TrackerConfig:
     tran_init: float = 0.0
     rot_init: Tuple[float] = (0, 0, 0)
     inc_step: int = 5
-    iterations: int = 500
+    iterations: int = 100
     stop_value: float = 0.05
-    rgb_iters: int = 200
+    rgb_iters: int = 10
     project_coin: bool = False
     connect_frames: bool = False
     accumulate: bool = False
@@ -87,7 +87,9 @@ class TrackerConfig:
     optimize_shape: bool = True
 
     gt_texture_path: str = None
-    optimize_texture: bool = True
+    optimize_texture: bool = False
+    # Either 'sgd' for stochastic gradient descent learning or 'sticking' for using the rendered texture uv coordinates
+    texture_estimation: str = 'sgd'
 
     gt_track_path: str = None
     optimize_pose: bool = True
@@ -108,7 +110,7 @@ class TrackerConfig:
     levenberg_marquardt_max_ter = 15
     use_lr_scheduler = False
     lr_scheduler_patience = 5
-    run_main_optimization_loop: bool = True
+    run_main_optimization_loop: bool = False
 
     # Optical flow settings
     add_flow_arcs_strategy: str = None  # One of 'all-previous', 'single-previous' and 'absolute'
@@ -120,9 +122,10 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
 
     # RANSAC settings
-    essential_matrix_algorithm: str = 'pygcransac'
-    ransac_feed_only_inlier_flow: bool = False
-    ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
+    essential_matrix_algorithm: str = None
+    ransac_feed_only_inlier_flow: bool = True
+    ransac_feed_only_inlier_flow_epe_threshold: float = 0.5
+    ransac_use_gt_occlusions_and_segmentation: bool = True
     ransac_feed_gt_flow: bool = False
     ransac_feed_gt_flow_percentage: float = 1.0
     ransac_distant_pixels_sample_size: int = 1000
