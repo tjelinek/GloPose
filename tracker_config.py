@@ -123,12 +123,14 @@ class TrackerConfig:
     essential_matrix_algorithm: str = 'pygcransac'
     ransac_feed_only_inlier_flow: bool = False
     ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
-    ransac_feed_gt_flow_percentage: float = 0
-    ransac_distant_pixels_sampling: bool = False
+    ransac_feed_gt_flow: bool = False
+    ransac_feed_gt_flow_percentage: float = 1.0
     ransac_distant_pixels_sample_size: int = 1000
     ransac_confidences_from_occlusion: bool = False
+    ransac_distant_pixels_sampling: bool = False
     inlier_pose_method: str = '8point'
     ransac_outlier_threshold: float = 0.01
+    ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
 
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
