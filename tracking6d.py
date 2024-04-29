@@ -966,13 +966,13 @@ class Tracking6D:
             if self.config.ransac_confidences_from_occlusion:
                 confidences = confidences[ok_pts_indices]
 
-        if self.config.ransac_feed_gt_flow:
+        if self.config.replace_mft_flow_with_gt_flow:
             n_points = src_pts_yx.shape[0]
             n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
             indices_permutation = torch.randperm(n_points)
-            indices_to_be_injected = indices_permutation[:n_points_injected]
+            indices_to_be_replaced = indices_permutation[:n_points_injected]
 
-            dst_pts_yx[indices_to_be_injected] = dst_pts_yx_gt_flow[indices_to_be_injected]
+            dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_flow[indices_to_be_replaced]
 
         if self.config.ransac_distant_pixels_sampling:
             random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
