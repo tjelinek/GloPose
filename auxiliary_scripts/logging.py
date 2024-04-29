@@ -532,6 +532,9 @@ class WriteResults:
 
             correct_flows = (correct_flows_epe < correct_threshold)
 
+            dst_pts_pred_visible_yx_small_errors = arc_data.dst_pts_yx
+            dst_pts_pred_visible_yx_gt_small_errors = arc_data.dst_pts_yx_gt
+
             inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
                                                arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
             correct_inliers = inliers_errors < correct_threshold
@@ -551,20 +554,22 @@ class WriteResults:
             results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
             results['model_obtained_from'].append(not arc_data.is_source_of_matching)
             results['ransac_inlier_ratio'].append(pred_inlier_ratio)
-            results['mft_flow_gt_flow_difference'].append(dst_pts_pred_visible_yx - dst_pts_pred_visible_yx_gt)
+            results['mft_flow_gt_flow_difference'].append(dst_pts_pred_visible_yx_small_errors -
+                                                          dst_pts_pred_visible_yx_gt_small_errors)
 
         return results
 
     def analyze_ransac_matchings(self, frame_i):
 
-        if (frame_i >= 10 and frame_i % 10 == 0) or frame_i >= self.sequence_length - 1:
+        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.sequence_length - 1:
             front_results = self.measure_ransac_stats(frame_i, 'front')
             back_results = self.measure_ransac_stats(frame_i, 'back')
 
             mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
             mft_flow_gt_flow_difference_back = back_results.pop('mft_flow_gt_flow_difference')
 
-            self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
+            if self.tracking_config.plot_mft_flow_kde_error_plot:
+                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
             fig = plt.figure(figsize=(20, 10))
             gs = gridspec.GridSpec(2, 3, figure=fig)
@@ -639,38 +644,29 @@ class WriteResults:
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
 
-        # Create a figure with two subplots (axes), assuming we want to plot vertically
-        nrows = len(mft_flow_gt_flow_differences) // 5
-        fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(10, 10*nrows))
+        frame = len(mft_flow_gt_flow_differences) - 1
 
-        # Iterate over each 5th element in the list
-        for i, ax in enumerate(axes):
-            frame = 5 * i + 1
-            gt_rotation: np.ndarray = (torch.rad2deg(self.data_graph.get_frame_data(frame).gt_rot_axis_angle)[0].
-                                       numpy(force=True))
-            gt_rotation = np.round(gt_rotation, 2)
+        if frame + 1 % self.tracking_config.mft_flow_kde_error_plot_frequency != 0:
+            return
 
-            data_tensor: torch.Tensor = mft_flow_gt_flow_differences[frame].numpy(force=True)
+        fig, ax = plt.subplots(figsize=(10, 10))
 
-            # fig.text(0.5, 0.00 if i == 0 else 0.00, f'Distribution of MFT Errors, Frame {frame}'
-            #                                         f'(gt rotation {gt_rotation})',
-            #          ha='center', va='top', fontsize=14, transform=fig.transFigure)
+        gt_rotation: np.ndarray = (torch.rad2deg(self.data_graph.get_frame_data(frame).gt_rot_axis_angle)[0].
+                                   numpy(force=True))
+        gt_rotation = np.round(gt_rotation, 2)
 
-            # Y differences
-            sns.histplot(data_tensor[:, 0], bins=30, kde=True, ax=ax[0], color='blue')
+        data_tensor: torch.Tensor = mft_flow_gt_flow_differences[frame].numpy(force=True)
 
-            ax[0].set_title(f'Distribution of MFT Errors,\nFrame {frame} (gt rotation [X, Y, Z] {gt_rotation})')
-            ax[0].set_xlabel('Y Axis Error [px]')
-            ax[0].set_ylabel('Frequency')
-
-            # X differences
-            sns.histplot(data_tensor[:, 1], bins=30, kde=True, ax=ax[1], color='green')
-            ax[1].set_title(f'Distribution of MFT Errors,\nFrame {frame} (gt rotation [X, Y, Z] {frame * 5}) ')
-            ax[1].set_xlabel('X Axis Error [px]')
-            ax[1].set_ylabel('Frequency')
+        sns.kdeplot(
+            x=data_tensor[:, 1], y=data_tensor[:, 0],
+            thresh=0, levels=20, fill=False, cmap="mako", ax=ax
+        )
+        ax.set_xlabel("X Axis Error [px]")
+        ax.set_ylabel("Y Axis Error [px]")
+        ax.set_title(f'Distribution of MFT Errors,\nFrame {frame} (gt rotation [X, Y, Z] {gt_rotation})')
 
         # Adjust layout for better fit and display the plot
-        plt.savefig(self.ransac_path / 'inliers_errors.svg')
+        plt.savefig(self.ransac_path / f'inliers_errors_frame_{frame}.svg')
         plt.close()
 
     def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, renderer,

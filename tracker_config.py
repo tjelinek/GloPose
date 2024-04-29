@@ -14,12 +14,15 @@ class TrackerConfig:
     features: str = 'deep'
     features_channels = 64
     verbose: bool = True
+
+    # Visualization
     write_results: bool = True
     write_results_frequency: int = 5
-    write_intermediate: bool = False
     visualize_loss_landscape: bool = False
     loss_landscape_visualization_frequency: int = 18
     training_print_status_frequency = 20
+    plot_mft_flow_kde_error_plot: bool = True
+    mft_flow_kde_error_plot_frequency: int = 10
 
     # Frame and keyframe settings
     input_frames: int = 0
