@@ -36,27 +36,6 @@ def erode_segment_mask2(erosion_iterations, segment_masks):
     return eroded_segment_masks
 
 
-def erode_segment_mask(erosion_iterations, segment_masks):
-    """
-
-    :param erosion_iterations: int - iterations of erosion by 3x3 kernel
-    :param segment_masks: Tensor of shape (N, 1, H, W)
-    :return: Eroded segment mask of the same shape
-    """
-
-    eroded_segment_masks = segment_masks.clone()
-    conv_kernel = torch.Tensor([[0, 1, 0],
-                                [1, 1, 1],
-                                [0, 1, 0]]).to(torch.float64)
-    conv_kernel = conv_kernel[None][None].to(segment_masks.device)
-
-    for _ in range(erosion_iterations):
-        eroded_segment_masks = torch.nn.functional.conv2d(eroded_segment_masks, weight=conv_kernel, padding=(1, 1))
-        # The sum of the conv weights is 5
-        eroded_segment_masks = (eroded_segment_masks >= 5).to(torch.float64) * 1.0
-    return eroded_segment_masks
-
-
 def write_video(array4d, path, fps=6):
     """
 
