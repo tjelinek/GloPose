@@ -362,8 +362,8 @@ class WriteResults:
     @torch.no_grad()
     def write_results(self, bounding_box, our_losses, frame_i, tex, new_flow_arcs,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
-                      renderer_backview, best_model, observations: FrameObservation,
-                      observations_backview: FrameObservation, gt_rotations, gt_translations):
+                      best_model, observations: FrameObservation, observations_backview: FrameObservation,
+                      gt_rotations, gt_translations):
 
         observed_images = observations.observed_image
         observed_image_features = observations.observed_image_features
@@ -378,8 +378,7 @@ class WriteResults:
 
             self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs, None)
 
-            self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs,
-                                              self.rendering, renderer_backview)
+            self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
@@ -669,8 +668,7 @@ class WriteResults:
         plt.savefig(self.ransac_path / f'inliers_errors_frame_{frame}.svg')
         plt.close()
 
-    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs, renderer,
-                                     renderer_backview):
+    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs):
 
         for new_flow_arc in new_flow_arcs:
 
@@ -685,9 +683,13 @@ class WriteResults:
                 continue
                 # TODO not the most elegant thing to do
 
-            rendered_flow_res = renderer.render_flow_for_frame(self.gt_encoder, flow_arc_source, flow_arc_target)
-            rendered_flow_res_back = renderer_backview.render_flow_for_frame(self.gt_encoder, flow_arc_source,
-                                                                             flow_arc_target)
+            arc_observation_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                          Cameras.FRONTVIEW)
+            arc_observation_back = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                         Cameras.BACKVIEW)
+
+            rendered_flow_res = arc_observation_front.gt_flow_result
+            rendered_flow_res_back = arc_observation_back.gt_flow_result
 
             rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow)
             rend_flow_np = rend_flow.numpy(force=True)

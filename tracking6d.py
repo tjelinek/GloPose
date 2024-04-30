@@ -529,7 +529,7 @@ class Tracking6D:
                                                  tex=tex, new_flow_arcs=new_flow_arcs,
                                                  active_keyframes=self.active_keyframes,
                                                  active_keyframes_backview=self.active_keyframes_backview,
-                                                 renderer_backview=self.rendering_backview, best_model=self.best_model,
+                                                 best_model=self.best_model,
                                                  observations=all_frame_observations,
                                                  observations_backview=all_frame_observations_backview,
                                                  gt_rotations=self.gt_rotations, gt_translations=self.gt_translations)
