@@ -7,7 +7,7 @@ import math
 import numpy as np
 import torch
 import yaml
-from kornia.morphology import erosion
+from kornia.morphology import erosion, dilation
 from skimage.measure import label, regionprops
 
 from main_settings import tmp_folder
@@ -34,6 +34,22 @@ def erode_segment_mask2(erosion_iterations, segment_masks):
     for _ in range(erosion_iterations):
         eroded_segment_masks = erosion(eroded_segment_masks, kernel)
     return eroded_segment_masks
+
+
+def dilate_mask(dilation_iterations, mask_tensor):
+    """
+
+    :param dilation_iterations: int - iterations of erosion by 3x3 kernel
+    :param mask_tensor: Tensor of shape (1, N, 1, H, W)
+    :return: Eroded segment mask of the same shape
+    """
+
+    kernel = torch.ones(3, 3).to(mask_tensor.device)
+    dilated_segment_masks = mask_tensor.clone()[0]
+
+    for _ in range(dilation_iterations):
+        dilated_segment_masks = dilation(dilated_segment_masks, kernel)
+    return dilated_segment_masks[None]
 
 
 def write_video(array4d, path, fps=6):
