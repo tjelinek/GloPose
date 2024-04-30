@@ -220,7 +220,7 @@ def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarra
 def get_correct_correspondences_mask(gt_flow, src_pts_yx, dst_pts_yx, epe_threshold):
     dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
     dst_pts_epe = torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, dim=1)
-    ok_pts_indices = torch.nonzero(dst_pts_epe < float(epe_threshold)).squeeze()
+    ok_pts_indices = torch.nonzero(dst_pts_epe < float(epe_threshold)).squeeze(-1)
     return ok_pts_indices
 
 
