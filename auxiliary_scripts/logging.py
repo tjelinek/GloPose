@@ -1095,6 +1095,17 @@ class WriteResults:
         flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
             else self.tracking_config.long_flow_model
 
+        min_data = min(rotations.min(), gt_rotations.min())
+        max_data = max(gt_rotations.max(), gt_rotations.max())
+
+        yticks_frequency = 20 if (max_data - min_data) / 20 <= 20 else 30
+
+        lower_bound = yticks_frequency * np.floor(min_data / yticks_frequency)
+        upper_bound = yticks_frequency * np.ceil(max_data / yticks_frequency)
+
+        yticks = np.arange(lower_bound, upper_bound + yticks_frequency, yticks_frequency)
+        rotation_ax.set_yticks(yticks)
+
         plot_motion(rotation_ax, frame_indices, rotations, gt_rotations,
                     ['X-axis Rotation', 'Y-axis Rotation', 'Z-axis Rotation'],
                     f'Rotation per Frame {flow_source_text}', 'Rotation')
