@@ -126,6 +126,7 @@ class TrackerConfig:
 
     # RANSAC settings
     essential_matrix_algorithm: str = None
+    ransac_erode_segmentation_dilate_occlusion: bool = True
     ransac_feed_only_inlier_flow: bool = True
     ransac_feed_only_inlier_flow_epe_threshold: float = 0.5
     ransac_use_gt_occlusions_and_segmentation: bool = True

@@ -40,7 +40,7 @@ from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGenerati
                            BaseTracker)
 from tracker_config import TrackerConfig
 from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, \
-    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix, get_foreground_and_segment_mask
+    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask
 
 
 class InferenceResult(NamedTuple):
@@ -925,6 +925,20 @@ class Tracking6D:
         arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
+
+        if self.config.ransac_erode_segmentation_dilate_occlusion and flow_arc[1] > 10:
+            eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
+            eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
+
+            flow_observation_current_frame.observed_flow_segmentation = eroded_observed_seg[None]
+            gt_flow_observation = gt_flow_observation._replace(rendered_flow_segmentation=eroded_gt_seg[None])
+
+            dilated_gt_occ = dilate_mask(1, gt_flow_observation.rendered_flow_occlusion)
+            dilated_observed_occ = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
+
+            gt_flow_observation = gt_flow_observation._replace(rendered_flow_occlusion=dilated_gt_occ)
+            flow_observation_current_frame.observed_flow_occlusion = dilated_observed_occ
+
         arc_data.observed_flow = flow_observation_current_frame.send_to_device('cpu')
 
         if self.config.ransac_use_gt_occlusions_and_segmentation:
@@ -1013,7 +1027,8 @@ class Tracking6D:
         inlier_src_pts = src_pts_yx[common_inlier_indices]
         outlier_src_pts = src_pts_yx[outlier_indices]
 
-        inlier_ratio = len(inlier_src_pts) / (len(inlier_src_pts) + len(outlier_src_pts))
+        # max(1, x) avoids division by zero
+        inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
         self.log_ransac_result(flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
                                gt_visible_fg_points_mask, gt_flow_observation, inlier_mask, src_pts_yx, dst_pts_yx,
