@@ -22,9 +22,12 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     K1_np = K1.numpy(force=True)
     K2_np = K2.numpy(force=True)
 
+    N_matches = src_pts_xy.shape[0]
+    min_matches_for_ransac = 5
+
     E_method = ransac_config.essential_matrix_algorithm
     ransac_confidence = ransac_config.ransac_confidence
-    if E_method == 'pygcransac':
+    if E_method == 'pygcransac' and N_matches >= min_matches_for_ransac:
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
 
         if confidences is not None:
@@ -35,7 +38,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
             E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
                                                      ransac_confidence, threshold=0.1, min_iters=10000)
 
-    elif E_method is not None:
+    elif E_method is not None and N_matches >= min_matches_for_ransac:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
                    '8point': cv2.USAC_FM_8PTS}
@@ -52,20 +55,25 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
 
     mask_tensor = torch.from_numpy(mask).cuda()
 
-    if ransac_config.inlier_pose_method == '8point':
+    if N_matches >= 8:
+        if ransac_config.inlier_pose_method == '8point':
 
-        src_pts_yx_inliers = src_pts_xy[mask_tensor]
-        dst_pts_yx_inliers = dst_pts_xy[mask_tensor]
+            src_pts_yx_inliers = src_pts_xy[mask_tensor]
+            dst_pts_yx_inliers = dst_pts_xy[mask_tensor]
 
-        F_mat = kornia.geometry.epipolar.find_fundamental(src_pts_yx_inliers[None], dst_pts_yx_inliers[None],
-                                                          method='8POINT')
-        E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
-        E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
+            F_mat = kornia.geometry.epipolar.find_fundamental(src_pts_yx_inliers[None], dst_pts_yx_inliers[None],
+                                                              method='8POINT')
+            E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
+            E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
 
-    elif ransac_config.inlier_pose_method == 'bundle_adjustment':
-        raise NotImplementedError("This is not implemented yet")
+        elif ransac_config.inlier_pose_method == 'bundle_adjustment':
+            raise NotImplementedError("This is not implemented yet")
+        else:
+            assert E_method is not None  # At least one pose estimation method must run.
     else:
-        assert E_method is not None  # At least one pose estimation method must run.
+        # TODO think what to do with this - this is when we have 0 inliers, so output R=(id), t=(1, 0, 0)
+        E = np.asarray([[0, 0, 0], [0, 0, -1], [0, 1, 0]]).astype(np.float32)
+        mask_tensor = torch.zeros_like(mask_tensor, dtype=torch.bool)
 
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
 
