@@ -72,8 +72,6 @@ class RenderingKaolin(nn.Module):
 
         self.register_buffer('camera_intrinsics', camera_intrinsics)
         self.set_faces(faces)
-        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).cuda()
-        self.register_buffer('kernel', kernel)
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
@@ -117,13 +115,9 @@ class RenderingKaolin(nn.Module):
             lighting[dibr_result.red_index[..., None][:, :, :, [0, 0, 0]] < 0] = 1
             ren_features = ren_features * lighting
         rendering_rgb = ren_features.permute(0, 3, 1, 2)
-        if self.config.erode_renderer_mask > 0:
-            ren_mask = erosion(dibr_result.ren_mask[:, None], self.kernel)
-        else:
-            ren_mask = torch.ones(batch_size, 1, self.height, self.width)
 
         renderings = rendering_rgb.unsqueeze(0)
-        segmentations = ren_mask.unsqueeze(0)
+        segmentations = dibr_result.ren_mask.unsqueeze(1).unsqueeze(0)
         rendered_object_camera_coords = dibr_result.ren_mesh_vertices_camera_coords.permute(0, 3, 1, 2).unsqueeze(0)
         rendered_object_world_coords = dibr_result.ren_mesh_vertices_world_coords.permute(0, 3, 1, 2).unsqueeze(0)
         rendered_object_face_normals_camera_coords = dibr_result.ren_face_normals.permute(0, 3, 1, 2).unsqueeze(0)
@@ -452,8 +446,6 @@ class RenderingKaolin(nn.Module):
                                 ren_face_normals_features)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
-        kernel = torch.ones(self.config.erode_renderer_mask, self.config.erode_renderer_mask).to(
-            translation.device)
         tex = torch.zeros(1, 3, self.config.texture_size, self.config.texture_size)
         cnt = torch.zeros(self.config.texture_size, self.config.texture_size)
         for frmi in range(quaternion.shape[1]):

@@ -79,7 +79,6 @@ class TrackerConfig:
     sigmainv: float = 7000
     factor: float = 1
     mask_iou_th: float = 0
-    erode_renderer_mask: int = 0
     rotation_divide: int = 8
     sequence: str = None
     max_rendering_batch_size: int = 4
