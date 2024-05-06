@@ -12,7 +12,7 @@ def get_config() -> TrackerConfig:
     cfg.run_main_optimization_loop = False
     cfg.preinitialization_method = 'essential_matrix_decomposition'
     cfg.gt_flow_source = 'FlowNetwork'
-    cfg.essential_matrix_algorithm = 'pygcransac'
+    cfg.ransac_essential_matrix_algorithm = 'pygcransac'
 
     cfg.ransac_feed_only_inlier_flow = True
     cfg.ransac_feed_only_inlier_flow_epe_threshold = 0.01
