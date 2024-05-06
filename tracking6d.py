@@ -950,7 +950,9 @@ class Tracking6D:
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observation_current_frame.observed_flow)
 
-        segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
+        observed_segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
+        gt_segmentation_binary_mask = (gt_flow_observation.rendered_flow_segmentation >
+                                       float(self.config.segmentation_mask_threshold))
 
         src_pts_yx, observed_visible_fg_points_mask = (
             get_not_occluded_foreground_points(occlusions, segmentation,
@@ -1051,7 +1053,8 @@ class Tracking6D:
         data.dst_pts_yx = dst_pts_yx.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
         data.gt_flow_result = gt_flow_cpu
-        data.observed_flow_segmentation = segmentation_binary_mask.cpu()
+        data.observed_flow_segmentation = observed_segmentation_binary_mask.cpu()
+        data.gt_flow_segmentation = gt_segmentation_binary_mask.cpu()
         data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
         data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         data.ransac_inliers = inlier_src_pts.cpu()

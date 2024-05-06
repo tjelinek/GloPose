@@ -50,6 +50,7 @@ class CrossFrameData:
     inliers_mask: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_visible_fg_points_mask: torch.Tensor = None
+    gt_flow_segmentation: torch.Tensor = None
     gt_visible_fg_points_mask: torch.Tensor = None
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
