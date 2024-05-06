@@ -34,7 +34,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, relative_scale_recovery
+from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
@@ -986,7 +986,18 @@ class Tracking6D:
             indices_permutation = torch.randperm(n_points)
             indices_to_be_replaced = indices_permutation[:n_points_injected]
 
-            dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_flow[indices_to_be_replaced]
+            dst_pts_yx_gt_for_replacing = dst_pts_yx_gt_flow[indices_to_be_replaced].clone()
+            if self.config.ransac_feed_gt_flow_add_gaussian_noise:
+                if self.config.ransac_feed_gt_flow_add_gaussian_noise_use_mft_errors:
+                    errors: torch.Tensor = dst_pts_yx_gt_for_replacing - dst_pts_yx[indices_to_be_replaced]
+                    mean = errors.mean(dim=0)
+                    sigma = errors.var(dim=0).sqrt()
+                else:
+                    sigma = self.config.ransac_feed_gt_flow_add_gaussian_noise_sigma
+                    mean = self.config.ransac_feed_gt_flow_add_gaussian_noise_mean
+                dst_pts_yx_gt_for_replacing += sigma * torch.randn(n_points_injected, 2, device=dst_pts_yx_gt_for_replacing.device) + mean
+
+            dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_for_replacing
 
         if self.config.ransac_distant_pixels_sampling:
             random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
