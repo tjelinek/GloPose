@@ -44,13 +44,6 @@ class RenderingKaolin(nn.Module):
 
         self.backview = False
 
-        R_frontview_to_backview = torch.Tensor([[-1., 0., 0.],
-                                                [0., -1., 0.],
-                                                [0., 0., 1.]]).cuda().unsqueeze(0)
-        t_frontview_to_backview = -torch.Tensor(self.config.camera_position).unsqueeze(-1).expand(1, 3, 1).cuda()
-
-        self.T_frontview_to_backview = Rt_to_matrix4x4(R_frontview_to_backview, t_frontview_to_backview)
-
         self.fov = torch.pi / 4  # 45 degrees
         camera_proj = kaolin.render.camera.generate_perspective_projection(self.fov, self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
