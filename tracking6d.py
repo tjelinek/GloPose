@@ -1030,39 +1030,27 @@ class Tracking6D:
         # max(1, x) avoids division by zero
         inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
-        self.log_ransac_result(flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
-                               gt_visible_fg_points_mask, gt_flow_observation, inlier_mask, src_pts_yx, dst_pts_yx,
-                               dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points, backview,
-                               inlier_ratio)
+        # LOG RANSAC RESULT
+        gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow_observation.theoretical_flow.detach().cpu(),
+                                         rendered_flow_segmentation=gt_flow_observation.rendered_flow_segmentation.detach().cpu(),
+                                         rendered_flow_occlusion=gt_flow_observation.rendered_flow_occlusion.detach().cpu())
+        camera1 = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
+        data = self.data_graph.get_edge_observations(*flow_arc, camera=camera1)
+        data.src_pts_yx = src_pts_yx.cpu()
+        data.dst_pts_yx = dst_pts_yx.cpu()
+        data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
+        data.gt_flow_result = gt_flow_cpu
+        data.observed_flow_segmentation = segmentation_binary_mask.cpu()
+        data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
+        data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
+        data.ransac_inliers = inlier_src_pts.cpu()
+        data.ransac_outliers = outlier_src_pts.cpu()
+        data.triangulated_points = triangulated_points.cpu()
+        data.inliers_mask = inlier_mask.cpu()
+        data.inlier_ratio = inlier_ratio
 
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)
-
-    def log_ransac_result(self, flow_arc, segmentation_binary_mask, observed_visible_fg_points_mask,
-                          gt_visible_fg_points_mask, gt_flow: RenderedFlowResult, inlier_mask, src_pts_yx, dst_pts_yx,
-                          dst_pts_yx_gt_flow, inlier_src_pts, outlier_src_pts, triangulated_points, backview,
-                          inlier_ratio):
-
-        gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow.theoretical_flow.detach().cpu(),
-                                         rendered_flow_segmentation=gt_flow.rendered_flow_segmentation.detach().cpu(),
-                                         rendered_flow_occlusion=gt_flow.rendered_flow_occlusion.detach().cpu())
-
-        camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
-        arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
-
-        arc_data.src_pts_yx = src_pts_yx.cpu()
-        arc_data.dst_pts_yx = dst_pts_yx.cpu()
-        arc_data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
-
-        arc_data.gt_flow_result = gt_flow_cpu
-        arc_data.observed_flow_segmentation = segmentation_binary_mask.cpu()
-        arc_data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
-        arc_data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
-        arc_data.ransac_inliers = inlier_src_pts.cpu()
-        arc_data.ransac_outliers = outlier_src_pts.cpu()
-        arc_data.triangulated_points = triangulated_points.cpu()
-        arc_data.inliers_mask = inlier_mask.cpu()
-        arc_data.inlier_ratio = inlier_ratio
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
