@@ -926,7 +926,7 @@ class Tracking6D:
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
-        if self.config.ransac_erode_segmentation_dilate_occlusion and flow_arc[1] > 10:
+        if self.config.ransac_erode_segmentation_dilate_occlusion:
             eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
             eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
 
