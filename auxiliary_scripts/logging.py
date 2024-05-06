@@ -740,7 +740,7 @@ class WriteResults:
                                                      new_flow_arc_data_front.ransac_inliers,
                                                      new_flow_arc_data_front.ransac_outliers)
 
-            self.visualize_outliers_distribution(new_flow_arc, rend_flow.cpu())
+            self.visualize_outliers_distribution(new_flow_arc)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
@@ -782,7 +782,7 @@ class WriteResults:
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
             fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
 
-    def visualize_outliers_distribution(self, new_flow_arc, gt_flow):
+    def visualize_outliers_distribution(self, new_flow_arc):
 
         new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
         gt_flow = new_flow_arc_data.gt_flow_result.theoretical_flow
@@ -853,16 +853,16 @@ class WriteResults:
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, seg_mask,
                                             occlusion, inliers, outliers):
-        matching_text = f'ransac method: {self.tracking_config.essential_matrix_algorithm}\n'
+        matching_text = f'ransac method: {self.tracking_config.ransac_essential_matrix_algorithm}\n'
         if inliers is not None:
             inliers = inliers.numpy(force=True).T  # Ensure shape is (2, N)
-            self.draw_cross_axes_flow_matches(inliers, seg_mask, occlusion, flow_np, rendered_flow,
+            self.draw_cross_axes_flow_matches(inliers, occlusion, flow_np, rendered_flow,
                                               ax_source, axs_target, 'Greens', 'Reds', 'inliers',
                                               max_points=20)
             matching_text += f'inliers: {inliers.shape[1]}\n'
         if outliers is not None:
             outliers = outliers.numpy(force=True).T  # Ensure shape is (2, N)
-            self.draw_cross_axes_flow_matches(outliers, seg_mask, occlusion, flow_np, rendered_flow, ax_source,
+            self.draw_cross_axes_flow_matches(outliers, occlusion, flow_np, rendered_flow, ax_source,
                                               axs_target, 'Blues', 'Oranges', 'outliers',
                                               max_points=10)
             matching_text += f'outliers: {outliers.shape[1]}'
@@ -953,16 +953,14 @@ class WriteResults:
 
         return dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview, inlier_indices
 
-    def draw_cross_axes_flow_matches(self, source_coords, segment_mask, occlusion_mask, flow_np, flow_np_from_movement,
+    def draw_cross_axes_flow_matches(self, source_coords, occlusion_mask, flow_np, flow_np_from_movement,
                                      axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
-        outlier_pixel_threshold = 5
 
-        segment_mask = (segment_mask >= self.tracking_config.segmentation_mask_threshold)
-        # foreground_points = np.asarray(np.nonzero(segment_mask.squeeze()))
+        outlier_pixel_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
 
         total_points = source_coords.shape[1]
 
-        if total_points > max_points:
+        if total_points > max_points and self.tracking_config.matching_visualization_type == 'matching':
             random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
             source_coords = source_coords[:, random_sample]
 
@@ -975,6 +973,11 @@ class WriteResults:
         cmap_incorrect = plt.get_cmap(cmap_incorrect)
         mappable_correct = ScalarMappable(norm=norm, cmap=cmap_correct)
         mappable_incorrect = ScalarMappable(norm=norm, cmap=cmap_incorrect)
+
+        dots_axs1 = []
+        dots_axs2 = []
+        colors_axs1 = []
+        colors_axs2 = []
 
         for i in range(0, source_coords.shape[1]):
 
@@ -994,24 +997,36 @@ class WriteResults:
                     color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
                     axs2.plot(xB_movement, yB_movement, color=color, marker='+', markersize=0.5)
-                    axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
+
+                    if self.tracking_config.matching_visualization_type == 'matching':
+                        axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
 
             elif point_type == 'outliers':
                 if np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold:
                     alpha = 0.0
                     color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
 
-            # Create a ConnectionPatch for each pair of sampled points
-            axs1.plot(xA, yA, color=color, marker='X', markersize=0.5, alpha=alpha)
-            axs2.plot(xB, yB, color=color, marker='X', markersize=0.5, alpha=alpha)
+            dots_axs1.append((xA, yA))
+            dots_axs2.append((xB, yB))
+            colors_axs1.append(color)
+            colors_axs2.append(color)
 
-            con = ConnectionPatch(xyA=(xA, yA), xyB=(xB, yB),
-                                  coordsA='data', coordsB='data',
-                                  axesA=axs1, axesB=axs2, color=color, lw=0.5, alpha=alpha)
-            axs2.add_artist(con)
+            if self.tracking_config.matching_visualization_type == 'matching':
+                # Create a ConnectionPatch for each pair of sampled points
+                axs1.plot(xA, yA, color=color, marker='X', markersize=0.5, alpha=alpha)
+                axs2.plot(xB, yB, color=color, marker='X', markersize=0.5, alpha=alpha)
 
-            axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
-            axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
+                con = ConnectionPatch(xyA=(xA, yA), xyB=(xB, yB),
+                                      coordsA='data', coordsB='data',
+                                      axesA=axs1, axesB=axs2, color=color, lw=0.5, alpha=alpha)
+                axs2.add_artist(con)
+
+                axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
+                axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
+
+        if self.tracking_config.matching_visualization_type == 'dots' and len(dots_axs1) > 0:
+            axs1.scatter(*zip(*dots_axs1), c=colors_axs1, marker='X', s=0.5, alpha=0.33)
+            axs2.scatter(*zip(*dots_axs2), c=colors_axs2, marker='X', s=0.5, alpha=0.33)
 
     def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
         flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
