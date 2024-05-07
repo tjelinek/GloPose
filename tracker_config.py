@@ -124,20 +124,33 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
 
     # RANSAC settings
-    essential_matrix_algorithm: str = None
-    ransac_erode_segmentation_dilate_occlusion: bool = True
-    ransac_feed_only_inlier_flow: bool = True
-    ransac_feed_only_inlier_flow_epe_threshold: float = 0.5
-    ransac_use_gt_occlusions_and_segmentation: bool = True
-    ransac_feed_gt_flow: bool = False
-    ransac_feed_gt_flow_percentage: float = 1.0
-    ransac_distant_pixels_sample_size: int = 1000
-    ransac_confidences_from_occlusion: bool = False
-    ransac_distant_pixels_sampling: bool = False
-    inlier_pose_method: str = '8point'
+    ransac_essential_matrix_algorithm: str = 'pygcransac'
     ransac_outlier_threshold: float = 0.01
     ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
+
+    ransac_erode_segmentation_dilate_occlusion: bool = False
+
+    ransac_feed_only_inlier_flow: bool = False
+    ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
+
+    ransac_use_gt_occlusions_and_segmentation: bool = False
+
+    replace_mft_flow_with_gt_flow: bool = False
+    ransac_feed_gt_flow_percentage: float = 1.0
+    ransac_feed_gt_flow_add_gaussian_noise: bool = False
+    ransac_feed_gt_flow_add_gaussian_noise_use_mft_errors: bool = False
+    ransac_feed_gt_flow_add_gaussian_noise_sigma: float = 2.5
+    ransac_feed_gt_flow_add_gaussian_noise_mean: float = 0.5
+
+    ransac_distant_pixels_sampling: bool = False
+    ransac_distant_pixels_sample_size: int = 1000
+
+    ransac_confidences_from_occlusion: bool = False
+
+    ransac_inlier_pose_method: str = '8point'
+
+    refine_pose_using_numerical_optimization: bool = False
 
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     use_custom_jacobian: bool = False
