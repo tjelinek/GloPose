@@ -2,6 +2,7 @@ import cv2
 import kornia
 import numpy as np
 import pygcransac
+import pymagsac
 import torch
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution
 
@@ -25,7 +26,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     N_matches = src_pts_xy.shape[0]
     min_matches_for_ransac = 5
 
-    E_method = ransac_config.essential_matrix_algorithm
+    E_method = ransac_config.ransac_essential_matrix_algorithm
     ransac_confidence = ransac_config.ransac_confidence
     if E_method == 'pygcransac' and N_matches >= min_matches_for_ransac:
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
@@ -56,7 +57,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     mask_tensor = torch.from_numpy(mask).cuda()
 
     if N_matches >= 8:
-        if ransac_config.inlier_pose_method == '8point':
+        if ransac_config.ransac_inlier_pose_method == '8point':
 
             src_pts_xy_inliers = src_pts_xy[mask_tensor]
             dst_pts_xy_inliers = dst_pts_xy[mask_tensor]
@@ -66,7 +67,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
             E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
             E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
 
-        elif ransac_config.inlier_pose_method == 'bundle_adjustment':
+        elif ransac_config.ransac_inlier_pose_method == 'bundle_adjustment':
             raise NotImplementedError("This is not implemented yet")
         else:
             assert E_method is not None  # At least one pose estimation method must run.
@@ -75,12 +76,29 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
         E = np.asarray([[0, 0, 0], [0, 0, -1], [0, 1, 0]]).astype(np.float32)
         mask_tensor = torch.zeros_like(mask_tensor, dtype=torch.bool)
 
+    if ransac_config.refine_pose_using_numerical_optimization and N_matches >= 8:
+        src_pts_xy_inliers_np = src_pts_xy.numpy(force=True).astype(np.float64)
+        dst_pts_xy_inliers_np = dst_pts_xy.numpy(force=True).astype(np.float64)
+        correspondences_inliers = np.ascontiguousarray(np.concatenate([src_pts_xy_inliers_np,
+                                                                       dst_pts_xy_inliers_np], axis=1))
+        # E_best = np.ones_like(E, dtype=np.float64)
+        E_old = E.copy()
+        E_best = E.astype(np.float64)
+        mask_uint64 = mask.astype(np.uint64)
+        E, mask = pymagsac.optimizeEssentialMatrix(correspondences_inliers, K1_np, K2_np, mask_uint64, E_best)
+        # print(f"This is what optimizeEssentialMatrix gave\n{E}")
+        if np.linalg.norm(E_old - E) < 0.01:
+            breakpoint()
+
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
 
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_yx, dst_pts_yx,
                                                                           mask_tensor)
     t_cam = t_cam.squeeze()
     r_cam = rotation_matrix_to_axis_angle(R.contiguous()).squeeze()
+    if ransac_config.refine_pose_using_numerical_optimization:
+        # TODO this is a nasty thing, but it seems that in this implementation, the directions are interchanged
+        r_cam = -r_cam
 
     # r_cam_deg = torch.rad2deg(torch.stack(euler_from_quaternion(*axis_angle_to_quaternion(r_cam))))
     # print('----------------------------------------')
