@@ -46,16 +46,19 @@ class CrossFrameData:
     src_pts_yx: torch.Tensor = None
     dst_pts_yx: torch.Tensor = None
     dst_pts_yx_gt: torch.Tensor = None
+    ransac_inliers_mask: torch.Tensor = None
+    ransac_inlier_ratio: float = None
 
-    inliers_mask: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_visible_fg_points_mask: torch.Tensor = None
     gt_flow_segmentation: torch.Tensor = None
     gt_visible_fg_points_mask: torch.Tensor = None
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
-    triangulated_points: Dict = None
-    inlier_ratio: float = None
+
+    ransac_triangulated_points: torch.Tensor = None
+    ransac_triangulated_points_gt_E: torch.Tensor = None
+    ransac_triangulated_points_gt_E_flow: torch.Tensor = None
 
     is_source_of_matching: bool = True
 

@@ -1059,9 +1059,9 @@ class Tracking6D:
         data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
-        data.triangulated_points = triangulated_points.cpu()
-        data.inliers_mask = inlier_mask.cpu()
-        data.inlier_ratio = inlier_ratio
+        data.ransac_triangulated_points = triangulated_points.cpu()
+        data.ransac_inliers_mask = inlier_mask.cpu()
+        data.ransac_inlier_ratio = inlier_ratio
 
         return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
                 triangulated_points)

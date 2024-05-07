@@ -11,6 +11,7 @@ import torch
 import cv2
 import imageio
 import csv
+import rerun_sdk as rr
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt, gridspec
@@ -515,8 +516,8 @@ class WriteResults:
             camera = Cameras.FRONTVIEW if view == 'front' else Cameras.BACKVIEW
             arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
-            pred_inlier_ratio = arc_data.inlier_ratio
-            inlier_mask = arc_data.inliers_mask
+            pred_inlier_ratio = arc_data.ransac_inlier_ratio
+            inlier_mask = arc_data.ransac_inliers_mask
 
             observed_flow_image = flow_unit_coords_to_image_coords(arc_data.observed_flow.observed_flow)
             gt_flow_image = flow_unit_coords_to_image_coords(arc_data.gt_flow_result.theoretical_flow)
@@ -787,8 +788,8 @@ class WriteResults:
         new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
         gt_flow = new_flow_arc_data.gt_flow_result.theoretical_flow
 
-        inlier_list = torch.nonzero(new_flow_arc_data.inliers_mask)[:, 0]
-        outlier_list = torch.nonzero(~new_flow_arc_data.inliers_mask)[:, 0]
+        inlier_list = torch.nonzero(new_flow_arc_data.ransac_inliers_mask)[:, 0]
+        outlier_list = torch.nonzero(~new_flow_arc_data.ransac_inliers_mask)[:, 0]
 
         src_pts_front = new_flow_arc_data.src_pts_yx
         dst_pts_front = new_flow_arc_data.dst_pts_yx
@@ -1091,7 +1092,7 @@ class WriteResults:
 
         rotations = np.array(rotations)
         translations = np.array(translations)
-        gt_rotations = np.array(gt_rotations)
+        gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
         gt_translations = np.array(gt_translations)
 
         # Plot Rotation
@@ -1107,7 +1108,11 @@ class WriteResults:
                 ax.set_title(title)
                 ax.set_xlabel('Frame Index')
                 ax.set_ylabel(ylabel)
-                ax.legend(loc='lower right')
+                if len(data[:, i]) > 180:
+                    ax.legend(loc='lower left', fontsize='small')
+                else:
+                    ax.legend(loc='upper left', fontsize='small')
+
 
         flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
             else self.tracking_config.long_flow_model
