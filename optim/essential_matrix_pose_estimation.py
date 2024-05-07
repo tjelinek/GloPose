@@ -106,7 +106,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     # print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
     # print('----------------------------------------')
 
-    return r_cam, t_cam, mask_tensor, triangulated_points
+    return r_cam, t_cam, mask_tensor, triangulated_points, E
 
 
 def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
@@ -127,8 +127,8 @@ def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     inliers_src_pts2 = inliers_dst_pts1
     inliers_dst_pts2 = essential_matrix_data.target_points[flow_arc][inlier_mask2]
 
-    triangulated_points_1 = essential_matrix_data.triangulated_points[flow_arc_prev]
-    triangulated_points_2 = essential_matrix_data.triangulated_points[flow_arc]
+    triangulated_points_1 = essential_matrix_data.ransac_triangulated_points[flow_arc_prev]
+    triangulated_points_2 = essential_matrix_data.ransac_triangulated_points[flow_arc]
 
     N_point = triangulated_points_1.shape[0]
 

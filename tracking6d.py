@@ -1014,7 +1014,7 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
                                                            self.rendering.height, self.config, confidences)
 
-        rot, t, inlier_mask, triangulated_points = result
+        rot, t, inlier_mask, triangulated_points, E = result
 
         # if flow_arc[1] > 1:
         #
