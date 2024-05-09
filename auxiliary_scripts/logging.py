@@ -35,7 +35,7 @@ from auxiliary_scripts.cameras import Cameras
 from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
                    coordinates_xy_to_tensor_index)
 from models.rendering import infer_normalized_renderings, RenderingKaolin
-from helpers.torch_helpers import write_renders
+from auxiliary_scripts.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
