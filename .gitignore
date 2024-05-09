@@ -3,7 +3,7 @@ lsf.*
 output/*
 saved_models/*
 *._*
-/GMA/
+/repositories/GMA/
 /RAFTocclUncertainty/
-/RAFTPrinceton/
+/repositories/RAFTPrinceton/
 /behave-dataset/
