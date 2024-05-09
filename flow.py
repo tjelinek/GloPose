@@ -369,14 +369,14 @@ class MFTFlowProvider(FlowProvider):
 
     def __init__(self, config_name):
         self.add_to_path()
-        from MFT_tracker.MFT.MFT import MFT as MFTTracker
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
         self.flow_model: MFTTracker = self.get_flow_model(config_name)
 
     @staticmethod
     def add_to_path():
         if 'MFT_tracker' not in sys.path:
-            sys.path.append('MFT_tracker')
+            sys.path.append('repositories/MFT_tracker')
 
     def init(self, template):
         template_mft = tensor_image_to_mft_format(template)
@@ -403,10 +403,10 @@ class MFTFlowProvider(FlowProvider):
     def get_flow_model(config_name=None):
         MFTFlowProvider.add_to_path()
 
-        from MFT_tracker.MFT.MFT import MFT as MFTTracker
-        config_module = importlib.import_module(f'MFT_tracker.configs.{config_name}')
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
 
-        with temporary_change_directory("MFT_tracker"):
+        with temporary_change_directory("repositories/MFT_tracker"):
             default_config = config_module.get_config()
             model = MFTTracker(default_config)
 
@@ -416,14 +416,14 @@ class MFTFlowProvider(FlowProvider):
 class MFTEnsembleFlowProvider(FlowProvider):
     def __init__(self, config_name):
         self.add_to_path()
-        from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
         self.need_to_init = True
         self.flow_model: MFTTracker = self.get_flow_model(config_name)
 
     @staticmethod
     def add_to_path():
         if 'MFT_tracker' not in sys.path:
-            sys.path.append('MFT_tracker')
+            sys.path.append('repositories/MFT_tracker')
 
     def init(self, template):
         template_mft = tensor_image_to_mft_format(template)
@@ -450,10 +450,10 @@ class MFTEnsembleFlowProvider(FlowProvider):
     def get_flow_model(config_name=None):
         MFTFlowProvider.add_to_path()
 
-        from MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
-        config_module = importlib.import_module(f'MFT_tracker.configs.{config_name}')
+        from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
 
-        with temporary_change_directory("MFT_tracker"):
+        with temporary_change_directory("repositories/MFT_tracker"):
             default_config = config_module.get_config()
             model = MFTTracker(default_config)
 
