@@ -13,7 +13,7 @@ from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
 from pathlib import Path
 
-sys.path.append('OSTrack/S2DNet')
+sys.path.append('repositories/OSTrack/S2DNet')
 
 
 def main():

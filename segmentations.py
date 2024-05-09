@@ -19,9 +19,9 @@ from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
 from utils import imread
 
-sys.path.insert(0, 'OSTrack')
-from OSTrack.lib.test.tracker.ostrack import OSTrack
-from OSTrack.lib.test.parameter.ostrack import parameters
+sys.path.insert(0, 'repositories/OSTrack')
+from repositories.OSTrack.lib.test.tracker.ostrack import OSTrack
+from repositories.OSTrack.lib.test.parameter.ostrack import parameters
 
 
 def pad_image(image):

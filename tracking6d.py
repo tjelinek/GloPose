@@ -19,7 +19,7 @@ from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List
 
-from OSTrack.S2DNet.s2dnet import S2DNet
+from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tracker_config import TrackerConfig
 
-sys.path.append('OSTrack/S2DNet')
+sys.path.append('repositories/OSTrack/S2DNet')
 
 from tracking6d import Tracking6D
 

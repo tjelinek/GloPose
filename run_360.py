@@ -13,7 +13,7 @@ from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
 
-sys.path.append('OSTrack/S2DNet')
+sys.path.append('repositories/OSTrack/S2DNet')
 
 from tracking6d import Tracking6D
 
