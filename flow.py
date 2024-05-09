@@ -328,7 +328,9 @@ class RAFTFlowProvider(FlowProvider):
         sys.path.append('RAFTPrinceton')
         from RAFTPrinceton.core.raft import RAFT
 
-        args = Namespace(model='tmp/raft_models/models/raft-things.pth', model_name='RAFTPrinceton', path=None,
+        args = Namespace(model='/mnt/personal/jelint19/weights/RAFT/raft-things.pth',
+                         model_name='RAFTPrinceton',
+                         path=None,
                          mixed_precision=True,
                          alternate_corr=False, small=False)
 
