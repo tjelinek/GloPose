@@ -23,6 +23,7 @@ from OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
+from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
     get_correct_correspondences_mask
@@ -34,7 +35,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences
+from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, triangulate_points_from_Rt
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
@@ -1014,7 +1015,7 @@ class Tracking6D:
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
                                                            self.rendering.height, self.config, confidences)
 
-        rot, t, inlier_mask, triangulated_points, E = result
+        rot_cam, t_cam, inlier_mask, triangulated_points = result
 
         # if flow_arc[1] > 1:
         #
@@ -1022,18 +1023,14 @@ class Tracking6D:
         #
         #     relative_scale_recovery(essential_matrix_data, flow_arc, K1)
 
-        R = axis_angle_to_rotation_matrix(rot[None])
+        R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 
-        T_RANSAC = inverse_transformation(Rt_to_matrix4x4(R, t[None, :, None]))
+        R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
 
-        # T_o2_to_o1 = T_w_to_c0 @ T_RANSAC @ (T_w_to_c0)^-1
-        T_o2_to_o1 = compose_transformations(compose_transformations(W_4x4, T_RANSAC),
-                                             inverse_transformation(W_4x4))
+        rot_obj = rotation_matrix_to_axis_angle(R_cam)
+        quat_obj = axis_angle_to_quaternion(rot_obj).squeeze()
 
-        R, t = matrix4x4_to_Rt(T_o2_to_o1)
-        rot = rotation_matrix_to_axis_angle(R).squeeze()
-        quat = axis_angle_to_quaternion(rot[None]).squeeze()
-        t = t.squeeze()
+        t_obj = t_obj.squeeze()
 
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
         outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
@@ -1063,7 +1060,7 @@ class Tracking6D:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat, t,
+        return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat_obj, t_obj,
                 triangulated_points)
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
