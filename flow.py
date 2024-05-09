@@ -413,6 +413,55 @@ class MFTFlowProvider(FlowProvider):
         return model
 
 
+class MFTIQFlowProvider(FlowProvider):
+
+    def __init__(self, config_name):
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
+
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('repositories/MFT_tracker')
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
+
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model(config_name=None):
+        MFTFlowProvider.add_to_path()
+
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        config_name = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("repositories/MFT_tracker"):
+            default_config = config_module.get_config()
+            model = default_config.tracker_class(default_config)  #
+
+        return model
+
+
 class MFTEnsembleFlowProvider(FlowProvider):
     def __init__(self, config_name):
         self.add_to_path()

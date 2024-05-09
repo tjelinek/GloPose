@@ -26,7 +26,7 @@ from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
-    get_correct_correspondences_mask
+    get_correct_correspondences_mask, MFTIQFlowProvider
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -365,6 +365,7 @@ class Tracking6D:
         long_flow_models = {
             'MFT': MFTFlowProvider,
             'MFTEnsemble': MFTEnsembleFlowProvider,
+            'MFT_IQ': MFTIQFlowProvider,
         }
 
         # For short_flow_model
