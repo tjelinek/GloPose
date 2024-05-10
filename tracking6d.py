@@ -1027,7 +1027,7 @@ class Tracking6D:
 
         R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
 
-        rot_obj = rotation_matrix_to_axis_angle(R_cam)
+        rot_obj = rotation_matrix_to_axis_angle(R_obj)
         quat_obj = axis_angle_to_quaternion(rot_obj).squeeze()
 
         t_obj = t_obj.squeeze()
