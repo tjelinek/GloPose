@@ -14,7 +14,6 @@ from abc import ABC, abstractmethod
 
 from GMA.core.utils import flow_viz
 from GMA.core.utils.utils import InputPadder
-from cfg import DEVICE
 from utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 
 
@@ -304,7 +303,7 @@ class FlowProvider(ABC):
         model.load_state_dict(torch.load(args.model))
         print(f"Loaded checkpoint at {args.model}")
         model = model.module
-        model.to(DEVICE)
+        model.to('cuda')
         model.eval()
         return model
 

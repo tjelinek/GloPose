@@ -5,10 +5,7 @@ import kaolin
 import torch
 import torch.nn as nn
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
-from kornia.geometry import Rt_to_matrix4x4
-from kornia.morphology import erosion
 
-import cfg
 from models.encoder import EncoderResult
 from tracker_config import TrackerConfig
 from utils import normalize_rendered_flows
@@ -75,7 +72,7 @@ class RenderingKaolin(nn.Module):
 
     def set_faces(self, faces):
         self.register_buffer('faces', torch.LongTensor(faces))
-        self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device=cfg.DEVICE))
+        self.register_buffer('face_indices', self.faces.clone().detach().to(dtype=torch.long, device='cuda'))
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps,
                 lights=None) -> RenderingResult:
