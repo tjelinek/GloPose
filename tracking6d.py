@@ -12,9 +12,8 @@ import time
 import torch
 import torchvision.transforms as transforms
 from kaolin.io.utils import mesh_handler_naive_triangulate
-from kornia.geometry import compose_transformations, inverse_transformation
-from kornia.geometry.conversions import axis_angle_to_quaternion, Rt_to_matrix4x4, axis_angle_to_rotation_matrix, \
-    matrix4x4_to_Rt, rotation_matrix_to_axis_angle
+from kornia.geometry.conversions import (axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
+                                         rotation_matrix_to_axis_angle)
 from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List
@@ -984,7 +983,7 @@ class Tracking6D:
             if self.config.ransac_confidences_from_occlusion:
                 confidences = confidences[ok_pts_indices]
 
-        if self.config.replace_mft_flow_with_gt_flow:
+        if self.config.ransac_replace_mft_flow_with_gt_flow:
             n_points = src_pts_yx.shape[0]
             n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
             indices_permutation = torch.randperm(n_points)

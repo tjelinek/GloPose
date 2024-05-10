@@ -57,8 +57,8 @@ class CrossFrameData:
     ransac_outliers: torch.Tensor = None
 
     ransac_triangulated_points: torch.Tensor = None
-    ransac_triangulated_points_gt_E: torch.Tensor = None
-    ransac_triangulated_points_gt_E_flow: torch.Tensor = None
+    ransac_triangulated_points_gt_Rt: torch.Tensor = None
+    ransac_triangulated_points_gt_Rt_gt_flow: torch.Tensor = None
 
     is_source_of_matching: bool = True
 
