@@ -137,8 +137,6 @@ class TrackerConfig:
 
     ransac_use_gt_occlusions_and_segmentation: bool = False
 
-    replace_mft_flow_with_gt_flow: bool = False
-    ransac_feed_gt_flow_percentage: float = 1.0
     ransac_replace_mft_flow_with_gt_flow: bool = False
     ransac_feed_gt_flow_percentage: float = 0.75
     ransac_feed_gt_flow_add_gaussian_noise: bool = False
