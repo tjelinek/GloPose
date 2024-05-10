@@ -12,8 +12,8 @@ import torchvision.transforms as T
 from argparse import Namespace
 from abc import ABC, abstractmethod
 
-from GMA.core.utils import flow_viz
-from GMA.core.utils.utils import InputPadder
+from repositories.GMA.core.utils import flow_viz
+from repositories.GMA.core.utils.utils import InputPadder
 from utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 
 
@@ -324,8 +324,8 @@ class RAFTFlowProvider(FlowProvider):
 
     @staticmethod
     def get_flow_model():
-        sys.path.append('RAFTPrinceton')
-        from RAFTPrinceton.core.raft import RAFT
+        sys.path.append('repositories/RAFTPrinceton')
+        from repositories.RAFTPrinceton.core.raft import RAFT
 
         args = Namespace(model='/mnt/personal/jelint19/weights/RAFT/raft-things.pth',
                          model_name='RAFTPrinceton',
@@ -343,7 +343,7 @@ class GMAFlowProvider(FlowProvider):
 
     @staticmethod
     def get_flow_model():
-        sys.path.append('GMA')
+        sys.path.append('repositories/GMA')
         from GMA.core.network import RAFTGMA
 
         args = Namespace(model='GMA/checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
