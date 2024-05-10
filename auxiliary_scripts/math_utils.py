@@ -4,15 +4,15 @@ from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_tra
 
 def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
 
-    T_cam = inverse_transformation(Rt_to_matrix4x4(R_cam, t_cam))
-    T_w_to_c_inv = inverse_transformation(T_world_to_cam)
+    T_RANSAC = inverse_transformation(Rt_to_matrix4x4(R_cam, t_cam))
 
-    # T_o2_to_o1 = T_w_to_c0 @ T_cam @ (T_w_to_c0)^-1
-    T_o2_to_o1 = compose_transformations(compose_transformations(T_world_to_cam, T_cam), T_w_to_c_inv)
+    # T_o2_to_o1 = T_w_to_c0 @ T_RANSAC @ (T_w_to_c0)^-1
+    T_o2_to_o1 = compose_transformations(compose_transformations(T_world_to_cam, T_RANSAC),
+                                         inverse_transformation(T_world_to_cam))
 
-    R_obj, t_obj = matrix4x4_to_Rt(T_o2_to_o1)
+    R, t = matrix4x4_to_Rt(T_o2_to_o1)
 
-    return R_obj, t_obj
+    return R, t
 
 
 def Rt_epipolar_cam_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
