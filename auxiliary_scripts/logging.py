@@ -11,7 +11,7 @@ import torch
 import cv2
 import imageio
 import csv
-import rerun_sdk as rr
+# import rerun as rr
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt, gridspec
@@ -87,12 +87,14 @@ class WriteResults:
         self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
         self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
+        self.point_clouds_path = self.write_folder / Path('point_clouds')
 
         self.flows_path.mkdir(exist_ok=True, parents=True)
         self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
         self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
         self.ransac_path.mkdir(exist_ok=True, parents=True)
+        self.point_clouds_path.mkdir(exist_ok=True, parents=True)
 
         self.metrics_writer = csv.writer(self.metrics_log)
 
@@ -1127,7 +1129,7 @@ class WriteResults:
                 ax.set_title(title)
                 ax.set_xlabel('Frame Index')
                 ax.set_ylabel(ylabel)
-                if len(data[:, i]) > 180:
+                if len(data[:, i]) > 36:
                     ax.legend(loc='lower left', fontsize='small')
                 else:
                     ax.legend(loc='upper left', fontsize='small')
