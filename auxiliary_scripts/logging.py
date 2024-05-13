@@ -26,6 +26,7 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
+from pytorch3d.io import save_ply
 
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
@@ -373,6 +374,8 @@ class WriteResults:
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
                                                observations_backview.observed_image[:, [-1]].cpu())
 
+        self.visualize_point_clouds_from_ransac(frame_i)
+
         if frame_i % self.tracking_config.write_results_frequency == 0:
             self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
@@ -505,6 +508,22 @@ class WriteResults:
         rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
         rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
         self.all_proj.write(rendered_silhouette)
+
+    def visualize_point_clouds_from_ransac(self, frame_i):
+
+        arc_data = self.data_graph.get_edge_observations(0, frame_i, Cameras.FRONTVIEW)
+
+        if frame_i % 5 == 0:
+            triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0]
+            triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0]
+
+            triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
+                                                     f'triangulated_point_cloud__gt_Rt_gt_flow_{frame_i}.ply')
+            triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
+                                                       f'triangulated_point_cloud__gt_Rt_pred_flow_{frame_i}.ply')
+
+            save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
+            save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
     def measure_ransac_stats(self, frame_i, view: str = 'front'):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
