@@ -130,12 +130,11 @@ class TrackerConfig:
     ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
 
+    ransac_use_gt_occlusions_and_segmentation: bool = False
     ransac_erode_segmentation_dilate_occlusion: bool = False
 
     ransac_feed_only_inlier_flow: bool = False
     ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
-
-    ransac_use_gt_occlusions_and_segmentation: bool = False
 
     ransac_replace_mft_flow_with_gt_flow: bool = False
     ransac_feed_gt_flow_percentage: float = 0.75
