@@ -11,7 +11,7 @@ import torch
 import cv2
 import imageio
 import csv
-# import rerun as rr
+import rerun as rr
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt, gridspec
@@ -96,6 +96,8 @@ class WriteResults:
         self.ransac_path.mkdir(exist_ok=True, parents=True)
         self.point_clouds_path.mkdir(exist_ok=True, parents=True)
 
+        self.rerun_init()
+
         self.metrics_writer = csv.writer(self.metrics_log)
 
         self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
@@ -108,6 +110,10 @@ class WriteResults:
         self.correspondences_log_file = self.write_folder / (f'correspondences_{self.tracking_config.sequence}'
                                                              f'_flow_{self.tracking_config.gt_flow_source}.h5')
         self.correspondences_log_write_common_data()
+
+    def rerun_init(self):
+        rr.init(f'{self.tracking_config.sequence}')
+        rr.save(self.rerun_log_path / 'rerun.rrd')
 
     def correspondences_log_write_common_data(self):
 
