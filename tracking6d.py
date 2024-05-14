@@ -429,52 +429,7 @@ class Tracking6D:
             b0 = (0, self.shape[-1], 0, self.shape[-2])
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
-            with torch.no_grad():
-                if self.config.add_flow_arcs_strategy == 'all-previous':
-                    short_flow_arcs = {(flow_source, frame_i) for flow_source in
-                                       set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
-                                       if flow_source < frame_i}
-                elif self.config.add_flow_arcs_strategy == 'single-previous':
-                    short_flow_arcs = {(frame_i - 1, frame_i)}
-                elif self.config.add_flow_arcs_strategy is None:
-                    short_flow_arcs = set()
-
-                for flow_arc in short_flow_arcs:
-                    flow_source_frame, flow_target_frame = flow_arc
-                    observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
-
-                    self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
-                                                       occlusions, uncertainties, flow_source_frame, flow_target_frame)
-
-                    self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-
-                if self.long_flow_provider is not None:
-                    long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
-                    flow_source_frame, flow_target_frame = long_flow_arc
-
-                    self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-
-                    observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
-                                                                                 mode='long')
-                    if long_flow_arc not in self.active_keyframes.G.edges:
-                        segment_front = self.active_keyframes.get_observations_for_keyframe(
-                            flow_source_frame).observed_segmentation
-                        self.active_keyframes.add_new_flow(observed_flow, segment_front,
-                                                           occlusions, uncertainties, flow_source_frame,
-                                                           flow_target_frame)
-
-                    if self.config.matching_target_to_backview:
-                        observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
-                                                                                                    flow_target_frame,
-                                                                                                    mode='long',
-                                                                                                    backview=True)
-                        if long_flow_arc not in self.active_keyframes_backview.G.edges:
-                            segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                                flow_source_frame).observed_segmentation
-                            self.active_keyframes_backview.add_new_flow(observed_flow_back,
-                                                                        segment_back,
-                                                                        occlusions_back, uncertainties_back,
-                                                                        flow_source_frame, flow_target_frame)
+            self.add_new_flows(frame_i, new_frame_observation)
 
             self.last_encoder_result = EncoderResult(*[tensor.clone()
                                                        if tensor is not None else None for tensor in
@@ -587,6 +542,57 @@ class Tracking6D:
                 del all_flow_observations_backview
 
         return self.best_model
+
+    @torch.no_grad()
+    def add_new_flows(self, frame_i, new_frame_observation):
+
+        if self.config.add_flow_arcs_strategy == 'all-previous':
+            short_flow_arcs = {(flow_source, frame_i) for flow_source in
+                               set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
+                               if flow_source < frame_i}
+        elif self.config.add_flow_arcs_strategy == 'single-previous':
+            short_flow_arcs = {(frame_i - 1, frame_i)}
+        elif self.config.add_flow_arcs_strategy is None:
+            short_flow_arcs = set()
+        else:
+            raise ValueError("Invalid value for 'add_flow_arcs_strategy'.")
+
+        for flow_arc in short_flow_arcs:
+            flow_source_frame, flow_target_frame = flow_arc
+            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
+
+            self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
+                                               occlusions, uncertainties, flow_source_frame, flow_target_frame)
+
+            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+
+        if self.long_flow_provider is not None:
+            long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
+            flow_source_frame, flow_target_frame = long_flow_arc
+
+            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+
+            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
+                                                                         mode='long')
+            if long_flow_arc not in self.active_keyframes.G.edges:
+                segment_front = self.active_keyframes.get_observations_for_keyframe(
+                    flow_source_frame).observed_segmentation
+                self.active_keyframes.add_new_flow(observed_flow, segment_front,
+                                                   occlusions, uncertainties, flow_source_frame,
+                                                   flow_target_frame)
+
+            if self.config.matching_target_to_backview:
+                observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
+                                                                                            flow_target_frame,
+                                                                                            mode='long',
+                                                                                            backview=True)
+                if long_flow_arc not in self.active_keyframes_backview.G.edges:
+                    segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                        flow_source_frame).observed_segmentation
+                    self.active_keyframes_backview.add_new_flow(observed_flow_back,
+                                                                segment_back,
+                                                                occlusions_back, uncertainties_back,
+                                                                flow_source_frame, flow_target_frame)
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short', backview=False):
 
