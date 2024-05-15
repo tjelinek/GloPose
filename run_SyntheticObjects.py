@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence, parse_args
+from runtime_utils import run_tracking_on_sequence, parse_args, load_gt_data
 from utils import load_config
 
 sys.path.append('repositories/OSTrack/S2DNet')
@@ -81,7 +81,9 @@ def main():
 
         segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(config, files, segms, write_folder)
+
+        gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
+        run_tracking_on_sequence(config, files, segms, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 
 if __name__ == "__main__":

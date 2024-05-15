@@ -1,15 +1,12 @@
-import math
-
 import glob
 import os
 import sys
 import time
-import shutil
 
 import numpy as np
 
 from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence, parse_args
+from runtime_utils import run_tracking_on_sequence, parse_args, load_gt_data
 from utils import load_config
 from pathlib import Path
 
@@ -72,10 +69,10 @@ def main():
         optical_flows = np.array(
             glob.glob(os.path.join(dataset_folder, dataset, optical_flows_folder, sequence, '*.*')))
         optical_flows.sort()
-        # optical_flows = None
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        run_tracking_on_sequence(config, files, segms, write_folder)
+        gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
+        run_tracking_on_sequence(config, files, segms, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 
 if __name__ == "__main__":
