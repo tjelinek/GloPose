@@ -29,7 +29,7 @@ def load_gt_data(config: TrackerConfig):
     return gt_texture, gt_mesh, gt_rotations, gt_translations
 
 
-def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder, gt_texture=None, gt_mesh=None,
+def run_tracking_on_sequence(config: TrackerConfig, files, write_folder, gt_texture=None, gt_mesh=None,
                              gt_rotations=None, gt_translations=None):
     if os.path.exists(write_folder):
         shutil.rmtree(write_folder)
@@ -44,16 +44,10 @@ def run_tracking_on_sequence(config: TrackerConfig, files, segms, write_folder, 
     print("Sequence:", write_folder_path.name)
     print('---------------------------------------------------\n\n')
 
-    config.input_frames = len(files)
-    if config.inc_step == 0:
-        config.inc_step = len(files)
-    inds = [os.path.splitext(os.path.basename(temp))[0] for temp in segms]
-    baseline_dict = dict(zip(inds, segms))
     torch.cuda.empty_cache()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     t0 = time.time()
 
-    sfb = Tracking6D(config, device, write_folder, files[0], baseline_dict, gt_texture=gt_texture, gt_mesh=gt_mesh,
+    sfb = Tracking6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
                      gt_rotations=gt_rotations, gt_translations=gt_translations)
     best_model = sfb.run_tracking(files)
     print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds, best model loss {best_model["value"]}')

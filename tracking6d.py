@@ -49,8 +49,8 @@ class InferenceResult(NamedTuple):
 
 class Tracking6D:
 
-    def __init__(self, config: TrackerConfig, device, write_folder, file0, bbox0, init_mask=None, gt_texture=None,
-                 gt_mesh=None, gt_rotations=None, gt_translations=None):
+    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
+                 gt_translations=None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -117,7 +117,7 @@ class Tracking6D:
         self.write_folder = Path(write_folder)
         self.config = config
         self.config_copy = copy.deepcopy(self.config)
-        self.device = device
+        self.device = 'cuda'
 
         iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
@@ -145,7 +145,6 @@ class Tracking6D:
             self.tracker_backview = SyntheticDataGeneratingTracker(self.config, self.rendering_backview,
                                                                    self.gt_encoder, self.gt_texture, self.feat)
             # Re-render the images using the synthetic tracker
-        images, images_feat, observed_flows_generated, segments = self.get_initial_images(file0, bbox0, init_mask)
 
         self.initialize_optimizer_and_loss(ivertices)
 
@@ -179,22 +178,6 @@ class Tracking6D:
         else:  # d3s
             self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
 
-    def initialize_gt_texture(self):
-        if self.config.gt_texture_path is not None:
-            texture = torch.from_numpy(imageio.v2.imread(Path(self.config.gt_texture_path)))
-            texture = texture.permute(2, 0, 1)[None].to(self.device) / 255.0
-            if max(texture.shape[-2:]) > self.config.texture_size:
-                resize = transforms.Resize(size=self.config.texture_size)
-                texture = resize(texture)
-
-            self.gt_texture = texture
-        self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
-
-    def initialize_gt_tracks(self):
-        if self.config.gt_track_path is not None:
-            _, gt_rotations, gt_translations = load_gt_annotations_file(self.config.gt_track_path)
-            self.gt_rotations = gt_rotations.to(self.device)
-            self.gt_translations = gt_translations.to(self.device)
 
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
@@ -304,10 +287,6 @@ class Tracking6D:
             self.feat = lambda x: x
 
     def initialize_mesh(self):
-        if self.config.gt_mesh_path is not None:
-            self.gt_mesh_prototype = kaolin.io.obj.import_mesh(str(self.config.gt_mesh_path), with_materials=True,
-                                                               heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
-
         if not self.config.optimize_shape:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
             self.faces = self.gt_mesh_prototype.faces

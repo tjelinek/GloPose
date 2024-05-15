@@ -41,20 +41,16 @@ def main():
             write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
         renderings_folder = 'original'
-        segmentations_folder = 'masks_U2Net'
         dataset_folder_ = Path(dataset_folder) / '360photo'
 
         t0 = time.time()
         files = np.array(
             glob.glob(os.path.join(dataset_folder_, renderings_folder, dataset, sequence, '*.*')))
         files.sort()
-        segms = np.array(
-            glob.glob(os.path.join(dataset_folder_, segmentations_folder, dataset, sequence, '*.*')))
-        segms.sort()
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, files, segms, write_folder)
+        run_tracking_on_sequence(config, files, write_folder)
 
 
 if __name__ == "__main__":

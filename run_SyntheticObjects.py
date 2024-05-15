@@ -63,27 +63,16 @@ def main():
             write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
         renderings_folder = 'renderings'
-        segmentations_folder = 'segmentations'
-        optical_flows_folder = 'optical_flow'
 
         t0 = time.time()
 
         files = np.array(
             glob.glob(os.path.join(dataset_folder, dataset, sequence, renderings_folder, '*.*')))
         files.sort()
-        segms = np.array(
-            glob.glob(os.path.join(dataset_folder, dataset, sequence, segmentations_folder, '*.*')))
-        segms.sort()
-        optical_flows = np.array(
-            glob.glob(os.path.join(dataset_folder, dataset, sequence, optical_flows_folder, '*.*')))
-        optical_flows.sort()
-        # optical_flows = None
-
-        segms.sort()
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
-        run_tracking_on_sequence(config, files, segms, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        run_tracking_on_sequence(config, files, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 
 if __name__ == "__main__":
