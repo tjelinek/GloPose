@@ -62,9 +62,11 @@ def main():
             glob.glob(os.path.join(dataset_folder, dataset, renderings_folder, sequence, '*.*')))
         files.sort()
 
+        config.input_frames = len(files)
+
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
         gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
-        run_tracking_on_sequence(config, files, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 
 if __name__ == "__main__":

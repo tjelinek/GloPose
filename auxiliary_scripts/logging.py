@@ -46,12 +46,11 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape, num_frames, tracking_config: TrackerConfig, rendering, rendering_backview,
+    def __init__(self, write_folder, shape, tracking_config: TrackerConfig, rendering, rendering_backview,
                  gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph):
 
         self.image_height = shape[0]
         self.image_width = shape[1]
-        self.sequence_length: int = num_frames
 
         self.data_graph: DataGraph = data_graph
 
@@ -75,8 +74,8 @@ class WriteResults:
 
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
-        self.baseline_iou = -np.ones((num_frames - 1, 1))
-        self.our_iou = -np.ones((num_frames - 1, 1))
+        self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
+        self.our_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
         self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
 
@@ -588,7 +587,7 @@ class WriteResults:
 
     def analyze_ransac_matchings(self, frame_i):
 
-        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.sequence_length - 1:
+        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
             front_results = self.measure_ransac_stats(frame_i, 'front')
             back_results = self.measure_ransac_stats(frame_i, 'back')
 

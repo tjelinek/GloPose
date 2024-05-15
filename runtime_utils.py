@@ -29,8 +29,8 @@ def load_gt_data(config: TrackerConfig):
     return gt_texture, gt_mesh, gt_rotations, gt_translations
 
 
-def run_tracking_on_sequence(config: TrackerConfig, files, write_folder, gt_texture=None, gt_mesh=None,
-                             gt_rotations=None, gt_translations=None):
+def run_tracking_on_sequence(config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
+                             gt_translations=None):
     if os.path.exists(write_folder):
         shutil.rmtree(write_folder)
 
@@ -49,7 +49,7 @@ def run_tracking_on_sequence(config: TrackerConfig, files, write_folder, gt_text
 
     sfb = Tracking6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
                      gt_rotations=gt_rotations, gt_translations=gt_translations)
-    best_model = sfb.run_tracking(files)
+    best_model = sfb.run_tracking()
     print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds, best model loss {best_model["value"]}')
 
 

@@ -50,7 +50,9 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, files, write_folder)
+        config.input_frames = len(files)
+
+        run_tracking_on_sequence(config, write_folder)
 
 
 if __name__ == "__main__":

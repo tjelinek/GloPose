@@ -360,12 +360,12 @@ class Tracking6D:
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
-    def run_tracking(self, files):
+    def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
-        our_losses = -np.ones((files.shape[0] - 1, 1))
+        our_losses = -np.ones((self.config.input_frames - 1, 1))
 
-        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape, num_frames=files.shape[0],
+        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape,
                                           tracking_config=self.config, rendering=self.rendering,
                                           rendering_backview=self.rendering_backview, gt_encoder=self.gt_encoder,
                                           deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
@@ -393,7 +393,8 @@ class Tracking6D:
             if type(self.tracker) is SyntheticDataGeneratingTracker:
                 next_tracker_frame = frame_i  # Index of a frame
             else:
-                next_tracker_frame = files[frame_i]  # Name of file
+                raise NotImplementedError("I need to implement some sort of data provider working with either synthetic"
+                                          "or file input data. So far using synthetic data only.")
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
             new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
