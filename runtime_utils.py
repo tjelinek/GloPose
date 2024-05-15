@@ -6,6 +6,7 @@ import time
 import argparse
 from pathlib import Path
 
+from auxiliary_scripts.data_utils import load_texture, load_mesh, load_gt_annotations_file
 from tracker_config import TrackerConfig
 
 sys.path.append('repositories/OSTrack/S2DNet')

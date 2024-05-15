@@ -4,24 +4,21 @@ import copy
 
 from dataclasses import replace
 
-import imageio
 import kaolin
 import numpy as np
 import os
 import time
 import torch
-import torchvision.transforms as transforms
-from kaolin.io.utils import mesh_handler_naive_triangulate
 from kornia.geometry.conversions import (axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
                                          rotation_matrix_to_axis_angle)
 from pathlib import Path
 from torch.optim import lr_scheduler
-from typing import Optional, NamedTuple, List
+from typing import Optional, NamedTuple, List, Callable
 
 from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from auxiliary_scripts.logging import WriteResults, load_gt_annotations_file
+from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
@@ -52,7 +49,8 @@ class InferenceResult(NamedTuple):
 
 class Tracking6D:
 
-    def __init__(self, config: TrackerConfig, device, write_folder, file0, bbox0, init_mask=None):
+    def __init__(self, config: TrackerConfig, device, write_folder, file0, bbox0, init_mask=None, gt_texture=None,
+                 gt_mesh=None, gt_rotations=None, gt_translations=None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -64,12 +62,12 @@ class Tracking6D:
         self.rendering: Optional[RenderingKaolin] = None
         self.rendering_backview: Optional[RenderingKaolin] = None
         self.faces = None
-        self.gt_mesh_prototype = None
-        self.gt_texture = None
+        self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
+        self.gt_texture = gt_texture
         self.gt_texture_features = None
 
         # Features
-        self.feat = None
+        self.feat: Optional[Callable] = None
         self.feat_rgb = None
 
         # Loss functions and optimizers
@@ -94,8 +92,8 @@ class Tracking6D:
         self.long_flow_provider_backview: Optional[MFTFlowProvider] = None
 
         # Ground truth related
-        self.gt_rotations = None
-        self.gt_translations = None
+        self.gt_rotations: Optional[torch.Tensor] = gt_rotations
+        self.gt_translations: Optional[torch.Tensor] = gt_translations
 
         # Keyframes
         self.active_keyframes: Optional[KeyframeBuffer] = None
@@ -124,8 +122,8 @@ class Tracking6D:
         iface_features, ivertices = self.initialize_mesh()
         self.initialize_flow_model()
         self.initialize_feature_extractor()
-        self.initialize_gt_texture()
-        self.initialize_gt_tracks()
+        if self.gt_texture is not None:
+            self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
         self.shape = (self.config.max_width, self.config.max_width)
 
