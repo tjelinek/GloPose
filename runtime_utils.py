@@ -55,7 +55,7 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder, gt_texture=Non
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=False, default="configs/config_deep.yaml")
+    parser.add_argument("--config", required=False, default="configs/config_deep.py")
     parser.add_argument("--sequences", required=False, nargs='*', default=None)
     parser.add_argument("--output_folder", required=False)
     parser.add_argument("--experiment", required=False, default='')  # Experiment name
