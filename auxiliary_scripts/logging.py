@@ -520,14 +520,15 @@ class WriteResults:
 
         arc_data = self.data_graph.get_edge_observations(0, frame_i, Cameras.FRONTVIEW)
 
-        if frame_i % 5 == 0:
-            triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0]
-            triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0]
+        rr.set_time_sequence("frame", frame_i)
 
-            triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
-                                                     f'triangulated_point_cloud__gt_Rt_gt_flow_{frame_i}.ply')
-            triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
-                                                       f'triangulated_point_cloud__gt_Rt_pred_flow_{frame_i}.ply')
+        triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0].cpu()
+        triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0].cpu()
+
+        triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
+                                                 f'triangulated_point_cloud__gt_Rt_gt_flow_{frame_i}.ply')
+        triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
+                                                   f'triangulated_point_cloud__gt_Rt_pred_flow_{frame_i}.ply')
 
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
