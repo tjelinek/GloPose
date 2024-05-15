@@ -41,7 +41,7 @@ def main():
         gt_texture_path = gt_mesh_path.parent.parent / 'images/texture0.jpg'
 
         gt_rotations_np = np.stack(scenarios.generate_rotations_yz(5).rotations, axis=0)
-        gt_rotations = torch.from_numpy(gt_rotations_np).unsqueeze(0).cuda()
+        gt_rotations = torch.from_numpy(gt_rotations_np).unsqueeze(0).cuda().to(torch.float32)
         gt_translations = torch.zeros_like(gt_rotations).unsqueeze(0)
 
         gt_mesh = dataset_item.data
