@@ -6,27 +6,11 @@ import time
 import argparse
 from pathlib import Path
 
-from auxiliary_scripts.data_utils import load_texture, load_mesh, load_gt_annotations_file
 from tracker_config import TrackerConfig
 
 sys.path.append('repositories/OSTrack/S2DNet')
 
 from tracking6d import Tracking6D
-
-
-def load_gt_data(config: TrackerConfig):
-    gt_texture = None
-    gt_mesh = None
-    gt_rotations = None
-    gt_translations = None
-    if config.gt_texture_path is not None:
-        gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
-    if config.gt_mesh_path is not None:
-        gt_mesh = load_mesh(Path(config.gt_mesh_path))
-    if config.gt_track_path is not None:
-        gt_rotations, gt_translations = load_gt_annotations_file(config.gt_track_path)
-
-    return gt_texture, gt_mesh, gt_rotations, gt_translations
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,

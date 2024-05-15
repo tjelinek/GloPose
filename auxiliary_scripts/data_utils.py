@@ -10,6 +10,8 @@ from torchvision import transforms
 
 import imageio
 
+from tracker_config import TrackerConfig
+
 
 def load_texture(texture_path: Path, texture_size: int) -> torch.Tensor:
     texture = torch.from_numpy(imageio.v2.imread(texture_path))
@@ -64,3 +66,18 @@ def load_gt_annotations_file(file_path) -> Tuple[torch.Tensor, torch.Tensor]:
     translations_tensor = torch.tensor(translations).unsqueeze(0).unsqueeze(1).cuda()
 
     return rotations_tensor, translations_tensor
+
+
+def load_gt_data(config: TrackerConfig):
+    gt_texture = None
+    gt_mesh = None
+    gt_rotations = None
+    gt_translations = None
+    if config.gt_texture_path is not None:
+        gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
+    if config.gt_mesh_path is not None:
+        gt_mesh = load_mesh(Path(config.gt_mesh_path))
+    if config.gt_track_path is not None:
+        gt_rotations, gt_translations = load_gt_annotations_file(config.gt_track_path)
+
+    return gt_texture, gt_mesh, gt_rotations, gt_translations
