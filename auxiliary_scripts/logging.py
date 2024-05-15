@@ -1,7 +1,7 @@
 from collections import defaultdict
 from itertools import product
 
-from typing import Dict, Iterable, Tuple, List
+from typing import Dict, Tuple, List
 
 import os
 import math
@@ -986,6 +986,8 @@ class WriteResults:
         outlier_pixel_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
 
         total_points = source_coords.shape[1]
+
+        assert self.tracking_config.matching_visualization_type in {'matching', 'dots'}
 
         if total_points > max_points and self.tracking_config.matching_visualization_type == 'matching':
             random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
