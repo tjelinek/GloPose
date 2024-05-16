@@ -34,6 +34,8 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
+        config.camera_position = (0, 0, 5.0)
+
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
         gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
         gt_mesh_path = gt_model_path / Path('meshes/model.obj')
@@ -47,7 +49,6 @@ def main():
         config.gt_track_path = gt_tracking_path
         config.tran_init = 0
         config.rot_init = [0, 0, 0]
-        # config['rot_init'] = [-math.pi / 2.0, 0, 0]
         config.sequence = sequence
 
         if args.output_folder is not None:
