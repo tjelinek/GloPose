@@ -4,7 +4,9 @@ import numpy as np
 import pygcransac
 import pymagsac
 import torch
-from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution
+from kornia import vec_like, eye_like
+from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, projection_from_KRt, \
+                            triangulate_points
 
 from tracker_config import TrackerConfig
 from utils import tensor_index_to_coordinates_xy
@@ -106,8 +108,28 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
     # print("---r_cam", r_cam_deg.squeeze().round(decimals=3))
     # print('----------------------------------------')
 
-    return r_cam, t_cam, mask_tensor, triangulated_points, E
+    return r_cam, t_cam, mask_tensor, triangulated_points
 
+
+def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts_yx: torch.Tensor,
+                               dst_pts_yx: torch.Tensor, K1: torch.Tensor, K2: torch.Tensor) -> torch.Tensor:
+
+    # set reference view pose and compute projection matrix
+    R1 = eye_like(3, K1)  # Bx3x3
+    t1 = vec_like(3, K1)  # Bx3x1
+
+    # compute the projection matrices for first camera
+    P1 = projection_from_KRt(K1, R1, t1)  # Bx3x4
+
+    # compute the projection matrices for second camera
+    R2 = R_cam
+    t2 = t_cam
+
+    P2 = projection_from_KRt(K2, R2, t2)  # Bx3x4
+
+    X = triangulate_points(P1, P2, src_pts_yx, dst_pts_yx)
+
+    return X
 
 def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     flow_source, flow_target = flow_arc
