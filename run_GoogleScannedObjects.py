@@ -27,8 +27,11 @@ def main():
             'Squirrel',
             'STACKING_BEAR',
             'Schleich_Allosaurus',
-            'Threshold_Ramekin_White_Porcelain',
-            'Tag_Dishtowel_Green'
+            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            'SCHOOL_BUS',
+            'Sootheze_Cold_Therapy_Elephant',
+            'TOP_TEN_HI',
+            'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ]
 
     for sequence in sequences:
