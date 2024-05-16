@@ -54,7 +54,7 @@ if __name__ == '__main__':
     config = load_config('configs/config_deep.py')
 
     configurations = {
-        'GoogleScannedObjects': replace(generate_rotations_z(5.0), initial_rotation=np.asarray([-90.0, 0.0, 0.0])),
+        'GoogleScannedObjects': replace(generate_rotations_z(5.0), initial_rotation=np.asarray([0.0, 0.0, 0.0])),
     }
 
     for gen_cfg_name, movement_scenario in configurations.items():
