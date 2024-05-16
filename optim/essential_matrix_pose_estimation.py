@@ -96,8 +96,7 @@ def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_
 
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_yx, dst_pts_yx,
                                                                           mask_tensor)
-    t_cam = t_cam.squeeze()
-    r_cam = rotation_matrix_to_axis_angle(R.contiguous()).squeeze()
+    r_cam = rotation_matrix_to_axis_angle(R.contiguous())
     if ransac_config.refine_pose_using_numerical_optimization:
         # TODO this is a nasty thing, but it seems that in this implementation, the directions are interchanged
         r_cam = -r_cam
