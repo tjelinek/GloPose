@@ -55,7 +55,6 @@ if __name__ == '__main__':
 
     configurations = {
         'GoogleScannedObjects': replace(generate_rotations_z(5.0), initial_rotation=np.asarray([-90.0, 0.0, 0.0])),
-        'GoogleScannedObjects_default_pose': generate_rotations_z(5.0),
     }
 
     for gen_cfg_name, movement_scenario in configurations.items():
