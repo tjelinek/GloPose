@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 
 from repositories.GMA.core.utils import flow_viz
 from repositories.GMA.core.utils.utils import InputPadder
+from tracker_config import TrackerConfig
 from utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 
 
@@ -225,7 +226,6 @@ def get_correct_correspondences_mask(gt_flow, src_pts_yx, dst_pts_yx, epe_thresh
 
 def get_non_occluded_foreground_correspondences(observed_flow_occlusion, observed_flow_segmentation, observed_flow,
                                                 segmentation_mask_threshold: float, occlusion_coef_threshold: float):
-
     src_pts_yx, _ = get_not_occluded_foreground_points(observed_flow_occlusion, observed_flow_segmentation,
                                                        segmentation_mask_threshold, occlusion_coef_threshold)
 
@@ -289,7 +289,7 @@ def get_flow_from_images_raft(image1, image2, model):
 
 class FlowProvider(ABC):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__()
         self.flow_model = self.get_flow_model()
 
@@ -344,7 +344,7 @@ class GMAFlowProvider(FlowProvider):
     @staticmethod
     def get_flow_model():
         sys.path.append('repositories/GMA')
-        from GMA.core.network import RAFTGMA
+        from repositories.GMA.core.network import RAFTGMA
 
         args = Namespace(model='GMA/checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
                          position_only=False,
@@ -368,7 +368,7 @@ def temporary_change_directory(new_directory):
 
 class MFTFlowProvider(FlowProvider):
 
-    def __init__(self, config_name):
+    def __init__(self, config_name, **kwargs):
         self.add_to_path()
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
@@ -416,7 +416,7 @@ class MFTFlowProvider(FlowProvider):
 
 class MFTIQFlowProvider(FlowProvider):
 
-    def __init__(self, config_name):
+    def __init__(self, config_name, **kwargs):
         self.add_to_path()
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
@@ -453,7 +453,6 @@ class MFTIQFlowProvider(FlowProvider):
         MFTFlowProvider.add_to_path()
 
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
-        config_name = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
         config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
 
         with temporary_change_directory("repositories/MFT_tracker"):
@@ -463,8 +462,32 @@ class MFTIQFlowProvider(FlowProvider):
         return model
 
 
+class MFTIQSyntheticFlowProvider(MFTIQFlowProvider):
+
+    def __init__(self, config_name, **kwargs):
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFTIQ import MFT as MFTTracker
+        from repositories.MFT_tracker.MFT.gt_flow import GTFlowWrapper
+
+        self.need_to_init = True
+        self.config: TrackerConfig = kwargs['config']
+        self.faces = kwargs['faces']
+        self.gt_encoder = kwargs['gt_encoder']
+
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
+        # TODO this does not work for some reason
+        # if not isinstance(self.flow_model.flower, GTFlowWrapper):
+        #     breakpoint()
+        #     raise ValueError("Something went wrong, the flower of MFT must be GTFlowWrapper")
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.flower.initialize_renderer(self.config, self.gt_encoder, self.faces)
+        self.flow_model.init(template_mft)
+
+
 class MFTEnsembleFlowProvider(FlowProvider):
-    def __init__(self, config_name):
+    def __init__(self, config_name, **kwargs):
         self.add_to_path()
         from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
         self.need_to_init = True
