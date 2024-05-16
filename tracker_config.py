@@ -101,6 +101,7 @@ class TrackerConfig:
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'RAFT'  # 'RAFT' 'GMA'
     long_flow_model: str = 'MFT_IQ'   # 'MFT' or None
+    MFT_IQ_backbone_cfg: str = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
     MFT_backbone_cfg: str = 'MFT_cfg'
 
     matching_target_to_backview: bool = True
