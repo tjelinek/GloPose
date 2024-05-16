@@ -81,16 +81,14 @@ class WriteResults:
 
         self.write_folder = Path(write_folder)
 
-        self.flows_path = self.write_folder / Path('flows')
+        self.observed_flows_path = self.write_folder / Path('observed_flows')
         self.gt_imgs_path = self.write_folder / Path('gt_imgs')
-        self.occlusion_maps_path = self.write_folder / Path('mft_occlusions')
         self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
         self.point_clouds_path = self.write_folder / Path('point_clouds')
 
-        self.flows_path.mkdir(exist_ok=True, parents=True)
+        self.observed_flows_path.mkdir(exist_ok=True, parents=True)
         self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
-        self.occlusion_maps_path.mkdir(exist_ok=True, parents=True)
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
         self.ransac_path.mkdir(exist_ok=True, parents=True)
         self.point_clouds_path.mkdir(exist_ok=True, parents=True)
@@ -1569,6 +1567,7 @@ class WriteResults:
 
             observed_flow = flow_observation.observed_flow.cpu()
             observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
+            observed_flow_uncertainties = flow_observation.observed_flow_uncertainty.cpu()
             source_frame_image = source_frame_observation.observed_image.cpu()
             source_frame_segment = source_frame_observation.observed_segmentation.cpu()
 
@@ -1584,6 +1583,7 @@ class WriteResults:
             source_frame_segment_squeezed = source_frame_segment.squeeze()
             target_frame_segment_squeezed = target_frame_segment.squeeze()
             observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
+            observed_flow_uncertainties_squeezed = observed_flow_uncertainties.squeeze()
 
             flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
                                                            [observed_flow_reordered], None,
@@ -1593,18 +1593,23 @@ class WriteResults:
 
             # Define output file paths
             new_image_path = self.gt_imgs_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
-            flow_image_path = self.flows_path / Path(f'flow_{source_frame}_{target_frame}.png')
-            occlusion_path = self.occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            observed_flow_path = self.observed_flows_path / Path(f'flow_{source_frame}_{target_frame}.png')
+            occlusion_path = self.observed_flows_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            uncertainty_path = self.observed_flows_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
-            visualize_occlusions(occlusion_path, source_frame_image.squeeze(),
-                                 observed_flow_occlusions_squeezed, alpha=0.5)
+            self.visualize_occlusions(target_frame, occlusion_path, source_frame_image.squeeze(),
+                                      observed_flow_occlusions_squeezed, alpha=0.5,
+                                      rerun_annotation='observed_flow/occlusion')
+            self.visualize_uncertainty(target_frame, uncertainty_path, source_frame_image.squeeze(),
+                                       observed_flow_uncertainties_squeezed, alpha=0.5,
+                                       rerun_annotation='observed_flow/uncertainty')
 
             transform = transforms.ToPILImage()
             target_image_PIL = transform(target_image_discrete)
 
             # Save the images to disk
             imageio.imwrite(new_image_path, target_image_PIL)
-            imageio.imwrite(flow_image_path, flow_illustration)
+            imageio.imwrite(observed_flow_path, flow_illustration)
 
             # PER PIXEL FLOW ERROR VISUALIZATION
             if per_pixel_flow_error is not None:
@@ -1620,12 +1625,39 @@ class WriteResults:
                 output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
                 imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
 
+    def visualize_occlusions(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
+                             rerun_annotation):
+        assert flow_occlusion.shape == (self.image_height, self.image_width)
+        assert source_image_rgb.shape == (3, self.image_height, self.image_width)
 
-def visualize_occlusions(occlusion_path, source_rendered_image_rgb, rendered_flow_occlusion, alpha):
-    occlusion_mask = rendered_flow_occlusion[:, -1:].detach().clone().repeat(1, 1, 3, 1, 1)
-    blended_image = alpha * occlusion_mask + (1 - alpha) * source_rendered_image_rgb
-    blended_image_np = blended_image.squeeze().cpu().numpy()
-    blended_image_np = (blended_image_np * 255).astype(np.uint8).transpose(1, 2, 0)
-    imageio.imwrite(occlusion_path, blended_image_np)
+        occlusion_mask = flow_occlusion.detach().unsqueeze(0).repeat(3, 1, 1)
+        blended_image = alpha * occlusion_mask + (1 - alpha) * source_image_rgb
+        blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
+
+        self.log_image(flow_target_frame, blended_image, occlusion_path, rerun_annotation)
+
+    def visualize_uncertainty(self, flow_target_frame, uncertainty_path, source_image_rgb,
+                              flow_uncertainty, alpha, rerun_annotation):
+        assert flow_uncertainty.shape == (self.image_height, self.image_width)
+        assert source_image_rgb.shape == (3, self.image_height, self.image_width)
+
+        # Create a red background where intensity is based on uncertainty
+        uncertainty_mask = flow_uncertainty.detach().unsqueeze(0).repeat(3, 1, 1)
+        red_background = torch.zeros_like(uncertainty_mask)
+        red_background[0, :, :] = uncertainty_mask[0, :, :]  # Red channel
+
+        # Blend the source image with the red background
+        blended_image = alpha * red_background + (1 - alpha) * source_image_rgb
+        blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
+
+        self.log_image(flow_target_frame, blended_image, uncertainty_path, rerun_annotation)
+
+    def log_image(self, frame: int, blended_image: torch.Tensor, save_path: Path, rerun_annotation: str):
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            rr.set_time_sequence("frame", frame)
+            rr.log(rerun_annotation, rr.Image(blended_image))
+        else:
+            blended_image_np = blended_image.numpy(force=True)
+            imageio.imwrite(save_path, blended_image_np)
 
 
