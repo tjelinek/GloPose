@@ -1668,7 +1668,4 @@ class WriteResults:
         rr.log(rerun_annotation, rr.Image(image))
         # else:
         image_np = image.numpy(force=True)
-        try:
-            imageio.imwrite(save_path, image_np)
-        except:
-            print(image_np.shape)
+        imageio.imwrite(save_path, image_np)
