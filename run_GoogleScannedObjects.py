@@ -1,13 +1,12 @@
-import glob
-import os
 import sys
-import time
 
 import numpy as np
+import torch
 
+from dataset_generators import scenarios
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
-from auxiliary_scripts.data_utils import load_gt_data
+from auxiliary_scripts.data_utils import load_mesh, load_texture
 from utils import load_config
 from pathlib import Path
 
@@ -42,35 +41,31 @@ def main():
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
         gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
         gt_mesh_path = gt_model_path / Path('meshes/model.obj')
-        gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path('gt_tracking_log') / Path(sequence) / \
-                           Path('gt_tracking_log.csv')
+        # gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path('gt_tracking_log') / Path(sequence) / \
+        #                    Path('gt_tracking_log.csv')
 
         experiment_name = args.experiment
 
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
-        config.gt_track_path = gt_tracking_path
+        # config.gt_track_path = gt_tracking_path
         config.tran_init = 0
         config.rot_init = [0, 0, 0]
         config.sequence = sequence
+
+        gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
+        gt_mesh = load_mesh(Path(config.gt_mesh_path))
+        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_y(5).rotations, axis=0))
+        gt_rotations = torch.from_numpy(gt_rotations_np).unsqueeze(0).cuda().to(torch.float32)
+        gt_translations = torch.zeros_like(gt_rotations).unsqueeze(0)
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
         else:
             write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
-        renderings_folder = 'renderings'
+        config.input_frames = gt_rotations.shape[1]
 
-        t0 = time.time()
-
-        files = np.array(
-            glob.glob(os.path.join(dataset_folder, dataset, renderings_folder, sequence, '*.*')))
-        files.sort()
-
-        config.input_frames = len(files)
-
-        print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-        gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
         run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 
