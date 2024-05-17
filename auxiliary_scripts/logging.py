@@ -34,10 +34,8 @@ from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from utils import (write_video, qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg,
-                   coordinates_xy_to_tensor_index)
+from utils import qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg, coordinates_xy_to_tensor_index
 from models.rendering import infer_normalized_renderings, RenderingKaolin
-from auxiliary_scripts.torch_helpers import write_renders
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -168,10 +166,6 @@ class WriteResults:
                     f.create_dataset(key, data=[value])
 
     def __del__(self):
-        self.all_input.release()
-        self.all_segm.release()
-        self.all_proj.release()
-        self.all_proj_filtered.release()
 
         self.tracking_log.close()
         self.metrics_log.close()
@@ -347,7 +341,7 @@ class WriteResults:
 
                 rotation_tensor_deg = torch.Tensor([0, 0, 0])
                 rotation_tensor_deg[rot_axis_idx] = rotation_deg
-                rotation_tensor_rad = deg_to_rad(rotation_tensor_deg)
+                rotation_tensor_rad = torch.deg2rad(rotation_tensor_deg)
                 rotation_tensor_quaternion = axis_angle_to_quaternion(rotation_tensor_rad)
 
                 sampled_rotation = rotation_tensor_quaternion[None, None].cuda()
@@ -400,13 +394,11 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, bounding_box, our_losses, frame_i, tex, new_flow_arcs,
+    def write_results(self, bounding_box, frame_i, tex, new_flow_arcs,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
                       best_model, observations: FrameObservation, observations_backview: FrameObservation,
                       gt_rotations, gt_translations):
 
-        observed_images = observations.observed_image
-        observed_image_features = observations.observed_image_features
         observed_segmentations = observations.observed_segmentation
 
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
@@ -446,12 +438,6 @@ class WriteResults:
         if self.tracking_config.features == 'rgb':
             tex = detached_result.texture_maps
 
-        feat_renders_result = self.rendering.forward(detached_result.translations, detached_result.quaternions,
-                                                     detached_result.vertices, self.deep_encoder.face_features,
-                                                     detached_result.texture_maps, detached_result.lights)
-
-        feat_renders = feat_renders_result.rendered_image
-
         rgb_renders_result = self.rendering.forward(detached_result.translations, detached_result.quaternions,
                                                     detached_result.vertices, self.deep_encoder.face_features,
                                                     tex, detached_result.lights)
@@ -459,18 +445,8 @@ class WriteResults:
         renders = rgb_renders_result.rendered_image
         rendered_silhouette = rgb_renders_result.rendered_image_segmentation
 
-        renders_crop = renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-        feat_renders_crop = feat_renders[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-
         self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
                                        observed_segmentations[:, [-1]], frame_i)
-
-        write_renders(feat_renders[:, :, :3], self.write_folder, self.tracking_config.max_keyframes + 1, ids=0)
-        write_renders(renders_crop, self.write_folder, self.tracking_config.max_keyframes + 1, ids=1)
-
-        # write_renders(torch.cat((images[..., bounding_box[0]:bounding_box[1],
-        #                          bounding_box[2]:bounding_box[3]], feat_renders[:, :, :, -1:]), 3),
-        #                 self.write_folder, self.tracking_config.max_keyframes + 1, ids=2)
 
         write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
                        self.deep_encoder.face_features[0].cpu().numpy(),
@@ -488,33 +464,7 @@ class WriteResults:
         with open(self.write_folder / f"model_{frame_i}.mtl", "w") as file:
             file.writelines(lines)
 
-        renders_np = renders.numpy(force=True)
-        observed_images_numpy = observed_images.numpy(force=True)
-        observed_segmentations_numpy = observed_segmentations.numpy(force=True)
-        segmented_images_numpy = observed_images_numpy * observed_segmentations_numpy
-
-        write_video(renders_np, os.path.join(self.write_folder, 'im_recon.avi'), fps=6)
-        write_video(observed_images_numpy, os.path.join(self.write_folder, 'input.avi'), fps=6)
-
-        write_video(segmented_images_numpy, os.path.join(self.write_folder, 'segments.avi'), fps=6)
         for tmpi in range(renders.shape[1]):
-            img = observed_images[0, tmpi, :3, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-            seg = observed_segmentations[0][tmpi, :, bounding_box[0]:bounding_box[1],
-                  bounding_box[2]:bounding_box[3]].clone()
-            save_image(seg, os.path.join(self.write_folder, 'imgs', 's{}.png'.format(tmpi)))
-            seg[seg == 0] = 0.35
-            save_image(img, os.path.join(self.write_folder, 'imgs', 'i{}.png'.format(tmpi)))
-            save_image(observed_image_features[0, tmpi, :3, bounding_box[0]:bounding_box[1],
-                       bounding_box[2]:bounding_box[3]],
-                       os.path.join(self.write_folder, 'imgs', 'if{}.png'.format(tmpi)))
-            save_image(torch.cat((img, seg), 0),
-                       os.path.join(self.write_folder, 'imgs', 'is{}.png'.format(tmpi)))
-            save_image(renders_crop[0, tmpi, 0, [3, 3, 3]],
-                       os.path.join(self.write_folder, 'imgs', 'm{}.png'.format(tmpi)))
-            save_image(renders_crop[0, tmpi, 0, :],
-                       os.path.join(self.write_folder, 'imgs', 'r{}.png'.format(tmpi)))
-            save_image(feat_renders_crop[0, tmpi, 0, :],
-                       os.path.join(self.write_folder, 'imgs', 'f{}.png'.format(tmpi)))
 
             segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
             self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
@@ -523,29 +473,6 @@ class WriteResults:
                                                      observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
-        np.savetxt(os.path.join(self.write_folder, 'baseline_iou.txt'), self.baseline_iou, fmt='%.10f',
-                   delimiter='\n')
-        np.savetxt(os.path.join(self.write_folder, 'iou.txt'), self.our_iou, fmt='%.10f', delimiter='\n')
-        np.savetxt(os.path.join(self.write_folder, 'losses.txt'), our_losses, fmt='%.10f', delimiter='\n')
-
-        image_to_write = observed_images[0, :, :3].clamp(min=0, max=1).cpu().numpy()
-        image_to_write = image_to_write.transpose(2, 3, 1, 0)
-        image_to_write = image_to_write[:, :, [2, 1, 0], -1]
-        image_to_write = (image_to_write * 255).astype(np.uint8)
-        self.all_input.write(image_to_write)
-
-        segmentation_to_write = (observed_images[0, :, :3] * observed_segmentations[0])
-        segmentation_to_write = segmentation_to_write.clamp(min=0, max=1).cpu().numpy()
-        segmentation_to_write = segmentation_to_write.transpose(2, 3, 1, 0)
-        segmentation_to_write = segmentation_to_write[:, :, [2, 1, 0], -1]
-        segmentation_to_write = (segmentation_to_write * 255).astype(np.uint8)
-        self.all_segm.write(segmentation_to_write)
-
-        rendered_silhouette = renders[0, :, :3].detach().clamp(min=0, max=1).cpu().numpy()
-        rendered_silhouette = rendered_silhouette.transpose(2, 3, 1, 0)
-        rendered_silhouette = rendered_silhouette[:, :, [2, 1, 0], -1]
-        rendered_silhouette = (rendered_silhouette * 255).astype(np.uint8)
-        self.all_proj.write(rendered_silhouette)
 
     def visualize_point_clouds_from_ransac(self, frame_i):
 
