@@ -82,14 +82,18 @@ class WriteResults:
 
         self.write_folder = Path(write_folder)
 
-        self.observed_flows_path = self.write_folder / Path('observed_flows')
-        self.gt_imgs_path = self.write_folder / Path('gt_imgs')
+        self.observations_path = self.write_folder / Path('observed_input')
+        self.gt_values_path = self.write_folder / Path('gt_output')
+        self.optimized_values_path = self.write_folder / Path('predicted_output')
+
         self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
         self.point_clouds_path = self.write_folder / Path('point_clouds')
 
-        self.observed_flows_path.mkdir(exist_ok=True, parents=True)
-        self.gt_imgs_path.mkdir(exist_ok=True, parents=True)
+        self.observations_path.mkdir(exist_ok=True, parents=True)
+        self.gt_values_path.mkdir(exist_ok=True, parents=True)
+        self.optimized_values_path.mkdir(exist_ok=True, parents=True)
+
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
         self.ransac_path.mkdir(exist_ok=True, parents=True)
         self.point_clouds_path.mkdir(exist_ok=True, parents=True)
@@ -399,10 +403,10 @@ class WriteResults:
         self.visualize_point_clouds_from_ransac(frame_i)
 
         if frame_i % self.tracking_config.write_results_frequency == 0:
-            self.visualize_theoretical_flow(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
+            self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
 
-            self.visualize_flow(active_keyframes, active_keyframes_backview, new_flow_arcs, None)
+            self.visualize_observed_data(active_keyframes, active_keyframes_backview, new_flow_arcs)
 
             self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
@@ -1470,7 +1474,7 @@ class WriteResults:
         encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_theoretical_flow(self, bounding_box, keyframe_buffer: KeyframeBuffer,
+    def visualize_optimized_values(self, bounding_box, keyframe_buffer: KeyframeBuffer,
                                    new_flow_arcs: List[Tuple[int, int]]):
         for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
@@ -1504,32 +1508,23 @@ class WriteResults:
             source_rendered_image_rgb = rendered_keyframe_images[0, -2]
             target_rendered_image_rgb = rendered_keyframe_images[0, -1]
 
-            # Prepare file paths
-            theoretical_flow_paths = self.write_folder / Path('rendered_flows')
-            renderings_path = self.write_folder / Path('renderings')
-
-            theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
-            renderings_path.mkdir(exist_ok=True, parents=True)
-
-            theoretical_flow_path = theoretical_flow_paths / Path(
+            theoretical_flow_path = self.optimized_values_path / Path(
                 f"predicted_flow_{source_frame}_{target_frame}.png")
-            flow_difference_path = theoretical_flow_paths / Path(
+            flow_difference_path = self.optimized_values_path / Path(
                 f"flow_difference_{source_frame}_{target_frame}.png")
-            rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
-            occlusion_path = theoretical_flow_paths / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            rendering_path = self.optimized_values_path / Path(f"rendering_{target_frame}.png")
+            occlusion_path = self.optimized_values_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
             rendered_occlusion_squeezed = rendered_flow_result.rendered_flow_occlusion.squeeze()
             self.visualize_occlusions(target_frame, occlusion_path, source_rendered_image_rgb.squeeze(),
                                       rendered_occlusion_squeezed, alpha=0.8,
-                                      rerun_annotation='/rendered_flow/occlusion')
-
-            # Convert tensors to NumPy arrays
-            target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
-            target_rendered_image_np = target_rendered_image_np.astype('uint8')
+                                      rerun_annotation='/optimized_values/occlusion')
 
             # Save rendered images
             if flow_arc_idx == 0:
-                imageio.imwrite(rendering_path, target_rendered_image_np)
+                target_rendered_image = (target_rendered_image_rgb * 255).permute(1, 2, 0).to(torch.uint8)
+                self.log_image(target_frame, target_rendered_image, rendering_path,
+                               "/optimized_values/rendering")
 
             # Adjust (0, 1) range to pixel range
             theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
@@ -1539,10 +1534,6 @@ class WriteResults:
             observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
             observed_flow = flow_unit_coords_to_image_coords(observed_flow)
             observed_flow = observed_flow.squeeze().detach().clone().cpu()
-
-            # Obtain flow and image illustrations
-            # theoretical_flow = self.write_tensor_into_bbox(theoretical_flow, bounding_box)
-            # observed_flow = self.write_tensor_into_bbox(observed_flow, bounding_box)
 
             observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
             theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
@@ -1576,8 +1567,7 @@ class WriteResults:
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
-    def visualize_flow(self, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview, flow_arcs,
-                       per_pixel_flow_error):
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview, flow_arcs):
         for flow_arcs in flow_arcs:
 
             source_frame = flow_arcs[0]
@@ -1614,10 +1604,10 @@ class WriteResults:
                                                            flow_occlusion_masks=[observed_flow_occlusions_squeezed])
 
             # Define output file paths
-            new_image_path = self.gt_imgs_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
-            observed_flow_path = self.observed_flows_path / Path(f'flow_{source_frame}_{target_frame}.png')
-            occlusion_path = self.observed_flows_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
-            uncertainty_path = self.observed_flows_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
+            new_image_path = self.observations_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
+            observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
+            occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
             self.visualize_occlusions(target_frame, occlusion_path, source_frame_image.squeeze(),
                                       observed_flow_occlusions_squeezed, alpha=0.8,
@@ -1632,20 +1622,6 @@ class WriteResults:
             # Save the images to disk
             imageio.imwrite(new_image_path, target_image_PIL)
             imageio.imwrite(observed_flow_path, flow_illustration)
-
-            # PER PIXEL FLOW ERROR VISUALIZATION
-            if per_pixel_flow_error is not None:
-                per_pixel_flow_loss_np = per_pixel_flow_error[:, -1].squeeze().detach().cpu().numpy()
-
-                # Normalize values for visualization (optional)
-                per_pixel_flow_loss_np_norm = (per_pixel_flow_loss_np - per_pixel_flow_loss_np.min()) / \
-                                              (per_pixel_flow_loss_np.max() - per_pixel_flow_loss_np.min()) * 255
-
-                # Convert to uint8 and save using imageio
-                output_loss_viz = self.write_folder / Path('losses')
-                output_loss_viz.mkdir(parents=True, exist_ok=True)
-                output_filename = output_loss_viz / f'end_point_error_frame_{source_frame}_{target_frame}.png'
-                imageio.imwrite(output_filename, per_pixel_flow_loss_np_norm.astype('uint8'))
 
     def visualize_occlusions(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
                              rerun_annotation):
@@ -1674,10 +1650,13 @@ class WriteResults:
 
         self.log_image(flow_target_frame, blended_image, uncertainty_path, rerun_annotation)
 
-    def log_image(self, frame: int, blended_image: torch.Tensor, save_path: Path, rerun_annotation: str):
+    def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str):
         # if self.tracking_config.write_to_rerun_rather_than_disk:
         rr.set_time_sequence("frame", frame)
-        rr.log(rerun_annotation, rr.Image(blended_image))
+        rr.log(rerun_annotation, rr.Image(image))
         # else:
-        blended_image_np = blended_image.numpy(force=True)
-        imageio.imwrite(save_path, blended_image_np)
+        image_np = image.numpy(force=True)
+        try:
+            imageio.imwrite(save_path, image_np)
+        except:
+            print(image_np.shape)
