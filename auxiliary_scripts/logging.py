@@ -1163,7 +1163,6 @@ class WriteResults:
                 else:
                     ax.legend(loc='upper left', fontsize='small')
 
-
         flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
             else self.tracking_config.long_flow_model
 
