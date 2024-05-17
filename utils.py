@@ -14,12 +14,6 @@ from main_settings import tmp_folder
 from tracker_config import TrackerConfig
 
 
-def segment2bbox(segment):
-    inds = segment.nonzero(as_tuple=False)
-    bbox = [int(inds[:, 1].min()), int(inds[:, 0].min()), int(inds[:, 1].max()), int(inds[:, 0].max())]
-    return bbox
-
-
 def erode_segment_mask2(erosion_iterations, segment_masks):
     """
 
@@ -51,41 +45,8 @@ def dilate_mask(dilation_iterations, mask_tensor):
         dilated_segment_masks = dilation(dilated_segment_masks, kernel)
     return dilated_segment_masks[None]
 
-
-def write_video(array4d, path, fps=6):
-    """
-
-    :param array4d: Input Tensor of Shape (1, N, C, H, W)
-    :param path: Output path
-    :param fps: Frames per second
-    :return:
-    """
-    array4d[array4d < 0] = 0
-    array4d[array4d > 1] = 1
-    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), fps, (array4d.shape[-1], array4d.shape[-2]), True)
-    for ki in range(array4d.shape[1]):
-        out.write((array4d[:, ki, [2, 1, 0]] * 255).astype(np.uint8))
-    out.release()
-
-
-def calciou_masks(mask1, mask2):
-    A_inter_B = mask1 * mask2
-    A_union_B = (mask1 + mask2 - A_inter_B)
-    iou = np.sum(A_inter_B) / np.sum(A_union_B)
-    return iou
-
-
-def load_config_yaml(config_name) -> TrackerConfig:
-    with open(config_name) as file:
-        config = yaml.safe_load(file)
-    tracker_config = TrackerConfig(**config)
-    return tracker_config
-
-
 def load_config(config_path) -> TrackerConfig:
     config_path = Path(config_path)
-    if config_path.suffix == 'yaml':
-        load_config_yaml(config_path)
 
     spec = importlib.util.spec_from_file_location("module.name", config_path)
     config_module = importlib.util.module_from_spec(spec)
@@ -97,26 +58,6 @@ def load_config(config_path) -> TrackerConfig:
     return config_instance
 
 
-def fmo_detect(I, B):
-    # simulate FMO detector -> find approximate location of FMO
-    dI = (np.sum(np.abs(I - B), 2) > 0.05).astype(float)
-    labeled = label(dI)
-    regions = regionprops(labeled)
-    ind = -1
-    maxsol = 0
-    for ki in range(len(regions)):
-        if 100 < regions[ki].area < 0.01 * np.prod(dI.shape):
-            if regions[ki].solidity > maxsol:
-                ind = ki
-                maxsol = regions[ki].solidity
-    if ind == -1:
-        return [], 0
-
-    # pdb.set_trace()
-    bbox = np.array(regions[ind].bbox).astype(int)
-    return bbox, regions[ind].minor_axis_length
-
-
 def imread(name):
     img = cv2.imread(name, cv2.IMREAD_UNCHANGED)
     if len(img.shape) == 2:
@@ -125,12 +66,6 @@ def imread(name):
         return img[:, :, [2, 1, 0]] / 255
     else:
         return img[:, :, [2, 1, 0, 3]] / 65535
-
-
-def imwrite(im, name=tmp_folder + 'tmp.png'):
-    im[im < 0] = 0
-    im[im > 1] = 1
-    cv2.imwrite(name, im[:, :, [2, 1, 0]] * 255)
 
 
 def fmo_detect_maxarea(I, B):
