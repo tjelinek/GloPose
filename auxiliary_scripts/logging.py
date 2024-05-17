@@ -12,6 +12,7 @@ import cv2
 import imageio
 import csv
 import rerun as rr
+# import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt, gridspec
@@ -111,6 +112,22 @@ class WriteResults:
     def rerun_init(self):
         rr.init(f'{self.tracking_config.sequence}')
         rr.save(self.rerun_log_path / 'rerun.rrd')
+
+        # blueprint = rrb.Blueprint(
+        #     rrb.Tabs(
+        #         contents=
+        #         [
+        #             rrb.Grid(
+        #                 contents=[
+        #                     rrb.Spatial2DView(name="Observed Flow Occlusion", origin="/observed_flow/occlusion"),
+        #                     rrb.Spatial2DView(name="Observed Flow Uncertainty", origin="/observed_flow/uncertainty")
+        #                 ]
+        #             ),
+        #             rrb.Grid(
+        #                 rrb.Spatial2DView(name="Rendered Flow Occlusion", origin="/rendered_flow/occlusion"))],
+        #         name='Observed Flow (MFT)'
+        #     )
+        # )
 
     def correspondences_log_write_common_data(self):
 
@@ -528,6 +545,12 @@ class WriteResults:
         triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
                                                    f'triangulated_point_cloud__gt_Rt_pred_flow_{frame_i}.ply')
 
+        # rr.log("triangulated_points_gt_Rt_gt_flow", rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
+        # rr.log("triangulated_points_gt_Rt_observed_flow", rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
+
+        # rr.log("points", rr.Points3D(points, colors=point_colors), rr.AnyValues(error=point_errors))
+
+        if frame_i % 5 == 0:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
@@ -1489,17 +1512,18 @@ class WriteResults:
 
             theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
             renderings_path.mkdir(exist_ok=True, parents=True)
-            occlusion_maps_path.mkdir(exist_ok=True, parents=True)
 
             theoretical_flow_path = theoretical_flow_paths / Path(
                 f"predicted_flow_{source_frame}_{target_frame}.png")
             flow_difference_path = theoretical_flow_paths / Path(
                 f"flow_difference_{source_frame}_{target_frame}.png")
             rendering_path = renderings_path / Path(f"rendering_{target_frame}.png")
-            occlusion_path = occlusion_maps_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            occlusion_path = theoretical_flow_paths / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
-            visualize_occlusions(occlusion_path, source_rendered_image_rgb,
-                                 rendered_flow_result.rendered_flow_occlusion, alpha=0.5)
+            rendered_occlusion_squeezed = rendered_flow_result.rendered_flow_occlusion.squeeze()
+            self.visualize_occlusions(target_frame, occlusion_path, source_rendered_image_rgb.squeeze(),
+                                      rendered_occlusion_squeezed, alpha=0.8,
+                                      rerun_annotation='/rendered_flow/occlusion')
 
             # Convert tensors to NumPy arrays
             target_rendered_image_np = (target_rendered_image_rgb * 255).detach().cpu().numpy().transpose(1, 2, 0)
@@ -1598,11 +1622,11 @@ class WriteResults:
             uncertainty_path = self.observed_flows_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
             self.visualize_occlusions(target_frame, occlusion_path, source_frame_image.squeeze(),
-                                      observed_flow_occlusions_squeezed, alpha=0.5,
-                                      rerun_annotation='observed_flow/occlusion')
+                                      observed_flow_occlusions_squeezed, alpha=0.8,
+                                      rerun_annotation='/observed_flow/occlusion')
             self.visualize_uncertainty(target_frame, uncertainty_path, source_frame_image.squeeze(),
-                                       observed_flow_uncertainties_squeezed, alpha=0.5,
-                                       rerun_annotation='observed_flow/uncertainty')
+                                       observed_flow_uncertainties_squeezed, alpha=0.8,
+                                       rerun_annotation='/observed_flow/uncertainty')
 
             transform = transforms.ToPILImage()
             target_image_PIL = transform(target_image_discrete)
@@ -1653,11 +1677,9 @@ class WriteResults:
         self.log_image(flow_target_frame, blended_image, uncertainty_path, rerun_annotation)
 
     def log_image(self, frame: int, blended_image: torch.Tensor, save_path: Path, rerun_annotation: str):
-        if self.tracking_config.write_to_rerun_rather_than_disk:
-            rr.set_time_sequence("frame", frame)
-            rr.log(rerun_annotation, rr.Image(blended_image))
-        else:
-            blended_image_np = blended_image.numpy(force=True)
-            imageio.imwrite(save_path, blended_image_np)
-
-
+        # if self.tracking_config.write_to_rerun_rather_than_disk:
+        rr.set_time_sequence("frame", frame)
+        rr.log(rerun_annotation, rr.Image(blended_image))
+        # else:
+        blended_image_np = blended_image.numpy(force=True)
+        imageio.imwrite(save_path, blended_image_np)
