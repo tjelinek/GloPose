@@ -8,7 +8,6 @@ import math
 
 import h5py
 import torch
-import cv2
 import imageio
 import csv
 import rerun as rr
