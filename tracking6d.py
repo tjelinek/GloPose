@@ -22,7 +22,7 @@ from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
     MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
-    get_correct_correspondences_mask, MFTIQFlowProvider
+    get_correct_correspondences_mask, MFTIQFlowProvider, MFTIQSyntheticFlowProvider
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -120,7 +120,6 @@ class Tracking6D:
         self.device = 'cuda'
 
         iface_features, ivertices = self.initialize_mesh()
-        self.initialize_flow_model()
         self.initialize_feature_extractor()
         if self.gt_texture is not None:
             self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
@@ -130,6 +129,8 @@ class Tracking6D:
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
+
+        self.initialize_flow_model()
 
         self.used_cameras = [Cameras.FRONTVIEW]
         if self.config.matching_target_to_backview:
@@ -177,7 +178,6 @@ class Tracking6D:
             self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
         else:  # d3s
             self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
-
 
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
@@ -342,6 +342,7 @@ class Tracking6D:
             'MFT': MFTFlowProvider,
             'MFTEnsemble': MFTEnsembleFlowProvider,
             'MFT_IQ': MFTIQFlowProvider,
+            'MFT_Synth': MFTIQSyntheticFlowProvider,
         }
 
         # For short_flow_model
@@ -353,10 +354,18 @@ class Tracking6D:
 
         # For long_flow_model
         if self.config.long_flow_model in long_flow_models:
-            self.long_flow_provider = long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg)
+            self.long_flow_provider = long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg,
+                                                                                    config=self.config,
+                                                                                    faces=self.faces,
+                                                                                    gt_encoder=self.gt_encoder
+                                                                                    )
             if self.config.matching_target_to_backview:
                 self.long_flow_provider_backview = (
-                    long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg))
+                    long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg,
+                                                                  config=self.config,
+                                                                  faces=self.faces,
+                                                                  gt_encoder=self.gt_encoder
+                                                                  ))
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
