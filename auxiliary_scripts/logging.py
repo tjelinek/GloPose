@@ -1505,9 +1505,8 @@ class WriteResults:
             target_rendered_image_rgb = rendered_keyframe_images[0, -1]
 
             # Prepare file paths
-            theoretical_flow_paths = self.write_folder / Path('flows')
+            theoretical_flow_paths = self.write_folder / Path('rendered_flows')
             renderings_path = self.write_folder / Path('renderings')
-            occlusion_maps_path = self.write_folder / Path('rendered_occlusions')
 
             theoretical_flow_paths.mkdir(exist_ok=True, parents=True)
             renderings_path.mkdir(exist_ok=True, parents=True)
