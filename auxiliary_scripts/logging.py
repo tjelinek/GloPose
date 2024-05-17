@@ -53,16 +53,6 @@ class WriteResults:
 
         self.data_graph: DataGraph = data_graph
 
-        self.all_input = cv2.VideoWriter(os.path.join(write_folder, 'all_input.avi'), cv2.VideoWriter_fourcc(*"MJPG"),
-                                         10, (shape[1], shape[0]), True)
-        self.all_segm = cv2.VideoWriter(os.path.join(write_folder, 'all_segm.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                        (shape[1], shape[0]), True)
-        self.all_proj = cv2.VideoWriter(os.path.join(write_folder, 'all_proj.avi'), cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                        (shape[1], shape[0]), True)
-        self.all_proj_filtered = cv2.VideoWriter(os.path.join(write_folder, 'all_proj_filtered.avi'),
-                                                 cv2.VideoWriter_fourcc(*"MJPG"), 10,
-                                                 (shape[1], shape[0]), True)
-
         self.rendering: RenderingKaolin = rendering
         self.rendering_backview: RenderingKaolin = rendering_backview
         self.gt_encoder: Encoder = gt_encoder
