@@ -34,7 +34,7 @@ from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from utils import qnorm, quaternion_angular_difference, deg_to_rad, rad_to_deg, coordinates_xy_to_tensor_index
+from utils import qnorm, quaternion_angular_difference, coordinates_xy_to_tensor_index
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
@@ -204,25 +204,24 @@ class WriteResults:
                 continue
 
             if relative_mode and stepi > 1:
-                gt_rotation_deg_prev = rad_to_deg(tracking6d.gt_rotations[0, stepi - 1]).cpu()
+                gt_rotation_deg_prev = torch.rad2deg(tracking6d.gt_rotations[0, stepi - 1]).cpu()
                 gt_translation_prev = tracking6d.gt_translations[0, 0, stepi - 1].cpu()
 
-                gt_rotation_deg_current = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+                gt_rotation_deg_current = torch.rad2deg(tracking6d.gt_rotations[0, stepi]).cpu()
                 gt_translation_current = tracking6d.gt_translations[0, 0, stepi].cpu()
 
                 gt_translation_diff = gt_translation_current - gt_translation_prev
                 gt_rotation_diff = gt_rotation_deg_current - gt_rotation_deg_prev
 
-                gt_translation = tracking6d.logged_sgd_translations[0][0, 0, 0].detach().cpu() + \
-                                 gt_translation_diff
+                gt_translation = tracking6d.logged_sgd_translations[0][0, 0, 0].detach().cpu() + gt_translation_diff
 
                 gt_rotation_quaternion = tracking6d.logged_sgd_quaternions[0].detach().cpu()
                 gt_rotation_rad = quaternion_to_axis_angle(gt_rotation_quaternion)
-                last_rotation_deg = rad_to_deg(gt_rotation_rad)[0, 0]
+                last_rotation_deg = torch.rad2deg(gt_rotation_rad)[0, 0]
 
                 gt_rotation_deg = last_rotation_deg + gt_rotation_diff
             else:
-                gt_rotation_deg = rad_to_deg(tracking6d.gt_rotations[0, stepi]).cpu()
+                gt_rotation_deg = torch.rad2deg(tracking6d.gt_rotations[0, stepi]).cpu()
                 gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
 
             translations_space = np.linspace(gt_translation[trans_axis_idx] - 0.3,
@@ -271,7 +270,7 @@ class WriteResults:
                 iteration_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, trans_axis_idx].detach().cpu()
                 iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
                 iteration_rotation_rad = quaternion_to_axis_angle(iteration_rotation_quaternion)
-                iteration_rotation_deg = rad_to_deg(iteration_rotation_rad)[0, -1, rot_axis_idx]
+                iteration_rotation_deg = torch.rad2deg(iteration_rotation_rad)[0, -1, rot_axis_idx]
 
                 if i == 0:
                     plt.scatter(iteration_translation, iteration_rotation_deg, color='white', marker='x', label='Start')
@@ -1299,7 +1298,7 @@ class WriteResults:
         # Current rotation and translation values
         translation_tensors = [t[0, 0, -1].detach().cpu() for t in logged_sgd_translations]
         rotation_tensors = [
-            rad_to_deg(quaternion_to_axis_angle(q.detach().cpu()))[0, -1]
+            torch.rad2deg(quaternion_to_axis_angle(q.detach().cpu()))[0, -1]
             for q in logged_sgd_quaternions
         ]
 
@@ -1311,7 +1310,7 @@ class WriteResults:
             ax1.plot(range(len(rotation_tensors)), values, label=axis_labels[i], color=colors[i])
             # Plot GT rotations if provided
             if gt_rotation is not None:
-                gt_rotation_deg = rad_to_deg(gt_rotation)
+                gt_rotation_deg = torch.rad2deg(gt_rotation)
                 gt_rotation_values = gt_rotation_deg.numpy(force=True).repeat(len(rotation_tensors))
                 ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values, linestyle='dashed',
                          label=f"GT {axis_labels[i]}", alpha=0.5, color=colors[i])

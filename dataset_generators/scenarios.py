@@ -6,9 +6,6 @@ from typing import List
 
 import numpy as np
 
-from utils import deg_to_rad
-
-
 def default_initial_rotation():
     return np.array([0., 0., 0.])
 
@@ -43,7 +40,7 @@ class MovementScenario:
         quaternions = []
 
         for rot_deg in self.rotations:
-            rotations_radians = deg_to_rad(rot_deg)
+            rotations_radians = np.deg2rad(rot_deg)
             rotation_quaternion = axis_angle_to_quaternion(torch.from_numpy(rotations_radians)).numpy()
             quaternions.append(rotation_quaternion)
 

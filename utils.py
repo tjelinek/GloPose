@@ -164,15 +164,6 @@ def crop_resize(Is, bbox, res):
         imr = imr[:, :, :, 0]
     return imr
 
-
-def deg_to_rad(deg):
-    return math.pi * deg / 180.0
-
-
-def rad_to_deg(rad):
-    return 180 * rad / math.pi
-
-
 def mesh_normalize(vertices):
     mesh_max = torch.max(vertices, dim=1, keepdim=True)[0]
     mesh_min = torch.min(vertices, dim=1, keepdim=True)[0]
