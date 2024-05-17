@@ -12,7 +12,7 @@ import cv2
 import imageio
 import csv
 import rerun as rr
-# import rerun.blueprint as rrb
+import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt, gridspec
@@ -117,21 +117,33 @@ class WriteResults:
         rr.init(f'{self.tracking_config.sequence}')
         rr.save(self.rerun_log_path / 'rerun.rrd')
 
-        # blueprint = rrb.Blueprint(
-        #     rrb.Tabs(
-        #         contents=
-        #         [
-        #             rrb.Grid(
-        #                 contents=[
-        #                     rrb.Spatial2DView(name="Observed Flow Occlusion", origin="/observed_flow/occlusion"),
-        #                     rrb.Spatial2DView(name="Observed Flow Uncertainty", origin="/observed_flow/uncertainty")
-        #                 ]
-        #             ),
-        #             rrb.Grid(
-        #                 rrb.Spatial2DView(name="Rendered Flow Occlusion", origin="/rendered_flow/occlusion"))],
-        #         name='Observed Flow (MFT)'
-        #     )
-        # )
+        blueprint = rrb.Blueprint(
+            rrb.Tabs(
+                contents=
+                [
+                    rrb.Grid(
+                        contents=[
+                            rrb.Spatial2DView(name="Observed Flow Occlusion", origin="/observed_flow/occlusion"),
+                            rrb.Spatial2DView(name="Observed Flow Uncertainty", origin="/observed_flow/uncertainty")
+                        ],
+                        name='Observed Input'
+                    ),
+                    rrb.Grid(
+                        contents=[
+                            rrb.Spatial2DView(name="Rendered Flow Occlusion", origin="/rendered_flow/occlusion")
+                        ],
+                        name='Output After Optimization'
+                    ),
+                    rrb.Grid(
+                        contents=[],
+                        name='GT Output'
+                    ),
+                ],
+                name=f'Results - {self.tracking_config.sequence}'
+            )
+        )
+
+        rr.send_blueprint(blueprint)
 
     def correspondences_log_write_common_data(self):
 
