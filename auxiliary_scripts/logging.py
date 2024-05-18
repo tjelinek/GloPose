@@ -1569,7 +1569,7 @@ class WriteResults:
         # Create a red background where intensity is based on uncertainty
         uncertainty_mask = flow_uncertainty.detach().unsqueeze(0).repeat(3, 1, 1)
         red_background = torch.zeros_like(uncertainty_mask)
-        red_background[0, :, :] = uncertainty_mask[0, :, :]  # Red channel
+        red_background[:, :, :] = uncertainty_mask[:, :, :]
 
         # Blend the source image with the red background
         blended_image = alpha * red_background + (1 - alpha) * source_image_rgb
