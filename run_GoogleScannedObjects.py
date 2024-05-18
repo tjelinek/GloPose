@@ -47,6 +47,7 @@ def main():
 
         experiment_name = args.experiment
 
+        config.experiment_name = experiment_name
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
         # config.gt_track_path = gt_tracking_path

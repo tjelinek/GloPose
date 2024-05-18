@@ -112,7 +112,7 @@ class WriteResults:
 
     def rerun_init(self):
         rr.init(f'{self.tracking_config.sequence}')
-        rr.save(self.rerun_log_path / 'rerun.rrd')
+        rr.save(self.rerun_log_path / f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
 
         blueprint = rrb.Blueprint(
             rrb.Tabs(

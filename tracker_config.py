@@ -83,6 +83,7 @@ class TrackerConfig:
     mask_iou_th: float = 0
     rotation_divide: int = 8
     sequence: str = None
+    experiment_name: str = None
     max_rendering_batch_size: int = 4
 
     # Ground truths
