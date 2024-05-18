@@ -5,6 +5,6 @@ def get_config() -> TrackerConfig:
     cfg = TrackerConfig()
 
     cfg.long_flow_model = 'MFT'
-    cfg.MFT_IQ_backbone_cfg = 'MFT_cfg'
+    cfg.MFT_backbone_cfg = 'MFT_cfg'
 
     return cfg
