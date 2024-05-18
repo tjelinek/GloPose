@@ -14,7 +14,7 @@ class TrackerConfig:
     features: str = 'deep'
     features_channels = 64
     verbose: bool = True
-    matching_visualization_type = 'dots'  # Either 'dots' or 'matches'
+    matching_visualization_type = 'matching'  # Either 'dots' or 'matching'
 
     # Visualization
     write_results: bool = True
@@ -102,10 +102,9 @@ class TrackerConfig:
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'RAFT'  # 'RAFT' 'GMA'
-    long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ' or None
-    MFT_IQ_backbone_cfg: str = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
-    MFT_backbone_cfg: str = 'MFT_cfg'
+    long_flow_model: str = 'MFT_Synth'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
     MFT_synth_add_noise: bool = True
+    MFT_backbone_cfg: str = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
 
     matching_target_to_backview: bool = True
 
@@ -128,7 +127,7 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
 
     # RANSAC settings
-    ransac_essential_matrix_algorithm: str = 'pygcransac'
+    ransac_essential_matrix_algorithm: str = None
     ransac_outlier_threshold: float = 0.01
     ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
