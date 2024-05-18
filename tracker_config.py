@@ -34,12 +34,13 @@ class TrackerConfig:
     # Mesh settings
     mesh_size: int = 11
     mesh_normalize: bool = False
-    texture_size: int = 300
+    texture_size: int = 1000
     use_lights: bool = False
 
     # Camera settings
     camera_position: Tuple[float] = (0, 0, 5.0)
-    max_width: int = 250
+    camera_up: Tuple[float] = (0, 1, 0)
+    max_width: int = 500
     image_downsample: float = 1.0
 
     # Learning rates

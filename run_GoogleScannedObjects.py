@@ -36,7 +36,8 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-        config.camera_position = (0, 0, 5.0)
+        config.camera_position = (0, -5.0, 0)
+        config.camera_up = (0, 0, 1)
 
         gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
         gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
@@ -55,7 +56,7 @@ def main():
 
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
-        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_y(5).rotations, axis=0))
+        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_z(5).rotations, axis=0))
         gt_rotations = torch.from_numpy(gt_rotations_np).unsqueeze(0).cuda().to(torch.float32)
         gt_translations = torch.zeros_like(gt_rotations).unsqueeze(0)
 

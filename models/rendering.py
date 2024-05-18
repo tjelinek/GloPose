@@ -47,7 +47,7 @@ class RenderingKaolin(nn.Module):
         self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
         self.register_buffer('camera_trans_backview', -torch.Tensor(self.config.camera_position)[None])
         self.register_buffer('obj_center', torch.zeros((1, 3)))
-        camera_up_direction = torch.Tensor((0, 1, 0))[None]
+        camera_up_direction = torch.Tensor(self.config.camera_up)[None]
         self.register_buffer('camera_up', camera_up_direction)
 
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
