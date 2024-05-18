@@ -18,7 +18,7 @@ runners = {
 
 
 def run_batch(configuration_name: str, sequences, dataset: Datasets, output_folder: Path) -> None:
-    configuration_path = Path('configs') / (configuration_name + '.py')
+    configuration_path = Path('configs')/(configuration_name + '.py')
 
     args = []
     args.append("--config")
@@ -95,6 +95,19 @@ def main():
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_ransac',
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_pygrancsac',
         # 'essential_matrix/config_deep_with_flow_gt_esmatrix_frontview_backview_synthetic_pygransac',
+        # 'configs/mft_iq/mft_iq_direct_8p_pose_direct',
+        # 'configs/mft_iq/mft_iq_flowformer_8p_pose',
+        # 'configs/mft_iq/mft_iq_flowformer_direct_8p_pose',
+        # 'configs/mft_iq/mft_iq_raft_8p_pose',
+        # 'configs/mft_iq/mft_iq_roma_8p_pose',
+        # 'configs/mft_iq/mft_iq_roma_direct_8p_pose',
+        # 'configs/mft_iq/mft_iq_synthetic_8p_pose',
+        # 'configs/mft_iq/mft_iq_synthetic_8p_pose_noise',
+        # 'configs/mft/mft_direct_8p_pose_direct',
+        # 'configs/mft/mft_flowformer_direct_8p_pose',
+        # 'configs/mft/mft_raft_8p_pose',
+        # 'configs/mft/mft_roma_8p_pose',
+        # 'configs/mft/mft_roma_direct_8p_pose',
     ]
 
     sequences = {
@@ -136,7 +149,7 @@ def main():
     for configuration in configurations:
 
         output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
-        output_folder = output_folder_root / configuration
+        output_folder = output_folder_root/configuration
         output_folder = create_unused_folder(output_folder)
 
         for dataset in sequences:
