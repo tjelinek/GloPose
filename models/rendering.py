@@ -480,8 +480,9 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
     rendering_mask = rendering_result.rendered_image_segmentation
 
     flow_result = renderer.compute_theoretical_flow(encoder_result, encoder_result_flow_frames, flow_arcs_indices)
-
-    print("Flow time: ", time() - start_time)
+    # flow_result = renderer.compute_theoretical_flow_using_rendered_vertices(rendering_result.rendered_face_camera_coords,
+    #                                                                         encoder_result, encoder_result_flow_frames,
+    #                                                                         flow_arcs_indices)
 
     theoretical_flow, rendered_flow_segmentation, occlusion_masks = flow_result
 
