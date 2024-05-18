@@ -1443,9 +1443,9 @@ class WriteResults:
             occlusion_path = self.optimized_values_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
             rendered_occlusion_squeezed = rendered_flow_result.rendered_flow_occlusion.squeeze()
-            self.visualize_occlusions(target_frame, occlusion_path, source_rendered_image_rgb.squeeze(),
-                                      rendered_occlusion_squeezed, alpha=0.8,
-                                      rerun_annotation='/optimized_values/occlusion')
+            self.visualize_1D_feature_map_using_overlay(target_frame, occlusion_path, source_rendered_image_rgb.squeeze(),
+                                                        rendered_occlusion_squeezed, alpha=0.8,
+                                                        rerun_annotation='/optimized_values/occlusion')
 
             # Save rendered images
             if flow_arc_idx == 0:
@@ -1536,12 +1536,17 @@ class WriteResults:
             occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
             uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
-            self.visualize_occlusions(target_frame, occlusion_path, source_frame_image.squeeze(),
-                                      observed_flow_occlusions_squeezed, alpha=0.8,
-                                      rerun_annotation='/observed_flow/occlusion')
-            self.visualize_uncertainty(target_frame, uncertainty_path, source_frame_image.squeeze(),
-                                       observed_flow_uncertainties_squeezed, alpha=0.8,
-                                       rerun_annotation='/observed_flow/uncertainty')
+            self.visualize_1D_feature_map_using_overlay(target_frame, occlusion_path, source_frame_image.squeeze(),
+                                                        observed_flow_occlusions_squeezed, alpha=0.8,
+                                                        rerun_annotation='/observed_flow/occlusion')
+            # Uncertainty visualizations
+            # TODO this computation is not mathematically justified, and serves just for visualization purposes
+            observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
+                                                     observed_flow_uncertainties.min())
+            observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
+            self.visualize_1D_feature_map_using_overlay(target_frame, uncertainty_path, source_frame_image.squeeze(),
+                                                        observed_flow_uncertainties_0_1_range, alpha=0.8,
+                                                        rerun_annotation='/observed_flow/uncertainty')
 
             transform = transforms.ToPILImage()
             target_image_PIL = transform(target_image_discrete)
@@ -1550,8 +1555,8 @@ class WriteResults:
             imageio.imwrite(new_image_path, target_image_PIL)
             imageio.imwrite(observed_flow_path, flow_illustration)
 
-    def visualize_occlusions(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
-                             rerun_annotation):
+    def visualize_1D_feature_map_using_overlay(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
+                                               rerun_annotation):
         assert flow_occlusion.shape == (self.image_height, self.image_width)
         assert source_image_rgb.shape == (3, self.image_height, self.image_width)
 
@@ -1560,22 +1565,6 @@ class WriteResults:
         blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
 
         self.log_image(flow_target_frame, blended_image, occlusion_path, rerun_annotation)
-
-    def visualize_uncertainty(self, flow_target_frame, uncertainty_path, source_image_rgb,
-                              flow_uncertainty, alpha, rerun_annotation):
-        assert flow_uncertainty.shape == (self.image_height, self.image_width)
-        assert source_image_rgb.shape == (3, self.image_height, self.image_width)
-
-        # Create a red background where intensity is based on uncertainty
-        uncertainty_mask = flow_uncertainty.detach().unsqueeze(0).repeat(3, 1, 1)
-        red_background = torch.zeros_like(uncertainty_mask)
-        red_background[:, :, :] = uncertainty_mask[:, :, :]
-
-        # Blend the source image with the red background
-        blended_image = alpha * red_background + (1 - alpha) * source_image_rgb
-        blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
-
-        self.log_image(flow_target_frame, blended_image, uncertainty_path, rerun_annotation)
 
     def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str):
         # if self.tracking_config.write_to_rerun_rather_than_disk:
