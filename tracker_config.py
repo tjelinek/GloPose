@@ -105,6 +105,7 @@ class TrackerConfig:
     long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ' or None
     MFT_IQ_backbone_cfg: str = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
     MFT_backbone_cfg: str = 'MFT_cfg'
+    MFT_synth_add_noise: bool = True
 
     matching_target_to_backview: bool = True
 
