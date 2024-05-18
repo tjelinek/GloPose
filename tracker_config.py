@@ -18,7 +18,8 @@ class TrackerConfig:
 
     # Visualization
     write_results: bool = True
-    write_results_frequency: int = 5
+    write_to_rerun_rather_than_disk: bool = True
+    write_results_frequency: int = 1
     visualize_loss_landscape: bool = False
     loss_landscape_visualization_frequency: int = 18
     training_print_status_frequency = 20

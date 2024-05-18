@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from itertools import product
 
 from typing import Dict, Tuple, List
@@ -14,6 +15,7 @@ import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
+import torchvision
 from matplotlib import pyplot as plt, gridspec
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -22,7 +24,6 @@ from matplotlib.patches import ConnectionPatch, Patch
 from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
@@ -41,6 +42,15 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
     source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
     get_correct_correspondences_mask
 
+
+@dataclass
+class RerunAnnotations:
+    template_image: str = '/observations/template_image_front'
+    observed_image: str = '/observations/observed_image_front'
+    observed_flow: str = '/observed_flow/observed_flow_front'
+    observed_flow_with_uncertainty: str = '/observed_flow/observed_flow_front_uncertainty'
+    observed_flow_occlusion: str = '/observed_flow/occlusion_front'
+    observed_flow_uncertainty: str = '/observed_flow/uncertainty_front'
 
 class WriteResults:
 
@@ -110,8 +120,14 @@ class WriteResults:
                 [
                     rrb.Grid(
                         contents=[
-                            rrb.Spatial2DView(name="Observed Flow Occlusion", origin="/observed_flow/occlusion"),
-                            rrb.Spatial2DView(name="Observed Flow Uncertainty", origin="/observed_flow/uncertainty")
+                            rrb.Spatial2DView(name="Observed Flow Occlusion",
+                                              origin=RerunAnnotations.observed_flow),
+                            rrb.Spatial2DView(name="Observed Flow Uncertainty",
+                                              origin=RerunAnnotations.observed_flow_with_uncertainty),
+                            # rrb.Spatial2DView(name="Observed Flow Occlusion",
+                            #                   origin=RerunAnnotations.observed_flow_occlusion),
+                            # rrb.Spatial2DView(name="Observed Flow Uncertainty",
+                            #                   origin=RerunAnnotations.observed_flow_uncertainty)
                         ],
                         name='Observed Input'
                     ),
@@ -398,7 +414,7 @@ class WriteResults:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
 
-            self.visualize_observed_data(active_keyframes, active_keyframes_backview, new_flow_arcs)
+            self.visualize_observed_data(active_keyframes, new_flow_arcs)
 
             self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
@@ -1450,8 +1466,7 @@ class WriteResults:
             # Save rendered images
             if flow_arc_idx == 0:
                 target_rendered_image = (target_rendered_image_rgb * 255).permute(1, 2, 0).to(torch.uint8)
-                self.log_image(target_frame, target_rendered_image, rendering_path,
-                               "/optimized_values/rendering")
+                self.log_image(target_frame, target_rendered_image, rendering_path, "/optimized_values/rendering")
 
             # Adjust (0, 1) range to pixel range
             theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
@@ -1494,14 +1509,14 @@ class WriteResults:
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, keyframe_buffer_backview, flow_arcs):
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, flow_arcs):
         for flow_arcs in flow_arcs:
 
             source_frame = flow_arcs[0]
             target_frame = flow_arcs[1]
 
             flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
-            source_frame_observation = keyframe_buffer_backview.get_observations_for_keyframe(source_frame)
+            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
             target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
 
             observed_flow = flow_observation.observed_flow.cpu()
@@ -1524,36 +1539,56 @@ class WriteResults:
             observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
             observed_flow_uncertainties_squeezed = observed_flow_uncertainties.squeeze()
 
+            # TODO this computation is not mathematically justified, and serves just for visualization purposes
+            observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
+                                                     observed_flow_uncertainties.min())
+            observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
+
             flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
                                                            [observed_flow_reordered], None,
                                                            gt_silhouette_current=source_frame_segment_squeezed,
                                                            gt_silhouettes_prev=[target_frame_segment_squeezed],
                                                            flow_occlusion_masks=[observed_flow_occlusions_squeezed])
 
+            uncertainty_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
+                                                           [observed_flow_reordered], None,
+                                                           gt_silhouette_current=source_frame_segment_squeezed,
+                                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
+                                                           flow_occlusion_masks=[observed_flow_uncertainties_0_1_range])
+
             # Define output file paths
+            template_image_path = self.observations_path / Path(f'template_img_{source_frame}_{target_frame}.png')
             new_image_path = self.observations_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
             observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
+            observed_flow_uncertainty_path = (self.observations_path /
+                                              Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
             occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
             uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
             self.visualize_1D_feature_map_using_overlay(target_frame, occlusion_path, source_frame_image.squeeze(),
                                                         observed_flow_occlusions_squeezed, alpha=0.8,
-                                                        rerun_annotation='/observed_flow/occlusion')
+                                                        rerun_annotation=RerunAnnotations.observed_flow_occlusion)
             # Uncertainty visualizations
-            # TODO this computation is not mathematically justified, and serves just for visualization purposes
-            observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
-                                                     observed_flow_uncertainties.min())
-            observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
             self.visualize_1D_feature_map_using_overlay(target_frame, uncertainty_path, source_frame_image.squeeze(),
                                                         observed_flow_uncertainties_0_1_range, alpha=0.8,
-                                                        rerun_annotation='/observed_flow/uncertainty')
-
-            transform = transforms.ToPILImage()
-            target_image_PIL = transform(target_image_discrete)
+                                                        rerun_annotation=RerunAnnotations.observed_flow_uncertainty)
 
             # Save the images to disk
-            imageio.imwrite(new_image_path, target_image_PIL)
-            imageio.imwrite(observed_flow_path, flow_illustration)
+            self.log_image(target_frame, target_image_discrete.permute(1, 2, 0), new_image_path,
+                           RerunAnnotations.observed_image)
+            self.log_image(target_frame, source_image_discrete.permute(1, 2, 0), template_image_path,
+                           RerunAnnotations.template_image)
+
+            flow_illustration_torch = (
+                torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
+            flow_illustration_uncertainty_torch = (
+                torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
+
+            self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
+                           RerunAnnotations.observed_flow_with_uncertainty, ignore_dimensions=True)
+
+            self.log_image(target_frame, flow_illustration_torch, observed_flow_path, RerunAnnotations.observed_flow,
+                           ignore_dimensions=True)
 
     def visualize_1D_feature_map_using_overlay(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
                                                rerun_annotation):
@@ -1566,10 +1601,14 @@ class WriteResults:
 
         self.log_image(flow_target_frame, blended_image, occlusion_path, rerun_annotation)
 
-    def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str):
-        # if self.tracking_config.write_to_rerun_rather_than_disk:
-        rr.set_time_sequence("frame", frame)
-        rr.log(rerun_annotation, rr.Image(image))
-        # else:
-        image_np = image.numpy(force=True)
-        imageio.imwrite(save_path, image_np)
+    def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
+                  ignore_dimensions=False):
+        if not ignore_dimensions:
+            assert image.shape == (self.image_height, self.image_width, 3)
+
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            rr.set_time_sequence("frame", frame)
+            rr.log(rerun_annotation, rr.Image(image))
+        else:
+            image_np = image.numpy(force=True)
+            imageio.imwrite(save_path, image_np)
