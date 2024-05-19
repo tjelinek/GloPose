@@ -31,7 +31,7 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optim.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, triangulate_points_from_Rt
+from pose.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, triangulate_points_from_Rt
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
