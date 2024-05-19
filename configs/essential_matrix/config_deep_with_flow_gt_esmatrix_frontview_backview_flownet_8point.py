@@ -11,7 +11,8 @@ class TrackerConfig8P(TrackerConfig):
         self.ransac_essential_matrix_algorithm = None
 
         self.ransac_use_gt_occlusions_and_segmentation = False
-        self.ransac_erode_segmentation_dilate_occlusion = False
+        self.ransac_dilate_occlusion = False
+        self.ransac_erode_segmentation = True
 
         self.ransac_feed_only_inlier_flow = False
         self.ransac_replace_mft_flow_with_gt_flow = False
