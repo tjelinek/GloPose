@@ -846,7 +846,10 @@ class Tracking6D:
         flow_source, flow_target = flow_arc
 
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc)
+        front_observations = observations.cameras_observations[Cameras.FRONTVIEW]
+
+        result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc,
+                                                       front_observations)
         (src_pts_yx_front, dst_pts_yx_front, inlier_mask_front, inlier_points, outlier_points, inlier_ratio_frontview,
          q_total, t_total, triangulation_frontview) = result
 
@@ -868,8 +871,9 @@ class Tracking6D:
 
             back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
 
+            back_observations = observations.cameras_observations[Cameras.BACKVIEW]
             result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc,
-                                                           backview=True)
+                                                           back_observations, backview=True)
             (src_pts_yx_back, dst_pts_yx_back, inlier_mask_back, inlier_points_backview, outlier_points_backview,
              inlier_ratio_backview, q_total_backview, t_total_backview, triangulation_backview) = result
 
@@ -897,7 +901,8 @@ class Tracking6D:
 
         return inference_result
 
-    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc, backview=False):
+    def estimate_pose_using_optical_flow(self, flow_observations, flow_arc_idx, flow_arc,
+                                         camera_observation: FrameObservation, backview=False):
 
         K1 = K2 = self.rendering.camera_intrinsics
 
