@@ -44,35 +44,15 @@ class EpipolarPoseEstimator:
 
         W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
-        renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
-        gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
-
         camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
         arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
-        if self.config.ransac_erode_segmentation_dilate_occlusion:
-            eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
-            eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
-
-            flow_observation_current_frame.observed_flow_segmentation = eroded_observed_seg[None]
-            gt_flow_observation = gt_flow_observation._replace(rendered_flow_segmentation=eroded_gt_seg[None])
-
-            dilated_gt_occ = dilate_mask(1, gt_flow_observation.rendered_flow_occlusion)
-            dilated_observed_occ = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
-
-            gt_flow_observation = gt_flow_observation._replace(rendered_flow_occlusion=dilated_gt_occ)
-            flow_observation_current_frame.observed_flow_occlusion = dilated_observed_occ
+        gt_flow_observation, occlusions, segmentation = (
+            self.get_occlusion_and_segmentation(backview, flow_arc, flow_observation_current_frame))
 
         arc_data.observed_flow = flow_observation_current_frame.send_to_device('cpu')
-
-        if self.config.ransac_use_gt_occlusions_and_segmentation:
-            occlusions = gt_flow_observation.rendered_flow_occlusion
-            segmentation = gt_flow_observation.rendered_flow_segmentation
-        else:
-            occlusions = flow_observation_current_frame.observed_flow_occlusion
-            segmentation = flow_observation_current_frame.observed_flow_segmentation
 
         optical_flow = flow_unit_coords_to_image_coords(flow_observation_current_frame.observed_flow)
 
@@ -98,44 +78,10 @@ class EpipolarPoseEstimator:
         else:
             confidences = None
 
-        if self.config.ransac_feed_only_inlier_flow:
-            ok_pts_indices = get_correct_correspondences_mask(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
-                                                              self.config.ransac_feed_only_inlier_flow_epe_threshold)
-            dst_pts_yx = dst_pts_yx[ok_pts_indices]
-            src_pts_yx = src_pts_yx[ok_pts_indices]
-            dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[ok_pts_indices]
-
-            if self.config.ransac_confidences_from_occlusion:
-                confidences = confidences[ok_pts_indices]
-
-        if self.config.ransac_replace_mft_flow_with_gt_flow:
-            n_points = src_pts_yx.shape[0]
-            n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
-            indices_permutation = torch.randperm(n_points)
-            indices_to_be_replaced = indices_permutation[:n_points_injected]
-
-            dst_pts_yx_gt_for_replacing = dst_pts_yx_gt_flow[indices_to_be_replaced].clone()
-            if self.config.ransac_feed_gt_flow_add_gaussian_noise:
-                if self.config.ransac_feed_gt_flow_add_gaussian_noise_use_mft_errors:
-                    errors: torch.Tensor = dst_pts_yx_gt_for_replacing - dst_pts_yx[indices_to_be_replaced]
-                    mean = errors.mean(dim=0)
-                    sigma = errors.var(dim=0).sqrt()
-                else:
-                    sigma = self.config.ransac_feed_gt_flow_add_gaussian_noise_sigma
-                    mean = self.config.ransac_feed_gt_flow_add_gaussian_noise_mean
-                dst_pts_yx_gt_for_replacing += sigma * torch.randn(n_points_injected, 2, device=dst_pts_yx_gt_for_replacing.device) + mean
-
-            dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_for_replacing
-
-        if self.config.ransac_distant_pixels_sampling:
-            random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
-            random_permutation_indices = random_src_pts_permutation[:min(self.config.ransac_distant_pixels_sample_size,
-                                                                         src_pts_yx.shape[0])]
-            dst_pts_yx = dst_pts_yx[random_permutation_indices]
-            src_pts_yx = src_pts_yx[random_permutation_indices]
-            dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[random_permutation_indices]
-            if self.config.ransac_confidences_from_occlusion:
-                confidences = confidences[random_permutation_indices]
+        confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = self.augment_correspondences(src_pts_yx, dst_pts_yx,
+                                                                                               dst_pts_yx_gt_flow,
+                                                                                               confidences,
+                                                                                               gt_flow_image_coord)
 
         result = estimate_pose_using_dense_correspondences(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
                                                            self.rendering.height, self.config, confidences)
@@ -205,3 +151,79 @@ class EpipolarPoseEstimator:
         data.ransac_inlier_ratio = inlier_ratio
 
         return inlier_ratio, quat_obj, t_obj
+
+    def get_occlusion_and_segmentation(self, backview, flow_arc, flow_observation_current_frame):
+        renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
+        gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+        if self.config.ransac_erode_segmentation:
+            eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
+            eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
+
+            flow_observation_current_frame.observed_flow_segmentation = eroded_observed_seg[None]
+            gt_flow_observation = gt_flow_observation._replace(rendered_flow_segmentation=eroded_gt_seg[None])
+
+        if self.config.ransac_dilate_occlusion:
+            dilated_gt_occ = dilate_mask(1, gt_flow_observation.rendered_flow_occlusion)
+            dilated_observed_occ = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
+
+            gt_flow_observation = gt_flow_observation._replace(rendered_flow_occlusion=dilated_gt_occ)
+            flow_observation_current_frame.observed_flow_occlusion = dilated_observed_occ
+        if self.config.ransac_use_gt_occlusions_and_segmentation:
+            occlusions = gt_flow_observation.rendered_flow_occlusion
+            segmentation = gt_flow_observation.rendered_flow_segmentation
+        else:
+            occlusions = flow_observation_current_frame.observed_flow_occlusion
+            segmentation = flow_observation_current_frame.observed_flow_segmentation
+        return gt_flow_observation, occlusions, segmentation
+
+    def augment_correspondences(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
+        if self.config.ransac_feed_only_inlier_flow:
+            confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = (
+                self.filter_outlier_flow(src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord))
+        if self.config.ransac_replace_mft_flow_with_gt_flow:
+            dst_pts_yx = self.replace_mft_flow_with_gt_flow(src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow)
+        if self.config.ransac_distant_pixels_sampling:
+            confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = (
+                self.distant_pixels_sampling(src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences))
+        return confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx
+
+    def distant_pixels_sampling(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences):
+        random_src_pts_permutation = np.random.default_rng(seed=42).permutation(src_pts_yx.shape[0])
+        random_permutation_indices = random_src_pts_permutation[:min(self.config.ransac_distant_pixels_sample_size,
+                                                                     src_pts_yx.shape[0])]
+        dst_pts_yx = dst_pts_yx[random_permutation_indices]
+        src_pts_yx = src_pts_yx[random_permutation_indices]
+        dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[random_permutation_indices]
+        if self.config.ransac_confidences_from_occlusion:
+            confidences = confidences[random_permutation_indices]
+        return confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx
+
+    def filter_outlier_flow(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
+        ok_pts_indices = get_correct_correspondences_mask(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
+                                                          self.config.ransac_feed_only_inlier_flow_epe_threshold)
+        dst_pts_yx = dst_pts_yx[ok_pts_indices]
+        src_pts_yx = src_pts_yx[ok_pts_indices]
+        dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[ok_pts_indices]
+        if self.config.ransac_confidences_from_occlusion:
+            confidences = confidences[ok_pts_indices]
+        return confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx
+
+    def replace_mft_flow_with_gt_flow(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow):
+        n_points = src_pts_yx.shape[0]
+        n_points_injected = int(n_points * self.config.ransac_feed_gt_flow_percentage)
+        indices_permutation = torch.randperm(n_points)
+        indices_to_be_replaced = indices_permutation[:n_points_injected]
+        dst_pts_yx_gt_for_replacing = dst_pts_yx_gt_flow[indices_to_be_replaced].clone()
+        if self.config.ransac_feed_gt_flow_add_gaussian_noise:
+            if self.config.ransac_feed_gt_flow_add_gaussian_noise_use_mft_errors:
+                errors: torch.Tensor = dst_pts_yx_gt_for_replacing - dst_pts_yx[indices_to_be_replaced]
+                mean = errors.mean(dim=0)
+                sigma = errors.var(dim=0).sqrt()
+            else:
+                sigma = self.config.ransac_feed_gt_flow_add_gaussian_noise_sigma
+                mean = self.config.ransac_feed_gt_flow_add_gaussian_noise_mean
+            dst_pts_yx_gt_for_replacing += sigma * torch.randn(n_points_injected, 2,
+                                                               device=dst_pts_yx_gt_for_replacing.device) + mean
+        dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_for_replacing
+
+        return dst_pts_yx
