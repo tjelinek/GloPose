@@ -691,8 +691,7 @@ class Tracking6D:
 
         scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters,
                                                                      mode='min', factor=0.8,
-                                                                     patience=self.config.lr_scheduler_patience,
-                                                                     verbose=False)
+                                                                     patience=self.config.lr_scheduler_patience)
 
         def lambda_schedule(epoch_):
             return 1 / (1 + np.exp(-0.25 * (epoch_ - self.config.optimize_non_positional_params_after)))
