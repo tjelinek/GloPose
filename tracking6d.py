@@ -1049,6 +1049,25 @@ class Tracking6D:
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points.cpu()
+
+        # quat_obj = self.gt_rotations
+        gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
+        gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
+        gt_trans_obj = self.gt_translations[0, :, flow_arc[1]].unsqueeze(-1)
+
+        gt_R_cam, gt_trans_cam = Rt_epipolar_cam_from_Rt_obj(gt_R_obj, gt_trans_obj, W_4x4)
+
+        # gt_trans_cam = torch.zeros(1, 3, 1).cuda()
+        # gt_trans_cam[:, 0] = 1.
+
+        ransac_triangulated_points_gt_Rt = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
+                                                                      dst_pts_yx[None], K1[None], K2[None])
+        ransac_triangulated_points_gt_Rt_gt_flow = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
+                                                                              dst_pts_yx_gt_flow[None], K1[None],
+                                                                              K2[None])
+
+        data.ransac_triangulated_points_gt_Rt = ransac_triangulated_points_gt_Rt
+        data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
