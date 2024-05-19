@@ -4,6 +4,9 @@ from tracker_config import TrackerConfig
 def get_config() -> TrackerConfig:
     cfg = TrackerConfig()
 
+    cfg.run_main_optimization_loop = False
+    cfg.optimize_shape = False
+
     cfg.ransac_essential_matrix_algorithm = None
 
     cfg.ransac_use_gt_occlusions_and_segmentation = False
