@@ -833,13 +833,6 @@ class Tracking6D:
                                            observations: MultiCameraObservation,
                                            flow_observations: MultiCameraObservation):
 
-        inlier_points_list = {}
-        outlier_points_list = {}
-        inlier_points_list_backview = {}
-        outlier_points_list_backview = {}
-        triangulated_points_frontview = {}
-        triangulated_points_backview = {}
-
         flow_arc = (0, max(keyframes))
         flow_arc_idx = flow_arcs.index(flow_arc)
 
@@ -850,12 +843,7 @@ class Tracking6D:
 
         result = self.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx, flow_arc,
                                                        front_observations)
-        (src_pts_yx_front, dst_pts_yx_front, inlier_mask_front, inlier_points, outlier_points, inlier_ratio_frontview,
-         q_total, t_total, triangulation_frontview) = result
-
-        inlier_points_list[flow_arc] = inlier_points
-        outlier_points_list[flow_arc] = outlier_points
-        triangulated_points_frontview[flow_arc] = triangulation_frontview
+        inlier_ratio_frontview, q_total, t_total = result
 
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
         self.encoder.quaternion_offsets[:, flow_target] = q_total
@@ -874,12 +862,8 @@ class Tracking6D:
             back_observations = observations.cameras_observations[Cameras.BACKVIEW]
             result = self.estimate_pose_using_optical_flow(back_flow_observations, flow_arc_idx, flow_arc,
                                                            back_observations, backview=True)
-            (src_pts_yx_back, dst_pts_yx_back, inlier_mask_back, inlier_points_backview, outlier_points_backview,
-             inlier_ratio_backview, q_total_backview, t_total_backview, triangulation_backview) = result
 
-            inlier_points_list_backview[flow_arc] = inlier_points_backview
-            outlier_points_list_backview[flow_arc] = outlier_points_backview
-            triangulated_points_backview[flow_arc] = triangulation_backview
+            inlier_ratio_backview, q_total_backview, t_total_backview = result
 
             if False and inlier_ratio_frontview < inlier_ratio_backview:
                 # self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
@@ -1076,8 +1060,7 @@ class Tracking6D:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return (src_pts_yx, dst_pts_yx, inlier_mask, inlier_src_pts, outlier_src_pts, inlier_ratio, quat_obj, t_obj,
-                triangulated_points)
+        return inlier_ratio, quat_obj, t_obj
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs, frame_losses):
