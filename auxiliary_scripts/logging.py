@@ -149,8 +149,10 @@ class WriteResults:
                                               origin=RerunAnnotations.triangulated_points_gt_Rt_mft_flow),
                             rrb.Spatial3DView(name="Triangulated Point Cloud GT Flow, GT, Rt",
                                               origin=RerunAnnotations.triangulated_points_gt_Rt_gt_flow),
-                            rrb.Spatial3DView(name="Point Cloud Dust3r",
-                                              origin=RerunAnnotations.point_cloud_dust3r_im1)
+                            rrb.Spatial3DView(name="Point Cloud Dust3r, Image 1",
+                                              origin=RerunAnnotations.point_cloud_dust3r_im1),
+                            rrb.Spatial3DView(name="Point Cloud Dust3r, Image 2",
+                                              origin=RerunAnnotations.point_cloud_dust3r_im2)
                         ],
                         grid_columns=2,
                         name='Point Clouds'
