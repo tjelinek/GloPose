@@ -59,7 +59,11 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
     return imgs
 
 
-def get_matches_using_dust3r(imgs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+# model_name = "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt"
+# you can put the path to a local checkpoint in model_name if needed
+# model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to('cuda')
+
+def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tensor, torch.Tensor]:
     device = 'cuda'
     batch_size = 1
     schedule = 'cosine'
@@ -70,12 +74,17 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor]) -> Tuple[torch.Tensor, to
     # you can put the path to a local checkpoint in model_name if needed
     model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to(device)
     # load_images can take a list of images or a directory
-    # images = load_images(['repositories/dust3r/croco/assets/Chateau1.png',
-    #                       'repositories/dust3r/croco/assets/Chateau2.png'], size=512)
-    images = load_images([
-        '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_1.png',
-        '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_10.png',
-    ], size=512)
+    images = tensors_for_dust3r(imgs, 512)
+    print(images[0]['img'].shape)
+
+    images = load_images(['repositories/dust3r/croco/assets/Chateau1.png',
+                          'repositories/dust3r/croco/assets/Chateau2.png'], size=512)
+    # images = load_images([
+    #     '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_1.png',
+    #     '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_10.png',
+    # ], size=512)
+    print(images[0]['img'].shape)
+    # breakpoint()
     pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
 
