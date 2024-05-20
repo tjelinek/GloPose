@@ -60,6 +60,9 @@ class CrossFrameData:
     ransac_triangulated_points_gt_Rt: torch.Tensor = None
     ransac_triangulated_points_gt_Rt_gt_flow: torch.Tensor = None
 
+    dust3r_point_cloud_im1: torch.Tensor = None
+    dust3r_point_cloud_im2: torch.Tensor = None
+
     is_source_of_matching: bool = True
 
 

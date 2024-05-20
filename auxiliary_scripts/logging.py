@@ -55,7 +55,8 @@ class RerunAnnotations:
     # Triangulated points RANSAC
     triangulated_points_gt_Rt_gt_flow: str = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
     triangulated_points_gt_Rt_mft_flow: str = '/point_clouds/triangulated_points_gt_Rt_mft_flow'
-    point_cloud_dust3r: str = '/point_clouds/point_cloud_dust3r'
+    point_cloud_dust3r_im1: str = '/point_clouds/point_cloud_dust3r_im1'
+    point_cloud_dust3r_im2: str = '/point_clouds/point_cloud_dust3r_im2'
 
 class WriteResults:
 
@@ -149,7 +150,7 @@ class WriteResults:
                             rrb.Spatial3DView(name="Triangulated Point Cloud GT Flow, GT, Rt",
                                               origin=RerunAnnotations.triangulated_points_gt_Rt_gt_flow),
                             rrb.Spatial3DView(name="Point Cloud Dust3r",
-                                              origin=RerunAnnotations.point_cloud_dust3r)
+                                              origin=RerunAnnotations.point_cloud_dust3r_im1)
                         ],
                         grid_columns=2,
                         name='Point Clouds'
@@ -503,7 +504,8 @@ class WriteResults:
 
         triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0]
         triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0]
-        triangulated_point_cloud_dust3r = arc_data.dust3r_point_cloud.cpu()
+        triangulated_point_cloud_dust3r_im1 = arc_data.dust3r_point_cloud_im1
+        triangulated_point_cloud_dust3r_im2 = arc_data.dust3r_point_cloud_im2
 
         triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
                                                  f'triangulated_point_cloud_gt_Rt_gt_flow_{frame_i}.ply')
@@ -514,8 +516,10 @@ class WriteResults:
                    rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
             rr.log(RerunAnnotations.triangulated_points_gt_Rt_mft_flow,
                    rr.Points3D(triangulated_point_cloud_pred_flow.numpy()))
-            rr.log(RerunAnnotations.point_cloud_dust3r,
-                   rr.Points3D(triangulated_point_cloud_dust3r.numpy()))
+            rr.log(RerunAnnotations.point_cloud_dust3r_im1,
+                   rr.Points3D(triangulated_point_cloud_dust3r_im1.numpy())),
+            rr.log(RerunAnnotations.point_cloud_dust3r_im2,
+                   rr.Points3D(triangulated_point_cloud_dust3r_im2.numpy()))
         else:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)

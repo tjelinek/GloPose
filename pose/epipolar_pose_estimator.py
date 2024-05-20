@@ -141,7 +141,9 @@ class EpipolarPoseEstimator:
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points.cpu()
-        data.dust3r_point_cloud = pts3d_dust3r.flatten(0, 1).cpu()
+        if pts3d_dust3r is not None:
+            data.dust3r_point_cloud_im1 = pts3d_dust3r[0].flatten(0, 1).cpu()
+            data.dust3r_point_cloud_im2 = pts3d_dust3r[1].flatten(0, 1).cpu()
 
         # quat_obj = self.gt_rotations
         gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]

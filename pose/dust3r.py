@@ -150,4 +150,4 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor]) -> Tuple[torch.Tensor, to
     #     pl.plot([x0, x1 + W0], [y0, y1], '-+', color=cmap(i / (n_viz - 1)), scalex=False, scaley=False)
     # pl.show(block=True)
 
-    return matches_im0_torch, matches_im1_torch, pts3d[0]
+    return matches_im0_torch, matches_im1_torch, pts3d
