@@ -10,7 +10,7 @@ sys.path.append('repositories/dust3r')
 
 from repositories.dust3r.dust3r.inference import inference
 from repositories.dust3r.dust3r.model import AsymmetricCroCo3DStereo
-from repositories.dust3r.dust3r.utils.image import load_images
+from repositories.dust3r.dust3r.utils.image import load_images, ImgNorm, _resize_pil_image
 from repositories.dust3r.dust3r.image_pairs import make_pairs
 from repositories.dust3r.dust3r.cloud_opt import global_aligner, GlobalAlignerMode
 from repositories.dust3r.dust3r.utils.geometry import find_reciprocal_matches, xy_grid
@@ -30,20 +30,14 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
     - List of dictionaries with processed image data and metadata.
     """
 
-    def resize_pil_image(img: Image.Image, target_size: int) -> Image.Image:
-        return img.resize((target_size, target_size), Image.ANTIALIAS)
-
-    def img_norm(img: Image.Image) -> torch.Tensor:
-        return torch.from_numpy(np.array(img)).float() / 255.0
-
     imgs = []
     for idx, tensor in enumerate(image_tensors):
-        img = PIL.Image.fromarray(tensor.mul(255).byte().permute(1, 2, 0).numpy())
+        img = PIL.Image.fromarray(tensor.mul(255).byte().permute(1, 2, 0).numpy(force=True))
         W1, H1 = img.size
         if size == 224:
-            img = resize_pil_image(img, round(size * max(W1 / H1, H1 / W1)))
+            img = _resize_pil_image(img, round(size * max(W1 / H1, H1 / W1)))
         else:
-            img = resize_pil_image(img, size)
+            img = _resize_pil_image(img, size)
         W, H = img.size
         cx, cy = W // 2, H // 2
         if size == 224:
@@ -58,8 +52,7 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
         W2, H2 = img.size
         if verbose:
             print(f' - processing tensor {idx} with resolution {W1}x{H1} --> {W2}x{H2}')
-        imgs.append(dict(img=img_norm(img)[None], true_shape=np.int32([img.size[::-1]]), idx=idx, instance=str(idx)))
-
+        imgs.append(dict(img=ImgNorm(img)[None], true_shape=np.int32([img.size[::-1]]), idx=idx, instance=str(idx)))
     assert imgs, 'no images found in the provided tensors'
     if verbose:
         print(f' (Processed {len(imgs)} images)')
