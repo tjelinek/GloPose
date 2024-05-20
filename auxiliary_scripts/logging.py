@@ -514,14 +514,18 @@ class WriteResults:
         triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
                                                    f'triangulated_point_cloud_gt_Rt_pred_flow_{frame_i}.ply')
         if self.tracking_config.write_to_rerun_rather_than_disk:
-            rr.log(RerunAnnotations.triangulated_points_gt_Rt_gt_flow,
-                   rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
-            rr.log(RerunAnnotations.triangulated_points_gt_Rt_mft_flow,
-                   rr.Points3D(triangulated_point_cloud_pred_flow.numpy()))
-            rr.log(RerunAnnotations.point_cloud_dust3r_im1,
-                   rr.Points3D(triangulated_point_cloud_dust3r_im1.numpy())),
-            rr.log(RerunAnnotations.point_cloud_dust3r_im2,
-                   rr.Points3D(triangulated_point_cloud_dust3r_im2.numpy()))
+            if triangulated_point_cloud_gt_flow is not None:
+                rr.log(RerunAnnotations.triangulated_points_gt_Rt_gt_flow,
+                       rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
+            if triangulated_point_cloud_pred_flow is not None:
+                rr.log(RerunAnnotations.triangulated_points_gt_Rt_mft_flow,
+                       rr.Points3D(triangulated_point_cloud_pred_flow.numpy()))
+            if triangulated_point_cloud_dust3r_im1 is not None:
+                rr.log(RerunAnnotations.point_cloud_dust3r_im1,
+                       rr.Points3D(triangulated_point_cloud_dust3r_im1.numpy()))
+            if triangulated_point_cloud_dust3r_im2 is not None:
+                rr.log(RerunAnnotations.point_cloud_dust3r_im2,
+                       rr.Points3D(triangulated_point_cloud_dust3r_im2.numpy()))
         else:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
