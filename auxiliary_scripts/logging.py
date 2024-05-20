@@ -51,6 +51,11 @@ class RerunAnnotations:
     observed_flow_with_uncertainty: str = '/observed_flow/observed_flow_front_uncertainty'
     observed_flow_occlusion: str = '/observed_flow/occlusion_front'
     observed_flow_uncertainty: str = '/observed_flow/uncertainty_front'
+    
+    # Triangulated points RANSAC
+    triangulated_points_gt_Rt_gt_flow: str = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
+    triangulated_points_gt_Rt_mft_flow: str = '/point_clouds/triangulated_points_gt_Rt_mft_flow'
+    point_cloud_dust3r: str = '/point_clouds/point_cloud_dust3r'
 
 class WriteResults:
 
@@ -136,6 +141,18 @@ class WriteResults:
                             rrb.Spatial2DView(name="Rendered Flow Occlusion", origin="/rendered_flow/occlusion")
                         ],
                         name='Output After Optimization'
+                    ),
+                    rrb.Grid(
+                        contents=[
+                            rrb.Spatial3DView(name="Triangulated Point Cloud MFT Flow, GT, Rt",
+                                              origin=RerunAnnotations.triangulated_points_gt_Rt_mft_flow),
+                            rrb.Spatial3DView(name="Triangulated Point Cloud GT Flow, GT, Rt",
+                                              origin=RerunAnnotations.triangulated_points_gt_Rt_gt_flow),
+                            rrb.Spatial3DView(name="Point Cloud Dust3r",
+                                              origin=RerunAnnotations.point_cloud_dust3r)
+                        ],
+                        grid_columns=2,
+                        name='Point Clouds'
                     ),
                     rrb.Grid(
                         contents=[],
@@ -484,20 +501,22 @@ class WriteResults:
 
         rr.set_time_sequence("frame", frame_i)
 
-        triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0].cpu()
-        triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0].cpu()
+        triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0]
+        triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0]
+        triangulated_point_cloud_dust3r = arc_data.dust3r_point_cloud.cpu()
 
         triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
-                                                 f'triangulated_point_cloud__gt_Rt_gt_flow_{frame_i}.ply')
+                                                 f'triangulated_point_cloud_gt_Rt_gt_flow_{frame_i}.ply')
         triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
-                                                   f'triangulated_point_cloud__gt_Rt_pred_flow_{frame_i}.ply')
-
-        # rr.log("triangulated_points_gt_Rt_gt_flow", rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
-        # rr.log("triangulated_points_gt_Rt_observed_flow", rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
-
-        # rr.log("points", rr.Points3D(points, colors=point_colors), rr.AnyValues(error=point_errors))
-
-        if frame_i % 5 == 0:
+                                                   f'triangulated_point_cloud_gt_Rt_pred_flow_{frame_i}.ply')
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            rr.log(RerunAnnotations.triangulated_points_gt_Rt_gt_flow,
+                   rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
+            rr.log(RerunAnnotations.triangulated_points_gt_Rt_mft_flow,
+                   rr.Points3D(triangulated_point_cloud_pred_flow.numpy()))
+            rr.log(RerunAnnotations.point_cloud_dust3r,
+                   rr.Points3D(triangulated_point_cloud_dust3r.numpy()))
+        else:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 

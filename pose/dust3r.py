@@ -63,7 +63,7 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
 # you can put the path to a local checkpoint in model_name if needed
 # model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to('cuda')
 
-def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tensor, torch.Tensor]:
+def get_matches_using_dust3r(imgs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     device = 'cuda'
     batch_size = 1
     schedule = 'cosine'
@@ -77,15 +77,15 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tens
     images = tensors_for_dust3r(imgs, 512)
     print(images[0]['img'].shape)
 
-    images = load_images(['repositories/dust3r/croco/assets/Chateau1.png',
-                          'repositories/dust3r/croco/assets/Chateau2.png'], size=512)
+    # images = load_images(['repositories/dust3r/croco/assets/Chateau1.png',
+    #                       'repositories/dust3r/croco/assets/Chateau2.png'], size=512)
     # images = load_images([
     #     '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_1.png',
     #     '/mnt/personal/jelint19/results/FlowTracker/GoogleScannedObjects/Squirrel/gt_imgs/gt_img_0_10.png',
     # ], size=512)
     print(images[0]['img'].shape)
     # breakpoint()
-    pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
+    pairs = make_pairs(images, scene_graph='oneref', prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
 
     # at this stage, you have the raw dust3r predictions
@@ -106,8 +106,8 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tens
     # depending on your task, you may be fine with the raw output and not need it
     # with only two input images, you could use GlobalAlignerMode.PairViewer: it would just convert the output
     # if using GlobalAlignerMode.PairViewer, no need to run compute_global_alignment
-    scene = global_aligner(output, device=device, mode=GlobalAlignerMode.PointCloudOptimizer)
-    loss = scene.compute_global_alignment(init="mst", niter=niter, schedule=schedule, lr=lr)
+    scene = global_aligner(output, device=device, mode=GlobalAlignerMode.PairViewer)
+    # loss = scene.compute_global_alignment(init="mst", niter=niter, schedule=schedule, lr=lr)
 
     # retrieve useful values from scene:
     imgs = scene.imgs
@@ -130,8 +130,8 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tens
     matches_im1 = pts2d_list[1][reciprocal_in_P2]
     matches_im0 = pts2d_list[0][nn2_in_P1][reciprocal_in_P2]
 
-    matches_im0_torch = torch.from_numpy(matches_im0).cuda()
-    matches_im1_torch = torch.from_numpy(matches_im1).cuda()
+    matches_im0_torch = torch.from_numpy(matches_im0).cuda()  #[:, [1, 0]]
+    matches_im1_torch = torch.from_numpy(matches_im1).cuda()  #[:, [1, 0]]
 
     # visualize a few matches
     # n_viz = 10
@@ -150,4 +150,4 @@ def get_matches_using_dust3r(imgs: List[torch.Tensor], size) -> Tuple[torch.Tens
     #     pl.plot([x0, x1 + W0], [y0, y1], '-+', color=cmap(i / (n_viz - 1)), scalex=False, scaley=False)
     # pl.show(block=True)
 
-    return matches_im0_torch, matches_im1_torch
+    return matches_im0_torch, matches_im1_torch, pts3d[0]

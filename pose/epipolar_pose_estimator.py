@@ -10,6 +10,7 @@ from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coord
 from keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult
+from pose.dust3r import get_matches_using_dust3r
 from pose.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, triangulate_points_from_Rt
 from tracker_config import TrackerConfig
 from utils import homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask, \
@@ -72,6 +73,18 @@ class EpipolarPoseEstimator:
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
         gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
+        src_pts_yx_gt_flow = src_pts_yx.clone()
+
+        pts3d_dust3r = None
+        if self.config.ransac_use_dust3r:
+            observed_images = camera_observation.observed_image[0][[0, -1]]
+            images_sequence = list(torch.unbind(observed_images, 0))
+            src_pts_yx_dust3r, dst_pts_yx_dust3r, pts3d_dust3r = get_matches_using_dust3r(images_sequence)
+
+            dust3r_fg_points_mask = gt_segmentation_binary_mask[0, 0, 0, src_pts_yx_dust3r[:, 0], src_pts_yx_dust3r[:, 1]]
+            src_pts_yx = src_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
+            dst_pts_yx = dst_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
+
 
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
@@ -128,6 +141,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points.cpu()
+        data.dust3r_point_cloud = pts3d_dust3r.flatten(0, 1).cpu()
 
         # quat_obj = self.gt_rotations
         gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
