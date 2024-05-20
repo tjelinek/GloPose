@@ -159,8 +159,8 @@ class EpipolarPoseEstimator:
                                                                               dst_pts_yx_gt_flow[None], K1[None],
                                                                               K2[None])
 
-        data.ransac_triangulated_points_gt_Rt = ransac_triangulated_points_gt_Rt
-        data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow
+        data.ransac_triangulated_points_gt_Rt = ransac_triangulated_points_gt_Rt.cpu()
+        data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow.cpu()
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
