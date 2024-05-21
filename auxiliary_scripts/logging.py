@@ -622,6 +622,19 @@ class WriteResults:
             front_results = self.measure_ransac_stats(frame_i, 'front')
             back_results = self.measure_ransac_stats(frame_i, 'back')
 
+            colors = {'visible': 'darkgreen',
+                      'predicted_as_visible': 'lime',
+                      'correctly_predicted_flows': 'yellow',
+                      'ransac_predicted_inliers': 'navy',
+                      'correctly_predicted_inliers': 'blue',
+                      'model_obtained_from': None,  # Not plotted
+                      'ransac_inlier_ratio': 'deeppink',
+                      'mft_flow_gt_flow_difference': None  # Not plotted
+                      }
+
+            # We want each line to have its assigned color
+            assert sorted(colors.keys()) == sorted(front_results.keys()) == sorted(back_results.keys())
+
             mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
             mft_flow_gt_flow_difference_back = back_results.pop('mft_flow_gt_flow_difference')
 
@@ -669,12 +682,13 @@ class WriteResults:
                 ax.set_ylim([0, 1.05])
 
                 for i, metric in enumerate(results.keys()):
+                    color = colors[metric]
                     if metric == 'model_obtained_from':
                         continue
                     if metric == 'ransac_inlier_ratio':
-                        line, = ax.plot(xs, results[metric], label=metric, linestyle='dashed')
+                        line, = ax.plot(xs, results[metric], label=metric, linestyle='dashed', color=color)
                     else:
-                        line, = ax.plot(xs, results[metric], label=metric)
+                        line, = ax.plot(xs, results[metric], label=metric, color=color)
 
                     if ax == axs[0]:
                         handles.append(line)
