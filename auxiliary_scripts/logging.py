@@ -4,7 +4,6 @@ from itertools import product
 
 from typing import Dict, Tuple, List
 
-import os
 import math
 
 import h5py
@@ -93,6 +92,8 @@ class WriteResults:
         self.ransac_path = self.write_folder / Path('ransac')
         self.point_clouds_path = self.write_folder / Path('point_clouds')
 
+        self.exported_mesh_path = self.write_folder / Path('3d_model')
+
         self.observations_path.mkdir(exist_ok=True, parents=True)
         self.gt_values_path.mkdir(exist_ok=True, parents=True)
         self.optimized_values_path.mkdir(exist_ok=True, parents=True)
@@ -100,6 +101,8 @@ class WriteResults:
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
         self.ransac_path.mkdir(exist_ok=True, parents=True)
         self.point_clouds_path.mkdir(exist_ok=True, parents=True)
+
+        self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
         self.rerun_init()
 
@@ -472,21 +475,7 @@ class WriteResults:
         self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
                                        observed_segmentations[:, [-1]], frame_i)
 
-        write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
-                       self.deep_encoder.face_features[0].cpu().numpy(),
-                       os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
-        save_image(detached_result.texture_maps[:, :3], os.path.join(self.write_folder, 'tex_deep.png'))
-        save_image(tex, os.path.join(self.write_folder, f'tex_{frame_i}.png'))
-
-        with open(self.write_folder / "model.mtl", "r") as file:
-            lines = file.readlines()
-
-        # Replace the last line
-        lines[-1] = f"map_Kd tex_{frame_i}.png\n"
-
-        # Write the result to a new file
-        with open(self.write_folder / f"model_{frame_i}.mtl", "w") as file:
-            file.writelines(lines)
+        self.save_3d_model(frame_i, tex, best_model, detached_result)
 
         for tmpi in range(renders.shape[1]):
 
@@ -497,6 +486,31 @@ class WriteResults:
                                                      observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
+
+    def save_3d_model(self, frame_i, tex, best_model, detached_result):
+        # write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
+        #                self.deep_encoder.face_features[0].cpu().numpy(),
+        #                os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
+
+        mesh_i_th_path = self.exported_mesh_path / f'mesh_{frame_i}.obj'
+        tex_path = self.exported_mesh_path / 'tex_deep.png'
+        tex_i_th_path = self.exported_mesh_path / f'tex_{frame_i}.png'
+        model_path = self.exported_mesh_path / 'model.mtl'
+        model_i_th_path = self.exported_mesh_path / f"model_{frame_i}.mtl"
+
+        write_obj_mesh(detached_result.vertices[0].numpy(force=True), best_model["faces"],
+                       self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path, str(model_i_th_path.name))
+                       
+        save_image(detached_result.texture_maps[:, :3], tex_path)
+        save_image(tex, tex_i_th_path)
+
+        with open(model_path, "r") as file:
+            lines = file.readlines()
+        # Replace the last line
+        lines[-1] = f"map_Kd tex_{frame_i}.png\n"
+        # Write the result to a new file
+        with open(model_i_th_path, "w") as file:
+            file.writelines(lines)
 
     def visualize_point_clouds_from_ransac(self, frame_i):
 

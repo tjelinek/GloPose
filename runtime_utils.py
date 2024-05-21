@@ -13,14 +13,16 @@ sys.path.append('repositories/OSTrack/S2DNet')
 from tracking6d import Tracking6D
 
 
-def run_tracking_on_sequence(config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
+def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, gt_texture=None, gt_mesh=None, gt_rotations=None,
                              gt_translations=None):
     if os.path.exists(write_folder):
         shutil.rmtree(write_folder)
 
-    os.makedirs(write_folder)
-    os.makedirs(os.path.join(write_folder, 'imgs'))
-    shutil.copyfile(os.path.join('prototypes', 'model.mtl'), os.path.join(write_folder, 'model.mtl'))
+    write_folder.mkdir(exist_ok=True, parents=True)
+    model_3d_dir = write_folder / '3d_model'
+    model_3d_dir.mkdir(exist_ok=True, parents=True)
+
+    shutil.copyfile(Path('prototypes') / 'model.mtl', model_3d_dir  / 'model.mtl')
 
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
