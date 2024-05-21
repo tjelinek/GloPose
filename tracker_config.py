@@ -104,7 +104,9 @@ class TrackerConfig:
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'RAFT'  # 'RAFT' 'GMA'
     long_flow_model: str = 'MFT_Synth'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
-    MFT_synth_add_noise: bool = True
+    MFT_synth_add_noise: bool = False
+    MFT_synth_noise_sigma: float = 0.3
+    MFT_synth_noise_mu: float = 0.0
     MFT_backbone_cfg: str = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
 
     matching_target_to_backview: bool = True
