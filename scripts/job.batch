@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
-#SBATCH --partition=gpufast
+#SBATCH --partition=amdgpufast
 #SBATCH --job-name=FlowTracker
 #SBATCH --err=/mnt/personal/jelint19/results/FlowTracker.err
 #SBATCH --out=/mnt/personal/jelint19/results/FlowTracker.out
@@ -51,5 +51,18 @@ echo "Log dir: ${output_folder}/${experiment}.log"
 echo "Output folder: ${output_folder}"
 echo "Experiment: ${experiment}"
 
-ml timm/0.9.12-foss-2023a-CUDA-12.1.1 kornia/0.7.2-foss-2023a-CUDA-12.1.1 PyTorch3D/0.7.5-foss-2023a-CUDA-12.1.1 OpenCV/4.8.1-foss-2023a-CUDA-12.1.1-contrib scikit-image/0.22.0-foss-2023a kaolin/0.15.0-foss-2023a-CUDA-12.1.1 pycolmap/0.6.1-foss-2023a-CUDA-12.1.1 pyceres/2.1-foss-2023a-CUDA-12.1.1 tensorboard/2.15.1-foss-2023a scikit-image/0.22.0-foss-2023a rerun/0.14.1-foss-2023a wandb/0.16.1-GCC-12.3.0 Seaborn/0.13.0-foss-2023a
+ml timm/0.9.16-foss-2023b-CUDA-12.4.0 \
+kornia/0.7.2-foss-2023b-CUDA-12.4.0 \
+PyTorch3D/0.7.6-foss-2023b-CUDA-12.4.0 \
+OpenCV/4.9.0-foss-2023b-contrib \
+scikit-image/0.23.2-foss-2023b \
+kaolin/0.15.0-foss-2023b-CUDA-12.4.0 \
+tensorboard/2.16.2-foss-2023b \
+Seaborn/0.13.2-gfbf-2023b \
+rerun/0.15.1-foss-2023b \
+wandb/0.16.6-GCC-13.2.0 \
+scikit-learn/1.3.2-gfbf-2023b \
+pycolmap/0.6.1-foss-2023b-CUDA-12.4.0 \
+pyceres/2.1-foss-2023b-CUDA-12.4.0
+
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" >> "${output_folder}/${experiment}.log" 2>&1
