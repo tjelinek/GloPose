@@ -4,7 +4,8 @@ from configs.epipolar.config_deep_with_flow_gt_esmatrix_frontview_backview_flown
 def get_config() -> TrackerConfig8P:
     cfg = TrackerConfig8P()
 
-    cfg.long_flow_model = 'MFT_IQ'
-    cfg.MFT_backbone_cfg = 'MFTIQ_RAFT_bs3_bce_200k_kubric_binary_cfg'
+    cfg.ransac_essential_matrix_algorithm = 'pygcransac'
+    cfg.long_flow_model = 'MFT'
+    cfg.MFT_backbone_cfg = 'MFT_RoMa_cfg'
 
     return cfg
