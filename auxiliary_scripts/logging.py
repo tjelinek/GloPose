@@ -58,8 +58,12 @@ class RerunAnnotations:
     point_cloud_dust3r_im1: str = '/point_clouds/point_cloud_dust3r_im1'
     point_cloud_dust3r_im2: str = '/point_clouds/point_cloud_dust3r_im2'
 
-    # Matchings
-    matching_correspondences: str = '/correspondences/matching'
+    # Ransac
+    matching_correspondences: str = '/epipolar/matching'
+    ransac_stats: str = '/epipolar/ransac_stats'
+
+    # Pose
+    pose_per_frame: str = '/pose/pose_per_frame'
 
 
 class WriteResults:
@@ -165,12 +169,19 @@ class WriteResults:
                         grid_columns=2,
                         name='Point Clouds'
                     ),
-                    rrb.Grid(
+                    rrb.Horizontal(
                         contents=[
                             rrb.Spatial2DView(name="Matching Visualization",
                                               origin=RerunAnnotations.matching_correspondences),
                         ],
                         name='Matching'
+                    ),
+                    rrb.Horizontal(
+                        contents=[
+                            rrb.Spatial2DView(name="Ransac Stats",
+                                              origin=RerunAnnotations.ransac_stats),
+                        ],
+                        name='Epipolar'
                     ),
                 ],
                 name=f'Results - {self.tracking_config.sequence}'
@@ -457,7 +468,7 @@ class WriteResults:
         self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
                                   gt_translations)
 
-        self.visualize_logged_metrics()
+        self.visualize_logged_metrics(plot_losses=False)
 
         self.analyze_ransac_matchings(frame_i)
 
@@ -684,8 +695,8 @@ class WriteResults:
             plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
             plt.tight_layout(rect=[0.13, 0, 1, 1])
 
-            plt.savefig(self.ransac_path / 'ransac_stats.svg')
-            plt.close()
+            fig_path = self.ransac_path / 'ransac_stats.svg'
+            self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats)
 
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
@@ -1112,6 +1123,7 @@ class WriteResults:
     def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
 
         using_own_axes = False
+        fig = None
         if rotation_ax is None and translation_ax is None:
             using_own_axes = True
             fig, axs = plt.subplots(2, 1, figsize=(12, 15))
@@ -1194,6 +1206,11 @@ class WriteResults:
         (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
         fig_path = Path(self.write_folder) / Path('rotations_by_epoch') / f'pose_per_frame.svg'
         if using_own_axes:
+            if fig is None:
+                raise ValueError("Variable 'fig' is None. This should not have happened as it is set if"
+                                 "no axes are provided and in this case, this code should not have been called.")
+
+            self.log_pyplot(max(frame_indices), fig, fig_path, RerunAnnotations.pose_per_frame)
             plt.savefig(fig_path)
             plt.close()
 
