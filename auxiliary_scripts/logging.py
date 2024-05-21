@@ -15,6 +15,7 @@ import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
 import torchvision
+from PIL import Image
 from matplotlib import pyplot as plt, gridspec
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -56,6 +57,10 @@ class RerunAnnotations:
     triangulated_points_gt_Rt_mft_flow: str = '/point_clouds/triangulated_points_gt_Rt_mft_flow'
     point_cloud_dust3r_im1: str = '/point_clouds/point_cloud_dust3r_im1'
     point_cloud_dust3r_im2: str = '/point_clouds/point_cloud_dust3r_im2'
+
+    # Matchings
+    matching_correspondences: str = '/correspondences/matching'
+
 
 class WriteResults:
 
@@ -161,8 +166,11 @@ class WriteResults:
                         name='Point Clouds'
                     ),
                     rrb.Grid(
-                        contents=[],
-                        name='GT Output'
+                        contents=[
+                            rrb.Spatial2DView(name="Matching Visualization",
+                                              origin=RerunAnnotations.matching_correspondences),
+                        ],
+                        name='Matching'
                     ),
                 ],
                 name=f'Results - {self.tracking_config.sequence}'
@@ -819,7 +827,9 @@ class WriteResults:
                                         flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
 
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
-            fig.savefig(str(destination_path), dpi=600, bbox_inches='tight')
+
+            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
+                            dpi=600, bbox_inches='tight')
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
@@ -1655,3 +1665,17 @@ class WriteResults:
         else:
             image_np = image.numpy(force=True)
             imageio.imwrite(save_path, image_np)
+
+    def log_pyplot(self, frame: int, fig: plt.plot, save_path: Path, rerun_annotation: str, **kwargs):
+
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            fig.canvas.draw()
+
+            image_bytes_np = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            image_np = image_bytes_np.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            image = Image.fromarray(image_np)
+            rr.log(rerun_annotation, rr.Image(image))
+            rr.set_time_sequence("frame", frame)
+        else:
+            plt.savefig(str(save_path), **kwargs)
+            plt.close()
