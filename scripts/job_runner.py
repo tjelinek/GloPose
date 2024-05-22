@@ -98,8 +98,6 @@ def main():
         # 'epipolar/mft_iq/mft_iq_flowformer_8p_pose',
         # 'epipolar/mft_iq/mft_iq_flowformer_direct_8p_pose',
         # 'epipolar/mft_iq/mft_iq_raft_8p_pose',
-        # 'epipolar/mft_iq/mft_iq_raft_direct_8p_pose',
-        # 'epipolar/mft_iq/mft_iq_roma_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_direct_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_direct_8p_pose',
@@ -114,6 +112,8 @@ def main():
         # 'epipolar/mft_iq/mft_iq_synthetic_8p_pose_noise_sigma_005_mu_01',
         # 'epipolar/mft/mft_direct_8p_pose',
         # 'epipolar/mft/mft_raft_8p_pose',
+        # 'epipolar/mft/mft_roma_8p_pose',
+        # 'epipolar/mft/mft_roma_direct_8p_pose',
         # 'epipolar/mft/mft_roma_ransac_8p_pose',
         # 'epipolar/mft/mft_roma_direct_ransac_8p_pose',
         # 'epipolar/dust3r/dust3r_8point'
