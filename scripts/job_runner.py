@@ -98,7 +98,6 @@ def main():
         # 'epipolar/mft_iq/mft_iq_flowformer_8p_pose',
         # 'epipolar/mft_iq/mft_iq_flowformer_direct_8p_pose',
         # 'epipolar/mft_iq/mft_iq_raft_8p_pose',
-        # 'epipolar/mft_iq/mft_iq_roma_direct_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_direct_8p_pose',
         # 'epipolar/mft_iq/mft_iq_roma_ransac_8p_pose',
