@@ -774,7 +774,7 @@ class WriteResults:
 
             display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
 
-            fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+            fig, axs = plt.subplots(3, 2, figsize=(8, 8), dpi=600)
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
