@@ -115,7 +115,9 @@ def main():
         # 'epipolar/mft/mft_roma_direct_8p_pose',
         # 'epipolar/mft/mft_roma_ransac_8p_pose',
         # 'epipolar/mft/mft_roma_direct_ransac_8p_pose',
-        # 'epipolar/dust3r/dust3r_8point'
+        # 'epipolar/dust3r/dust3r_8point',
+        'epipolar/mft_iq/mft_iq_roma_ransac_8p_pose_nice_camera',
+        'epipolar/mft/mft_roma_ransac_8p_pose_nice_camera',
     ]
 
     sequences = {

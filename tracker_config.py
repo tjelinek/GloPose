@@ -139,6 +139,8 @@ class TrackerConfig:
     ransac_dilate_occlusion: bool = False
     ransac_erode_segmentation: bool = False
 
+    ransac_use_dust3r: bool = False
+
     ransac_feed_only_inlier_flow: bool = False
     ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
 
