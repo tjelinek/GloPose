@@ -60,7 +60,27 @@ class RerunAnnotations:
 
     # Ransac
     matching_correspondences: str = '/epipolar/matching'
-    ransac_stats: str = '/epipolar/ransac_stats'
+
+    ransac_stats_old: str = '/epipolar/ransac_stats_img'
+    ransac_stats_frontview: str = '/epipolar/ransac_stats_frontview'
+    ransac_stats_frontview_visible: str = '/epipolar/ransac_stats_frontview/visible'
+    ransac_stats_frontview_predicted_as_visible: str = '/epipolar/ransac_stats_frontview/predicted_as_visible'
+    ransac_stats_frontview_correctly_predicted_flows: str = '/epipolar/ransac_stats_frontview/correctly_predicted_flows'
+    ransac_stats_frontview_ransac_predicted_inliers: str = '/epipolar/ransac_stats_frontview/ransac_predicted_inliers'
+    ransac_stats_frontview_correctly_predicted_inliers: str = '/epipolar/ransac_stats_frontview/correctly_predicted_inliers'
+    ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
+
+    ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
+    ransac_stats_backview_visible: str = '/epipolar/ransac_stats_backview/visible'
+    ransac_stats_backview_predicted_as_visible: str = '/epipolar/ransac_stats_backview/predicted_as_visible'
+    ransac_stats_backview_correctly_predicted_flows: str = '/epipolar/ransac_stats_backview/correctly_predicted_flows'
+    ransac_stats_backview_ransac_predicted_inliers: str = '/epipolar/ransac_stats_backview/ransac_predicted_inliers'
+    ransac_stats_backview_correctly_predicted_inliers: str = '/epipolar/ransac_stats_backview/correctly_predicted_inliers'
+    ransac_stats_backview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_backview/ransac_inlier_ratio'
+
+    # Pose
+    pose_rotation: str = '/pose/rotation'
+    pose_translation: str = '/pose/translation'
 
     # Pose
     pose_per_frame: str = '/pose/pose_per_frame'
@@ -176,12 +196,29 @@ class WriteResults:
                         ],
                         name='Matching'
                     ),
-                    rrb.Horizontal(
+                    rrb.Grid(
                         contents=[
-                            rrb.Spatial2DView(name="Ransac Stats",
-                                              origin=RerunAnnotations.ransac_stats),
+                            rrb.TimeSeriesView(name="RANSAC - Frontview",
+                                               origin=RerunAnnotations.ransac_stats_frontview
+                                               ),
+                            rrb.TimeSeriesView(name="RANSAC - Backview",
+                                               origin=RerunAnnotations.ransac_stats_backview
+                                               ),
+                            rrb.TimeSeriesView(name="Pose - Rotation",
+                                               origin=RerunAnnotations.pose_rotation
+                                               ),
+                            rrb.TimeSeriesView(name="Pose - Translation",
+                                               origin=RerunAnnotations.pose_translation
+                                               ),
                         ],
                         name='Epipolar'
+                    ),
+                    rrb.Grid(
+                        contents=[
+                            rrb.Spatial2DView(name="RANSAC Stats",
+                                              origin=RerunAnnotations.ransac_stats_old),
+                        ],
+                        name='Epipolar (old)'
                     ),
                 ],
                 name=f'Results - {self.tracking_config.sequence}'
@@ -632,19 +669,35 @@ class WriteResults:
 
     def analyze_ransac_matchings(self, frame_i):
 
-        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
-            front_results = self.measure_ransac_stats(frame_i, 'front')
-            back_results = self.measure_ransac_stats(frame_i, 'back')
+        front_results = self.measure_ransac_stats(frame_i, 'front')
+        back_results = self.measure_ransac_stats(frame_i, 'back')
 
-            colors = {'visible': 'darkgreen',
-                      'predicted_as_visible': 'lime',
-                      'correctly_predicted_flows': 'yellow',
-                      'ransac_predicted_inliers': 'navy',
-                      'correctly_predicted_inliers': 'blue',
-                      'model_obtained_from': None,  # Not plotted
-                      'ransac_inlier_ratio': 'deeppink',
-                      'mft_flow_gt_flow_difference': None  # Not plotted
-                      }
+        front_results.pop('mft_flow_gt_flow_difference')
+        back_results.pop('mft_flow_gt_flow_difference')
+
+        colors = {'visible': 'darkgreen',
+                  'predicted_as_visible': 'lime',
+                  'correctly_predicted_flows': 'yellow',
+                  'ransac_predicted_inliers': 'navy',
+                  'correctly_predicted_inliers': 'blue',
+                  'model_obtained_from': None,  # Not plotted
+                  'ransac_inlier_ratio': 'deeppink',
+                  }
+
+        for view_type, results in zip(['frontview', 'backview'], [front_results, back_results]):
+
+            for i, metric in enumerate(results.keys()):
+                if metric == 'model_obtained_from':
+                    continue
+
+                rerun_time_series_entity = getattr(RerunAnnotations, 'ransac_stats_' + view_type + '_' + metric)
+
+                rr.set_time_sequence("frame", frame_i)
+                metric_val: float = results[metric][-1]
+                rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
+
+        save_freq = 5
+        if (frame_i >= save_freq and frame_i % save_freq == 0) or frame_i >= self.tracking_config.input_frames:
 
             # We want each line to have its assigned color
             assert sorted(colors.keys()) == sorted(front_results.keys()) == sorted(back_results.keys())
@@ -718,7 +771,8 @@ class WriteResults:
             plt.tight_layout(rect=[0.13, 0, 1, 1])
 
             fig_path = self.ransac_path / 'ransac_stats.svg'
-            self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats)
+
+            self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats_old)
 
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
