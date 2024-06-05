@@ -470,6 +470,7 @@ class WriteResults:
 
         self.visualize_logged_metrics(plot_losses=False)
 
+        self.analyze_ransac_matchings_errors(frame_i)
         self.analyze_ransac_matchings(frame_i)
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
@@ -616,6 +617,19 @@ class WriteResults:
 
         return results
 
+    def analyze_ransac_matchings_errors(self, frame_i):
+
+        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
+
+            front_results = self.measure_ransac_stats(frame_i, 'front')
+            back_results = self.measure_ransac_stats(frame_i, 'back')
+
+            mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
+            mft_flow_gt_flow_difference_back = back_results.pop('mft_flow_gt_flow_difference')
+
+            if self.tracking_config.plot_mft_flow_kde_error_plot:
+                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
+
     def analyze_ransac_matchings(self, frame_i):
 
         if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
@@ -634,12 +648,6 @@ class WriteResults:
 
             # We want each line to have its assigned color
             assert sorted(colors.keys()) == sorted(front_results.keys()) == sorted(back_results.keys())
-
-            mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
-            mft_flow_gt_flow_difference_back = back_results.pop('mft_flow_gt_flow_difference')
-
-            if self.tracking_config.plot_mft_flow_kde_error_plot:
-                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
             fig = plt.figure(figsize=(20, 10))
             gs = gridspec.GridSpec(2, 3, figure=fig)
