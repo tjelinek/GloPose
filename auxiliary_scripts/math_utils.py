@@ -11,7 +11,7 @@ def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
 
 
 def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
-    T_cam = inverse_transformation(Rt_to_matrix4x4(R_cam, t_cam))
+    T_cam = Rt_to_matrix4x4(R_cam, t_cam)
 
     T_o2_to_o1 = T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam)
 
