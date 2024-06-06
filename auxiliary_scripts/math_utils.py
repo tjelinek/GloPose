@@ -5,9 +5,9 @@ def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
     T_cam_to_world = inverse_transformation(T_world_to_cam)
 
     # T_o1_to_o2 = T_w_to_c0 @ T_cam @ (T_w_to_c0)^-1
-    T_o2_to_o1 = compose_transformations(compose_transformations(T_world_to_cam, T_cam), T_cam_to_world)
+    T_obj = compose_transformations(compose_transformations(T_world_to_cam, T_cam), T_cam_to_world)
 
-    return T_o2_to_o1
+    return T_obj
 
 
 def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
