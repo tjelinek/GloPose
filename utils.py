@@ -7,7 +7,6 @@ import numpy as np
 import torch
 from kornia.morphology import erosion, dilation
 from skimage.measure import label, regionprops
-import matplotlib.colors as mcolors
 
 from tracker_config import TrackerConfig
 
@@ -113,63 +112,6 @@ def comp_tran_diff(vect):
     vdiff = (vect[1:] - vect[:-1]).abs()
     vdiff[vdiff < 0.2] = 0
     return torch.cat((0 * vdiff[:1], vdiff), 0).norm(dim=1)
-
-
-def qnorm(q1):
-    return q1 / q1.norm()
-
-
-def qnorm_vectorized(quaternions):
-    return quaternions / quaternions.norm(dim=-1).unsqueeze(-1)
-
-
-def qmult(q1, q0):  # q0, then q1, you get q3
-    w0, x0, y0, z0 = q0[0]
-    w1, x1, y1, z1 = q1[0]
-    q3 = torch.cat(((-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0)[None, None],
-                    (x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0)[None, None],
-                    (-x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0)[None, None],
-                    (x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0)[None, None]), 1)
-    return q3
-
-
-def qdist(q1, q2):
-    return 1 - (q1 * q2).sum() ** 2
-
-
-def qdifference(q1, q2):  # how to get from q1 to q2
-    q1conj = -q1
-    q1conj[0, 0] = q1[0, 0]
-    q1inv = q1conj / q1.norm()
-    diff = qmult(q2, q1inv)
-    return diff
-
-
-def quaternion_angular_difference(quaternions1, quaternions2):
-    angles = torch.zeros(quaternions1.shape[1])
-
-    for i in range(angles.shape[0]):
-        diff = qnorm(qdifference(quaternions1[:, i], quaternions2[:, i]))
-        ang = float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi
-        angles[i] = ang
-    return angles
-
-
-def consecutive_quaternions_angular_difference(quaternion):
-    angs = []
-    for qi in range(quaternion.shape[1] - 1):
-        diff = qnorm(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
-        angs.append(float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi)
-    return np.array(angs)
-
-
-def consecutive_quaternions_angular_difference2(quaternion):
-    angs = []
-    for qi in range(quaternion.shape[1] - 1):
-        ang = float(torch.acos(torch.dot(quaternion[0, qi], quaternion[0, qi + 1]) /
-                               (quaternion[0, qi].norm() * quaternion[0, qi].norm()))) * 180.0 / np.pi
-        angs.append(ang)
-    return np.array(angs)
 
 
 def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,

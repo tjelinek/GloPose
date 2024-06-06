@@ -13,7 +13,8 @@ from pathlib import Path
 from dataset_generators.scenarios import MovementScenario
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
-from utils import qnorm, qmult, normalize_vertices
+from utils import normalize_vertices
+from auxiliary_scripts.math_utils import qnorm, qmult
 from flow import visualize_flow_with_images
 
 

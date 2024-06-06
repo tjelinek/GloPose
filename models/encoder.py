@@ -8,7 +8,8 @@ from kornia.geometry.quaternion import Quaternion
 from kornia.geometry.liegroup import Se3, So3
 from pytorch3d.transforms import quaternion_multiply
 
-from utils import mesh_normalize, comp_tran_diff, qnorm, qmult, qdist, qnorm_vectorized
+from utils import mesh_normalize, comp_tran_diff
+from auxiliary_scripts.math_utils import qnorm, qnorm_vectorized, qmult, qdist
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights', 'translation_difference', 'quaternion_difference'])

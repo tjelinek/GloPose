@@ -6,7 +6,7 @@ import torch
 from models.encoder import Encoder, EncoderResult
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
-from utils import qnorm_vectorized, normalize_rendered_flows
+from auxiliary_scripts.math_utils import qnorm_vectorized
 
 
 class LossFunctionWrapper(torch.nn.Module):

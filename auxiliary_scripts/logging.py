@@ -34,7 +34,8 @@ from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from utils import qnorm, quaternion_angular_difference, coordinates_xy_to_tensor_index
+from utils import coordinates_xy_to_tensor_index
+from auxiliary_scripts.math_utils import qnorm, quaternion_angular_difference
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder

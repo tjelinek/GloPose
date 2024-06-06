@@ -9,8 +9,7 @@ import numpy as np
 import os
 import time
 import torch
-from kornia.geometry.conversions import (axis_angle_to_quaternion, axis_angle_to_rotation_matrix,
-                                         rotation_matrix_to_axis_angle)
+from kornia.geometry.conversions import axis_angle_to_quaternion
 from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable
@@ -20,10 +19,9 @@ from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
+from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider, flow_unit_coords_to_image_coords, source_coords_to_target_coords, \
-    get_correct_correspondences_mask, MFTIQFlowProvider, MFTIQSyntheticFlowProvider
+    MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -32,13 +30,11 @@ from models.initial_mesh import generate_face_features
 from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from pose.essential_matrix_pose_estimation import estimate_pose_using_dense_correspondences, triangulate_points_from_Rt
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
 from tracker_config import TrackerConfig
-from utils import consecutive_quaternions_angular_difference, normalize_vertices, normalize_rendered_flows, \
-    get_not_occluded_foreground_points, homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask
+from utils import normalize_vertices, normalize_rendered_flows
 
 
 class InferenceResult(NamedTuple):
