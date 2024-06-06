@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt
+from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt, \
+    normalize_quaternion
 
 
 def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
@@ -33,14 +34,6 @@ def Rt_epipolar_cam_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
     return R_cam, t_cam
 
 
-def qnorm(q1):
-    return q1 / q1.norm()
-
-
-def qnorm_vectorized(quaternions):
-    return quaternions / quaternions.norm(dim=-1).unsqueeze(-1)
-
-
 def qmult(q1, q0):  # q0, then q1, you get q3
     w0, x0, y0, z0 = q0[0]
     w1, x1, y1, z1 = q1[0]
@@ -63,20 +56,10 @@ def qdifference(q1, q2):  # how to get from q1 to q2
     return diff
 
 
-def quaternion_angular_difference(quaternions1, quaternions2):
-    angles = torch.zeros(quaternions1.shape[1])
-
-    for i in range(angles.shape[0]):
-        diff = qnorm(qdifference(quaternions1[:, i], quaternions2[:, i]))
-        ang = float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi
-        angles[i] = ang
-    return angles
-
-
 def consecutive_quaternions_angular_difference(quaternion):
     angs = []
     for qi in range(quaternion.shape[1] - 1):
-        diff = qnorm(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
+        diff = normalize_quaternion(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
         angs.append(float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi)
     return np.array(angs)
 

@@ -2,11 +2,11 @@ from dataclasses import field, dataclass
 from typing import Optional, Tuple
 
 import torch
+from kornia.geometry import normalize_quaternion
 
 from models.encoder import Encoder, EncoderResult
 from models.loss import FMOLoss
 from models.rendering import RenderingKaolin
-from auxiliary_scripts.math_utils import qnorm_vectorized
 
 
 class LossFunctionWrapper(torch.nn.Module):
@@ -50,7 +50,7 @@ class LossFunctionWrapper(torch.nn.Module):
 
         translations = trans_quats[None, ..., :3]
         quaternions = trans_quats[..., 3:]
-        quaternions = qnorm_vectorized(quaternions)
+        quaternions = normalize_quaternion(quaternions)
 
         encoder_result = self.encoder_result._replace(translations=translations, quaternions=quaternions)
 

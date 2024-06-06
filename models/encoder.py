@@ -3,13 +3,14 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from kornia.geometry import normalize_quaternion
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from kornia.geometry.liegroup import Se3, So3
 from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize, comp_tran_diff
-from auxiliary_scripts.math_utils import qnorm, qnorm_vectorized, qmult, qdist
+from auxiliary_scripts.math_utils import qmult, qdist
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights', 'translation_difference', 'quaternion_difference'])
@@ -159,11 +160,12 @@ class Encoder(nn.Module):
         return tdiff, qdiff
 
     def get_total_rotation_at_frame_vectorized(self):
-        offset_initial_quaternion = quaternion_multiply(qnorm_vectorized(self.initial_quaternion),
-                                                        qnorm_vectorized(self.quaternion_offsets))
+        offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.initial_quaternion),
+                                                        normalize_quaternion(self.quaternion_offsets))
         quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
-        total_rotation_quaternion = qnorm_vectorized(quaternion_multiply(offset_initial_quaternion,
-                                                                         qnorm_vectorized(quaternion)))
+        quaternions = quaternion_multiply(offset_initial_quaternion,
+                                          normalize_quaternion(quaternion))
+        total_rotation_quaternion = normalize_quaternion(quaternions)
 
         return total_rotation_quaternion
 
@@ -187,8 +189,8 @@ class Encoder(nn.Module):
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
         quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
-        self.quaternion_offsets[:, stepi] = qmult(qnorm(self.quaternion_offsets[:, stepi - 1]),
-                                                  qnorm(quaternion[:, stepi - 1]).detach())
+        self.quaternion_offsets[:, stepi] = qmult(normalize_quaternion(self.quaternion_offsets[:, stepi - 1]),
+                                                  normalize_quaternion(quaternion[:, stepi - 1]).detach())
 
         axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
         self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()

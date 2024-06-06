@@ -16,6 +16,7 @@ import numpy as np
 import seaborn as sns
 import torchvision
 from PIL import Image
+from kornia.geometry import normalize_quaternion
 from matplotlib import pyplot as plt, gridspec
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -35,7 +36,7 @@ from tracker_config import TrackerConfig
 from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
-from auxiliary_scripts.math_utils import qnorm, quaternion_angular_difference
+from auxiliary_scripts.math_utils import quaternion_angular_difference
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
@@ -1563,7 +1564,7 @@ class WriteResults:
     def write_keyframe_rotations(self, detached_result, keyframes):
         quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
         for k in range(quaternions.shape[0]):
-            quaternions[k] = qnorm(quaternions[k])
+            quaternions[k] = normalize_quaternion(quaternions[k])
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
