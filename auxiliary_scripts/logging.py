@@ -80,7 +80,20 @@ class RerunAnnotations:
 
     # Pose
     pose_rotation: str = '/pose/rotation'
+    pose_rotation_x: str = '/pose/rotation/x_axis'
+    pose_rotation_x_gt: str = '/pose/rotation/x_axis_gt'
+    pose_rotation_y: str = '/pose/rotation/y_axis'
+    pose_rotation_y_gt: str = '/pose/rotation/y_axis_gt'
+    pose_rotation_z: str = '/pose/rotation/z_axis'
+    pose_rotation_z_gt: str = '/pose/rotation/z_axis_gt'
+    
     pose_translation: str = '/pose/translation'
+    pose_translation_x: str = '/pose/translation/x_axis'
+    pose_translation_x_gt: str = '/pose/translation/x_axis_gt'
+    pose_translation_y: str = '/pose/translation/y_axis'
+    pose_translation_y_gt: str = '/pose/translation/y_axis_gt'
+    pose_translation_z: str = '/pose/translation/z_axis'
+    pose_translation_z_gt: str = '/pose/translation/z_axis_gt'
 
     # Pose
     pose_per_frame: str = '/pose/pose_per_frame'
@@ -1232,6 +1245,25 @@ class WriteResults:
         translations = np.array(translations)
         gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
         gt_translations = np.array(gt_translations)
+        
+        # Rerun
+        rr.set_time_sequence("frame", max(frame_indices))
+
+        rr.log(RerunAnnotations.pose_rotation_x, rr.Scalar(rotations[-1][0]))
+        rr.log(RerunAnnotations.pose_rotation_y, rr.Scalar(rotations[-1][1]))
+        rr.log(RerunAnnotations.pose_rotation_z, rr.Scalar(rotations[-1][2]))
+        
+        rr.log(RerunAnnotations.pose_rotation_x_gt, rr.Scalar(gt_rotations[-1][0]))
+        rr.log(RerunAnnotations.pose_rotation_y_gt, rr.Scalar(gt_rotations[-1][1]))
+        rr.log(RerunAnnotations.pose_rotation_z_gt, rr.Scalar(gt_rotations[-1][2]))
+
+        rr.log(RerunAnnotations.pose_translation_x, rr.Scalar(translations[-1][0]))
+        rr.log(RerunAnnotations.pose_translation_y, rr.Scalar(translations[-1][1]))
+        rr.log(RerunAnnotations.pose_translation_z, rr.Scalar(translations[-1][2]))
+
+        rr.log(RerunAnnotations.pose_translation_x_gt, rr.Scalar(gt_translations[-1][0]))
+        rr.log(RerunAnnotations.pose_translation_y_gt, rr.Scalar(gt_translations[-1][1]))
+        rr.log(RerunAnnotations.pose_translation_z_gt, rr.Scalar(gt_translations[-1][2]))
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
