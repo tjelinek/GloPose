@@ -47,9 +47,6 @@ class Encoder(nn.Module):
         translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
         self.register_buffer('translation_offsets', translation_offsets)
 
-        axis_angle_offsets = torch.zeros(1, config.input_frames, 3)
-        self.register_buffer('axis_angle_offsets', axis_angle_offsets)
-
         self.translation = nn.Parameter(torch.zeros(translation_offsets.shape))
         quat = torch.zeros(1, config.input_frames, 4)
         quat[:, :, 0] = 1.0
@@ -58,18 +55,6 @@ class Encoder(nn.Module):
         self.quaternion_x = nn.Parameter(quat[..., 1, None])
         self.quaternion_y = nn.Parameter(quat[..., 2, None])
         self.quaternion_z = nn.Parameter(quat[..., 3, None])
-
-        axis_angles = torch.zeros(1, config.input_frames, 3)
-        self.axis_angle_x = nn.Parameter(axis_angles[..., 0, None])
-        self.axis_angle_y = nn.Parameter(axis_angles[..., 1, None])
-        self.axis_angle_z = nn.Parameter(axis_angles[..., 2, None])
-
-        se3_algebra_init = Se3(So3(Quaternion(qinit[0])), translation_init[0, 0]).log()
-        se3_algebra_offsets = Se3(So3(Quaternion(quaternion_offsets[0])), translation_offsets[0, 0]).log()
-
-        self.register_buffer('se3_algebra_init', se3_algebra_init)
-        self.register_buffer('se3_algebra_offsets', se3_algebra_offsets)
-        self.se3_algebra = nn.Parameter(torch.zeros(se3_algebra_init.shape))
 
         # Lights initialization
         if self.config.use_lights:
@@ -118,7 +103,6 @@ class Encoder(nn.Module):
 
         translation = self.get_total_translation_at_frame_vectorized()
         quaternion = self.get_total_rotation_at_frame_vectorized()
-        rotation = self.get_total_rotation_at_frame_vectorized_axis_angle()
         translation[:, :, 0] = translation[:, :, 0].detach()
         quaternion[:, 0] = quaternion[:, 0].detach()
 
@@ -126,7 +110,6 @@ class Encoder(nn.Module):
 
         translation[:, :, noopt] = translation[:, :, noopt].detach()
         quaternion[:, noopt] = quaternion[:, noopt].detach()
-        rotation[:, noopt] = rotation[:, noopt].detach()
 
         quaternion = quaternion[:, :opt_frames[-1] + 1]
         translation = translation[:, :, :opt_frames[-1] + 1]
@@ -169,36 +152,20 @@ class Encoder(nn.Module):
 
         return total_rotation_quaternion
 
-    def get_total_rotation_at_frame_vectorized_axis_angle(self):
-        axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
-        return self.initial_axis_angle + self.axis_angle_offsets + axis_angle_rot
-
     def get_total_translation_at_frame_vectorized(self):
         # The formula is initial_translation * translation_offsets * translation
         return self.initial_translation + self.translation_offsets + self.translation
-
-    def get_composed_se3_at_frame_vectorized(self):
-        return Se3.exp(self.se3_algebra_init) * Se3.exp(self.se3_algebra_offsets) * Se3.exp(self.se3_algebra)
 
     def compute_next_offset(self, stepi):
         self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
         self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
         self.initial_axis_angle[:, stepi] = self.initial_axis_angle[:, stepi - 1]
-        self.se3_algebra_init[stepi] = self.se3_algebra_init[stepi - 1]
 
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
         quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
         self.quaternion_offsets[:, stepi] = qmult(normalize_quaternion(self.quaternion_offsets[:, stepi - 1]),
                                                   normalize_quaternion(quaternion[:, stepi - 1]).detach())
-
-        axis_angle_rot = torch.cat([self.axis_angle_x, self.axis_angle_y, self.axis_angle_z], dim=-1)
-        self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
-
-        self.axis_angle_offsets[:, stepi] = self.axis_angle_offsets[:, stepi] + axis_angle_rot[:, stepi - 1].detach()
-
-        self.se3_algebra_offsets[stepi] = (Se3.exp(self.se3_algebra_offsets[stepi]) *
-                                           Se3.exp(self.se3_algebra[stepi])).log()
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames) -> Tuple[EncoderResult, EncoderResult]:
 

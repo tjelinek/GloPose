@@ -195,10 +195,6 @@ class Tracking6D:
             encoder.quaternion_y = torch.nn.Parameter(rotation_quaternion[..., 2, None])
             encoder.quaternion_z = torch.nn.Parameter(rotation_quaternion[..., 3, None])
 
-            encoder.axis_angle_x = torch.nn.Parameter(rotations[..., 0, None])
-            encoder.axis_angle_y = torch.nn.Parameter(rotations[..., 1, None])
-            encoder.axis_angle_z = torch.nn.Parameter(rotations[..., 2, None])
-
             encoder.translation = torch.nn.Parameter(translations)
 
         self.encoder.train()
@@ -209,8 +205,7 @@ class Tracking6D:
 
                 # Do not optimize the poses
                 for param in [self.encoder.quaternion_w, self.encoder.quaternion_x, self.encoder.quaternion_y,
-                              self.encoder.quaternion_z, self.encoder.translation,
-                              self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z]:
+                              self.encoder.quaternion_z, self.encoder.translation]:
                     param.detach_()
             else:
                 raise ValueError("Required not to optimize pose even though no ground truth "
