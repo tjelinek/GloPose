@@ -1,5 +1,4 @@
-from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt, \
-    rotation_matrix_to_axis_angle
+from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt
 
 
 def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
