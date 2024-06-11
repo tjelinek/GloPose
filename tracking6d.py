@@ -499,7 +499,11 @@ class Tracking6D:
                     self.long_flow_provider.need_to_init = True
 
             if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
-                nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:-self.config.max_keyframes]
+                if self.config.max_keyframes <= 1:
+                    nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:]
+                else:
+                    nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:-self.config.max_keyframes]
+
                 remaining_keyframes = sorted(list(set(self.active_keyframes.keyframes) - set(nodes_to_remove)))
                 remaining_flow_frames = sorted(list(set(self.active_keyframes.flow_frames) - set(nodes_to_remove)))
 
