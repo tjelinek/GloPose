@@ -1117,8 +1117,7 @@ class Tracking6D:
                                             observed_flow_occlusion=flow_observations.observed_flow_occlusion,
                                             rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
                                             observed_flow_uncertainties=flow_observations.observed_flow_uncertainty,
-                                            keyframes_encoder_result=encoder_result,
-                                            last_keyframes_encoder_result=self.last_encoder_result)
+                                            keyframes_encoder_result=encoder_result)
 
         result = InferenceResult(encoder_result, loss_result, renders, rendered_flow_result)
 
