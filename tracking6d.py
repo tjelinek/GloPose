@@ -800,7 +800,6 @@ class Tracking6D:
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
                                    loss_result.losses, encoder_result, frame_index)
 
-    @torch.no_grad()
     def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
                                stacked_flow_observations, stacked_observations):
 
@@ -820,6 +819,7 @@ class Tracking6D:
         self.best_model["value"] = joint_loss
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
+    @torch.no_grad()
     def essential_matrix_preinitialization(self, flow_arcs, keyframes, flow_frames,
                                            observations: MultiCameraObservation,
                                            flow_observations: MultiCameraObservation):
