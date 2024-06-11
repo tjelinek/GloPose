@@ -7,11 +7,11 @@ from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipola
 from dataset_generators import scenarios
 from utils import homogenize_3x4_transformation_matrix
 
-camera_translation = torch.tensor([0.0, -0.0, 5.0]).to(torch.float).unsqueeze(0)
+camera_translation = torch.tensor([1.0, -2.0, 5.0]).to(torch.float).unsqueeze(0)
 camera_up = torch.tensor([0, 1, 0]).to(torch.float).unsqueeze(0)
 obj_center = torch.tensor([0, 0, 0]).to(torch.float).unsqueeze(0)
 
-obj_rot_np = np.deg2rad(np.stack(scenarios.generate_rotations_x(5).rotations, axis=0))
+obj_rot_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
 obj_rot = torch.from_numpy(obj_rot_np).to(torch.float32)
 # obj_rot[:, [0, 2]] *= -1.
 obj_trans = torch.zeros_like(obj_rot).squeeze().unsqueeze(-1)
@@ -34,8 +34,8 @@ R_obj_prime, t_obj_prime = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_
 r_obj_prime = rotation_matrix_to_axis_angle(R_obj_prime)
 
 
-def print_tensor(name, tensor: torch.Tensor, max_vals=2):
-    print(f"{name}:\n{tensor[:max_vals].squeeze().numpy()}\n\n")
+def print_tensor(name, tensor: torch.Tensor, max_vals=80):
+    print(f"{name}:\n{tensor[:max_vals].squeeze()}\n\n")
 
 
 print_tensor("t_obj", obj_trans)
