@@ -406,13 +406,6 @@ class Tracking6D:
 
             self.add_new_flows(frame_i, new_frame_observation)
 
-            self.last_encoder_result = EncoderResult(*[tensor.clone()
-                                                       if tensor is not None else None for tensor in
-                                                       self.encoder(self.active_keyframes.keyframes)])
-            self.last_encoder_result_rgb = EncoderResult(*[tensor.clone()
-                                                           if tensor is not None else None for tensor in
-                                                           self.rgb_encoder(self.active_keyframes.keyframes)])
-
             all_frame_observations: FrameObservation = \
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
             all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
@@ -883,7 +876,7 @@ class Tracking6D:
                                        flow_frames, keyframes, flow_arcs):
         loss_coefs_names = [
             'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight',
-            'loss_dist_weight', 'loss_q_weight', 'loss_texture_change_weight',
+            'loss_dist_weight', 'loss_q_weight',
             'loss_t_weight', 'loss_rgb_weight', 'loss_flow_weight'
         ]
 
@@ -952,9 +945,7 @@ class Tracking6D:
                                                      observed_flow_occlusion=observed_flows_occlusion,
                                                      rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
                                                      observed_flow_uncertainties=observed_flows_uncertainty,
-                                                     keyframes_encoder_result=encoder_result,
-                                                     last_keyframes_encoder_result=self.last_encoder_result,
-                                                     return_end_point_errors=False)
+                                                     keyframes_encoder_result=encoder_result)
 
             losses_all, losses, joint_loss, per_pixel_error = loss_result
             joint_loss = joint_loss.mean()
@@ -1149,7 +1140,6 @@ class Tracking6D:
             'loss_iou_weight': self.config.loss_iou_weight,
             'loss_dist_weight': self.config.loss_dist_weight,
             'loss_q_weight': self.config.loss_q_weight,
-            'loss_texture_change_weight': self.config.loss_texture_change_weight,
             'loss_t_weight': self.config.loss_t_weight,
             'loss_rgb_weight': self.config.loss_rgb_weight,
             'loss_flow_weight': self.config.loss_flow_weight,
