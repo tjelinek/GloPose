@@ -792,8 +792,7 @@ class Tracking6D:
         self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
                                          stacked_flow_observations, stacked_observations)
 
-        replace(data_graph_frame_data, flow_render_result=rendered_flow_result,
-                renders=renders, per_pixel_flow_error=loss_result.per_pixel_flow_loss)
+        replace(data_graph_frame_data, renders=renders, per_pixel_flow_error=loss_result.per_pixel_flow_loss)
 
     def infer_model_and_log_results(self, flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
                                     stacked_flow_observations, stacked_observations):
