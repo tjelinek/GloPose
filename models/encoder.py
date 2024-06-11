@@ -50,10 +50,7 @@ class Encoder(nn.Module):
         quat = torch.zeros(1, config.input_frames, 4)
         quat[:, :, 0] = 1.0
 
-        self.quaternion_w = nn.Parameter(quat[..., 0, None])
-        self.quaternion_x = nn.Parameter(quat[..., 1, None])
-        self.quaternion_y = nn.Parameter(quat[..., 2, None])
-        self.quaternion_z = nn.Parameter(quat[..., 3, None])
+        self.quaternion = nn.Parameter(quat)
 
         # Lights initialization
         if self.config.use_lights:
@@ -137,9 +134,9 @@ class Encoder(nn.Module):
     def get_total_rotation_at_frame_vectorized(self):
         offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.initial_quaternion),
                                                         normalize_quaternion(self.quaternion_offsets))
-        quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
+
         quaternions = quaternion_multiply(offset_initial_quaternion,
-                                          normalize_quaternion(quaternion))
+                                          normalize_quaternion(self.quaternion))
         total_rotation_quaternion = normalize_quaternion(quaternions)
 
         return total_rotation_quaternion
@@ -155,9 +152,9 @@ class Encoder(nn.Module):
 
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
-        quaternion = torch.cat([self.quaternion_w, self.quaternion_x, self.quaternion_y, self.quaternion_z], dim=-1)
+
         self.quaternion_offsets[:, stepi] = qmult(normalize_quaternion(self.quaternion_offsets[:, stepi - 1]),
-                                                  normalize_quaternion(quaternion[:, stepi - 1]).detach())
+                                                  normalize_quaternion(self.quaternion[:, stepi - 1]).detach())
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames) -> Tuple[EncoderResult, EncoderResult]:
 
