@@ -8,7 +8,7 @@ from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
 from models.encoder import EncoderResult
 from tracker_config import TrackerConfig
-from utils import normalize_rendered_flows
+from flow import normalize_rendered_flows
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',

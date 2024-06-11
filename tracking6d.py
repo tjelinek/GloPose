@@ -21,7 +21,7 @@ from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
-    MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider
+    MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider, normalize_rendered_flows
 from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
@@ -34,7 +34,7 @@ from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
                            BaseTracker)
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, normalize_rendered_flows
+from utils import normalize_vertices
 
 
 class InferenceResult(NamedTuple):

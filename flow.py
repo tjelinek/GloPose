@@ -174,6 +174,15 @@ def normalize_flow_to_unit_range(observed_flow: torch.Tensor) -> torch.Tensor:
     return observed_flow
 
 
+def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,
+                             original_height):
+    rendered_flows[..., 0] = rendered_flows[..., 0] * (rendering_width / original_width)
+    rendered_flows[..., 1] = rendered_flows[..., 1] * (rendering_height / original_height)
+
+    return rendered_flows
+
+
+
 def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor) -> torch.Tensor:
     # Convert unit range coordinates back to image coordinates
     observed_flow = observed_flow.clone()
