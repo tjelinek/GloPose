@@ -114,14 +114,6 @@ def comp_tran_diff(vect):
     return torch.cat((0 * vdiff[:1], vdiff), 0).norm(dim=1)
 
 
-def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,
-                             original_height):
-    rendered_flows[..., 0] = rendered_flows[..., 0] * (rendering_width / original_width)
-    rendered_flows[..., 1] = rendered_flows[..., 1] * (rendering_height / original_height)
-
-    return rendered_flows
-
-
 def normalize_vertices(vertices: torch.Tensor):
     vertices = vertices - vertices.mean(axis=0)
     max_abs_val = torch.max(torch.abs(vertices))
