@@ -502,7 +502,8 @@ class WriteResults:
         self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
                                                observations_backview.observed_image[:, [-1]].cpu())
 
-        self.visualize_point_clouds_from_ransac(frame_i)
+        if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
+            self.visualize_point_clouds_from_ransac(frame_i)
 
         if frame_i % self.tracking_config.write_results_frequency == 0:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
