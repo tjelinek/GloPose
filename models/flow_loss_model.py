@@ -82,7 +82,9 @@ class LossFunctionWrapper(torch.nn.Module):
         if self.rendering.config.use_custom_jacobian:
             self.ctx.flow_sgd_indices = nonzero_points
 
-        return loss_result.to(torch.float)
+        loss_result = loss_result.to(torch.float)
+
+        return loss_result
 
     def dx_dq(self, q, x0):
         # Given quaternion q=(q_w, q_i, q_j, q_k) and an initial point x=(x_0, x_1, x_2), computes the gradient
