@@ -190,11 +190,8 @@ class Tracking6D:
 
         def set_encoder_poses(encoder, rotations, translations):
             rotation_quaternion = axis_angle_to_quaternion(rotations)
-            encoder.quaternion_w = torch.nn.Parameter(rotation_quaternion[..., 0, None])
-            encoder.quaternion_x = torch.nn.Parameter(rotation_quaternion[..., 1, None])
-            encoder.quaternion_y = torch.nn.Parameter(rotation_quaternion[..., 2, None])
-            encoder.quaternion_z = torch.nn.Parameter(rotation_quaternion[..., 3, None])
 
+            encoder.quaternion = torch.nn.Parameter(rotation_quaternion)
             encoder.translation = torch.nn.Parameter(translations)
 
         self.encoder.train()
@@ -204,8 +201,7 @@ class Tracking6D:
                 set_encoder_poses(self.encoder, self.gt_rotations, self.gt_translations)
 
                 # Do not optimize the poses
-                for param in [self.encoder.quaternion_w, self.encoder.quaternion_x, self.encoder.quaternion_y,
-                              self.encoder.quaternion_z, self.encoder.translation]:
+                for param in [self.encoder.quaternion, self.encoder.translation]:
                     param.detach_()
             else:
                 raise ValueError("Required not to optimize pose even though no ground truth "
@@ -236,8 +232,7 @@ class Tracking6D:
     def initialize_optimizer_and_loss(self, ivertices):
         self.all_parameters = set(list(self.encoder.parameters()))
         self.translational_params = {self.encoder.translation}
-        self.rotational_params = {self.encoder.quaternion_w, self.encoder.quaternion_x,
-                                  self.encoder.quaternion_y, self.encoder.quaternion_z}
+        self.rotational_params = {self.encoder.quaternion}
         self.positional_params = self.translational_params | self.rotational_params
         # rotational_params = [
         #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
