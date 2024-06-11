@@ -117,8 +117,6 @@ class WriteResults:
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
 
-        self.past_frame_renderings: Dict = {}
-
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
@@ -499,11 +497,11 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        self.past_frame_renderings[frame_i] = (observations.observed_image[:, [-1]].cpu(),
-                                               observations_backview.observed_image[:, [-1]].cpu())
-
-        if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
-            self.visualize_point_clouds_from_ransac(frame_i)
+        self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image =\
+            observations.observed_image[:, [-1]].cpu()
+        if self.tracking_config.matching_target_to_backview:
+            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
+                observations_backview.observed_image[:, [-1]].cpu()
 
         if frame_i % self.tracking_config.write_results_frequency == 0:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
@@ -511,7 +509,8 @@ class WriteResults:
 
             self.visualize_observed_data(active_keyframes, new_flow_arcs)
 
-            self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
+            if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
+                self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
@@ -523,8 +522,10 @@ class WriteResults:
 
         self.visualize_logged_metrics(plot_losses=False)
 
-        self.analyze_ransac_matchings_errors(frame_i)
-        self.analyze_ransac_matchings(frame_i)
+        if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
+            self.analyze_ransac_matchings_errors(frame_i)
+            self.analyze_ransac_matchings(frame_i)
+            self.visualize_point_clouds_from_ransac(frame_i)
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
@@ -732,7 +733,8 @@ class WriteResults:
             axs[2].set_title('Template Front')
             axs[3].set_title('Template Back')
 
-            template_image_f, template_image_b = self.past_frame_renderings[1]
+            template_image_f = self.data_graph.get_camera_specific_frame_data(1, Cameras.FRONTVIEW).observed_image
+            template_image_b = self.data_graph.get_camera_specific_frame_data(1, Cameras.BACKVIEW).observed_image
             template_image_f = template_image_f[0, 0].permute(1, 2, 0).numpy(force=True)
             template_image_b = template_image_b[0, 0].permute(1, 2, 0).numpy(force=True)
 

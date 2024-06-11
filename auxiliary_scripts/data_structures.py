@@ -25,7 +25,7 @@ class CommonFrameData:
 @dataclass
 class CameraSpecificFrameData:
 
-    flow_render_result: RenderedFlowResult = None
+    observed_image: torch.Tensor = None
     renders: Any = None
     per_pixel_flow_error: Any = None
 
