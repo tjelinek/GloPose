@@ -166,14 +166,10 @@ class FMOLoss(nn.Module):
         rendered_flow_segmentation = (rendered_flow_segmentation > 0).to(rendered_flow_segmentation.dtype)
         # Perform erosion of the segmentation mask
         if self.config.segmentation_mask_erosion_iters:
-            # TODO fix
-            raise ("Needs to be fixed")
-            erosion_iterations = self.config.segmentation_mask_erosion_iters
-            observed_flow_segmentation = erode_segment_mask2(erosion_iterations, observed_flow_segmentation)
 
-            flow_from_tracking_tmp = rendered_flow[0].permute(0, 3, 1, 2)
-            flow_from_tracking_tmp = erode_segment_mask2(flow_from_tracking_tmp, rendered_flow_segmentation)
-            rendered_flow = flow_from_tracking_tmp.permute(0, 2, 3, 1)
+            rendered_flow_segmentation = erode_segment_mask2(self.config.segmentation_mask_erosion_iters,
+                                                             rendered_flow_segmentation)
+
         flow_from_tracking_clone = rendered_flow.clone()  # Size (1, N, 2, H, W)
         flow_from_tracking_clone = flow_from_tracking_clone.permute(0, 1, 3, 4, 2)  # Size (1, N, H, W, 2)
         observed_flow_clone = observed_flow.clone()  # Size (1, N, 2, H, W)
