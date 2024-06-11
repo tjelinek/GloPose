@@ -813,7 +813,7 @@ class Tracking6D:
 
         if self.config.preinitialization_method == 'levenberg-marquardt':
             infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
-                                                               flow_frames, keyframes, flow_arcs, frame_losses)
+                                                               flow_frames, keyframes, flow_arcs)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
             infer_result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
                                                                    flow_observations)
@@ -885,7 +885,7 @@ class Tracking6D:
         return inference_result
 
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
-                                       flow_frames, keyframes, flow_arcs, frame_losses):
+                                       flow_frames, keyframes, flow_arcs):
         loss_coefs_names = [
             'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight',
             'loss_dist_weight', 'loss_q_weight', 'loss_texture_change_weight',
