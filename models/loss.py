@@ -31,8 +31,7 @@ class FMOLoss(nn.Module):
                 observed_flow_segmentation, rendered_flow_segmentation,
                 observed_flow_occlusion, rendered_flow_occlusion,
                 observed_flow_uncertainties,
-                keyframes_encoder_result, last_keyframes_encoder_result,
-                return_end_point_errors=False,
+                keyframes_encoder_result,
                 custom_points_for_ransac=None) -> LossResult:
         """
         Forward pass of the model.
@@ -127,15 +126,6 @@ class FMOLoss(nn.Module):
 
             flow_loss = per_pixel_mean_flow_loss_rendered
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
-
-        if self.config.loss_texture_change_weight > 0:
-            change_in_texture = (last_keyframes_encoder_result.texture_maps - texture_maps) ** 2
-            change_in_texture = change_in_texture.squeeze().permute(1, 2, 0)
-            change_in_texture = change_in_texture.sum(dim=-1).flatten()
-            least_changed_90_pct, _ = (-change_in_texture).topk(k=int(change_in_texture.size().numel() * 0.9))
-            least_changed_90_pct = -least_changed_90_pct
-            loss_texture_change = least_changed_90_pct.mean()
-            losses["texture_change"] = loss_texture_change * self.config.loss_texture_change_weight
 
         loss = 0
         for ls in losses:

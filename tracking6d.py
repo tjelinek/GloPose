@@ -376,9 +376,6 @@ class Tracking6D:
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
 
-        self.last_encoder_result_rgb = self.rgb_encoder(self.active_keyframes.keyframes)
-        self.last_encoder_result = self.encoder(self.active_keyframes.keyframes)
-
         for frame_i in range(1, self.config.input_frames):
 
             self.data_graph.add_new_frame(frame_i)
