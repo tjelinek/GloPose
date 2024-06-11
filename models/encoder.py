@@ -6,7 +6,6 @@ import torch.nn as nn
 from kornia.geometry import normalize_quaternion
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
-from kornia.geometry.liegroup import Se3, So3
 from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize, comp_tran_diff
@@ -82,13 +81,6 @@ class Encoder(nn.Module):
 
         # Aspect ratio
         self.aspect_ratio = height / width
-
-    def set_grad_mesh(self, req_grad):
-        self.texture_map.requires_grad = req_grad
-        if self.config.optimize_shape:
-            self.vertices.requires_grad = req_grad
-        if self.config.use_lights:
-            self.lights.requires_grad = req_grad
 
     def forward(self, opt_frames):
 
