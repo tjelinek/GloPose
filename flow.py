@@ -163,7 +163,15 @@ def overlay_silhouette_on_image(silhouette, image_pil):
     return image_pil
 
 
-def normalize_flow_to_unit_range(observed_flow: torch.Tensor) -> torch.Tensor:
+def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,
+                             original_height):
+    rendered_flows[..., 0] = rendered_flows[..., 0] * (rendering_width / original_width)
+    rendered_flows[..., 1] = rendered_flows[..., 1] * (rendering_height / original_height)
+
+    return rendered_flows
+
+
+def flow_image_coords_to_unit_coords(observed_flow: torch.Tensor) -> torch.Tensor:
     # Normalize x-components by width and y-components by height
     observed_flow = observed_flow.clone()
     width = observed_flow.shape[-1]
@@ -172,15 +180,6 @@ def normalize_flow_to_unit_range(observed_flow: torch.Tensor) -> torch.Tensor:
     observed_flow[:, :, 1, ...] /= height
 
     return observed_flow
-
-
-def normalize_rendered_flows(rendered_flows, rendering_width, rendering_height, original_width,
-                             original_height):
-    rendered_flows[..., 0] = rendered_flows[..., 0] * (rendering_width / original_width)
-    rendered_flows[..., 1] = rendered_flows[..., 1] * (rendering_height / original_height)
-
-    return rendered_flows
-
 
 
 def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor) -> torch.Tensor:
