@@ -23,6 +23,8 @@ class Observation:
 
         for attr_name, attr_type in self.__annotations__.items():
             to_trim = getattr(self, attr_name)
+            if not issubclass(attr_type, torch.Tensor) or to_trim is None:
+                continue
             trimmed = to_trim[:, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
             setattr(copy, attr_name, trimmed)
 
@@ -31,8 +33,8 @@ class Observation:
     def get_memory_size(self):
         memory_used = 0.0
         for attr_name, attr_type in self.__annotations__.items():
-            attr = getattr(self, attr_name)
-            if isinstance(attr, torch.Tensor):
+            if issubclass(attr_type, torch.Tensor):
+                attr = getattr(self, attr_name)
                 memory_used += attr.numel() * attr.element_size()
 
         return memory_used
@@ -48,6 +50,8 @@ class Observation:
             check_for_none = (getattr(observation, attr_name) is None for observation in observations)
             if any(check_for_none):
                 assert all(check_for_none)
+            elif not issubclass(attr_type, torch.Tensor):
+                continue
             else:
                 concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
                 setattr(concatenated_observations, attr_name, concatenated_attr)
@@ -60,7 +64,7 @@ class Observation:
 
         for attr_name, attr_type in self.__annotations__.items():
             value = getattr(self, attr_name)
-            if value is not None:
+            if value is not None and issubclass(attr_type, torch.Tensor):
                 setattr(new_observation, attr_name, value[:, frames_indices, :])
 
         return new_observation
@@ -71,7 +75,7 @@ class Observation:
 
         for attr_name, attr_type in self.__annotations__.items():
             value: torch.Tensor = getattr(self, attr_name)
-            if value is not None:
+            if value is not None and issubclass(attr_type, torch.Tensor):
                 setattr(new_observation, attr_name, value.to(device))
 
         return new_observation
