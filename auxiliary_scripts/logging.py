@@ -644,7 +644,7 @@ class WriteResults:
             inlier_mask = arc_data.ransac_inliers_mask
 
             observed_flow_image = flow_unit_coords_to_image_coords(arc_data.observed_flow.observed_flow)
-            gt_flow_image = flow_unit_coords_to_image_coords(arc_data.gt_flow_result.theoretical_flow)
+            gt_flow_image = flow_unit_coords_to_image_coords(arc_data.synthetic_flow_result.theoretical_flow)
 
             src_pts_pred_visible_yx = arc_data.observed_visible_fg_points_mask.nonzero()
             dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx.permute(1, 0),
@@ -852,8 +852,8 @@ class WriteResults:
             arc_observation_back = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
                                                                          Cameras.BACKVIEW)
 
-            rendered_flow_res = arc_observation_front.gt_flow_result
-            rendered_flow_res_back = arc_observation_back.gt_flow_result
+            rendered_flow_res = arc_observation_front.synthetic_flow_result
+            rendered_flow_res_back = arc_observation_back.synthetic_flow_result
 
             rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.theoretical_flow)
             rend_flow_np = rend_flow.numpy(force=True)
@@ -951,7 +951,7 @@ class WriteResults:
     def visualize_outliers_distribution(self, new_flow_arc):
 
         new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
-        gt_flow = new_flow_arc_data.gt_flow_result.theoretical_flow
+        gt_flow = new_flow_arc_data.synthetic_flow_result.theoretical_flow
 
         inlier_list = torch.nonzero(new_flow_arc_data.ransac_inliers_mask)[:, 0]
         outlier_list = torch.nonzero(~new_flow_arc_data.ransac_inliers_mask)[:, 0]

@@ -40,7 +40,7 @@ class CameraSpecificFrameData:
 @dataclass
 class CrossFrameData:
 
-    gt_flow_result: RenderedFlowResult = None
+    synthetic_flow_result: RenderedFlowResult = None
     observed_flow: FlowObservation = None
 
     src_pts_yx: torch.Tensor = None
