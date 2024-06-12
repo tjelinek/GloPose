@@ -510,6 +510,9 @@ class WriteResults:
 
         self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image =\
             observations.observed_image[:, [-1]].cpu()
+
+        self.visualize_observed_data(active_keyframes, new_flow_arcs)
+
         if self.tracking_config.matching_target_to_backview:
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
                 observations_backview.observed_image[:, [-1]].cpu()
@@ -517,8 +520,6 @@ class WriteResults:
         if frame_i % self.tracking_config.write_results_frequency == 0:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
-
-            self.visualize_observed_data(active_keyframes, new_flow_arcs)
 
             if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
                 self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
@@ -1770,8 +1771,9 @@ class WriteResults:
             # Save the images to disk
             self.log_image(target_frame, target_image_discrete.permute(1, 2, 0), new_image_path,
                            RerunAnnotations.observed_image)
-            self.log_image(target_frame, source_image_discrete.permute(1, 2, 0), template_image_path,
-                           RerunAnnotations.template_image)
+            if target_frame == 1:
+                self.log_image(target_frame, source_image_discrete.permute(1, 2, 0), template_image_path,
+                               RerunAnnotations.template_image)
 
             flow_illustration_torch = (
                 torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
