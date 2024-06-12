@@ -1704,11 +1704,11 @@ class WriteResults:
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, flow_arcs):
-        for flow_arcs in flow_arcs:
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, new_flow_arcs):
+        for new_flow_arcs in new_flow_arcs:
 
-            source_frame = flow_arcs[0]
-            target_frame = flow_arcs[1]
+            source_frame = new_flow_arcs[0]
+            target_frame = new_flow_arcs[1]
 
             flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
             source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
