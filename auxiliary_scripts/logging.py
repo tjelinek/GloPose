@@ -30,6 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
+from auxiliary_scripts.visualizations import visualize_optical_flow_disparity
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
@@ -47,13 +48,19 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 
 @dataclass
 class RerunAnnotations:
+
+    # Observations
     template_image: str = '/observations/template_image_front'
     observed_image: str = '/observations/observed_image_front'
     observed_flow: str = '/observed_flow/observed_flow_front'
     observed_flow_with_uncertainty: str = '/observed_flow/observed_flow_front_uncertainty'
     observed_flow_occlusion: str = '/observed_flow/occlusion_front'
     observed_flow_uncertainty: str = '/observed_flow/uncertainty_front'
-    observed_flow_gt_disparity: str = '/observed_flow/observed_flow_gt_disparity'
+    observed_flow_errors: str = '/observed_flow/observed_flow_gt_disparity'
+
+    # Optimized model visualizations
+    optimized_model_occlusion: str = '/optimized_values/occlusion'
+    optimized_model_render: str = '/optimized_values/rendering'
     
     # Triangulated points RANSAC
     triangulated_points_gt_Rt_gt_flow: str = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
@@ -178,7 +185,7 @@ class WriteResults:
                                     rrb.Spatial2DView(name="Observed Flow Uncertainty",
                                                       origin=RerunAnnotations.observed_flow_with_uncertainty),
                                     rrb.Spatial2DView(name="Observed Flow GT Disparity",
-                                                      origin=RerunAnnotations.observed_flow_gt_disparity),
+                                                      origin=RerunAnnotations.observed_flow_errors),
                                 ],
                                 name='Flows'
                             ),
@@ -1654,9 +1661,8 @@ class WriteResults:
             occlusion_path = self.optimized_values_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
 
             rendered_occlusion_squeezed = rendered_flow_result.rendered_flow_occlusion.squeeze()
-            self.visualize_1D_feature_map_using_overlay(target_frame, occlusion_path, source_rendered_image_rgb.squeeze(),
-                                                        rendered_occlusion_squeezed, alpha=0.8,
-                                                        rerun_annotation='/optimized_values/occlusion')
+            flow_occlusion_image = self.visualize_1D_feature_map_using_overlay(source_rendered_image_rgb.squeeze(),
+                                                                               rendered_occlusion_squeezed, alpha=0.8)
 
             # Save rendered images
             if flow_arc_idx == 0:
@@ -1701,6 +1707,8 @@ class WriteResults:
                                                                      gt_silhouette_prev=[source_image_segmentation])
 
             # Save flow illustrations
+            self.log_image(target_frame, flow_occlusion_image, occlusion_path,
+                           RerunAnnotations.observed_flow_occlusion)
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
@@ -1767,34 +1775,43 @@ class WriteResults:
                                                            gt_silhouettes_prev=[target_frame_segment_squeezed],
                                                            flow_occlusion_masks=[observed_flow_uncertainties_0_1_range])
 
+            flow_disparity_illustration = visualize_optical_flow_disparity(source_image_discrete,
+                                                                           target_image_discrete,
+                                                                           flow_observation_image_coords,
+                                                                           synthetic_flow_observation)
+
             # Define output file paths
             observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
             observed_flow_uncertainty_path = (self.observations_path /
                                               Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
+            observed_flow_errors_path = self.observations_path / Path(f'flow_errors_{source_frame}_{target_frame}.png')
             occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
             uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
-            self.visualize_1D_feature_map_using_overlay(target_frame, occlusion_path, source_frame_image.squeeze(),
-                                                        observed_flow_occlusions_squeezed, alpha=0.8,
-                                                        rerun_annotation=RerunAnnotations.observed_flow_occlusion)
+            flow_occlusions_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
+                                                                                observed_flow_occlusions_squeezed, alpha=0.8)
             # Uncertainty visualizations
-            self.visualize_1D_feature_map_using_overlay(target_frame, uncertainty_path, source_frame_image.squeeze(),
-                                                        observed_flow_uncertainties_0_1_range, alpha=0.8,
-                                                        rerun_annotation=RerunAnnotations.observed_flow_uncertainty)
+            flow_uncertainty_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
+                                                                                 observed_flow_uncertainties_0_1_range, alpha=0.8)
 
             flow_illustration_torch = (
                 torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
             flow_illustration_uncertainty_torch = (
                 torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
 
+            self.log_image(target_frame, flow_occlusions_image, occlusion_path,
+                           RerunAnnotations.observed_flow_errors)
+            self.log_image(target_frame, flow_occlusions_image, occlusion_path,
+                           RerunAnnotations.observed_flow_occlusion)
+            self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,
+                           RerunAnnotations.observed_flow_uncertainty)
             self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
                            RerunAnnotations.observed_flow_with_uncertainty, ignore_dimensions=True)
 
             self.log_image(target_frame, flow_illustration_torch, observed_flow_path, RerunAnnotations.observed_flow,
                            ignore_dimensions=True)
 
-    def visualize_1D_feature_map_using_overlay(self, flow_target_frame, occlusion_path, source_image_rgb, flow_occlusion, alpha,
-                                               rerun_annotation):
+    def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
         assert flow_occlusion.shape == (self.image_height, self.image_width)
         assert source_image_rgb.shape == (3, self.image_height, self.image_width)
 
@@ -1802,7 +1819,7 @@ class WriteResults:
         blended_image = alpha * occlusion_mask + (1 - alpha) * source_image_rgb
         blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
 
-        self.log_image(flow_target_frame, blended_image, occlusion_path, rerun_annotation)
+        return blended_image
 
     def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
                   ignore_dimensions=False):
