@@ -45,17 +45,12 @@ class EpipolarPoseEstimator:
 
         W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
 
-        camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
-        arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
-
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
         gt_flow_observation, occlusions, segmentation = (
             self.get_occlusion_and_segmentation(backview, flow_arc, flow_observation_current_frame))
 
-        arc_data.observed_flow = flow_observation_current_frame.send_to_device('cpu')
-
-        optical_flow = flow_unit_coords_to_image_coords(flow_observation_current_frame.observed_flow)
+        optical_flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
 
         observed_segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
         gt_segmentation_binary_mask = (gt_flow_observation.rendered_flow_segmentation >
@@ -124,18 +119,12 @@ class EpipolarPoseEstimator:
         # max(1, x) avoids division by zero
         inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
-        # LOG RANSAC RESULT
-        gt_flow_cpu = RenderedFlowResult(theoretical_flow=gt_flow_observation.theoretical_flow.detach().cpu(),
-                                         rendered_flow_segmentation=gt_flow_observation.rendered_flow_segmentation.detach().cpu(),
-                                         rendered_flow_occlusion=gt_flow_observation.rendered_flow_occlusion.detach().cpu())
         camera1 = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
         data = self.data_graph.get_edge_observations(*flow_arc, camera=camera1)
         data.src_pts_yx = src_pts_yx.cpu()
         data.dst_pts_yx = dst_pts_yx.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
-        data.synthetic_flow_result = gt_flow_cpu
         data.observed_flow_segmentation = observed_segmentation_binary_mask.cpu()
-        data.gt_flow_segmentation = gt_segmentation_binary_mask.cpu()
         data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
         data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         data.ransac_inliers = inlier_src_pts.cpu()
