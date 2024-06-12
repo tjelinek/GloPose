@@ -404,7 +404,7 @@ class Tracking6D:
             b0 = (0, self.shape[-1], 0, self.shape[-2])
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
-            self.add_new_flows(frame_i, new_frame_observation)
+            self.add_new_flows(frame_i)
 
             all_frame_observations: FrameObservation = \
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
@@ -516,7 +516,51 @@ class Tracking6D:
         return self.best_model
 
     @torch.no_grad()
-    def add_new_flows(self, frame_i, new_frame_observation):
+    def add_new_flows(self, frame_i):
+
+        def process_flow_arc(flow_source_frame, flow_target_frame, mode=None, backview=False):
+            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
+                                                                         mode=mode, backview=backview)
+            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+            if backview:
+                renderer: RenderingKaolin = self.rendering_backview
+                synthetic_flow: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame,
+                                                                                    flow_target_frame)
+
+                synthetic_flow_cpu = RenderedFlowResult(
+                    theoretical_flow=synthetic_flow.theoretical_flow.cpu(),
+                    rendered_flow_segmentation=synthetic_flow.rendered_flow_segmentation.cpu(),
+                    rendered_flow_occlusion=synthetic_flow.rendered_flow_occlusion.cpu())
+
+                edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame,
+                                                                  Cameras.FRONTVIEW)
+
+                edge_data.synthetic_flow_result = synthetic_flow_cpu
+
+                segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                    flow_source_frame).observed_segmentation
+
+                self.active_keyframes_backview.add_new_flow(observed_flow, segment_back, occlusions, uncertainties,
+                                                            flow_source_frame, flow_target_frame)
+            else:
+                renderer: RenderingKaolin = self.rendering
+                synthetic_flow: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame,
+                                                                                    flow_target_frame)
+
+                synthetic_flow_cpu = RenderedFlowResult(
+                    theoretical_flow=synthetic_flow.theoretical_flow.cpu(),
+                    rendered_flow_segmentation=synthetic_flow.rendered_flow_segmentation.cpu(),
+                    rendered_flow_occlusion=synthetic_flow.rendered_flow_occlusion.cpu())
+
+                edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame,
+                                                                  Cameras.FRONTVIEW)
+
+                edge_data.synthetic_flow_result = synthetic_flow_cpu
+
+                segment_front = self.active_keyframes.get_observations_for_keyframe(
+                    flow_source_frame).observed_segmentation
+                self.active_keyframes.add_new_flow(observed_flow, segment_front, occlusions, uncertainties,
+                                                   flow_source_frame, flow_target_frame)
 
         if self.config.add_flow_arcs_strategy == 'all-previous':
             short_flow_arcs = {(flow_source, frame_i) for flow_source in
@@ -531,40 +575,15 @@ class Tracking6D:
 
         for flow_arc in short_flow_arcs:
             flow_source_frame, flow_target_frame = flow_arc
-            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
-
-            self.active_keyframes.add_new_flow(observed_flow, new_frame_observation.observed_segmentation,
-                                               occlusions, uncertainties, flow_source_frame, flow_target_frame)
-
-            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+            process_flow_arc(flow_source_frame, flow_target_frame)
 
         if self.long_flow_provider is not None:
             long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
             flow_source_frame, flow_target_frame = long_flow_arc
-
-            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-
-            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
-                                                                         mode='long')
-            if long_flow_arc not in self.active_keyframes.G.edges:
-                segment_front = self.active_keyframes.get_observations_for_keyframe(
-                    flow_source_frame).observed_segmentation
-                self.active_keyframes.add_new_flow(observed_flow, segment_front,
-                                                   occlusions, uncertainties, flow_source_frame,
-                                                   flow_target_frame)
+            process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
 
             if self.config.matching_target_to_backview:
-                observed_flow_back, occlusions_back, uncertainties_back = self.next_gt_flow(flow_source_frame,
-                                                                                            flow_target_frame,
-                                                                                            mode='long',
-                                                                                            backview=True)
-                if long_flow_arc not in self.active_keyframes_backview.G.edges:
-                    segment_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                        flow_source_frame).observed_segmentation
-                    self.active_keyframes_backview.add_new_flow(observed_flow_back,
-                                                                segment_back,
-                                                                occlusions_back, uncertainties_back,
-                                                                flow_source_frame, flow_target_frame)
+                process_flow_arc(flow_source_frame, flow_target_frame, mode='long', backview=True)
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short', backview=False):
 
