@@ -511,7 +511,7 @@ class WriteResults:
         self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image =\
             observations.observed_image[:, [-1]].cpu()
 
-        self.visualize_observed_data(active_keyframes, new_flow_arcs)
+        self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs)
 
         if self.tracking_config.matching_target_to_backview:
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
@@ -1704,7 +1704,22 @@ class WriteResults:
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, new_flow_arcs):
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs):
+
+        # Save the images to disk
+        last_frame_observation = keyframe_buffer.get_observations_for_keyframe(frame_i)
+
+        new_image_path = self.observations_path / Path(f'gt_img_{frame_i}.png')
+        last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
+
+        self.log_image(frame_i, last_observed_image, new_image_path,
+                       RerunAnnotations.observed_image)
+        if frame_i == 1:
+            template_image_path = self.observations_path / Path(f'template_img_{frame_i}.png')
+            self.log_image(frame_i, last_observed_image, template_image_path,
+                           RerunAnnotations.template_image)
+
+        # Visualize new flow arcs
         for new_flow_arcs in new_flow_arcs:
 
             source_frame = new_flow_arcs[0]
@@ -1752,8 +1767,6 @@ class WriteResults:
                                                            flow_occlusion_masks=[observed_flow_uncertainties_0_1_range])
 
             # Define output file paths
-            template_image_path = self.observations_path / Path(f'template_img_{source_frame}_{target_frame}.png')
-            new_image_path = self.observations_path / Path(f'gt_img_{source_frame}_{target_frame}.png')
             observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
             observed_flow_uncertainty_path = (self.observations_path /
                                               Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
@@ -1767,13 +1780,6 @@ class WriteResults:
             self.visualize_1D_feature_map_using_overlay(target_frame, uncertainty_path, source_frame_image.squeeze(),
                                                         observed_flow_uncertainties_0_1_range, alpha=0.8,
                                                         rerun_annotation=RerunAnnotations.observed_flow_uncertainty)
-
-            # Save the images to disk
-            self.log_image(target_frame, target_image_discrete.permute(1, 2, 0), new_image_path,
-                           RerunAnnotations.observed_image)
-            if target_frame == 1:
-                self.log_image(target_frame, source_image_discrete.permute(1, 2, 0), template_image_path,
-                               RerunAnnotations.template_image)
 
             flow_illustration_torch = (
                 torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
