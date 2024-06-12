@@ -20,9 +20,9 @@ from auxiliary_scripts.data_structures import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
-from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, normalize_flow_to_unit_range, \
+from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, flow_image_coords_to_unit_coords, \
     MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider, normalize_rendered_flows
-from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation
+from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, SyntheticFlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
@@ -530,11 +530,11 @@ class Tracking6D:
             synthetic_flow = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame, flow_target_frame)
 
             # Convert synthetic flow results to CPU
-            synthetic_flow_cpu = RenderedFlowResult(
-                theoretical_flow=synthetic_flow.theoretical_flow.cpu(),
-                rendered_flow_segmentation=synthetic_flow.rendered_flow_segmentation.cpu(),
-                rendered_flow_occlusion=synthetic_flow.rendered_flow_occlusion.cpu()
-            )
+            synthetic_flow_cpu = SyntheticFlowObservation(
+                observed_flow=synthetic_flow.theoretical_flow,
+                observed_flow_segmentation=synthetic_flow.rendered_flow_segmentation,
+                observed_flow_occlusion=synthetic_flow.rendered_flow_occlusion,
+            ).send_to_device('cpu')
 
             # Get the observed segmentation for the flow source frame
             segment = active_keyframes.get_observations_for_keyframe(flow_source_frame).observed_segmentation
@@ -645,7 +645,7 @@ class Tracking6D:
             else:
                 raise ValueError("Unknown mode")
 
-            observed_flow = normalize_flow_to_unit_range(observed_flow)
+            observed_flow = flow_image_coords_to_unit_coords(observed_flow)
 
         else:
             raise ValueError("'gt_flow_source' must be either 'GenerateSynthetic' or 'FlowNetwork'")

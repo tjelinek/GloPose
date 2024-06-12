@@ -13,7 +13,7 @@ from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coo
 
 
 ObservationType = TypeVar('ObservationType', bound='Observation')
-
+FlowObservationType = TypeVar('FlowObservationType', bound='BaseFlowObservation')
 
 @dataclass
 class Observation:
@@ -89,11 +89,10 @@ class FrameObservation(Observation):
 
 
 @dataclass
-class FlowObservation(Observation):
+class BaseFlowObservation(Observation):
     observed_flow: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
-    observed_flow_uncertainty: torch.Tensor = None
     coordinate_system: str = 'unit'  # Either 'unit' or 'image'
 
     def cast_unit_coords_to_image_coords(self):
@@ -116,8 +115,25 @@ class FlowObservation(Observation):
 
 
 @dataclass
+class FlowObservation(BaseFlowObservation):
+    observed_flow: torch.Tensor = None
+    observed_flow_segmentation: torch.Tensor = None
+    observed_flow_occlusion: torch.Tensor = None
+    observed_flow_uncertainty: torch.Tensor = None
+    coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+
+
+@dataclass
+class SyntheticFlowObservation(BaseFlowObservation):
+    observed_flow: torch.Tensor = None
+    observed_flow_segmentation: torch.Tensor = None
+    observed_flow_occlusion: torch.Tensor = None
+    coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+
+
+@dataclass
 class MultiCameraObservation:
-    cameras_observations: Dict[Cameras, Union[FrameObservation, FlowObservation]] = field(default_factory=dict)
+    cameras_observations: Dict[Cameras, Union[FrameObservation, FlowObservationType]] = field(default_factory=dict)
 
     @classmethod
     def from_kwargs(cls, **kwargs) -> 'MultiCameraObservation':
@@ -130,7 +146,7 @@ class MultiCameraObservation:
         }
         return cls(cameras_observations=cameras_observations_kwargs)
 
-    def stack(self) -> Union[FrameObservation, FlowObservation]:
+    def stack(self) -> Union[FrameObservation, FlowObservationType]:
         observation_types = {type(obs) for obs in self.cameras_observations.values()}
 
         if len(observation_types) > 1:
@@ -141,10 +157,8 @@ class MultiCameraObservation:
         sorted_observations = sorted(self.cameras_observations.items(), key=lambda item: item[0].value)
         observations = [obs for _, obs in sorted_observations]
 
-        if observation_type == FrameObservation:
-            return FrameObservation.concatenate(*observations)
-        elif observation_type == FlowObservation:
-            return FlowObservation.concatenate(*observations)
+        if issubclass(observation_type, FrameObservation) or issubclass(observation_type, BaseFlowObservation):
+            return observation_type.concatenate(*observations)
         else:
             raise ValueError("Unknown observation type encountered.")
 

@@ -5,9 +5,8 @@ import networkx as nx
 import torch
 
 from auxiliary_scripts.cameras import Cameras
-from keyframe_buffer import FlowObservation
+from keyframe_buffer import FlowObservation, SyntheticFlowObservation
 from models.encoder import EncoderResult
-from models.rendering import RenderedFlowResult
 
 
 @dataclass
@@ -39,8 +38,8 @@ class CameraSpecificFrameData:
 
 @dataclass
 class CrossFrameData:
-
-    synthetic_flow_result: RenderedFlowResult = None
+    # Optical Flow
+    synthetic_flow_result: SyntheticFlowObservation = None
     observed_flow: FlowObservation = None
 
     src_pts_yx: torch.Tensor = None
