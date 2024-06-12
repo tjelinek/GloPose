@@ -1,14 +1,18 @@
 from bisect import insort
 from copy import deepcopy
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, TypeVar
 
 import numpy as np
 import torch
 import networkx as nx
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from auxiliary_scripts.cameras import Cameras
+from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
+
+
+ObservationType = TypeVar('ObservationType', bound='Observation')
 
 
 @dataclass
@@ -50,7 +54,7 @@ class Observation:
 
         return concatenated_observations
 
-    def filter_frames(self, frames_indices: List) -> 'Observation':
+    def filter_frames(self: ObservationType, frames_indices: List) -> ObservationType:
 
         new_observation = type(self)()
 
@@ -61,7 +65,7 @@ class Observation:
 
         return new_observation
 
-    def send_to_device(self, device: str) -> 'Observation':
+    def send_to_device(self: ObservationType, device: str) -> ObservationType:
 
         new_observation = type(self)()
 
@@ -71,7 +75,6 @@ class Observation:
                 setattr(new_observation, attr_name, value.to(device))
 
         return new_observation
-
 
 
 @dataclass
@@ -87,6 +90,25 @@ class FlowObservation(Observation):
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
     observed_flow_uncertainty: torch.Tensor = None
+    coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+
+    def cast_unit_coords_to_image_coords(self):
+        if self.coordinate_system != 'unit':
+            raise ValueError("Current coordinate system must be 'unit' to cast to 'image' coordinates.")
+
+        observed_flow_image_coords = flow_unit_coords_to_image_coords(self.observed_flow)
+
+        new_instance = replace(self, observed_flow=observed_flow_image_coords, coordinate_system='image')
+        return new_instance
+
+    def cast_image_coords_to_unit_coords(self):
+        if self.coordinate_system != 'image':
+            raise ValueError("Current coordinate system must be 'image' to cast to 'unit' coordinates.")
+
+        observed_flow_unit_coords = flow_image_coords_to_unit_coords(self.observed_flow)
+
+        new_instance = replace(self, observed_flow=observed_flow_unit_coords, coordinate_system='unit')
+        return new_instance
 
 
 @dataclass
