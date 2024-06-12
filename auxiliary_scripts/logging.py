@@ -1726,32 +1726,33 @@ class WriteResults:
             target_frame = new_flow_arcs[1]
 
             flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
-            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
-            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
+            flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords().send_to_device('cpu')
 
-            observed_flow = flow_observation.observed_flow.cpu()
-            observed_flow_occlusions = flow_observation.observed_flow_occlusion.cpu()
-            observed_flow_uncertainties = flow_observation.observed_flow_uncertainty.cpu()
-            source_frame_image = source_frame_observation.observed_image.cpu()
-            source_frame_segment = source_frame_observation.observed_segmentation.cpu()
+            data_graph_edge_data = self.data_graph.get_edge_observations(source_frame, target_frame, Cameras.FRONTVIEW)
+            synthetic_flow_observation = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
+
+            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame).send_to_device('cpu')
+            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame).send_to_device('cpu')
+
+            source_frame_image = source_frame_observation.observed_image
+            source_frame_segment = source_frame_observation.observed_segmentation
 
             target_frame_image = target_frame_observation.observed_image.cpu()
             target_frame_segment = target_frame_observation.observed_segmentation.cpu()
 
-            observed_flow = flow_unit_coords_to_image_coords(observed_flow)
-            observed_flow_reordered = observed_flow.squeeze().permute(1, 2, 0).numpy()
+            observed_flow_reordered = flow_observation_image_coords.observed_flow.squeeze().permute(1, 2, 0).numpy()
 
             source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
             target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
 
             source_frame_segment_squeezed = source_frame_segment.squeeze()
             target_frame_segment_squeezed = target_frame_segment.squeeze()
-            observed_flow_occlusions_squeezed = observed_flow_occlusions.squeeze()
-            observed_flow_uncertainties_squeezed = observed_flow_uncertainties.squeeze()
+            observed_flow_occlusions_squeezed = flow_observation.observed_flow_occlusion.cpu().squeeze()
+            observed_flow_uncertainties_squeezed = flow_observation.observed_flow_uncertainty.cpu().squeeze()
 
             # TODO this computation is not mathematically justified, and serves just for visualization purposes
             observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
-                                                     observed_flow_uncertainties.min())
+                                                     observed_flow_uncertainties_squeezed.min())
             observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
 
             flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
