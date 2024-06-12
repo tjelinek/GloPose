@@ -116,6 +116,7 @@ class BaseFlowObservation(Observation):
 
 @dataclass
 class FlowObservation(BaseFlowObservation):
+    # Needs to be redeclared so as it contained in __annotations__.items() used for generic manipulations
     observed_flow: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
@@ -125,6 +126,7 @@ class FlowObservation(BaseFlowObservation):
 
 @dataclass
 class SyntheticFlowObservation(BaseFlowObservation):
+    # Needs to be redeclared so as it contained in __annotations__.items() used for generic manipulations
     observed_flow: torch.Tensor = None
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
