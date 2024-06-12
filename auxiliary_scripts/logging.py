@@ -466,8 +466,7 @@ class WriteResults:
                                                     observed_flow_occlusion=flow_observations.observed_flow_occlusion,
                                                     rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
                                                     observed_flow_uncertainties=flow_observations.observed_flow_uncertainty,
-                                                    keyframes_encoder_result=encoder_result,
-                                                    last_keyframes_encoder_result=encoder_result)
+                                                    keyframes_encoder_result=encoder_result)
 
                 losses_all, losses, joint_loss, per_pixel_error = loss_result
 
