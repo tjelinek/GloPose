@@ -30,7 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
-from auxiliary_scripts.visualizations import visualize_optical_flow_disparity
+from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
@@ -48,7 +48,6 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 
 @dataclass
 class RerunAnnotations:
-
     # Observations
     template_image: str = '/observations/template_image_front'
     observed_image: str = '/observations/observed_image_front'
@@ -61,7 +60,7 @@ class RerunAnnotations:
     # Optimized model visualizations
     optimized_model_occlusion: str = '/optimized_values/occlusion'
     optimized_model_render: str = '/optimized_values/rendering'
-    
+
     # Triangulated points RANSAC
     triangulated_points_gt_Rt_gt_flow: str = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
     triangulated_points_gt_Rt_mft_flow: str = '/point_clouds/triangulated_points_gt_Rt_mft_flow'
@@ -96,7 +95,7 @@ class RerunAnnotations:
     pose_rotation_y_gt: str = '/pose/rotation/y_axis_gt'
     pose_rotation_z: str = '/pose/rotation/z_axis'
     pose_rotation_z_gt: str = '/pose/rotation/z_axis_gt'
-    
+
     pose_translation: str = '/pose/translation'
     pose_translation_x: str = '/pose/translation/x_axis'
     pose_translation_x_gt: str = '/pose/translation/x_axis_gt'
@@ -171,7 +170,8 @@ class WriteResults:
 
     def rerun_init(self):
         rr.init(f'{self.tracking_config.sequence}-{self.tracking_config.experiment_name}')
-        rr.save(self.rerun_log_path / f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
+        rr.save(
+            self.rerun_log_path / f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
 
         blueprint = rrb.Blueprint(
             rrb.Tabs(
@@ -515,7 +515,7 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image =\
+        self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image = \
             observations.observed_image[:, [-1]].cpu()
 
         self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs)
@@ -571,7 +571,6 @@ class WriteResults:
         self.save_3d_model(frame_i, tex, best_model, detached_result)
 
         for tmpi in range(renders.shape[1]):
-
             segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
             self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
                                                           observed_segmentations[:, -1:, [-1]]).detach().cpu()
@@ -593,7 +592,7 @@ class WriteResults:
 
         write_obj_mesh(detached_result.vertices[0].numpy(force=True), best_model["faces"],
                        self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path, str(model_i_th_path.name))
-                       
+
         save_image(detached_result.texture_maps[:, :3], tex_path)
         save_image(tex, tex_i_th_path)
 
@@ -1269,14 +1268,14 @@ class WriteResults:
         translations = np.array(translations)
         gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
         gt_translations = np.array(gt_translations)
-        
+
         # Rerun
         rr.set_time_sequence("frame", max(frame_indices))
 
         rr.log(RerunAnnotations.pose_rotation_x, rr.Scalar(rotations[-1][0]))
         rr.log(RerunAnnotations.pose_rotation_y, rr.Scalar(rotations[-1][1]))
         rr.log(RerunAnnotations.pose_rotation_z, rr.Scalar(rotations[-1][2]))
-        
+
         rr.log(RerunAnnotations.pose_rotation_x_gt, rr.Scalar(gt_rotations[-1][0]))
         rr.log(RerunAnnotations.pose_rotation_y_gt, rr.Scalar(gt_rotations[-1][1]))
         rr.log(RerunAnnotations.pose_rotation_z_gt, rr.Scalar(gt_rotations[-1][2]))
@@ -1729,7 +1728,6 @@ class WriteResults:
 
         # Visualize new flow arcs
         for new_flow_arcs in new_flow_arcs:
-
             source_frame = new_flow_arcs[0]
             target_frame = new_flow_arcs[1]
 
@@ -1770,15 +1768,16 @@ class WriteResults:
                                                            flow_occlusion_masks=[observed_flow_occlusions_squeezed])
 
             uncertainty_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
-                                                           [observed_flow_reordered], None,
-                                                           gt_silhouette_current=source_frame_segment_squeezed,
-                                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
-                                                           flow_occlusion_masks=[observed_flow_uncertainties_0_1_range])
+                                                                  [observed_flow_reordered], None,
+                                                                  gt_silhouette_current=source_frame_segment_squeezed,
+                                                                  gt_silhouettes_prev=[target_frame_segment_squeezed],
+                                                                  flow_occlusion_masks=[
+                                                                      observed_flow_uncertainties_0_1_range])
 
-            flow_disparity_illustration = visualize_optical_flow_disparity(source_image_discrete,
-                                                                           target_image_discrete,
-                                                                           flow_observation_image_coords,
-                                                                           synthetic_flow_observation)
+            flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
+                                                                     target_image_discrete,
+                                                                     flow_observation_image_coords,
+                                                                     synthetic_flow_observation)
 
             # Define output file paths
             observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
@@ -1789,25 +1788,26 @@ class WriteResults:
             uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
             flow_occlusions_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                                                observed_flow_occlusions_squeezed, alpha=0.8)
+                                                                                observed_flow_occlusions_squeezed,
+                                                                                alpha=0.8)
             # Uncertainty visualizations
             flow_uncertainty_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                                                 observed_flow_uncertainties_0_1_range, alpha=0.8)
+                                                                                 observed_flow_uncertainties_0_1_range,
+                                                                                 alpha=0.8)
 
             flow_illustration_torch = (
                 torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
             flow_illustration_uncertainty_torch = (
                 torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
 
-            self.log_image(target_frame, flow_occlusions_image, occlusion_path,
-                           RerunAnnotations.observed_flow_errors)
+            self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
+                            RerunAnnotations.observed_flow_errors)
             self.log_image(target_frame, flow_occlusions_image, occlusion_path,
                            RerunAnnotations.observed_flow_occlusion)
             self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,
                            RerunAnnotations.observed_flow_uncertainty)
             self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
                            RerunAnnotations.observed_flow_with_uncertainty, ignore_dimensions=True)
-
             self.log_image(target_frame, flow_illustration_torch, observed_flow_path, RerunAnnotations.observed_flow,
                            ignore_dimensions=True)
 
