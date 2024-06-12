@@ -53,6 +53,7 @@ class RerunAnnotations:
     observed_flow_with_uncertainty: str = '/observed_flow/observed_flow_front_uncertainty'
     observed_flow_occlusion: str = '/observed_flow/occlusion_front'
     observed_flow_uncertainty: str = '/observed_flow/uncertainty_front'
+    observed_flow_gt_disparity: str = '/observed_flow/observed_flow_gt_disparity'
     
     # Triangulated points RANSAC
     triangulated_points_gt_Rt_gt_flow: str = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
@@ -167,18 +168,29 @@ class WriteResults:
 
         blueprint = rrb.Blueprint(
             rrb.Tabs(
-                contents=
-                [
-                    rrb.Grid(
+                contents=[
+                    rrb.Horizontal(
                         contents=[
-                            rrb.Spatial2DView(name="Observed Flow Occlusion",
-                                              origin=RerunAnnotations.observed_flow),
-                            rrb.Spatial2DView(name="Observed Flow Uncertainty",
-                                              origin=RerunAnnotations.observed_flow_with_uncertainty),
-                            # rrb.Spatial2DView(name="Observed Flow Occlusion",
-                            #                   origin=RerunAnnotations.observed_flow_occlusion),
-                            # rrb.Spatial2DView(name="Observed Flow Uncertainty",
-                            #                   origin=RerunAnnotations.observed_flow_uncertainty)
+                            rrb.Vertical(
+                                contents=[
+                                    rrb.Spatial2DView(name="Observed Flow Occlusion",
+                                                      origin=RerunAnnotations.observed_flow),
+                                    rrb.Spatial2DView(name="Observed Flow Uncertainty",
+                                                      origin=RerunAnnotations.observed_flow_with_uncertainty),
+                                    rrb.Spatial2DView(name="Observed Flow GT Disparity",
+                                                      origin=RerunAnnotations.observed_flow_gt_disparity),
+                                ],
+                                name='Flows'
+                            ),
+                            rrb.Vertical(
+                                contents=[
+                                    rrb.Spatial2DView(name="Template Image",
+                                                      origin=RerunAnnotations.template_image),
+                                    rrb.Spatial2DView(name="Observed Image",
+                                                      origin=RerunAnnotations.observed_image),
+                                ],
+                                name='Observed Images'
+                            ),
                         ],
                         name='Observed Input'
                     ),
