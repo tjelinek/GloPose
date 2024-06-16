@@ -169,12 +169,6 @@ class Tracking6D:
                                                   self.shape[-1], self.shape[-2]).to(self.device)
         self.rendering_backview.backview = True
 
-    def initialize_tracker(self):
-        if self.config.tracker_type == 'ostrack':
-            self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
-        else:  # d3s
-            self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
-
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
                                self.config.features_channels).to(self.device)
