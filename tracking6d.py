@@ -27,7 +27,6 @@ from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
-from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
@@ -280,12 +279,16 @@ class Tracking6D:
             self.faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
         elif self.config.initial_mesh_path is not None:
-            mesh = load_obj(self.config.initial_mesh_path)
+            path = self.config.initial_mesh_path
+            print("Loading mesh located at", path)
+            mesh = kaolin.io.obj.import_mesh(path, with_materials=True)
             ivertices = normalize_vertices(mesh.vertices).numpy()
             self.faces = mesh.faces.numpy()
             iface_features = generate_face_features(ivertices, self.faces)
         else:
-            mesh = load_obj(os.path.join('./prototypes/sphere.obj'))
+            path = Path('./prototypes/sphere.obj')
+            print("Loading mesh located at", path)
+            mesh = kaolin.io.obj.import_mesh(str(path), with_materials=True)
             ivertices = normalize_vertices(mesh.vertices).numpy()
             self.faces = mesh.faces.numpy()
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
