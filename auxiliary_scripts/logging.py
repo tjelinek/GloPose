@@ -39,7 +39,6 @@ from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
 from auxiliary_scripts.math_utils import quaternion_angular_difference
 from models.rendering import infer_normalized_renderings, RenderingKaolin
-from models.kaolin_wrapper import write_obj_mesh
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
     source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
@@ -579,10 +578,31 @@ class WriteResults:
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
 
+    @staticmethod
+    def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
+        if materials_model_name is None:
+            materials_model_name = "model.mtl"
+
+        file = open(name, "w")
+        file.write("mtllib " + materials_model_name + "\n")
+        file.write("o FMO\n")
+        for ver in vertices:
+            file.write("v {:.6f} {:.6f} {:.6f} \n".format(ver[0], ver[1], ver[2]))
+        for ffeat in face_features:
+            for feat in ffeat:
+                if len(feat) == 3:
+                    file.write("vt {:.6f} {:.6f} {:.6f} \n".format(feat[0], feat[1], feat[2]))
+                else:
+                    file.write("vt {:.6f} {:.6f} \n".format(feat[0], feat[1]))
+        file.write("usemtl Material.002\n")
+        file.write("s 1\n")
+        for fi in range(faces.shape[0]):
+            fc = faces[fi] + 1
+            ti = 3 * fi + 1
+            file.write("f {}/{} {}/{} {}/{}\n".format(fc[0], ti, fc[1], ti + 1, fc[2], ti + 2))
+        file.close()
+
     def save_3d_model(self, frame_i, tex, best_model, detached_result):
-        # write_obj_mesh(detached_result.vertices[0].cpu().numpy(), best_model["faces"],
-        #                self.deep_encoder.face_features[0].cpu().numpy(),
-        #                os.path.join(self.write_folder, f'mesh_{frame_i}.obj'), "model_" + str(frame_i) + ".mtl")
 
         mesh_i_th_path = self.exported_mesh_path / f'mesh_{frame_i}.obj'
         tex_path = self.exported_mesh_path / 'tex_deep.png'
@@ -590,8 +610,9 @@ class WriteResults:
         model_path = self.exported_mesh_path / 'model.mtl'
         model_i_th_path = self.exported_mesh_path / f"model_{frame_i}.mtl"
 
-        write_obj_mesh(detached_result.vertices[0].numpy(force=True), best_model["faces"],
-                       self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path, str(model_i_th_path.name))
+        self.write_obj_mesh(detached_result.vertices[0].numpy(force=True), best_model["faces"],
+                            self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path,
+                            str(model_i_th_path.name))
 
         save_image(detached_result.texture_maps[:, :3], tex_path)
         save_image(tex, tex_i_th_path)
