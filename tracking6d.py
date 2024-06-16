@@ -29,7 +29,7 @@ from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import (OSTracker, MyTracker, SyntheticDataGeneratingTracker, BaseTracker)
+from segmentations import SyntheticDataGeneratingTracker, BaseTracker
 from tracker_config import TrackerConfig
 from utils import normalize_vertices
 
