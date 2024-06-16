@@ -31,8 +31,7 @@ from models.kaolin_wrapper import load_obj
 from models.loss import FMOLoss, iou_loss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import (CSRTrack, OSTracker, MyTracker, SyntheticDataGeneratingTracker,
-                           BaseTracker)
+from segmentations import (OSTracker, MyTracker, SyntheticDataGeneratingTracker, BaseTracker)
 from tracker_config import TrackerConfig
 from utils import normalize_vertices
 
@@ -173,9 +172,7 @@ class Tracking6D:
         self.rendering_backview.backview = True
 
     def initialize_tracker(self):
-        if self.config.tracker_type == 'csrt':
-            self.tracker = CSRTrack(self.config.image_downsample, self.config.max_width)
-        elif self.config.tracker_type == 'ostrack':
+        if self.config.tracker_type == 'ostrack':
             self.tracker = OSTracker(self.config.image_downsample, self.config.max_width)
         else:  # d3s
             self.tracker = MyTracker(self.config.image_downsample, self.config.max_width)
