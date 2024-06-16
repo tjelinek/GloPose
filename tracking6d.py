@@ -6,7 +6,6 @@ from dataclasses import replace
 
 import kaolin
 import numpy as np
-import os
 import time
 import torch
 from kornia.geometry.conversions import axis_angle_to_quaternion
