@@ -86,48 +86,6 @@ class BaseTracker(ABC):
         return image, segment
 
 
-class PrecomputedTracker(BaseTracker):
-    def __init__(self, perc, max_width, baseline_dict, feature_extractor):
-        super().__init__(perc, max_width, feature_extractor)
-        self.perc = perc
-        self.max_width = max_width
-        self.baseline_dict = baseline_dict
-        self.shape = None
-
-        self.background_mdl = np.zeros((1, 65), np.float64)
-        self.foreground_mdl = np.zeros((1, 65), np.float64)
-
-    def process(self, image, ind):
-        self.shape = image.shape
-        if self.max_width / image.shape[1] < self.perc:
-            self.perc = self.max_width / image.shape[1]
-        segment = cv2.resize(imread(self.baseline_dict[ind]), self.shape[1::-1]).astype(np.float64)
-        if len(segment.shape) > 2:
-            segment = segment[:, :, :1]
-
-        image, segments = self.standardize_image_and_segment(image, segment)
-
-        return image, segments
-
-    def init_bbox(self, file0, bbox0, init_mask=None):
-        image, segments = self.next(file0)
-
-        segments = pad_image(segments)
-        image = pad_image(image)
-
-        return image, segments
-
-    def next(self, file):
-        ind = os.path.splitext(os.path.basename(file))[0]
-        image = imread(file) * 255
-        image, segments = self.process(image, ind)
-
-        segments = pad_image(segments)[None]
-        image = pad_image(image)[None]
-
-        return image, segments
-
-
 class SyntheticDataGeneratingTracker(BaseTracker):
 
     def __init__(self, tracker_config: TrackerConfig, renderer: RenderingKaolin, gt_encoder: Encoder, gt_texture,
@@ -214,42 +172,6 @@ class MyTracker(BaseTracker):
         return image, segments
 
 
-class CSRTrack(BaseTracker):
-    def __init__(self, perc, max_width):
-        feature_extractor = None
-        super().__init__(perc, max_width, feature_extractor)
-        self.tracker = cv2.TrackerCSRT_create()
-        self.perc = perc
-        self.max_width = max_width
-        self.background_mdl = np.zeros((1, 65), np.float64)
-        self.foreground_mdl = np.zeros((1, 65), np.float64)
-        self.shape = None
-
-    def process(self, image, bbox0):
-        self.shape = image.shape
-        bbox = (bbox0 + np.array([0, 0, bbox0[0], bbox0[1]]))
-        if self.max_width / image.shape[1] < self.perc:
-            self.perc = self.max_width / image.shape[1]
-        segment = np.zeros((image.shape[0], image.shape[1])).astype(np.float64)
-        segment[bbox[1]:bbox[3], bbox[0]:bbox[2]] = 1
-
-        image, segments = self.standardize_image_and_segment(image, segment)
-        return image, segments
-
-    def init_bbox(self, file0, bbox0, init_mask=None):
-        image = (imread(file0) * 255).astype(np.uint8)
-        bbox = bbox0.astype(int)
-        self.tracker.init(image, bbox)
-        image, segments = self.process(image, bbox)
-        return image, segments
-
-    def next(self, file):
-        image = (imread(file) * 255).astype(np.uint8)
-        ok, bbox0 = self.tracker.update(image)
-        image, segments = self.process(image, bbox0)
-        return image, segments
-
-
 def get_ar(img, init_box, ar_path):
     """ set up Alpha-Refine """
     sys.path.insert(0, './AlphaRefine')
@@ -301,27 +223,3 @@ class OSTracker(BaseTracker):
         segment = self.RF_module.get_mask(image, np.array(bbox0))
         image, segments = self.process(image, bbox0, segment)
         return image, segments
-
-
-def get_bbox(segments):
-    all_segments = segments[0, :, 1].sum(0) > 0
-    nzeros = torch.nonzero(all_segments, as_tuple=True)
-    pix_offset = 20
-    x0 = max(0, nzeros[0].min().item() - pix_offset)
-    x1 = min(all_segments.shape[0] - 1, nzeros[0].max().item() + pix_offset)
-    y0 = max(0, nzeros[1].min().item() - pix_offset)
-    y1 = min(all_segments.shape[1] - 1, nzeros[1].max().item() + pix_offset)
-    if x1 - x0 > y1 - y0:
-        addall = (x1 - x0) - (y1 - y0)
-        add0 = int(addall / 2)
-        add1 = addall - add0
-        y0 = max(0, y0 - add0)
-        y1 = min(all_segments.shape[1] - 1, y1 + add1)
-    else:
-        addall = (y1 - y0) - (x1 - x0)
-        add0 = int(addall / 2)
-        add1 = addall - add0
-        x0 = max(0, x0 - add0)
-        x1 = min(all_segments.shape[0] - 1, x1 + add1)
-    bounds = [x0, x1, y0, y1]
-    return bounds
