@@ -79,8 +79,10 @@ class Tracking6D:
         self.optimizer_all_parameters = None
         self.rgb_optimizer = None
 
-        # Network related
-        self.net = None
+        # Feature extraction
+        self.feature_extractor: Optional[S2DNet] = None
+
+        # Optical flow
         self.short_flow_model: Optional[FlowProvider] = None
         self.long_flow_provider: Optional[MFTFlowProvider] = None
         self.long_flow_provider_backview: Optional[MFTFlowProvider] = None
@@ -260,8 +262,8 @@ class Tracking6D:
 
     def initialize_feature_extractor(self):
         if self.config.features == 'deep':
-            self.net = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
-            self.feat = lambda x: self.net(x[0])[0][None][:, :, :self.config.features_channels]
+            self.feature_extractor = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
+            self.feat = lambda x: self.feature_extractor(x[0])[0][None][:, :, :self.config.features_channels]
             self.feat_rgb = lambda x: x
         else:
             self.feat = lambda x: x
