@@ -193,18 +193,6 @@ def flow_unit_coords_to_image_coords(observed_flow: torch.Tensor) -> torch.Tenso
     return observed_flow
 
 
-def optical_flow_to_matched_coords(flow: torch.Tensor, step=1):
-    height, width = flow.shape[-2], flow.shape[-1]
-    x, y = torch.meshgrid(torch.arange(0, width, step), torch.arange(0, height, step))
-    coords = torch.stack((x, y), dim=0).float().to(flow.device)  # Shape: [2, height, width]
-
-    coords = coords.unsqueeze(0).unsqueeze(0)
-
-    matched_coords = coords + flow[:, :, :, ::step, ::step]
-
-    return matched_coords
-
-
 def source_coords_to_target_coords(source_coords: torch.Tensor, flow: torch.Tensor):
     y1, x1 = source_coords
     delta_x, delta_y = flow[0, 0, :, -y1.to(torch.int), x1.to(torch.int)]
