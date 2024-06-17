@@ -51,14 +51,20 @@ class GenerateSyntheticFlowStrategy(SyntheticFlowStrategy):
 
 
 class ShortFlowStrategy(ExternalMethodFlowStrategy):
-    def __init__(self, short_flow_model: FlowProvider):
-        self.short_flow_model = short_flow_model
+    def __init__(self, short_flow_model_name: str):
 
-    def compute_flow(self, flow_source_frame, flow_target_frame, backview=False):
-        image_new_x255 = flow_target_frame.observed_image.float() * 255
-        image_prev_x255 = flow_source_frame.observed_image.float() * 255
+        if short_flow_model_name in short_flow_models:
+            self.short_flow_model = self.short_flow_model = short_flow_models[short_flow_model_name]()
+        else:
+            # Default case or raise an error if you don't want a default FlowProvider
+            raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
 
-        observed_flow = self.short_flow_model.next_flow(image_prev_x255, image_new_x255)
+    def compute_flow(self, source_image: torch.Tensor, target_image: torch.Tensor, backview=False):
+        source_image = source_image.float() * 255
+        target_image = target_image.float() * 255
+
+        observed_flow = self.short_flow_model.next_flow(source_image, target_image)
+
         occlusion = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
         uncertainty = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
 
@@ -66,27 +72,17 @@ class ShortFlowStrategy(ExternalMethodFlowStrategy):
 
 
 class LongFlowStrategy(ExternalMethodFlowStrategy):
-    def __init__(self, long_flow_provider: MFTFlowProvider, long_flow_provider_backview: MFTFlowProvider):
+    def __init__(self, long_flow_provider: MFTFlowProvider):
         self.long_flow_provider = long_flow_provider
-        self.long_flow_provider_backview = long_flow_provider_backview
 
-    def compute_flow(self, flow_source_frame, flow_target_frame, backview=False):
-        image_new_x255 = flow_target_frame.observed_image.float() * 255
-        image_prev_x255 = flow_source_frame.observed_image.float() * 255
+    def compute_flow(self, source_image: torch.Tensor, target_image: torch.Tensor, backview=False):
+        source_image = source_image.float() * 255
+        target_image = target_image.float() * 255
 
-        if backview:
-            template = image_prev_x255
-            target = image_new_x255
-            flow_provider = self.long_flow_provider_backview
-        else:
-            template = image_prev_x255
-            target = image_new_x255
-            flow_provider = self.long_flow_provider
+        if self.long_flow_provider.need_to_init:
+            self.long_flow_provider.init(source_image)
+            self.long_flow_provider.need_to_init = False
 
-        if flow_provider.need_to_init:
-            flow_provider.init(template)
-            flow_provider.need_to_init = False
-
-        observed_flow, occlusion, uncertainty = flow_provider.next_flow(template, target)
+        observed_flow, occlusion, uncertainty = self.long_flow_provider.next_flow(source_image, target_image)
 
         return observed_flow, occlusion, uncertainty
