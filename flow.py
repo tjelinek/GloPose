@@ -250,51 +250,6 @@ def tensor_image_to_mft_format(image_tensor):
     return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
 
 
-def get_flow_from_images_raft(image1, image2, model):
-    with torch.no_grad():
-        padder = InputPadder(image1.shape)
-
-        image1, image2 = padder.pad(image1, image2)
-        height = image1.size()[-1]
-        width = image2.size()[-2]
-        transposed = False
-
-        if height > width:
-            transposed = True
-            image1 = image1.transpose(-1, -2)
-            image2 = image2.transpose(-1, -2)
-            width, height = height, width
-
-        resizer = torchvision.transforms.Resize((1024, 440))
-
-        height_scale = height / 440
-        width_scale = width / 1024
-
-        image1 = resizer(image1)
-        image2 = resizer(image2)
-
-        flow_low, flow_up = model(image1, image2, iters=12, test_mode=True)
-
-        flow_low = torchvision.transforms.Resize((width, height))(flow_low)
-        flow_up = torchvision.transforms.Resize((width, height))(flow_up)
-
-        if transposed:
-            flow_low = flow_low.transpose(-1, -2)
-            flow_up = flow_up.transpose(-1, -2)
-
-            flow_low[:, :, 0], flow_low[:, :, 1] = flow_low[:, :, 1], flow_low[:, :, 0]
-            flow_up[:, :, 0], flow_up[:, :, 1] = flow_up[:, :, 1], flow_up[:, :, 0]
-
-        flow_low = padder.unpad(flow_low)
-
-        flow_up[:, :, 0] *= width_scale
-        flow_up[:, :, 1] *= height_scale
-
-        flow_up = padder.unpad(flow_up)
-
-    return flow_low, flow_up
-
-
 class FlowProvider(ABC):
 
     def __init__(self, **kwargs):
