@@ -11,7 +11,8 @@ from keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult
 from pose.dust3r import get_matches_using_dust3r
-from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_solver, triangulate_points_from_Rt
+from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_solver, triangulate_points_from_Rt, \
+    estimate_pose_using_directly_zaragoza
 from tracker_config import TrackerConfig
 from utils import homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask, \
     get_not_occluded_foreground_points
@@ -93,12 +94,23 @@ class EpipolarPoseEstimator:
                                                                                                confidences,
                                                                                                gt_flow_image_coord)
 
-        result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
-                                                    self.rendering.height, self.config, confidences)
+        if self.config.relative_camera_pose_algorithm == 'RANSAC_2D_to_2D_E_solver':
+            result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
+                                                        self.rendering.height, self.config, confidences)
 
-        rot_cam, t_cam, inlier_mask, triangulated_points = result
+            rot_cam, t_cam, inlier_mask, triangulated_points = result
+            rot_cam[[0, 1]] *= -1.  # TODO Delete this mathematically unjustified ugly piece of code
+        elif self.config.relative_camera_pose_algorithm == 'zaragoza':
+            result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
+                                                           self.rendering.intrinsics.focal_x.cuda(),
+                                                           self.rendering.intrinsics.focal_y.cuda(),
+                                                           self.rendering.intrinsics.x0.cuda(),
+                                                           self.rendering.intrinsics.y0.cuda())
 
-        rot_cam[[0, 1]] *= -1.  # TODO Delete this mathematically unjustified ugly piece of code
+            rot_cam, t_cam, inlier_mask, triangulated_points = result
+        else:
+            raise ValueError("Unknown value of 'ransac_use_zaragoza_algorithm'.")
+
 
         # if flow_arc[1] > 1:
         #

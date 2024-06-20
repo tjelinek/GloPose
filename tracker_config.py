@@ -129,6 +129,8 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
 
     # RANSAC settings
+    relative_camera_pose_algorithm: str = 'zaragoza'  # 'RANSAC_2D_to_2D_E_solver' or 'zaragoza'
+
     ransac_essential_matrix_algorithm: str = None
     ransac_outlier_threshold: float = 0.01
     ransac_min_iters: int = 1000

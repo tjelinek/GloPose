@@ -6,7 +6,8 @@ import pymagsac
 import torch
 from kornia import vec_like, eye_like
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, projection_from_KRt, \
-                            triangulate_points
+    triangulate_points
+from nonmin_pose import C2P
 
 from tracker_config import TrackerConfig
 from utils import tensor_index_to_coordinates_xy
@@ -112,7 +113,6 @@ def estimate_pose_using_2D_2D_E_solver(src_pts_yx: torch.Tensor, dst_pts_yx: tor
 
 def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts_yx: torch.Tensor,
                                dst_pts_yx: torch.Tensor, K1: torch.Tensor, K2: torch.Tensor) -> torch.Tensor:
-
     # set reference view pose and compute projection matrix
     R1 = eye_like(3, K1)  # Bx3x3
     t1 = vec_like(3, K1)  # Bx3x1
@@ -129,6 +129,7 @@ def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts
     X = triangulate_points(P1, P2, src_pts_yx, dst_pts_yx)
 
     return X
+
 
 def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     flow_source, flow_target = flow_arc
@@ -167,9 +168,49 @@ def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
     ratio = torch.linalg.norm(triangulated_points_1 - triangulated_points_2)
 
 
-def extend_inlier_mask1(inlier_mask1, inlier_mask2, src_pts_yx_current, src_pts_yx_prev):
-    all_points = torch.cat((src_pts_yx_prev, src_pts_yx_current), dim=0)
-    unique_points, inverse_indices = torch.unique(all_points, return_inverse=True, dim=0)
+def compute_bearing_vectors(pts_xy, focal_x, focal_y, c_x, c_y):
+    normalized_x = (pts_xy[:, 0] - c_x) / focal_x
+    normalized_y = (pts_xy[:, 1] - c_y) / focal_y
 
-    breakpoint()
+    bearing_vectors = torch.stack([normalized_x, normalized_y, torch.ones_like(normalized_x)], dim=1)
+    bearing_vectors = bearing_vectors / torch.norm(bearing_vectors, dim=1, keepdim=True)
+
+    return bearing_vectors
+
+
+def estimate_pose_using_directly_zaragoza(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, focal_x: torch.Tensor,
+                                          focal_y: torch.Tensor, c_x: torch.Tensor, c_y: torch.Tensor):
+    configuration = {
+        # threshold for the singular values of X to check if rank(X)\in[1,3] (condition for tightness),
+        # where X is the SDP-solution submatrix corresponding to E, t, q and h.
+        "th_rank_optimality": 1e-5,  # default
+        # threshold for the slack variable "st" for detecting (near-)pure rotations.
+        "th_pure_rot_sdp": 1e-3,  # default
+        # threshold for "st" used for detecting noise-free pure rotations
+        # and improving the numerical accuracy.
+        "th_pure_rot_noisefree_sdp": 1e-4,  # default
+    }
+
+    solver = C2P(cfg=configuration)
+
+    src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+    dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
+
+    src_pts_bearings_xy = compute_bearing_vectors(src_pts_xy, focal_x, focal_y, c_x, c_y)
+    dst_pts_bearings_xy = compute_bearing_vectors(dst_pts_xy, focal_x, focal_y, c_x, c_y)
+
+    src_pts_xy_bearings_np = src_pts_bearings_xy.numpy(force=True).T
+    dst_pts_xy_bearings_np = dst_pts_bearings_xy.numpy(force=True).T
+
+    solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
+
+    R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
+    t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
+
+    r_cam = rotation_matrix_to_axis_angle(R_cam)
+
+    mask_tensor = torch.ones(src_pts_yx.shape[0], dtype=torch.bool).cuda()  # TODO fill me with something meaningful
+    triangulated_points = torch.zeros_like(src_pts_bearings_xy).cuda()  # TODO fill me with something meaningful
+
+    return r_cam, t_cam, mask_tensor, triangulated_points
 
