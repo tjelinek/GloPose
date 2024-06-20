@@ -543,7 +543,8 @@ class Tracking6D:
             active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
 
             # Update the edge data with synthetic flow results
-            edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame, Cameras.FRONTVIEW)
+            camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
+            edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame, camera)
             edge_data.synthetic_flow_result = synthetic_flow_cpu
             edge_data.observed_flow = flow_observation.send_to_device('cpu')
 
@@ -841,10 +842,11 @@ class Tracking6D:
         # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
         #                                                         q_total[None])
 
-        self.data_graph.get_edge_observations(flow_source, flow_target,
-                                              Cameras.BACKVIEW).is_source_of_matching = True
-        self.data_graph.get_edge_observations(flow_source, flow_target,
-                                              Cameras.FRONTVIEW).is_source_of_matching = False
+        if self.config.matching_target_to_backview:
+            self.data_graph.get_edge_observations(flow_source, flow_target,
+                                                  Cameras.BACKVIEW).is_source_of_matching = True
+            self.data_graph.get_edge_observations(flow_source, flow_target,
+                                                  Cameras.FRONTVIEW).is_source_of_matching = False
 
         if self.config.matching_target_to_backview:
 
