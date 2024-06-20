@@ -80,6 +80,8 @@ class EpipolarPoseEstimator:
             src_pts_yx = src_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
             dst_pts_yx = dst_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
 
+            src_pts_yx_gt_flow = src_pts_yx.clone()
+            dst_pts_yx_gt_flow = dst_pts_yx.clone()
 
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
