@@ -123,7 +123,7 @@ class TrackerConfig:
     add_flow_arcs_strategy: str = None  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).N
-    segmentation_mask_erosion_iters: int = 0
+    segmentation_mask_erosion_iters: int = 3
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent',
     #                                   'essential_matrix_decomposition' or None
     preinitialization_method: str = 'essential_matrix_decomposition'
