@@ -172,13 +172,4 @@ def extend_inlier_mask1(inlier_mask1, inlier_mask2, src_pts_yx_current, src_pts_
     unique_points, inverse_indices = torch.unique(all_points, return_inverse=True, dim=0)
 
     breakpoint()
-    occurrences = torch.bincount(inverse_indices)
-    duplicates = occurrences > 1
-    is_common = duplicates[inverse_indices[len(src_pts_yx_prev):]]
-    inlier_mask_1_extended = torch.zeros(len(unique_points), dtype=torch.bool)
-    inlier_mask_1_extended[:len(src_pts_yx_prev)] = inlier_mask1
-    inlier_mask_1_extended[len(src_pts_yx_prev):][is_common] = inlier_mask2[
-        src_pts_yx_current[inverse_indices[len(src_pts_yx_prev):]] == unique_points[is_common]]
 
-    breakpoint()
-    return inlier_mask_1_extended
