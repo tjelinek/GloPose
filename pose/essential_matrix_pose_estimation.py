@@ -12,9 +12,9 @@ from tracker_config import TrackerConfig
 from utils import tensor_index_to_coordinates_xy
 
 
-def estimate_pose_using_dense_correspondences(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
-                                              K2: torch.Tensor, width: int, height: int, ransac_config: TrackerConfig,
-                                              confidences=None):
+def estimate_pose_using_2D_2D_E_solver(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, K1: torch.Tensor,
+                                       K2: torch.Tensor, width: int, height: int, ransac_config: TrackerConfig,
+                                       confidences=None):
     # Convert to x, y order
     src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
     dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
