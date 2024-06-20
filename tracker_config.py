@@ -28,7 +28,7 @@ class TrackerConfig:
 
     # Frame and keyframe settings
     input_frames: int = 0
-    max_keyframes: int = 2
+    max_keyframes: int = 1
     all_frames_keyframes: bool = False
     fmo_steps: int = 1
 
@@ -131,12 +131,12 @@ class TrackerConfig:
     # RANSAC settings
     ransac_essential_matrix_algorithm: str = None
     ransac_outlier_threshold: float = 0.01
-    ransac_min_iters: int = 10000
+    ransac_min_iters: int = 1000
     ransac_confidence: float = 0.9999
 
     ransac_use_gt_occlusions_and_segmentation: bool = False
     ransac_dilate_occlusion: bool = False
-    ransac_erode_segmentation: bool = False
+    ransac_erode_segmentation: bool = True
 
     ransac_use_dust3r: bool = False
 
