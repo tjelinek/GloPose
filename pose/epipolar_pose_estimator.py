@@ -9,7 +9,7 @@ from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipola
 from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords, get_correct_correspondences_mask
 from keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
-from models.rendering import RenderingKaolin, RenderedFlowResult
+from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
 from pose.dust3r import get_matches_using_dust3r
 from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_solver, triangulate_points_from_Rt, \
     estimate_pose_using_directly_zaragoza
@@ -48,7 +48,7 @@ class EpipolarPoseEstimator:
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
-        gt_flow_observation, occlusions, segmentation = (
+        gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords = (
             self.get_occlusion_and_segmentation(backview, flow_arc, flow_observation_current_frame))
 
         optical_flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
@@ -176,6 +176,10 @@ class EpipolarPoseEstimator:
     def get_occlusion_and_segmentation(self, backview, flow_arc, flow_observation_current_frame):
         renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
         gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
+
+        gt_rendering_result: RenderingResult = renderer.rendering_result_for_frame(self.gt_encoder, 0)
+        rendered_obj_cam0_coords = gt_rendering_result.rendered_face_camera_coords
+
         if self.config.ransac_erode_segmentation:
             eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
             eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
@@ -195,7 +199,7 @@ class EpipolarPoseEstimator:
         else:
             occlusions = flow_observation_current_frame.observed_flow_occlusion
             segmentation = flow_observation_current_frame.observed_flow_segmentation
-        return gt_flow_observation, occlusions, segmentation
+        return gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords
 
     def augment_correspondences(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
         if self.config.ransac_feed_only_inlier_flow:
