@@ -16,7 +16,8 @@ def estimate_pose_using_PnP_solver(src_pts_yx: torch.Tensor, dst_pts_yx: torch.T
     src_pts_np = src_pts_xy.numpy(force=True)
     dst_pts_np = dst_pts_xy.numpy(force=True)
 
-    coords_c1_3d_fg = coords_c1_3d[0, 0, :, src_pts_yx[:, 0].long(), src_pts_yx[:, 1].long()]
+    coords_c1_3d_fg = coords_c1_3d[0, 0, :, src_pts_yx[:, 1].long(), src_pts_yx[:, 0].long()]
+    coords_c1_3d_fg = coords_c1_3d_fg[[1, 0, 2]]
     coords_c1_3d_numpy_fg = coords_c1_3d_fg.permute(1, 0).numpy(force=True)
 
     K1_np = K1.numpy(force=True)
