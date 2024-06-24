@@ -25,18 +25,17 @@ def estimate_pose_using_PnP_solver(src_pts_yx: torch.Tensor, dst_pts_yx: torch.T
     N_matches = src_pts_xy.shape[0]
     min_matches_for_ransac = 6
 
-    success, rvec, tvec, inliers = cv2.solvePnPRansac(coords_c1_3d_numpy_fg, dst_pts_np, K2_np, None)
+    if N_matches > min_matches_for_ransac:
+        success, rvec, tvec, inliers = cv2.solvePnPRansac(coords_c1_3d_numpy_fg, dst_pts_np, K2_np, None)
 
-    rvec = torch.from_numpy(rvec).cuda().squeeze().to(torch.float32)
-    tvec = torch.from_numpy(tvec).cuda().to(torch.float32)
-    inliers = torch.from_numpy(inliers).cuda().to(torch.bool)[:, 0]
+        rvec = torch.from_numpy(rvec).cuda().squeeze().to(torch.float32)
+        tvec = torch.from_numpy(tvec).cuda().to(torch.float32)
+        inliers = torch.from_numpy(inliers).cuda().to(torch.bool)[:, 0]
+    else:
+        tvec = torch.zeros(3).to(torch.float32).cuda().unsqueeze(-1)
+        rvec = torch.zeros(3).to(torch.float32).cuda()
 
-    triangulated_points = torch.zeros(inliers.shape[0], 3).to(torch.float32)  # TODO remove me
     inliers = torch.ones(src_pts_yx.shape[0], dtype=torch.bool)  # TODO remove me
-
-    try:
-        assert inliers.shape[0] == src_pts_yx.shape[0]
-    except:
-        breakpoint()
+    triangulated_points = torch.zeros(inliers.shape[0], 3).to(torch.float32)  # TODO remove me
 
     return rvec, tvec, inliers, triangulated_points
