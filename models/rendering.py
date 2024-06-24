@@ -7,7 +7,7 @@ import torch.nn as nn
 from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
-from models.encoder import EncoderResult
+from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
 
@@ -349,6 +349,16 @@ class RenderingKaolin(nn.Module):
         flow_result = RenderedFlowResult(theoretical_flow, flow_segmentation, mock_occlusion)
 
         return flow_result
+
+    def rendering_result_for_frame(self, encoder: Encoder, frame_i) -> RenderingResult:
+        frames = [frame_i]
+        encoder_result, _ = encoder.frames_and_flow_frames_inference(frames, frames)
+
+        rendering_res = self.forward(encoder_result.translations, encoder_result.quaternions, encoder_result.vertices,
+                                     encoder.face_features, encoder.texture_map)
+
+        return rendering_res
+
 
     def render_flow_for_frame(self, encoder, flow_arc_source, flow_arc_target) -> RenderedFlowResult:
         keyframes = [flow_arc_source, flow_arc_target]
