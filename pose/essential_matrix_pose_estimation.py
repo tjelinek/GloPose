@@ -202,15 +202,19 @@ def estimate_pose_using_directly_zaragoza(src_pts_yx: torch.Tensor, dst_pts_yx: 
     src_pts_xy_bearings_np = src_pts_bearings_xy.numpy(force=True).T
     dst_pts_xy_bearings_np = dst_pts_bearings_xy.numpy(force=True).T
 
-    solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
-
-    R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
-    t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
-
-    r_cam = rotation_matrix_to_axis_angle(R_cam)
-
     mask_tensor = torch.ones(src_pts_yx.shape[0], dtype=torch.bool).cuda()  # TODO fill me with something meaningful
     triangulated_points = torch.zeros_like(src_pts_bearings_xy).cuda()  # TODO fill me with something meaningful
+
+    if src_pts_yx.shape[0] < 5:
+        R_cam = torch.eye(3).to(torch.float32).cuda()
+        t_cam = torch.zeros(3).to(torch.float32).cuda().unsqueeze(-1)
+    else:
+        solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
+
+        R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
+        t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
+
+    r_cam = rotation_matrix_to_axis_angle(R_cam)
 
     return r_cam, t_cam, mask_tensor, triangulated_points
 
