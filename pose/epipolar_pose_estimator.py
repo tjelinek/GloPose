@@ -117,13 +117,6 @@ class EpipolarPoseEstimator:
         else:
             raise ValueError("Unknown value of 'ransac_use_zaragoza_algorithm'.")
 
-
-        # if flow_arc[1] > 1:
-        #
-        #     data_suffix = 'back' if backview else 'front'
-        #
-        #     relative_scale_recovery(essential_matrix_data, flow_arc, K1)
-
         R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 
         R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
@@ -156,15 +149,11 @@ class EpipolarPoseEstimator:
             data.dust3r_point_cloud_im1 = pts3d_dust3r[0].flatten(0, 1).cpu()
             data.dust3r_point_cloud_im2 = pts3d_dust3r[1].flatten(0, 1).cpu()
 
-        # quat_obj = self.gt_rotations
         gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
         gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
         gt_trans_obj = self.gt_translations[0, :, flow_arc[1]].unsqueeze(-1)
 
         gt_R_cam, gt_trans_cam = Rt_epipolar_cam_from_Rt_obj(gt_R_obj, gt_trans_obj, W_4x4)
-
-        # gt_trans_cam = torch.zeros(1, 3, 1).cuda()
-        # gt_trans_cam[:, 0] = 1.
 
         ransac_triangulated_points_gt_Rt = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
                                                                       dst_pts_yx[None], K1[None], K2[None])
