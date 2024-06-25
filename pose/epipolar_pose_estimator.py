@@ -13,6 +13,7 @@ from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResul
 from pose.dust3r import get_matches_using_dust3r
 from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_solver, triangulate_points_from_Rt, \
     estimate_pose_using_directly_zaragoza
+from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
 from utils import homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask, \
     get_not_occluded_foreground_points
@@ -93,8 +94,13 @@ class EpipolarPoseEstimator:
                                                                                                dst_pts_yx_gt_flow,
                                                                                                confidences,
                                                                                                gt_flow_image_coord)
+        if self.config.relative_camera_pose_algorithm == 'pnp':
+            result = estimate_pose_using_PnP_solver(src_pts_yx, dst_pts_yx, K1, K2, rendered_obj_cam0_coords,
+                                                    self.rendering.width, self.rendering.height, self.config,
+                                                    confidences)
+            rot_cam, t_cam, inlier_mask, triangulated_points = result
 
-        if self.config.relative_camera_pose_algorithm == 'RANSAC_2D_to_2D_E_solver':
+        elif self.config.relative_camera_pose_algorithm == 'RANSAC_2D_to_2D_E_solver':
             result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
                                                         self.rendering.height, self.config, confidences)
 

@@ -39,4 +39,7 @@ def estimate_pose_using_PnP_solver(src_pts_yx: torch.Tensor, dst_pts_yx: torch.T
     inliers = torch.ones(src_pts_yx.shape[0], dtype=torch.bool)  # TODO remove me
     triangulated_points = torch.zeros(inliers.shape[0], 3).to(torch.float32)  # TODO remove me
 
+    rvec[1] -= np.pi
+    rvec *= -1.  # TODO properly align the poses
+
     return rvec, tvec, inliers, triangulated_points
