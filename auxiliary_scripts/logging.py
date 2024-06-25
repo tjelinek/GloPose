@@ -686,8 +686,11 @@ class WriteResults:
             dst_pts_pred_visible_yx_small_errors = arc_data.dst_pts_yx
             dst_pts_pred_visible_yx_gt_small_errors = arc_data.dst_pts_yx_gt
 
-            inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
-                                               arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
+            try:
+                inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
+                                                   arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
+            except:
+                breakpoint()
             correct_inliers = inliers_errors < correct_threshold
 
             fg_points_num = float(arc_data.observed_flow_segmentation.sum())
@@ -893,7 +896,7 @@ class WriteResults:
 
             display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
 
-            fig, axs = plt.subplots(3, 2, figsize=(8, 8), dpi=600)
+            fig, axs = plt.subplots(3, 2, figsize=(8, 8), dpi=200)
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
@@ -973,7 +976,7 @@ class WriteResults:
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
-                            dpi=600, bbox_inches='tight')
+                            dpi=200, bbox_inches='tight')
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
