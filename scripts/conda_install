@@ -1,0 +1,16 @@
+conda install conda-forge::pycolmap
+conda install conda-forge::pyceres
+conda install conda-forge::kaolin
+conda install conda-forge::scikit-learn
+conda install conda-forge::rerun-sdk
+conda install conda-forge::seaborn
+conda install conda-forge::opencv
+conda install conda-forge::scikit-image
+conda install conda-forge::pillow
+conda install conda-forge::pytorch3d
+conda install conda-forge::imageio
+conda install conda-forge::h5py
+conda install pytorch::torchvision
+
+pycolmap pyceres
+conda create -n FlowTrackerTest -c conda-forge -c pytorch kaolin scikit-learn rerun-sdk seaborn opencv scikit-image pillow pytorch3d imageio h5py torchvision
