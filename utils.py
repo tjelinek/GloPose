@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from kornia.morphology import erosion, dilation
 from skimage.measure import label, regionprops
+import torch.nn.functional as F
 
 from tracker_config import TrackerConfig
 
@@ -174,3 +175,21 @@ def homogenize_3x4_transformation_matrix(T_3x4):
     T_4x4[..., :3, :] = T_3x4
 
     return T_4x4
+
+
+def pad_to_multiple(image, multiple):
+
+    height, width = image.shape[-2:]
+    pad_h = multiple - (height % multiple)
+    pad_w = multiple - (width % multiple)
+    padded_image = F.pad(image, (0, pad_w, 0, pad_h))
+
+    return padded_image, pad_h, pad_w
+
+
+def unpad_image(image, pad_h, pad_w):
+    if pad_h > 0:
+        image = image[:, :-pad_h, :]
+    if pad_w > 0:
+        image = image[:, :, :-pad_w]
+    return image

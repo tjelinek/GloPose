@@ -3,6 +3,8 @@ from pathlib import Path
 
 import torch
 
+from utils import pad_to_multiple, unpad_image
+
 sys.path.append('repositories/Depth-Anything-V2/')
 from repositories.DepthAnythingV2.depth_anything_v2.dpt import DepthAnythingV2
 
@@ -20,17 +22,22 @@ class DepthAnythingProvider:
         self.depth_anything = DepthAnythingV2(**model_configs[encoder])
         base_dir = Path('/mnt/personal/jelint19/weights/DepthAnythingV2/')
 
-        path_to_weights = base_dir / f'depth_anything_v2_{encoder}14.pth'
+        path_to_weights = base_dir / f'depth_anything_v2_{encoder}.pth'
 
-        breakpoint()
         self.depth_anything.load_state_dict(torch.load(path_to_weights, map_location='cpu'))
         self.depth_anything.eval()
 
-        breakpoint()
-
     def infer_depth_anything(self, image: torch.Tensor) -> torch.Tensor:
-        pass
 
-        depth_image = self.depth_anything(image)
+        padded_image, pad_h, pad_w = pad_to_multiple(image, 14)
+
+        depth_image = self.depth_anything(padded_image.to('cpu'))
+        depth_image = unpad_image(depth_image, pad_h, pad_w)
+
+        depth_image = depth_image.cuda()
 
         return depth_image
+
+
+def depth_to_point_cloud(depth_image, f_x: float, f_y: float, c_x: float, c_y: float):
+    pass

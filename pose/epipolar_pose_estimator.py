@@ -5,6 +5,7 @@ from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_ax
 
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.data_structures import DataGraph
+from auxiliary_scripts.depth import DepthAnythingProvider, depth_to_point_cloud
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords, get_correct_correspondences_mask
 from keyframe_buffer import FrameObservation, FlowObservation
@@ -95,7 +96,16 @@ class EpipolarPoseEstimator:
                                                                                                confidences,
                                                                                                gt_flow_image_coord)
         if self.config.relative_camera_pose_algorithm == 'pnp':
-            result = estimate_pose_using_PnP_solver(src_pts_yx, dst_pts_yx, K1, K2, rendered_obj_cam0_coords,
+            point_map = rendered_obj_cam0_coords
+
+            observed_image_target = camera_observation.observed_image[:, 0]
+            depth_image = self.depth_anything.infer_depth_anything(observed_image_target)
+
+            intrinsics = self.rendering.intrinsics
+            point_map_from_depth = depth_to_point_cloud(depth_image, intrinsics.focal_x,
+                                                        intrinsics.focal_y, intrinsics.x0, intrinsics.y0)
+
+            result = estimate_pose_using_PnP_solver(src_pts_yx, dst_pts_yx, K1, K2, point_map,
                                                     self.rendering.width, self.rendering.height, self.config,
                                                     confidences)
             rot_cam, t_cam, inlier_mask, triangulated_points = result
