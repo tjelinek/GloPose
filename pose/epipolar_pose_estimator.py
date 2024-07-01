@@ -32,6 +32,7 @@ class EpipolarPoseEstimator:
         self.rendering: RenderingKaolin = rendering
         self.rendering_backview: RenderingKaolin = rendering_backview
         self.gt_encoder: Encoder = gt_encoder
+        self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
     def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
                                          camera_observation: FrameObservation, backview=False):
