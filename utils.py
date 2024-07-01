@@ -98,6 +98,7 @@ def crop_resize(Is, bbox, res):
         imr = imr[:, :, :, 0]
     return imr
 
+
 def mesh_normalize(vertices):
     mesh_max = torch.max(vertices, dim=1, keepdim=True)[0]
     mesh_min = torch.min(vertices, dim=1, keepdim=True)[0]
@@ -124,18 +125,33 @@ def normalize_vertices(vertices: torch.Tensor):
     return vertices
 
 
-def get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
+def compute_occlusion_mask(observed_occlusion: torch.Tensor, occlusion_threshold: float) -> torch.Tensor:
+    return torch.le(observed_occlusion, occlusion_threshold)
+
+
+def compute_segmentation_mask(observed_segmentation: torch.Tensor, segmentation_threshold: float) -> torch.Tensor:
+    return torch.gt(observed_segmentation, segmentation_threshold)
+
+
+def compute_not_occluded_foreground_mask(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
+                                         occlusion_threshold: float, segmentation_threshold: float) -> torch.Tensor:
+    not_occluded_binary_mask = compute_occlusion_mask(observed_occlusion, occlusion_threshold)
+    segmentation_binary_mask = compute_segmentation_mask(observed_segmentation, segmentation_threshold)
+    return (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+
+
+def get_foreground_and_segment_mask(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
                                     occlusion_threshold: float, segmentation_threshold: float):
-    not_occluded_binary_mask: torch.Tensor = (observed_occlusion <= occlusion_threshold)
-    segmentation_binary_mask: torch.Tensor = (observed_segmentation > segmentation_threshold)
-    not_occluded_foreground_mask = (not_occluded_binary_mask * segmentation_binary_mask).squeeze()
+    not_occluded_binary_mask = compute_occlusion_mask(observed_occlusion, occlusion_threshold)
+    segmentation_binary_mask = compute_segmentation_mask(observed_segmentation, segmentation_threshold)
+    not_occluded_foreground_mask = compute_not_occluded_foreground_mask(observed_occlusion, observed_segmentation,
+                                                                        occlusion_threshold, segmentation_threshold)
 
     return not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask
 
 
-def get_not_occluded_foreground_points(observed_occlusion, observed_segmentation, occlusion_threshold,
-                                       segmentation_threshold):
-
+def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
+                                       occlusion_threshold: float, segmentation_threshold: float):
     _, _, not_occluded_foreground_mask = get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
                                                                          occlusion_threshold, segmentation_threshold)
 
@@ -178,7 +194,6 @@ def homogenize_3x4_transformation_matrix(T_3x4):
 
 
 def pad_to_multiple(image, multiple):
-
     height, width = image.shape[-2:]
     pad_h = multiple - (height % multiple)
     pad_w = multiple - (width % multiple)
