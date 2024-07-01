@@ -57,6 +57,7 @@ def visualize_optical_flow_errors(template_image: torch.Tensor, target_image: to
     # Plot source image with error vectors
     ax[0].imshow(template_image_np)
     ax[0].quiver(xv, yv, error_u, error_v, color=colors, scale=1, scale_units='xy')
+    ax[0].grid(visible=False)
     ax[0].set_title('Source Image with Error Vectors')
 
     # Plot target image with connected flow vectors
@@ -65,7 +66,8 @@ def visualize_optical_flow_errors(template_image: torch.Tensor, target_image: to
                  label='Synthetic Flow')
     ax[1].quiver(xv, yv, observed_end_x - xv, observed_end_y - yv, color='b', scale=1, scale_units='xy',
                  label='Observed Flow')
-    ax[1].legend()
+    ax[1].grid(visible=False)
+    ax[1].legend(loc='upper right')
     ax[1].set_title('Target Image with Flow Vectors')
 
     fig.tight_layout()
