@@ -6,7 +6,7 @@ def get_config() -> TrackerConfig8P:
 
     cfg.ransac_essential_matrix_algorithm = 'pygcransac'
     cfg.long_flow_model = 'MFT'
-    cfg.MFT_backbone_cfg = 'RoMa_thresholds/MFT_RoMa_direct_cfg_occl_1'
+    cfg.MFT_backbone_cfg = 'RoMa_thresholds.MFT_RoMa_direct_cfg_occl_1'
 
     cfg.occlusion_coef_threshold = 1.0
 
