@@ -645,7 +645,10 @@ class WriteResults:
 
     def visualize_point_clouds_from_ransac(self, frame_i):
 
-        arc_data = self.data_graph.get_edge_observations(0, frame_i, Cameras.FRONTVIEW)
+        in_edges = self.data_graph.G.in_edges(frame_i, data=False)
+        flow_source = int(min(e[0] for e in in_edges))
+
+        arc_data = self.data_graph.get_edge_observations(flow_source, frame_i, Cameras.FRONTVIEW)
 
         rr.set_time_sequence("frame", frame_i)
 
@@ -680,7 +683,8 @@ class WriteResults:
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
-            flow_arc = (0, i)
+            in_edges = self.data_graph.G.in_edges(i, data=False)
+            flow_arc = (min(e[0] for e in in_edges), i)
 
             camera = Cameras.FRONTVIEW if view == 'front' else Cameras.BACKVIEW
             arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
