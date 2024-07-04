@@ -592,15 +592,13 @@ class Tracking6D:
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
-            b0 = (0, self.config.max_width, 0, self.config.max_width)
-
             last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
             last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
 
             last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                flow_target_frame, b0)
+                flow_target_frame)
             last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                flow_source_frame, b0)
+                flow_source_frame)
 
             image_new_x255 = last_keyframe_observations.observed_image.float() * 255
             image_prev_x255 = last_flowframe_observations.observed_image.float() * 255
