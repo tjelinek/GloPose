@@ -5,7 +5,7 @@ import networkx as nx
 import torch
 
 from auxiliary_scripts.cameras import Cameras
-from keyframe_buffer import FlowObservation, SyntheticFlowObservation
+from keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
 from models.encoder import EncoderResult
 
 
@@ -25,6 +25,9 @@ class CommonFrameData:
 class CameraSpecificFrameData:
 
     observed_image: torch.Tensor = None
+    frame_observation: FrameObservation = None
+    renders: Any = None
+    per_pixel_flow_error: Any = None
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
