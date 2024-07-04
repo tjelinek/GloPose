@@ -126,7 +126,8 @@ class Tracking6D:
         self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
 
-        self.initialize_flow_model()
+        if self.config.gt_flow_source != 'GenerateSynthetic':  # This provides a significant speed-up for debugging
+            self.initialize_flow_model()
 
         self.used_cameras = [Cameras.FRONTVIEW]
         if self.config.matching_target_to_backview:
