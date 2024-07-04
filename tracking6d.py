@@ -489,17 +489,10 @@ class Tracking6D:
                 else:
                     nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:-self.config.max_keyframes]
 
-                remaining_keyframes = sorted(list(set(self.active_keyframes.keyframes) - set(nodes_to_remove)))
-                remaining_flow_frames = sorted(list(set(self.active_keyframes.flow_frames) - set(nodes_to_remove)))
-
-                self.active_keyframes.G.remove_nodes_from(nodes_to_remove)
-                self.active_keyframes.keyframes = copy.deepcopy(remaining_keyframes)
-                self.active_keyframes.flow_frames = copy.deepcopy(remaining_flow_frames)
+                self.active_keyframes.remove_frames(nodes_to_remove)
 
                 if self.config.matching_target_to_backview:
-                    self.active_keyframes_backview.G.remove_nodes_from(nodes_to_remove)
-                    self.active_keyframes_backview.keyframes = copy.deepcopy(remaining_keyframes)
-                    self.active_keyframes_backview.flow_frames = copy.deepcopy(remaining_flow_frames)
+                    self.active_keyframes_backview.remove_frames(nodes_to_remove)
                 print(f"Removed nodes {nodes_to_remove}")
 
             del all_frame_observations

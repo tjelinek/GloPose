@@ -1,3 +1,4 @@
+import copy
 from bisect import insort
 from copy import deepcopy
 from typing import Tuple, List, Dict, Union, TypeVar
@@ -291,6 +292,14 @@ class KeyframeBuffer:
             return self.keep_selected_keyframes(keep_keyframes)
         else:
             return KeyframeBuffer()
+
+    def remove_frames(self, frames_to_remove: List):
+        remaining_keyframes = sorted(list(set(self.keyframes) - set(frames_to_remove)))
+        remaining_flow_frames = sorted(list(set(self.flow_frames) - set(frames_to_remove)))
+
+        self.G.remove_nodes_from(frames_to_remove)
+        self.keyframes = copy.deepcopy(remaining_keyframes)
+        self.flow_frames = copy.deepcopy(remaining_flow_frames)
 
     def keep_selected_keyframes(self, keep_keyframes):
         not_keep_keyframes = ~ keep_keyframes
