@@ -26,7 +26,7 @@ from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
-from models.loss import FMOLoss, iou_loss, LossResult
+from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import SyntheticDataGeneratingTracker, BaseTracker
