@@ -826,7 +826,7 @@ class Tracking6D:
                                            observations: MultiCameraObservation,
                                            flow_observations: MultiCameraObservation):
 
-        flow_arc = (0, max(keyframes))
+        flow_arc = (self.flow_tracks_inits[-1], max(keyframes))
         flow_arc_idx = flow_arcs.index(flow_arc)
 
         flow_source, flow_target = flow_arc
