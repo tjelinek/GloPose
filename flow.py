@@ -6,7 +6,6 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw
 import torch
-import torchvision
 import torchvision.transforms as T
 
 from argparse import Namespace
