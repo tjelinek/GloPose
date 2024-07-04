@@ -25,8 +25,6 @@ class CommonFrameData:
 class CameraSpecificFrameData:
 
     observed_image: torch.Tensor = None
-    renders: Any = None
-    per_pixel_flow_error: Any = None
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
