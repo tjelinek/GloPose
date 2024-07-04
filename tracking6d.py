@@ -568,7 +568,7 @@ class Tracking6D:
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
             process_flow_arc(flow_source_frame, flow_target_frame)
 
-        if self.long_flow_provider is not None:
+        if self.config.long_flow_model is not None:
             long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
             flow_source_frame, flow_target_frame = long_flow_arc
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
