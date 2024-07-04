@@ -371,6 +371,12 @@ class Tracking6D:
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
 
+        self.data_graph.add_new_frame(0)
+        self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
+            template_frame_observation.send_to_device('cpu'))
+        self.data_graph.get_camera_specific_frame_data(0, Cameras.BACKVIEW).frame_observation = (
+            template_frame_observation_from_back.send_to_device('cpu'))
+
         for frame_i in range(1, self.config.input_frames):
 
             self.data_graph.add_new_frame(frame_i)
@@ -391,6 +397,10 @@ class Tracking6D:
             new_frame_observation = self.tracker.next(next_tracker_frame)
             new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
 
+            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).frame_observation = (
+                new_frame_observation.send_to_device('cpu'))
+            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).frame_observation = (
+                new_frame_observation_from_back.send_to_device('cpu'))
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
             self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, frame_i)
 
