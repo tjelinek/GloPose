@@ -8,13 +8,6 @@ from PIL import Image
 
 sys.path.append('repositories/dust3r')
 
-from repositories.dust3r.dust3r.inference import inference
-from repositories.dust3r.dust3r.model import AsymmetricCroCo3DStereo
-from repositories.dust3r.dust3r.utils.image import load_images, ImgNorm, _resize_pil_image
-from repositories.dust3r.dust3r.image_pairs import make_pairs
-from repositories.dust3r.dust3r.cloud_opt import global_aligner, GlobalAlignerMode
-from repositories.dust3r.dust3r.utils.geometry import find_reciprocal_matches, xy_grid
-
 
 def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: bool = False, verbose: bool = True):
     """
@@ -29,6 +22,8 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
     Returns:
     - List of dictionaries with processed image data and metadata.
     """
+
+    from repositories.dust3r.dust3r.utils.image import ImgNorm, _resize_pil_image
 
     imgs = []
     for idx, tensor in enumerate(image_tensors):
@@ -64,6 +59,12 @@ def tensors_for_dust3r(image_tensors: List[torch.Tensor], size: int, square_ok: 
 # model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to('cuda')
 
 def get_matches_using_dust3r(imgs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    from repositories.dust3r.dust3r.inference import inference
+    from repositories.dust3r.dust3r.model import AsymmetricCroCo3DStereo
+    from repositories.dust3r.dust3r.image_pairs import make_pairs
+    from repositories.dust3r.dust3r.cloud_opt import global_aligner, GlobalAlignerMode
+    from repositories.dust3r.dust3r.utils.geometry import find_reciprocal_matches, xy_grid
+
     device = 'cuda'
     batch_size = 1
     schedule = 'cosine'
