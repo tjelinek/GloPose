@@ -15,13 +15,13 @@ from typing import Optional, NamedTuple, List, Callable
 
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from repositories.OSTrack.S2DNet.s2dnet import S2DNet
-from auxiliary_scripts.data_structures import DataGraph
+from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, flow_image_coords_to_unit_coords, \
     MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider, normalize_rendered_flows
-from keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, SyntheticFlowObservation
+from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, SyntheticFlowObservation
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper

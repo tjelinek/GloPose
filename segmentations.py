@@ -1,8 +1,5 @@
-from typing import Tuple
-
 from abc import abstractmethod, ABC
 
-import os
 import sys
 
 import cv2
@@ -13,7 +10,7 @@ from scipy.ndimage import uniform_filter
 from torchvision import transforms
 import torch.nn.functional as F
 
-from keyframe_buffer import FrameObservation
+from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig

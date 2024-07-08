@@ -31,10 +31,10 @@ from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
-from keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
+from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
-from auxiliary_scripts.data_structures import DataGraph
+from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
 from auxiliary_scripts.math_utils import quaternion_angular_difference

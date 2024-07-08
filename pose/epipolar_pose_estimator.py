@@ -4,11 +4,11 @@ import torch
 from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle, axis_angle_to_quaternion
 
 from auxiliary_scripts.cameras import Cameras
-from auxiliary_scripts.data_structures import DataGraph
+from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider, depth_to_point_cloud
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords, get_correct_correspondences_mask
-from keyframe_buffer import FrameObservation, FlowObservation
+from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
 from pose.dust3r import get_matches_using_dust3r

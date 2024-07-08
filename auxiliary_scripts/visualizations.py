@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from keyframe_buffer import FlowObservation, SyntheticFlowObservation
+from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation
 
 
 def visualize_optical_flow_errors(template_image: torch.Tensor, target_image: torch.Tensor,
