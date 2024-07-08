@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, List
 
 import networkx as nx
 import torch
 
 from auxiliary_scripts.cameras import Cameras
-from keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
+from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
 from models.encoder import EncoderResult
 
 
