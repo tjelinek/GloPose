@@ -526,16 +526,16 @@ class WriteResults:
     def write_results(self, bounding_box, frame_i, tex, new_flow_arcs,
                       active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
                       best_model, observations: FrameObservation, observations_backview: FrameObservation,
-                      gt_rotations, gt_translations):
+                      gt_rotations, gt_translations, flow_tracks_inits: List[int]):
 
         observed_segmentations = observations.observed_segmentation
 
         self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image = \
             observations.observed_image[:, [-1]].cpu()
 
-        self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, Cameras.FRONTVIEW)
+        self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, Cameras.FRONTVIEW)
         if self.tracking_config.matching_target_to_backview:
-            self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, Cameras.BACKVIEW)
+            self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, Cameras.BACKVIEW)
 
         if self.tracking_config.matching_target_to_backview:
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
@@ -1757,7 +1757,8 @@ class WriteResults:
             imageio.imwrite(theoretical_flow_path, flow_illustration)
             imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs, view=Cameras.FRONTVIEW):
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs,
+                                flow_tracks_inits: List[int], view=Cameras.FRONTVIEW):
 
         # Save the images to disk
         last_frame_observation = keyframe_buffer.get_observations_for_keyframe(frame_i)
@@ -1786,7 +1787,7 @@ class WriteResults:
             raise ValueError("Unsupported camera")
 
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
-        if frame_i == 1:
+        if frame_i == 1 or (len(flow_tracks_inits) > 1 and frame_i == flow_tracks_inits[-1] + 1):
             template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
 
             self.log_image(frame_i, last_observed_image, template_image_path, template_image_annotation)

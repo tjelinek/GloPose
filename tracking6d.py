@@ -462,7 +462,8 @@ class Tracking6D:
                                                  best_model=self.best_model,
                                                  observations=all_frame_observations,
                                                  observations_backview=all_frame_observations_backview,
-                                                 gt_rotations=self.gt_rotations, gt_translations=self.gt_translations)
+                                                 gt_rotations=self.gt_rotations, gt_translations=self.gt_translations,
+                                                 flow_tracks_inits=self.flow_tracks_inits)
 
                 gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                     if self.gt_mesh_prototype is not None else None
