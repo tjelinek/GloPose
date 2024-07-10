@@ -43,11 +43,7 @@ class EpipolarPoseEstimator:
         if backview:
             camera_translation = -camera_translation
 
-        W_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=camera_translation,
-                                                                    camera_up_direction=self.rendering.camera_up,
-                                                                    look_at=self.rendering.obj_center)
-
-        W_4x4 = homogenize_3x4_transformation_matrix(W_4x3.permute(0, 2, 1))
+        W_4x4 = self.rendering.camera_transformation_matrix_4x4()
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 

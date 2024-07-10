@@ -10,6 +10,7 @@ from kornia.geometry.conversions import quaternion_to_rotation_matrix
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
+from utils import homogenize_3x4_transformation_matrix
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',
@@ -359,7 +360,6 @@ class RenderingKaolin(nn.Module):
 
         return rendering_res
 
-
     def render_flow_for_frame(self, encoder, flow_arc_source, flow_arc_target) -> RenderedFlowResult:
         keyframes = [flow_arc_source, flow_arc_target]
         flow_frames = [flow_arc_source, flow_arc_target]
@@ -368,6 +368,15 @@ class RenderingKaolin(nn.Module):
         rendered_flow_res = self.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                           flow_arcs_indices=[(0, 1)])
         return rendered_flow_res
+
+    def camera_transformation_matrix_4x4(self):
+        T_world_to_cam_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=self.camera_trans,
+                                                                                 camera_up_direction=self.camera_up,
+                                                                                 look_at=self.obj_center)
+
+        T_world_to_cam_4x4 = homogenize_3x4_transformation_matrix(T_world_to_cam_4x3.permute(0, 2, 1))
+
+        return T_world_to_cam_4x4
 
     @staticmethod
     def rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
