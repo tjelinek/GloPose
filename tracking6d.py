@@ -13,6 +13,7 @@ from pathlib import Path
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable
 
+from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from data_structures.data_graph import DataGraph
@@ -455,15 +456,14 @@ class Tracking6D:
             if self.config.write_results:
                 new_flow_arcs = [arc for arc in flow_arcs if arc[1] == frame_i]
 
-                self.write_results.write_results(bounding_box=b0, frame_i=frame_i,
-                                                 tex=tex, new_flow_arcs=new_flow_arcs,
+                self.write_results.write_results(bounding_box=b0, frame_i=frame_i, tex=tex, new_flow_arcs=new_flow_arcs,
                                                  active_keyframes=self.active_keyframes,
                                                  active_keyframes_backview=self.active_keyframes_backview,
-                                                 best_model=self.best_model,
-                                                 observations=all_frame_observations,
+                                                 best_model=self.best_model, observations=all_frame_observations,
                                                  observations_backview=all_frame_observations_backview,
                                                  gt_rotations=self.gt_rotations, gt_translations=self.gt_translations,
-                                                 flow_tracks_inits=self.flow_tracks_inits)
+                                                 flow_tracks_inits=self.flow_tracks_inits,
+                                                 pose_icosphere=self.pose_icosphere)
 
                 gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                     if self.gt_mesh_prototype is not None else None

@@ -32,6 +32,7 @@ from pytorch3d.io import save_ply
 
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
+from data_structures.pose_icosphere import PoseIcosphere
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
@@ -523,10 +524,10 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, bounding_box, frame_i, tex, new_flow_arcs,
-                      active_keyframes: KeyframeBuffer, active_keyframes_backview: KeyframeBuffer,
-                      best_model, observations: FrameObservation, observations_backview: FrameObservation,
-                      gt_rotations, gt_translations, flow_tracks_inits: List[int]):
+    def write_results(self, bounding_box, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer,
+                      active_keyframes_backview: KeyframeBuffer, best_model, observations: FrameObservation,
+                      observations_backview: FrameObservation, gt_rotations, gt_translations,
+                      flow_tracks_inits: List[int], pose_icosphere: PoseIcosphere):
 
         observed_segmentations = observations.observed_segmentation
 
