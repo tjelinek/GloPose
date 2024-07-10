@@ -129,7 +129,7 @@ class TrackerConfig:
     preinitialization_method: str = 'essential_matrix_decomposition'
 
     # RANSAC settings
-    relative_camera_pose_algorithm: str = 'zaragoza'  # 'RANSAC_2D_to_2D_E_solver' or 'zaragoza'
+    relative_camera_pose_algorithm: str = 'RANSAC_2D_to_2D_E_solver'  # 'RANSAC_2D_to_2D_E_solver' or 'zaragoza'
 
     ransac_essential_matrix_algorithm: str = None
     ransac_outlier_threshold: float = 0.01
@@ -157,7 +157,7 @@ class TrackerConfig:
 
     ransac_confidences_from_occlusion: bool = False
 
-    ransac_inlier_pose_method: str = '8point'
+    ransac_inlier_pose_method: str = 'zaragoza'
 
     refine_pose_using_numerical_optimization: bool = False
 
