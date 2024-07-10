@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt, \
-    normalize_quaternion, Se3, Quaternion
+    normalize_quaternion, Se3, Quaternion, quaternion_to_axis_angle
 
 
 def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
@@ -91,9 +91,9 @@ def get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q: torch.Tensor
     obj_pose_R, obj_pose_t = Rt_epipolar_cam_from_Rt_obj(obj_pose_se3.quaternion.matrix(),
                                                          obj_pose_se3.t[..., None], T_world_to_cam)
     obj_pose_q_cam_space = Quaternion.from_matrix(obj_pose_R)
-    obj_pose_se3_cam_space = Se3(obj_pose_q_cam_space,
-                                 obj_pose_t[..., 0])
-    cam_space_in_plane_rot_axis_angle = torch.rad2deg(torch.tensor([in_plane_rotation_degrees]).cuda())
+    obj_pose_se3_cam_space = Se3(obj_pose_q_cam_space, obj_pose_t[..., 0])
+
+    cam_space_in_plane_rot_axis_angle = torch.deg2rad(torch.tensor([in_plane_rotation_degrees]).cuda())
     cam_space_in_plane_rot_se3 = Se3.rot_z(cam_space_in_plane_rot_axis_angle, )
     obj_pose_se3_rotated_cam_space = obj_pose_se3_cam_space * cam_space_in_plane_rot_se3
     R_obj_rotated_world, t_obj_rotated_world = Rt_obj_from_epipolar_Rt_cam(
