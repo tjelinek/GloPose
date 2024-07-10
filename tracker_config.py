@@ -88,7 +88,7 @@ class TrackerConfig:
     # Ground truths
     initial_mesh_path: str = 'prototypes/sphere.obj'
     gt_mesh_path: str = None
-    optimize_shape: bool = True
+    optimize_shape: bool = False
 
     gt_texture_path: str = None
     optimize_texture: bool = False
