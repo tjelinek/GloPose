@@ -1919,4 +1919,5 @@ class WriteResults:
             rr.set_time_sequence("frame", frame)
         else:
             plt.savefig(str(save_path), **kwargs)
-            plt.close()
+
+        plt.close()
