@@ -260,8 +260,8 @@ class WriteResults:
                                 contents=[
                                     rrb.Spatial2DView(name="Template Front",
                                                       origin=RerunAnnotations.template_image_frontview),
-                                    rrb.Spatial2DView(name="Template Back",
-                                                      origin=RerunAnnotations.template_image_backview)
+                                    # rrb.Spatial2DView(name="Template Back",
+                                    #                   origin=RerunAnnotations.template_image_backview)
                                 ],
                                 name='Templates'
                             )
