@@ -408,14 +408,16 @@ class Tracking6D:
                                           "or file input data. So far using synthetic data only.")
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
-            new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
-
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).frame_observation = (
                 new_frame_observation.send_to_device('cpu'))
-            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).frame_observation = (
-                new_frame_observation_from_back.send_to_device('cpu'))
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
-            self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, frame_i)
+
+            if self.config.matching_target_to_backview:
+                # TODO for camera in self.cameras
+                new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
+                self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).frame_observation = (
+                    new_frame_observation_from_back.send_to_device('cpu'))
+                self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, frame_i)
 
             start = time.time()
 
@@ -657,16 +659,17 @@ class Tracking6D:
             last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
             last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
 
-            last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                flow_target_frame)
-            last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                flow_source_frame)
-
             image_new_x255 = last_keyframe_observations.observed_image.float() * 255
             image_prev_x255 = last_flowframe_observations.observed_image.float() * 255
 
-            image_new_x255_back = last_keyframe_observations_back.observed_image.float() * 255
-            image_prev_x255_back = last_flowframe_observations_back.observed_image.float() * 255
+            if self.config.matching_target_to_backview:
+                # TODO perform rather some iteration over self.cameras
+                last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                    flow_target_frame)
+                last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
+                    flow_source_frame)
+                image_new_x255_back = last_keyframe_observations_back.observed_image.float() * 255
+                image_prev_x255_back = last_flowframe_observations_back.observed_image.float() * 255
 
             if mode == 'long':
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
