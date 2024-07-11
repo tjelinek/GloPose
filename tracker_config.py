@@ -165,4 +165,6 @@ class TrackerConfig:
     use_custom_jacobian: bool = False
     flow_sgd: bool = True
     flow_sgd_n_samples: int = 100
-    points_fraction_visible_new_track = None  # If more then this foreground pixels are occluded, create new MFT track
+
+    # Icosphere templates
+    icosphere_trust_region_degrees = 30

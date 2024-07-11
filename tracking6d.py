@@ -8,8 +8,10 @@ import kaolin
 import numpy as np
 import time
 import torch
-from kornia.geometry.conversions import axis_angle_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle
 from pathlib import Path
+
+from pytorch3d.transforms import quaternion_multiply
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable
 
@@ -19,10 +21,12 @@ from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
+from auxiliary_scripts.math_utils import (consecutive_quaternions_angular_difference,
+                                          get_object_pose_after_in_plane_rot_in_cam_space)
 from flow import RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider, flow_image_coords_to_unit_coords, \
     MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider, normalize_rendered_flows
-from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, SyntheticFlowObservation
+from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, \
+    SyntheticFlowObservation, generate_rotated_observations
 from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.flow_loss_model import LossFunctionWrapper
@@ -101,6 +105,7 @@ class Tracking6D:
 
         # Flow tracks
         self.flow_tracks_inits = [0]
+        self.pose_icosphere: Optional[PoseIcosphere] = PoseIcosphere()
 
         # Tracker
         self.tracker: Optional[BaseTracker] = None
@@ -360,6 +365,8 @@ class Tracking6D:
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
+        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
+
         our_losses = -np.ones((self.config.input_frames - 1, 1))
 
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape,
@@ -378,6 +385,12 @@ class Tracking6D:
             template_frame_observation.send_to_device('cpu'))
         self.data_graph.get_camera_specific_frame_data(0, Cameras.BACKVIEW).frame_observation = (
             template_frame_observation_from_back.send_to_device('cpu'))
+
+        initial_rotation = self.encoder.quaternion_offsets[0, [0]]
+        self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
+
+        self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_rotation,
+                                             self.config.icosphere_trust_region_degrees, 0)
 
         for frame_i in range(1, self.config.input_frames):
 
@@ -483,17 +496,47 @@ class Tracking6D:
 
             print("Angles:", angles)
 
-            if self.config.points_fraction_visible_new_track is not None:
-                longest_flow = self.active_keyframes.get_flows_between_frames(self.flow_tracks_inits[-1], frame_i)
-                last_observed_segmentation = longest_flow.observed_flow_segmentation[:, -1:, -1:]
-                last_observed_occlusion = longest_flow.observed_flow_occlusion[:, -1:]
-                fraction_points_visible = float(iou_loss(last_observed_segmentation, last_observed_occlusion))
+            current_pose = self.encoder.quaternion_offsets[:, [frame_i]]
+            closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
+            print(f">>>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
 
-                print(f"Fraction points not occluded {fraction_points_visible} flow tracks beginnings at "
-                      f"{self.flow_tracks_inits}")
-                if fraction_points_visible < self.config.points_fraction_visible_new_track:
-                    self.flow_tracks_inits.append(frame_i)
+            if True:
+                if self.long_flow_provider is not None:
                     self.long_flow_provider.need_to_init = True
+
+                if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
+
+                    self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
+                    self.active_keyframes_backview.remove_frames(self.flow_tracks_inits[:])
+
+                    self.encoder.quaternion_offsets[:, frame_i+1:] = self.encoder.quaternion_offsets[:, [frame_i]]
+
+                    if True or 'generate_multiple_in_plane_rotated_templates':
+                        obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
+
+                        self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_rotation_q,
+                                                             self.config.icosphere_trust_region_degrees, frame_i)
+
+                    else:
+                        self.pose_icosphere.insert_new_reference(new_frame_observation,
+                                                                 self.encoder.quaternion_offsets[0, [frame_i]], frame_i)
+
+                    self.flow_tracks_inits.append(frame_i)
+
+                else:
+                    self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
+                    self.active_keyframes_backview.remove_frames(self.flow_tracks_inits[:])
+
+                    self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
+                                                                       closest_node.keyframe_idx_observed)
+
+                    # TODO the backview code is now only a dummy code
+                    self.active_keyframes_backview.add_new_keyframe_observation(closest_node.observation,
+                                                                                closest_node.keyframe_idx_observed)
+
+                    self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion
+
+                    self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
 
             if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
                 if self.config.max_keyframes <= 1:
@@ -514,6 +557,15 @@ class Tracking6D:
                 del all_flow_observations_backview
 
         return self.best_model
+
+    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, obj_rotation_q, degree_delta, frame_i):
+        rotated_observations, degrees = generate_rotated_observations(frame_observation,
+                                                                      2 * degree_delta)
+        for i, degree in enumerate(degrees):
+            q_obj_rotated_world = get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q, T_world_to_cam_4x4, degree)
+
+            rotated_observation = rotated_observations[i]
+            self.pose_icosphere.insert_new_reference(rotated_observation, q_obj_rotated_world, frame_i)
 
     @torch.no_grad()
     def add_new_flows(self, frame_i):
@@ -844,6 +896,9 @@ class Tracking6D:
         self.encoder.quaternion_offsets[:, flow_target] = q_total
         # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
         #                                                         q_total[None])
+        # self.encoder.quaternion_offsets[:, flow_target] = q_total
+        new_quaternion = quaternion_multiply(self.encoder.quaternion_offsets[:, flow_target], q_total[None])
+        self.encoder.quaternion_offsets[:, flow_target] = new_quaternion
 
         if self.config.matching_target_to_backview:
             self.data_graph.get_edge_observations(flow_source, flow_target,
