@@ -1,6 +1,5 @@
-import pickle
-
 import numpy as np
+import torch
 import sys
 import time
 from pathlib import Path
@@ -68,7 +67,7 @@ def main():
             gt_rotations.append(data_dict['objRot'])
             gt_translations.append(data_dict['objTrans'])
 
-        config.input_frames = len(gt_translations)
+        config.generate_synthetic_observations_if_possible = False
 
         eerr0 = set(i for i in range(len(gt_rotations)) if len(gt_rotations[i].shape) < 2)
         eert0 = set(i for i in range(len(gt_rotations)) if len(gt_translations[i].shape) < 1)
@@ -78,14 +77,19 @@ def main():
         # Filter the lists to include only valid elements
         filtered_gt_rotations = [gt_rotations[i] for i in valid_indices]
         filtered_gt_translations = [gt_translations[i] for i in valid_indices]
+        gt_images_list = [gt_images_list[i] for i in valid_indices]
+        gt_segmentations_list = [gt_segmentations_list[i] for i in valid_indices]
+
+        config.input_frames = len(gt_images_list)
 
         # Create NumPy ndarrays from the filtered lists
-        rotations_array = np.array(filtered_gt_rotations)[None, ..., 0]
-        translations_array = np.array(filtered_gt_translations)[None]
+        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None, ..., 0])
+        translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None])
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, write_folder, None, None, gt_rotations, gt_translations)
+        run_tracking_on_sequence(config, write_folder, None, None, rotations_array, translations_array,
+                                 gt_images_list, gt_segmentations_list)
 
 
 if __name__ == "__main__":
