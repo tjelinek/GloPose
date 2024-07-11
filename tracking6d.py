@@ -370,16 +370,19 @@ class Tracking6D:
                                           deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
                                           data_graph=self.data_graph)
 
-        template_frame_observation = self.tracker.next(0)
-        template_frame_observation_from_back = self.tracker_backview.next(0)
-        self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
-        self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
-
         self.data_graph.add_new_frame(0)
+
+        # TODO for camera in self.cameras
+        template_frame_observation = self.tracker.next(0)
+        self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
             template_frame_observation.send_to_device('cpu'))
-        self.data_graph.get_camera_specific_frame_data(0, Cameras.BACKVIEW).frame_observation = (
-            template_frame_observation_from_back.send_to_device('cpu'))
+
+        if self.config.matching_target_to_backview:
+            template_frame_observation_from_back = self.tracker_backview.next(0)
+            self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
+            self.data_graph.get_camera_specific_frame_data(0, Cameras.BACKVIEW).frame_observation = (
+                template_frame_observation_from_back.send_to_device('cpu'))
 
         initial_rotation = self.encoder.quaternion_offsets[0, [0]]
         self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
