@@ -44,7 +44,7 @@ def resize_and_filter_image(image, new_width, new_height):
 
 
 class BaseTracker(ABC):
-    def __init__(self, perc, max_width, feature_extractor, device = torch.device('cuda')):
+    def __init__(self, perc, max_width, feature_extractor, device=torch.device('cuda')):
         self.perc = perc
         self.max_width = max_width
         self.feature_extractor = feature_extractor
@@ -95,7 +95,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
     @staticmethod
     def binary_segmentation_from_rendered_segmentation(rendered_segmentations: torch.Tensor):
-        rendered_segment_discrete: torch.Tensor = ~(rendered_segmentations < 1)
+        rendered_segment_discrete: torch.Tensor = torch.logical_not(torch.lt(rendered_segmentations, 1.0))
         rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
         return rendered_segment_discrete
 
