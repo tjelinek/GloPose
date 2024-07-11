@@ -10,7 +10,7 @@ import numpy as np
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
-from auxiliary_scripts.image_utils import resize_and_filter_image
+from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
@@ -94,8 +94,7 @@ class PrecomputedTracker(BaseTracker, ABC):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
 
-        image = imageio.v3.imread(images_paths[0])
-        self.shape = (image.shape[0], image.shape[1])
+        self.shape = get_shape(images_paths[0])
 
         self.images_paths: List[Path] = images_paths
         self.segmentations_paths: List[Path] = segmentations_paths

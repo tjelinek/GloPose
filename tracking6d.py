@@ -15,6 +15,7 @@ from pytorch3d.transforms import quaternion_multiply
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable
 
+from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from repositories.OSTrack.S2DNet.s2dnet import S2DNet
@@ -116,7 +117,7 @@ class Tracking6D:
         self.logged_sgd_translations = []
         self.logged_sgd_quaternions = []
 
-        self.shape: Optional[torch.Size] = None
+        self.image_shape: Optional[ImageShape] = None
         self.write_folder = Path(write_folder)
         self.config = config
         self.config_copy = copy.deepcopy(self.config)
@@ -127,7 +128,10 @@ class Tracking6D:
         if self.gt_texture is not None:
             self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
-        self.shape = (self.config.max_width, self.config.max_width)
+        if self.config.generate_synthetic_observations_if_possible:
+            self.image_shape = ImageShape(width=self.config.max_width, height=self.config.max_width)
+        else:
+            self.image_shape = get_shape(images_paths[0])
 
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
@@ -173,18 +177,20 @@ class Tracking6D:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
 
     def initialize_renderer(self):
-        self.rendering = RenderingKaolin(self.config, self.faces, self.shape[-1], self.shape[-2]).to(self.device)
+        self.rendering = RenderingKaolin(self.config, self.faces, self.image_shape.width,
+                                         self.image_shape.height).to(self.device)
 
         config_back_view = copy.deepcopy(self.config)
         config_back_view.camera_position = tuple(-el for el in config_back_view.camera_position)
 
         self.rendering_backview = RenderingKaolin(self.config, self.faces,
-                                                  self.shape[-1], self.shape[-2]).to(self.device)
+                                                  self.image_shape.width,
+                                                  self.image_shape.height).to(self.device)
         self.rendering_backview.backview = True
 
     def initialize_encoders(self, iface_features, ivertices):
-        self.encoder = Encoder(self.config, ivertices, iface_features, self.shape[-1], self.shape[-2],
-                               self.config.features_channels).to(self.device)
+        self.encoder = Encoder(self.config, ivertices, iface_features, self.image_shape.width,
+                               self.image_shape.height, self.config.features_channels).to(self.device)
 
         if not self.config.optimize_texture and self.gt_texture is not None:
             self.encoder.texture_map = torch.nn.Parameter(self.gt_texture_features)
@@ -211,7 +217,7 @@ class Tracking6D:
 
         #  Ground truth encoder for synthetic data generation
         self.gt_encoder = Encoder(self.config, ivertices, iface_features,
-                                  self.shape[-1], self.shape[-2], 3).to(self.device)
+                                  self.image_shape.width, self.image_shape.height, 3).to(self.device)
         for name, param in self.gt_encoder.named_parameters():
             if isinstance(param, torch.Tensor):
                 param.detach_()
@@ -364,7 +370,7 @@ class Tracking6D:
 
         our_losses = -np.ones((self.config.input_frames - 1, 1))
 
-        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.shape,
+        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                           tracking_config=self.config, rendering=self.rendering,
                                           rendering_backview=self.rendering_backview, gt_encoder=self.gt_encoder,
                                           deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
@@ -417,7 +423,7 @@ class Tracking6D:
 
             start = time.time()
 
-            b0 = (0, self.shape[-1], 0, self.shape[-2])
+            b0 = (0, self.image_shape.height, 0, self.image_shape.width)
             self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
 
             self.add_new_flows(frame_i)
@@ -647,7 +653,7 @@ class Tracking6D:
 
             observed_flow = observed_renderings.theoretical_flow.detach()
             observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
-                                                     self.shape[-1], self.shape[-2])
+                                                     self.image_shape.width, self.image_shape.height)
             occlusion = observed_renderings.rendered_flow_occlusion.detach()
 
         elif self.config.gt_flow_source == 'FlowNetwork':
@@ -968,8 +974,8 @@ class Tracking6D:
         flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
                                               flow_arcs_indices, self.loss_function, observed_flows,
                                               observed_flows_segmentations,
-                                              self.rendering.width, self.rendering.height, self.shape[-1],
-                                              self.shape[-2])
+                                              self.rendering.width, self.rendering.height, self.image_shape.width,
+                                              self.image_shape.height)
 
         fun = flow_loss_model.forward
         jac_function = None
@@ -994,7 +1000,7 @@ class Tracking6D:
 
             inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                            encoder_result_flow_frames, flow_arcs_indices,
-                                                           self.shape[-1], self.shape[-2])
+                                                           self.image_shape.width, self.image_shape.height)
             renders, rendered_silhouettes, rendered_flow_result = inference_result
 
             loss_result = self.loss_function.forward(rendered_images=renders,
@@ -1123,11 +1129,11 @@ class Tracking6D:
 
         inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
-                                                       self.shape[-1], self.shape[-2])
+                                                       self.image_shape.width, self.image_shape.height)
         inference_result_backview = infer_normalized_renderings(self.rendering_backview, self.encoder.face_features,
                                                                 encoder_result, encoder_result_flow_frames,
-                                                                flow_arcs_indices_sorted, self.shape[-1],
-                                                                self.shape[-2])
+                                                                flow_arcs_indices_sorted, self.image_shape.width,
+                                                                self.image_shape.height)
 
         renders, rendered_silhouettes, rendered_flow_result = inference_result
 

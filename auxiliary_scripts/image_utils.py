@@ -1,7 +1,19 @@
+from collections import namedtuple
+from pathlib import Path
+
 import cv2
+import imageio
 from scipy.ndimage import uniform_filter
 from torch.nn import functional as F
 from torchvision import transforms
+
+ImageShape = namedtuple('ImageShape', ['width', 'height'])
+
+
+def get_shape(image_path: Path) -> ImageShape:
+    image = imageio.v3.imread(image_path)
+
+    return ImageShape(width=image.shape[1], height=image.shape[0])
 
 
 def pad_image(image):
