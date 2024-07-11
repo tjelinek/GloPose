@@ -401,11 +401,7 @@ class Tracking6D:
                 gc.collect()
                 torch.cuda.empty_cache()
 
-            if type(self.tracker) is SyntheticDataGeneratingTracker:
-                next_tracker_frame = frame_i  # Index of a frame
-            else:
-                raise NotImplementedError("I need to implement some sort of data provider working with either synthetic"
-                                          "or file input data. So far using synthetic data only.")
+            next_tracker_frame = frame_i  # Index of a frame
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).frame_observation = (
