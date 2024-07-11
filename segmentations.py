@@ -117,7 +117,7 @@ class PrecomputedTrackerHO3D(PrecomputedTracker):
 
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_id])
         segmentation = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation = self.resize_transform(segmentation)[None, None, [1]].to(torch.bool)
+        segmentation = self.resize_transform(segmentation)[None, None, [1]].to(torch.bool).to(torch.float32)
 
         image_feat = self.feature_extractor(image).detach()
 
