@@ -39,10 +39,6 @@ class EpipolarPoseEstimator:
 
         K1 = K2 = self.rendering.camera_intrinsics
 
-        camera_translation = self.rendering.camera_trans
-        if backview:
-            camera_translation = -camera_translation
-
         W_4x4 = self.rendering.camera_transformation_matrix_4x4()
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
