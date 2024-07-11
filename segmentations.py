@@ -21,14 +21,6 @@ class BaseTracker(ABC):
         self.shape = None
         self.device = device
 
-    def init_bbox(self, file0, bbox0, init_mask=None):
-        image, segments = self.next(file0)
-
-        segments = pad_image(segments)
-        image = pad_image(image)
-
-        return image, segments
-
     @abstractmethod
     def next(self, file) -> FrameObservation:
         pass

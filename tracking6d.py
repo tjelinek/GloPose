@@ -218,15 +218,6 @@ class Tracking6D:
         if self.gt_texture is not None:
             self.gt_encoder.gt_texture = self.gt_texture
 
-    def get_initial_images(self, file0, bbox0, init_mask):
-        if type(self.tracker) is SyntheticDataGeneratingTracker:
-            file0 = 0
-        images, segments = self.tracker.init_bbox(file0, bbox0, init_mask)
-        images, segments = images.to(self.device), segments.to(self.device)
-        images_feat = self.feat(images).detach()
-        observed_flows = torch.zeros(1, 0, 2, *segments.shape[-2:])
-        return images, images_feat, observed_flows, segments
-
     def initialize_optimizer_and_loss(self, ivertices):
         self.all_parameters = set(list(self.encoder.parameters()))
         self.translational_params = {self.encoder.translation}
