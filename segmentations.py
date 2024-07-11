@@ -1,7 +1,5 @@
 from abc import abstractmethod, ABC
 
-import sys
-
 import cv2
 import torch
 import numpy as np
@@ -14,11 +12,7 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-from utils import imread
 
-sys.path.insert(0, 'repositories/OSTrack')
-from repositories.OSTrack.lib.test.tracker.ostrack import OSTrack
-from repositories.OSTrack.lib.test.parameter.ostrack import parameters
 
 
 def pad_image(image):
