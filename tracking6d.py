@@ -276,7 +276,7 @@ class Tracking6D:
             self.feat = lambda x: x
 
     def initialize_mesh(self):
-        if not self.config.optimize_shape:
+        if not self.config.optimize_shape and self.gt_mesh_prototype is not None:
             ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
             self.faces = self.gt_mesh_prototype.faces
             iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
@@ -893,11 +893,11 @@ class Tracking6D:
         inlier_ratio_frontview, q_total, t_total = result
 
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
-        self.encoder.quaternion_offsets[:, flow_target] = q_total
-        # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
-        #                                                         q_total[None])
         # self.encoder.quaternion_offsets[:, flow_target] = q_total
         new_quaternion = quaternion_multiply(self.encoder.quaternion_offsets[:, flow_target], q_total[None])
+        print(f"Frame {flow_target} offset: {torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_target])).numpy(force=True).round(2)}")
+        print(f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(q_total)).numpy(force=True).round(2)}")
+        print(f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_quaternion)).numpy(force=True).round(2)}")
         self.encoder.quaternion_offsets[:, flow_target] = new_quaternion
 
         if self.config.matching_target_to_backview:
