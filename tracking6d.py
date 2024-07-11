@@ -34,7 +34,7 @@ from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import SyntheticDataGeneratingTracker, BaseTracker
+from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTrackerHO3D
 from tracker_config import TrackerConfig
 from utils import normalize_vertices
 
@@ -49,7 +49,8 @@ class InferenceResult(NamedTuple):
 class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
-                 gt_translations=None):
+                 gt_translations=None, images_paths: List[Path] = None,
+                 segmentation_paths: List[Path] = None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -148,7 +149,10 @@ class Tracking6D:
 
             self.tracker_backview = SyntheticDataGeneratingTracker(self.config, self.rendering_backview,
                                                                    self.gt_encoder, self.gt_texture, self.feat)
-            # Re-render the images using the synthetic tracker
+        else:
+            assert not config.matching_target_to_backview
+
+            self.tracker = PrecomputedTrackerHO3D(self.config, self.feat, images_paths, segmentation_paths)
 
         self.initialize_optimizer_and_loss(ivertices)
 

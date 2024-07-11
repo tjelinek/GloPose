@@ -1,12 +1,16 @@
 from abc import abstractmethod, ABC
+from pathlib import Path
+from typing import Callable, List
 
 import cv2
 import torch
+import imageio
 import numpy as np
 
 from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
-from auxiliary_scripts.image_utils import pad_image, resize_and_filter_image
+from auxiliary_scripts.image_utils import resize_and_filter_image
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
@@ -15,7 +19,7 @@ from tracker_config import TrackerConfig
 
 class BaseTracker(ABC):
     def __init__(self, perc, max_width, feature_extractor, device=torch.device('cuda')):
-        self.perc = perc
+        self.downsample_factor = perc
         self.max_width = max_width
         self.feature_extractor = feature_extractor
         self.shape = None
@@ -27,16 +31,16 @@ class BaseTracker(ABC):
 
     def process_segm(self, img):
         segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
-        width = int(self.shape[1] * self.perc)
-        height = int(self.shape[0] * self.perc)
+        width = int(self.shape[1] * self.downsample_factor)
+        height = int(self.shape[0] * self.downsample_factor)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
 
         segm = transforms.ToTensor()(segment)
         return segm
 
     def standardize_image_and_segment(self, image, segment):
-        new_width = int(image.shape[1] * self.perc)
-        new_height = int(image.shape[0] * self.perc)
+        new_width = int(image.shape[1] * self.downsample_factor)
+        new_height = int(image.shape[0] * self.downsample_factor)
         image = resize_and_filter_image(image, new_width, new_height)
 
         segment = (segment > 0.5).astype(np.float64)
@@ -83,13 +87,42 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
         return frame_observation
 
-    def init_bbox(self, file0, bbox0, init_mask=None):
-        frame_observation = self.next(file0)
 
-        image = frame_observation.observed_image
-        segments = frame_observation.observed_segmentation
+class PrecomputedTracker(BaseTracker, ABC):
 
-        segments = pad_image(segments)
-        image = pad_image(image)
+    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+                 segmentations_paths: List[Path]):
+        super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
 
-        return image, segments
+        image = imageio.v3.imread(images_paths[0])
+        self.shape = (image.shape[0], image.shape[1])
+
+        self.images_paths: List[Path] = images_paths
+        self.segmentations_paths: List[Path] = segmentations_paths
+
+
+class PrecomputedTrackerHO3D(PrecomputedTracker):
+
+    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+                 segmentations_paths: List[Path]):
+        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
+
+        self.resize_transform = transforms.Resize((self.shape[0], self.shape[1]),
+                                                  interpolation=InterpolationMode.NEAREST)
+
+    def next(self, frame_id):
+
+        image = imageio.v3.imread(self.images_paths[frame_id])
+        image = torch.from_numpy(image).cuda().permute(2, 0, 1)[None, None].to(torch.float32) / 255.0
+
+        segmentation = imageio.v3.imread(self.segmentations_paths[frame_id])
+        segmentation = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
+        segmentation = self.resize_transform(segmentation)[None, None, [1]].to(torch.bool)
+
+        image_feat = self.feature_extractor(image).detach()
+
+        frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
+                                             observed_segmentation=segmentation)
+
+        return frame_observation
+
