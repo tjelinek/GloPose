@@ -153,15 +153,7 @@ class WriteResults:
 
         self.exported_mesh_path = self.write_folder / Path('3d_model')
 
-        self.observations_path.mkdir(exist_ok=True, parents=True)
-        self.gt_values_path.mkdir(exist_ok=True, parents=True)
-        self.optimized_values_path.mkdir(exist_ok=True, parents=True)
-
-        self.rerun_log_path.mkdir(exist_ok=True, parents=True)
-        self.ransac_path.mkdir(exist_ok=True, parents=True)
-        self.point_clouds_path.mkdir(exist_ok=True, parents=True)
-
-        self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
+        self.init_directories()
 
         self.rerun_init()
 
@@ -177,6 +169,15 @@ class WriteResults:
         self.correspondences_log_file = self.write_folder / (f'correspondences_{self.tracking_config.sequence}'
                                                              f'_flow_{self.tracking_config.gt_flow_source}.h5')
         self.correspondences_log_write_common_data()
+
+    def init_directories(self):
+        self.observations_path.mkdir(exist_ok=True, parents=True)
+        self.gt_values_path.mkdir(exist_ok=True, parents=True)
+        self.optimized_values_path.mkdir(exist_ok=True, parents=True)
+        self.rerun_log_path.mkdir(exist_ok=True, parents=True)
+        self.ransac_path.mkdir(exist_ok=True, parents=True)
+        self.point_clouds_path.mkdir(exist_ok=True, parents=True)
+        self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
         rr.init(f'{self.tracking_config.sequence}-{self.tracking_config.experiment_name}')
