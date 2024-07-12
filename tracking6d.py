@@ -501,7 +501,8 @@ class Tracking6D:
 
             current_pose = self.encoder.quaternion_offsets[:, [frame_i]]
             closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
-            print(f">>>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
+            print(
+                f">>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
 
             if True:
                 if self.long_flow_provider is not None:
@@ -512,7 +513,7 @@ class Tracking6D:
                     self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
                     self.active_keyframes_backview.remove_frames(self.flow_tracks_inits[:])
 
-                    self.encoder.quaternion_offsets[:, frame_i+1:] = self.encoder.quaternion_offsets[:, [frame_i]]
+                    self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
 
                     if True or 'generate_multiple_in_plane_rotated_templates':
                         obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
@@ -561,11 +562,12 @@ class Tracking6D:
 
         return self.best_model
 
-    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, obj_rotation_q, degree_delta, frame_i):
-        rotated_observations, degrees = generate_rotated_observations(frame_observation,
-                                                                      2 * degree_delta)
+    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, obj_rotation_q, degree_delta,
+                                        frame_i):
+        rotated_observations, degrees = generate_rotated_observations(frame_observation, 2 * degree_delta)
         for i, degree in enumerate(degrees):
-            q_obj_rotated_world = get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q, T_world_to_cam_4x4, degree)
+            q_obj_rotated_world = get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q, T_world_to_cam_4x4,
+                                                                                  degree)
 
             rotated_observation = rotated_observations[i]
             self.pose_icosphere.insert_new_reference(rotated_observation, q_obj_rotated_world, frame_i)
@@ -899,9 +901,12 @@ class Tracking6D:
         # self.encoder.translation_offsets[:, :, flow_target] = t_total
         # self.encoder.quaternion_offsets[:, flow_target] = q_total
         new_quaternion = quaternion_multiply(self.encoder.quaternion_offsets[:, flow_target], q_total[None])
-        print(f"Frame {flow_target} offset: {torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_target])).numpy(force=True).round(2)}")
-        print(f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(q_total)).numpy(force=True).round(2)}")
-        print(f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_quaternion)).numpy(force=True).round(2)}")
+        print(
+            f"Frame {flow_target} offset: {torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_target])).numpy(force=True).round(2)}")
+        print(
+            f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(q_total)).numpy(force=True).round(2)}")
+        print(
+            f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_quaternion)).numpy(force=True).round(2)}")
         self.encoder.quaternion_offsets[:, flow_target] = new_quaternion
 
         if self.config.matching_target_to_backview:
