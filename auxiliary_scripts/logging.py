@@ -537,9 +537,9 @@ class WriteResults:
         self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image = \
             observations.observed_image[:, [-1]].cpu()
 
-        self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, Cameras.FRONTVIEW)
-        if self.tracking_config.matching_target_to_backview:
-            self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, Cameras.BACKVIEW)
+        if frame_i % 5 == 0:
+            for camera in self.cameras:
+                self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
 
         if self.tracking_config.matching_target_to_backview:
             self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
