@@ -682,7 +682,7 @@ class WriteResults:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
-    def measure_ransac_stats(self, frame_i, view: str = 'front'):
+    def measure_ransac_stats(self, frame_i, camera = Cameras.FRONTVIEW):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
         results = defaultdict(list)
 
@@ -690,7 +690,6 @@ class WriteResults:
             in_edges = self.data_graph.G.in_edges(i, data=False)
             flow_arc = (min(e[0] for e in in_edges), i)
 
-            camera = Cameras.FRONTVIEW if view == 'front' else Cameras.BACKVIEW
             arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
             pred_inlier_ratio = arc_data.ransac_inlier_ratio
@@ -743,109 +742,100 @@ class WriteResults:
 
         if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
 
-            front_results = self.measure_ransac_stats(frame_i, 'front')
-            back_results = self.measure_ransac_stats(frame_i, 'back')
+            for camera in self.cameras:
+                front_results = self.measure_ransac_stats(frame_i, camera)
 
-            mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
-            mft_flow_gt_flow_difference_back = back_results.pop('mft_flow_gt_flow_difference')
+                mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
 
-            if self.tracking_config.plot_mft_flow_kde_error_plot:
-                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
+                if self.tracking_config.plot_mft_flow_kde_error_plot and camera == Cameras.FRONTVIEW:
+                    self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
     def analyze_ransac_matchings(self, frame_i):
 
-        front_results = self.measure_ransac_stats(frame_i, 'front')
-        back_results = self.measure_ransac_stats(frame_i, 'back')
+        fig = plt.figure(figsize=(20, 10))
+        gs = gridspec.GridSpec(2, 3, figure=fig)
 
-        front_results.pop('mft_flow_gt_flow_difference')
-        back_results.pop('mft_flow_gt_flow_difference')
+        axs = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[0, 2]),
+               fig.add_subplot(gs[1, 2])]
 
-        colors = {'visible': 'darkgreen',
-                  'predicted_as_visible': 'lime',
-                  'correctly_predicted_flows': 'yellow',
-                  'ransac_predicted_inliers': 'navy',
-                  'correctly_predicted_inliers': 'blue',
-                  'model_obtained_from': None,  # Not plotted
-                  'ransac_inlier_ratio': 'deeppink',
-                  }
+        axs[0].set_title('Front View')
+        axs[1].set_title('Back View')
+        axs[2].set_title('Template Front')
+        axs[3].set_title('Template Back')
 
-        for view_type, results in zip(['frontview', 'backview'], [front_results, back_results]):
+        for ax in axs:
+            step = 1 if frame_i < 30 else 5
+            x_ticks = np.arange(1, frame_i + 1, step)
+            x_labels = np.arange(1, frame_i + 1, step)
 
-            for i, metric in enumerate(results.keys()):
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_labels)
+
+            ax.set_yticks(np.arange(0., 1.05, 0.1))
+            ax.set_ylim([0, 1.05])
+
+        template_axes = {Cameras.FRONTVIEW: 2, Cameras.BACKVIEW: 3}
+
+        for camera in self.cameras:
+            front_results = self.measure_ransac_stats(frame_i, camera)
+
+            front_results.pop('mft_flow_gt_flow_difference')
+
+            colors = {'visible': 'darkgreen',
+                      'predicted_as_visible': 'lime',
+                      'correctly_predicted_flows': 'yellow',
+                      'ransac_predicted_inliers': 'navy',
+                      'correctly_predicted_inliers': 'blue',
+                      'model_obtained_from': None,  # Not plotted
+                      'ransac_inlier_ratio': 'deeppink',
+                      }
+
+            for i, metric in enumerate(front_results.keys()):
                 if metric == 'model_obtained_from':
                     continue
 
-                rerun_time_series_entity = getattr(RerunAnnotations, 'ransac_stats_' + view_type + '_' + metric)
+                rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{camera.value}_{metric}')
 
                 rr.set_time_sequence("frame", frame_i)
-                metric_val: float = results[metric][-1]
+                metric_val: float = front_results[metric][-1]
                 rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
 
-        save_freq = 5
-        if (frame_i >= save_freq and frame_i % save_freq == 0) or frame_i >= self.tracking_config.input_frames:
-
             # We want each line to have its assigned color
-            assert sorted(colors.keys()) == sorted(front_results.keys()) == sorted(back_results.keys())
-
-            fig = plt.figure(figsize=(20, 10))
-            gs = gridspec.GridSpec(2, 3, figure=fig)
-
-            axs = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[0, 2]),
-                   fig.add_subplot(gs[1, 2])]
+            assert sorted(colors.keys()) == sorted(front_results.keys())
 
             self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
                                           translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
 
-            axs[0].set_title('Front View')
-            axs[1].set_title('Back View')
-            axs[2].set_title('Template Front')
-            axs[3].set_title('Template Back')
+            template_image = self.data_graph.get_camera_specific_frame_data(1, camera).observed_image
+            template_image = template_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
-            template_image_f = self.data_graph.get_camera_specific_frame_data(1, Cameras.FRONTVIEW).observed_image
-            template_image_b = self.data_graph.get_camera_specific_frame_data(1, Cameras.BACKVIEW).observed_image
-            template_image_f = template_image_f[0, 0].permute(1, 2, 0).numpy(force=True)
-            template_image_b = template_image_b[0, 0].permute(1, 2, 0).numpy(force=True)
-
-            axs[2].imshow(template_image_f, aspect='equal')
-            axs[3].imshow(template_image_b, aspect='equal')
+            axs[template_axes[camera]].imshow(template_image, aspect='equal')
 
             handles, labels = [], []
 
-            for ax in [axs[2], axs[3]]:
-                ax.xaxis.set_visible(False)
-                ax.yaxis.set_visible(False)
+            axs[template_axes[camera]].xaxis.set_visible(False)
+            axs[template_axes[camera]].yaxis.set_visible(False)
 
-            for ax, results in zip(axs, [front_results, back_results]):
-
+            for i, metric in enumerate(front_results.keys()):
                 xs = np.arange(1, frame_i + 1)
-                step = 1 if frame_i < 30 else 5
-                x_ticks = np.arange(1, frame_i + 1, step)
-                x_labels = np.arange(1, frame_i + 1, step)
 
-                ax.set_xticks(x_ticks)
-                ax.set_xticklabels(x_labels)
+                color = colors[metric]
+                if metric == 'model_obtained_from':
+                    continue
+                if metric == 'ransac_inlier_ratio':
+                    line, = axs[template_axes[camera]].plot(xs, front_results[metric], label=metric,
+                                                            linestyle='dashed', color=color)
+                else:
+                    line, = axs[template_axes[camera]].plot(xs, front_results[metric], label=metric, color=color)
 
-                ax.set_yticks(np.arange(0., 1.05, 0.1))
-                ax.set_ylim([0, 1.05])
+                if template_axes[camera] == axs[0]:
+                    handles.append(line)
+                    labels.append(metric)
 
-                for i, metric in enumerate(results.keys()):
-                    color = colors[metric]
-                    if metric == 'model_obtained_from':
-                        continue
-                    if metric == 'ransac_inlier_ratio':
-                        line, = ax.plot(xs, results[metric], label=metric, linestyle='dashed', color=color)
-                    else:
-                        line, = ax.plot(xs, results[metric], label=metric, color=color)
-
-                    if ax == axs[0]:
-                        handles.append(line)
-                        labels.append(metric)
-
-            for ax, results in zip(axs, [front_results, back_results]):
-                ylim = ax.get_ylim()
-                for i, is_foreground in enumerate(front_results['model_obtained_from']):
-                    if not is_foreground:
-                        ax.fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
+            ylim = axs[template_axes[camera]].get_ylim()
+            for i, is_foreground in enumerate(front_results['model_obtained_from']):
+                if not is_foreground:
+                    axs[template_axes[camera]].fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
 
             for ax in axs:
                 ax.set_xlabel('Frame')
