@@ -963,37 +963,6 @@ class WriteResults:
 
             axs[2, 0].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5), fontsize='small')
 
-            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask_front, occlusion_threshold,
-                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask_front)
-
-            if self.tracking_config.matching_target_to_backview:
-                values_backview = self.get_values_for_matching(active_keyframes_backview, flow_arc_source,
-                                                               flow_arc_target)
-                (occlusion_mask_back, seg_mask_back, target_back, template_back,
-                 template_back_overlay, step, flow_backview) = values_backview
-
-                assert template_back_overlay.shape == template_front_overlay.shape
-                assert target_back.shape == target_front.shape
-
-                axs[0, 1].imshow(template_back * darkening_factor, extent=display_bounds)
-                axs[0, 1].set_title('Template Back')
-
-                axs[1, 1].imshow(template_back_overlay * darkening_factor, extent=display_bounds)
-                axs[1, 1].set_title('Template Back Occlusion')
-
-                axs[2, 1].imshow(target_front * darkening_factor, extent=display_bounds)
-                axs[2, 1].set_title('Target Back')
-
-                flow_backview_np = flow_backview.numpy(force=True)
-
-                self.visualize_inliers_outliers_matching(axs[1, 1], axs[2, 1], flow_backview_np,
-                                                         rend_flow_back_np, seg_mask_back, occlusion_mask_back,
-                                                         new_flow_arc_data_back.ransac_inliers,
-                                                         new_flow_arc_data_back.ransac_outliers)
-
-                self.plot_matched_lines(axs[1, 1], axs[2, 1], template_coords, occlusion_mask_back, occlusion_threshold,
-                                        flow_backview_np, cmap='cool', marker='x', segment_mask=seg_mask_back)
-
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
