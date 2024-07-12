@@ -1,6 +1,6 @@
-import kaolin
 import numpy as np
 import torch
+from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle, axis_angle_to_quaternion
 
 from auxiliary_scripts.cameras import Cameras
@@ -16,14 +16,14 @@ from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_so
     estimate_pose_using_directly_zaragoza
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import homogenize_3x4_transformation_matrix, erode_segment_mask2, dilate_mask, \
-    get_not_occluded_foreground_points
+from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points
 
 
 class EpipolarPoseEstimator:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, gt_rotations, gt_translations,
-                 rendering: RenderingKaolin, rendering_backview: RenderingKaolin, gt_encoder):
+                 rendering: RenderingKaolin, rendering_backview: RenderingKaolin, gt_encoder,
+                 camera_instrinsics: PinholeIntrinsics = None):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
@@ -34,10 +34,15 @@ class EpipolarPoseEstimator:
         self.gt_encoder: Encoder = gt_encoder
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
+        if camera_instrinsics is None:
+            self.camera_intrinsics = self.rendering.camera_intrinsics
+        else:
+            self.camera_intrinsics = camera_instrinsics
+
     def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
                                          camera_observation: FrameObservation, backview=False):
 
-        K1 = K2 = self.rendering.camera_intrinsics
+        K1 = K2 = self.camera_intrinsics.params.to(torch.float32)
 
         W_4x4 = self.rendering.camera_transformation_matrix_4x4()
 
@@ -94,27 +99,28 @@ class EpipolarPoseEstimator:
             observed_image_target = camera_observation.observed_image[:, 0]
             depth_image = self.depth_anything.infer_depth_anything(observed_image_target)
 
-            intrinsics = self.rendering.intrinsics
-            point_map_from_depth = depth_to_point_cloud(depth_image, intrinsics.focal_x,
-                                                        intrinsics.focal_y, intrinsics.x0, intrinsics.y0)
+            intrinsics = self.camera_intrinsics
+            point_map_from_depth = depth_to_point_cloud(depth_image, float(intrinsics.focal_x),
+                                                        float(intrinsics.focal_y), float(intrinsics.x0),
+                                                        float(intrinsics.y0))
 
             result = estimate_pose_using_PnP_solver(src_pts_yx, dst_pts_yx, K1, K2, point_map,
-                                                    self.rendering.width, self.rendering.height, self.config,
-                                                    confidences)
+                                                    self.camera_intrinsics.width, self.camera_intrinsics.height,
+                                                    self.config, confidences)
             rot_cam, t_cam, inlier_mask, triangulated_points = result
 
         elif self.config.relative_camera_pose_algorithm == 'RANSAC_2D_to_2D_E_solver':
-            result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.rendering.width,
-                                                        self.rendering.height, self.config, confidences)
+            result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.camera_intrinsics.width,
+                                                        self.camera_intrinsics.height, self.config, confidences)
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
             rot_cam[[0, 1]] *= -1.  # TODO Delete this mathematically unjustified ugly piece of code
         elif self.config.relative_camera_pose_algorithm == 'zaragoza':
             result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
-                                                           self.rendering.intrinsics.focal_x.cuda(),
-                                                           self.rendering.intrinsics.focal_y.cuda(),
-                                                           self.rendering.intrinsics.x0.cuda(),
-                                                           self.rendering.intrinsics.y0.cuda())
+                                                           self.camera_intrinsics.focal_x.cuda(),
+                                                           self.camera_intrinsics.focal_y.cuda(),
+                                                           self.camera_intrinsics.x0.cuda(),
+                                                           self.camera_intrinsics.y0.cuda())
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
         else:

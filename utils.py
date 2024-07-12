@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+from kaolin.render.camera import PinholeIntrinsics
 from kornia.morphology import erosion, dilation
 from skimage.measure import label, regionprops
 import torch.nn.functional as F
@@ -208,3 +209,10 @@ def unpad_image(image, pad_h, pad_w):
     if pad_w > 0:
         image = image[:, :, :-pad_w]
     return image
+
+
+def pinhole_intrinsics_from_tensor(intrinsics: torch.Tensor, width: int, height: int) -> PinholeIntrinsics:
+
+    pinhole_intrinsics = PinholeIntrinsics(width, height, intrinsics)
+
+    return pinhole_intrinsics

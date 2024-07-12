@@ -8,6 +8,7 @@ import kaolin
 import numpy as np
 import time
 import torch
+from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle
 from pathlib import Path
 
@@ -37,7 +38,7 @@ from models.rendering import RenderingKaolin, infer_normalized_renderings, Rende
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTrackerHO3D
 from tracker_config import TrackerConfig
-from utils import normalize_vertices
+from utils import normalize_vertices, pinhole_intrinsics_from_tensor
 
 
 class InferenceResult(NamedTuple):
@@ -50,8 +51,8 @@ class InferenceResult(NamedTuple):
 class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
-                 gt_translations=None, images_paths: List[Path] = None,
-                 segmentation_paths: List[Path] = None):
+                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
+                 cam_intrinsics: torch.Tensor = None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -66,6 +67,9 @@ class Tracking6D:
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
         self.gt_texture = gt_texture
         self.gt_texture_features = None
+
+        # External camera
+        self.cam_intrinsics: Optional[PinholeIntrinsics] = None
 
         # Features
         self.feat: Optional[Callable] = None
@@ -133,6 +137,9 @@ class Tracking6D:
         else:
             self.image_shape = get_shape(images_paths[0])
 
+        self.cam_intrinsics = pinhole_intrinsics_from_tensor(cam_intrinsics, self.image_shape.width,
+                                                             self.image_shape.height)
+
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
@@ -171,7 +178,8 @@ class Tracking6D:
 
         self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.gt_rotations,
                                                              self.gt_translations, self.rendering,
-                                                             self.rendering_backview, self.gt_encoder)
+                                                             self.rendering_backview, self.gt_encoder,
+                                                             self.cam_intrinsics)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))

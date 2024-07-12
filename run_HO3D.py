@@ -63,12 +63,14 @@ def main():
 
         gt_translations = []
         gt_rotations = []
+        cam_intrinsics_list = []
         for i, file in enumerate(sorted(meta_folder.iterdir())):
             if file.suffix != '.npz':
                 continue
 
             data = np.load(file, allow_pickle=True)
             data_dict = {key: data[key] for key in data}
+            cam_intrinsics_list.append(data_dict['camMat'])
             gt_rotations.append(data_dict['objRot'])
             gt_translations.append(data_dict['objTrans'])
 
@@ -87,14 +89,16 @@ def main():
 
         config.input_frames = len(gt_images_list)
 
-        # Create NumPy ndarrays from the filtered lists
-        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None, ..., 0])
-        translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None])
+        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None, ..., 0]).cuda()
+        translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None, None]).cuda()
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, write_folder, None, None, rotations_array, translations_array,
-                                 gt_images_list, gt_segmentations_list)
+        cam_intrinsics = torch.from_numpy(cam_intrinsics_list[0]).cuda()
+
+        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
+                                 gt_translations=translations_array, images_paths=gt_images_list,
+                                 segmentation_paths=gt_segmentations_list, camera_intrinsics=cam_intrinsics)
 
 
 if __name__ == "__main__":
