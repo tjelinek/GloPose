@@ -106,22 +106,22 @@ class PrecomputedTrackerHO3D(PrecomputedTracker):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
 
-        self.resize_transform = transforms.Resize((self.shape[0], self.shape[1]),
+        self.resize_transform = transforms.Resize((self.shape.height, self.shape.width),
                                                   interpolation=InterpolationMode.NEAREST)
 
     def next(self, frame_id):
 
         image = imageio.v3.imread(self.images_paths[frame_id])
-        image = torch.from_numpy(image).cuda().permute(2, 0, 1)[None, None].to(torch.float32) / 255.0
+        image_perm = torch.from_numpy(image).cuda().permute(2, 0, 1)[None, None].to(torch.float32) / 255.0
 
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_id])
-        segmentation = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation = self.resize_transform(segmentation)[None, None, [1]].to(torch.bool).to(torch.float32)
+        segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
+        segmentation_resized = self.resize_transform(segmentation_p)[None, None, [1]].to(torch.bool).to(torch.float32)
 
-        image_feat = self.feature_extractor(image).detach()
+        image_feat = self.feature_extractor(image_perm).detach()
 
-        frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
-                                             observed_segmentation=segmentation)
+        frame_observation = FrameObservation(observed_image=image_perm, observed_image_features=image_feat,
+                                             observed_segmentation=segmentation_resized)
 
         return frame_observation
 
