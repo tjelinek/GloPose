@@ -259,15 +259,15 @@ class WriteResults:
                         contents=[
                             rrb.Spatial2DView(name="RANSAC Stats",
                                               origin=RerunAnnotations.ransac_stats_old),
-                            rrb.Vertical(
-                                contents=[
-                                    rrb.Spatial2DView(name="Template Front",
-                                                      origin=RerunAnnotations.template_image_frontview),
-                                    # rrb.Spatial2DView(name="Template Back",
-                                    #                   origin=RerunAnnotations.template_image_backview)
-                                ],
-                                name='Templates'
-                            )
+                            # rrb.Vertical(
+                            #     contents=[
+                            #         rrb.Spatial2DView(name="Template Front",
+                            #                           origin=RerunAnnotations.template_image_frontview),
+                            #         # rrb.Spatial2DView(name="Template Back",
+                            #         #                   origin=RerunAnnotations.template_image_backview)
+                            #     ],
+                            #     name='Templates'
+                            # )
                         ],
                         name='Epipolar (old)'
                     ),
