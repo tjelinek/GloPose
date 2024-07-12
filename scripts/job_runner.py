@@ -7,12 +7,14 @@ from pathlib import Path
 class Datasets(Enum):
     SyntheticObjects = "SyntheticObjects"
     GoogleScannedObjects = "GoogleScannedObjects"
+    HO3D = "HO3D"
     # photo360 = "360photo"
 
 
 runners = {
     Datasets.SyntheticObjects: "run_SyntheticObjects.py",
     Datasets.GoogleScannedObjects: "run_GoogleScannedObjects.py",
+    Datasets.HO3D: "run_HO3D.py",
     # Datasets.photo360: "run_360.py"
 }
 
@@ -145,6 +147,7 @@ def main():
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_099_epe_leq_1',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975_epe_leq_1',
+        'base_config'
     ]
 
     sequences = {
@@ -175,6 +178,13 @@ def main():
             'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
+        Datasets.HO3D: [
+            'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+            'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
+            'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
+            'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
+            'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
+        ]
         # Datasets.photo360: [
         #     "09"
         # ]
