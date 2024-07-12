@@ -424,7 +424,8 @@ class Tracking6D:
             start = time.time()
 
             b0 = (0, self.image_shape.height, 0, self.image_shape.width)
-            self.rendering = RenderingKaolin(self.config, self.faces, b0[3] - b0[2], b0[1] - b0[0]).to(self.device)
+            self.rendering = RenderingKaolin(self.config, self.faces, self.image_shape.width,
+                                             self.image_shape.height).to(self.device)
 
             self.add_new_flows(frame_i)
 
