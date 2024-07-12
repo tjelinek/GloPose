@@ -134,6 +134,8 @@ class WriteResults:
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
 
+        self.logged_flow_tracks_inits: Dict[Cameras, List] = defaultdict(list)
+
         self.tracking_config: TrackerConfig = tracking_config
         self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
@@ -146,11 +148,9 @@ class WriteResults:
         self.observations_path = self.write_folder / Path('observed_input')
         self.gt_values_path = self.write_folder / Path('gt_output')
         self.optimized_values_path = self.write_folder / Path('predicted_output')
-
         self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
         self.point_clouds_path = self.write_folder / Path('point_clouds')
-
         self.exported_mesh_path = self.write_folder / Path('3d_model')
 
         self.init_directories()
@@ -1749,10 +1749,16 @@ class WriteResults:
             raise ValueError("Unsupported camera")
 
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
-        if frame_i == 1 or (len(flow_tracks_inits) > 1 and frame_i == flow_tracks_inits[-1] + 1):
-            template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
 
-            self.log_image(frame_i, last_observed_image, template_image_path, template_image_annotation)
+        not_logged_template_idx = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
+        for not_logged_flow_tracks_init in not_logged_template_idx:
+            datagraph_data = self.data_graph.get_camera_specific_frame_data(not_logged_flow_tracks_init, view)
+            template = datagraph_data.frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
+
+            template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
+            self.log_image(frame_i, template, template_image_path, template_image_annotation)
+
+            self.logged_flow_tracks_inits[view].append(not_logged_flow_tracks_init)
 
         # Visualize new flow arcs
         if view == Cameras.FRONTVIEW:
