@@ -24,7 +24,6 @@ class CommonFrameData:
 @dataclass
 class CameraSpecificFrameData:
 
-    observed_image: torch.Tensor = None
     frame_observation: FrameObservation = None
     renders: Any = None
     per_pixel_flow_error: Any = None

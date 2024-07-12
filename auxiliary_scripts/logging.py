@@ -535,18 +535,11 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).observed_image = \
-            observations.observed_image[:, [-1]].cpu()
-
-        if frame_i % 5 == 0:
+        if frame_i % 5 == 0 or frame_i == 1:
             for camera in self.cameras:
                 self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
 
-        if self.tracking_config.matching_target_to_backview:
-            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).observed_image = \
-                observations_backview.observed_image[:, [-1]].cpu()
-
-        if frame_i % self.tracking_config.write_results_frequency == 0:
+        if frame_i % 25 == 0 or frame_i == 1:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
 
@@ -809,7 +802,7 @@ class WriteResults:
             self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
                                           translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
 
-            template_image = self.data_graph.get_camera_specific_frame_data(1, camera).observed_image
+            template_image = self.data_graph.get_camera_specific_frame_data(1, camera).frame_observation.observed_image
             template_image = template_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
             axs[template_axes[camera]].imshow(template_image, aspect='equal')
