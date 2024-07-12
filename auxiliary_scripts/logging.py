@@ -752,6 +752,8 @@ class WriteResults:
 
     def analyze_ransac_matchings(self, frame_i):
 
+        if frame_i % 10 == 0:
+            return
         fig = plt.figure(figsize=(20, 10))
         gs = gridspec.GridSpec(2, 3, figure=fig)
 
@@ -846,9 +848,8 @@ class WriteResults:
             plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
             plt.tight_layout(rect=[0.13, 0, 1, 1])
 
-            fig_path = self.ransac_path / 'ransac_stats.svg'
-
-            self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats_old)
+        fig_path = self.ransac_path / 'ransac_stats.svg'
+        self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats_old)
 
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
