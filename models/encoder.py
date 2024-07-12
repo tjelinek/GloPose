@@ -30,13 +30,9 @@ class Encoder(nn.Module):
         init_angle = torch.Tensor(self.config.rot_init)
         qinit[:, 0, :] = axis_angle_to_quaternion(init_angle)
 
-        init_axis_angle = torch.zeros(1, config.input_frames, 3)
-        init_axis_angle[:, 0] = init_angle
-
         # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
         self.register_buffer('initial_quaternion', qinit.clone())
-        self.register_buffer('initial_axis_angle', init_axis_angle.clone())
 
         # Offsets initialization
         quaternion_offsets = torch.zeros(1, config.input_frames, 4)
