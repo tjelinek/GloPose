@@ -374,7 +374,7 @@ class Tracking6D:
                                           tracking_config=self.config, rendering=self.rendering,
                                           rendering_backview=self.rendering_backview, gt_encoder=self.gt_encoder,
                                           deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                          data_graph=self.data_graph)
+                                          data_graph=self.data_graph, cameras=self.used_cameras)
 
         self.data_graph.add_new_frame(0)
 

@@ -119,10 +119,12 @@ class RerunAnnotations:
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, rendering_backview,
-                 gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph):
+                 gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras]):
 
         self.image_height = shape.height
         self.image_width = shape.width
+
+        self.cameras: List[Cameras] = cameras
 
         self.data_graph: DataGraph = data_graph
 
@@ -892,35 +894,7 @@ class WriteResults:
 
             flow_arc_source, flow_arc_target = new_flow_arc
 
-            new_flow_arc_data_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                            camera=Cameras.FRONTVIEW)
-            new_flow_arc_data_back = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                           camera=Cameras.BACKVIEW)
-
-            if flow_arc_source != 0:
-                continue
-                # TODO not the most elegant thing to do
-
-            arc_observation_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                          Cameras.FRONTVIEW)
-            arc_observation_back = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                         Cameras.BACKVIEW)
-
-            rendered_flow_res = arc_observation_front.synthetic_flow_result
-            rendered_flow_res_back = arc_observation_back.synthetic_flow_result
-
-            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
-            rend_flow_np = rend_flow.numpy(force=True)
-            rend_flow_back = flow_unit_coords_to_image_coords(rendered_flow_res_back.observed_flow)
-            rend_flow_back_np = rend_flow_back.numpy(force=True)
-
-            values_frontview = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
-            (occlusion_mask_front, seg_mask_front, target_front,
-             template_front, template_front_overlay, step, flow_frontview) = values_frontview
-
-            display_bounds = (0, target_front.shape[0], 0, target_front.shape[1])
-
-            fig, axs = plt.subplots(3, 2, figsize=(8, 8), dpi=200)
+            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 8), dpi=200)
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
@@ -928,37 +902,69 @@ class WriteResults:
 
             heading_text = (f"Frames {new_flow_arc}\n"
                             f"Flow: {flow_source_label}")
+
+            if len(self.cameras) == 1:
+                axs = np.atleast_2d(axs).T
+
             axs[0, 0].text(1.05, 1, heading_text, transform=axs[0, 0].transAxes, verticalalignment='top',
                            fontsize='medium')
 
-            for ax in axs.flat:
-                ax.axis('off')
+            for i, camera in enumerate(self.cameras):
+                new_flow_arc_data_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                                camera=camera)
 
-            darkening_factor = 0.5
-            axs[0, 0].imshow(template_front * darkening_factor, extent=display_bounds)
-            axs[0, 0].set_title('Template Front')
+                if flow_arc_source != 0:
+                    continue
+                    # TODO not the most elegant thing to do
 
-            axs[1, 0].imshow(template_front_overlay * darkening_factor, extent=display_bounds)
-            axs[1, 0].set_title('Template Front Occlusion')
+                arc_observation_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
+                                                                              camera)
 
-            axs[2, 0].imshow(target_front * darkening_factor, extent=display_bounds)
-            axs[2, 0].set_title('Target Front')
+                rendered_flow_res = arc_observation_front.synthetic_flow_result
 
-            height, width = template_front.shape[:2]  # Assuming these are the dimensions of your images
-            x, y = np.meshgrid(np.arange(width, step=step), np.arange(height, step=step))
-            template_coords = np.stack((y, x), axis=0).reshape(2, -1)  # Shape: [2, height*width]
+                rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
+                rend_flow_np = rend_flow.numpy(force=True)
 
-            # Plot lines on the target front and back view subplots
-            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
+                if camera == Cameras.FRONTVIEW:
+                    values = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
+                elif camera == Cameras.BACKVIEW:
+                    values = self.get_values_for_matching(active_keyframes_backview, flow_arc_source, flow_arc_target)
+                else:
+                    # TODO: also do a dict of active keyframes
+                    raise ValueError("Unknown camera value")
 
-            flow_frontview_np = flow_frontview.numpy(force=True)
+                occlusion_mask, seg_mask, target, template, template_overlay, step, opt_flow = values
 
-            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
-                                                     rend_flow_np, seg_mask_front, occlusion_mask_front,
-                                                     new_flow_arc_data_front.ransac_inliers,
-                                                     new_flow_arc_data_front.ransac_outliers)
+                display_bounds = (0, target.shape[0], 0, target.shape[1])
 
-            self.visualize_outliers_distribution(new_flow_arc)
+                for ax in axs.flat:
+                    ax.axis('off')
+
+                darkening_factor = 0.5
+                axs[0, i].imshow(template * darkening_factor, extent=display_bounds)
+                axs[0, i].set_title(f'Template {camera}')
+
+                axs[1, i].imshow(template_overlay * darkening_factor, extent=display_bounds)
+                axs[1, i].set_title(f'Template {camera} occlusion')
+
+                axs[2, i].imshow(target * darkening_factor, extent=display_bounds)
+                axs[2, i].set_title(f'Target {camera}')
+
+                x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
+                template_coords = np.stack((y, x), axis=0).reshape(2, -1)
+
+                # Plot lines on the target front and back view subplots
+                occlusion_threshold = self.tracking_config.occlusion_coef_threshold
+
+                flow_frontview_np = opt_flow.numpy(force=True)
+
+                self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
+                                                         rend_flow_np, seg_mask, occlusion_mask,
+                                                         new_flow_arc_data_front.ransac_inliers,
+                                                         new_flow_arc_data_front.ransac_outliers)
+
+                self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask, occlusion_threshold,
+                                        flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
