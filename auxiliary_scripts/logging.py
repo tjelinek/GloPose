@@ -779,9 +779,9 @@ class WriteResults:
         template_axes = {Cameras.FRONTVIEW: 2, Cameras.BACKVIEW: 3}
 
         for camera in self.cameras:
-            front_results = self.measure_ransac_stats(frame_i, camera)
+            ransac_stats = self.measure_ransac_stats(frame_i, camera)
 
-            front_results.pop('mft_flow_gt_flow_difference')
+            ransac_stats.pop('mft_flow_gt_flow_difference')
 
             colors = {'visible': 'darkgreen',
                       'predicted_as_visible': 'lime',
@@ -792,18 +792,18 @@ class WriteResults:
                       'ransac_inlier_ratio': 'deeppink',
                       }
 
-            for i, metric in enumerate(front_results.keys()):
+            for i, metric in enumerate(ransac_stats.keys()):
                 if metric == 'model_obtained_from':
                     continue
 
                 rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{camera.value}_{metric}')
 
                 rr.set_time_sequence("frame", frame_i)
-                metric_val: float = front_results[metric][-1]
+                metric_val: float = ransac_stats[metric][-1]
                 rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
 
             # We want each line to have its assigned color
-            assert sorted(colors.keys()) == sorted(front_results.keys())
+            assert sorted(colors.keys()) == sorted(ransac_stats.keys())
 
             self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
                                           translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
@@ -818,24 +818,24 @@ class WriteResults:
             axs[template_axes[camera]].xaxis.set_visible(False)
             axs[template_axes[camera]].yaxis.set_visible(False)
 
-            for i, metric in enumerate(front_results.keys()):
+            for i, metric in enumerate(ransac_stats.keys()):
                 xs = np.arange(1, frame_i + 1)
 
                 color = colors[metric]
                 if metric == 'model_obtained_from':
                     continue
                 if metric == 'ransac_inlier_ratio':
-                    line, = axs[template_axes[camera]].plot(xs, front_results[metric], label=metric,
+                    line, = axs[template_axes[camera]].plot(xs, ransac_stats[metric], label=metric,
                                                             linestyle='dashed', color=color)
                 else:
-                    line, = axs[template_axes[camera]].plot(xs, front_results[metric], label=metric, color=color)
+                    line, = axs[template_axes[camera]].plot(xs, ransac_stats[metric], label=metric, color=color)
 
                 if template_axes[camera] == axs[0]:
                     handles.append(line)
                     labels.append(metric)
 
             ylim = axs[template_axes[camera]].get_ylim()
-            for i, is_foreground in enumerate(front_results['model_obtained_from']):
+            for i, is_foreground in enumerate(ransac_stats['model_obtained_from']):
                 if not is_foreground:
                     axs[template_axes[camera]].fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
 
