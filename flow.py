@@ -64,7 +64,7 @@ def visualize_flow_with_images(templates, image2, observed_flows=None, gt_flows=
     width, height = image2.shape[-1], image2.shape[-2]
 
     assert observed_flows is not None or gt_flows is not None
-    assert np.all([(width, height) == t.shape[-2:] for t in templates])
+    assert np.all([(height, width) == t.shape[-2:] for t in templates])
     assert gt_silhouettes_prev is None or len(templates) == len(gt_silhouettes_prev)
     assert flow_occlusion_masks is None or len(templates) == len(flow_occlusion_masks)
     assert observed_flows is None or len(templates) == len(observed_flows)
