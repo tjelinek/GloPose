@@ -30,6 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
+from auxiliary_scripts.image_utils import ImageShape
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
@@ -117,11 +118,11 @@ class RerunAnnotations:
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape, tracking_config: TrackerConfig, rendering, rendering_backview,
+    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, rendering_backview,
                  gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph):
 
-        self.image_height = shape[0]
-        self.image_width = shape[1]
+        self.image_height = shape.height
+        self.image_width = shape.width
 
         self.data_graph: DataGraph = data_graph
 
