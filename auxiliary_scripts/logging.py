@@ -550,10 +550,10 @@ class WriteResults:
             self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
                                       gt_translations)
 
+        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
+        detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
+                                          for it in encoder_result])
         if self.tracking_config.save_3d_model:
-            encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
-            detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
-                                              for it in encoder_result])
             self.save_3d_model(frame_i, tex, best_model, detached_result)
 
         self.visualize_logged_metrics(plot_losses=False)
@@ -582,10 +582,8 @@ class WriteResults:
         renders = rgb_renders_result.rendered_image
         rendered_silhouette = rgb_renders_result.rendered_image_segmentation
 
-        self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-                                       observed_segmentations[:, [-1]], frame_i)
-
-        self.save_3d_model(frame_i, tex, best_model, detached_result)
+        # self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
+        #                                observed_segmentations[:, [-1]], frame_i)
 
         for tmpi in range(renders.shape[1]):
             segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
