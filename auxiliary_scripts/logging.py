@@ -540,11 +540,14 @@ class WriteResults:
                 self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
 
         if frame_i % 25 == 0 or frame_i == 1:
-            self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
-                                            new_flow_arcs=new_flow_arcs)
+            self.visualize_optimized_values(keyframe_buffer=active_keyframes, new_flow_arcs=new_flow_arcs)
 
             self.visualize_flow_with_matching(new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
+
+        if self.tracking_config.visualize_outliers_distribution:
+            for new_flow_arc in new_flow_arcs:
+                self.visualize_outliers_distribution(new_flow_arc)
 
         if self.tracking_config.dump_correspondences:
             self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
