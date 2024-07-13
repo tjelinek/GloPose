@@ -16,7 +16,7 @@ from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_so
     estimate_pose_using_directly_zaragoza
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points
+from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor
 
 
 class EpipolarPoseEstimator:
@@ -35,7 +35,9 @@ class EpipolarPoseEstimator:
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
         if camera_instrinsics is None:
-            self.camera_intrinsics = self.rendering.intrinsics
+            self.camera_intrinsics = pinhole_intrinsics_from_tensor(self.rendering.camera_intrinsics,
+                                                                    self.rendering.width,
+                                                                    self.rendering.height)
         else:
             self.camera_intrinsics = camera_instrinsics
 
