@@ -137,8 +137,9 @@ class Tracking6D:
         else:
             self.image_shape = get_shape(images_paths[0])
 
-        self.cam_intrinsics = pinhole_intrinsics_from_tensor(cam_intrinsics, self.image_shape.width,
-                                                             self.image_shape.height)
+        if cam_intrinsics is not None:
+            self.cam_intrinsics = pinhole_intrinsics_from_tensor(cam_intrinsics, self.image_shape.width,
+                                                                 self.image_shape.height)
 
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
