@@ -1629,8 +1629,7 @@ class WriteResults:
         encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_optimized_values(self, bounding_box, keyframe_buffer: KeyframeBuffer,
-                                   new_flow_arcs: List[Tuple[int, int]]):
+    def visualize_optimized_values(self, keyframe_buffer: KeyframeBuffer, new_flow_arcs: List[Tuple[int, int]]):
         for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
 
             source_frame = flow_arc[0]
@@ -1657,11 +1656,11 @@ class WriteResults:
             rendered_flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                                            flow_arcs_indices=[(0, 1)])
 
-            rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
+            # rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
 
             # Extract current and previous rendered images
-            source_rendered_image_rgb = rendered_keyframe_images[0, -2]
-            target_rendered_image_rgb = rendered_keyframe_images[0, -1]
+            source_rendered_image_rgb = rendering_rgb[0, -2]
+            target_rendered_image_rgb = rendering_rgb[0, -1]
 
             theoretical_flow_path = self.optimized_values_path / Path(
                 f"predicted_flow_{source_frame}_{target_frame}.png")
@@ -1719,8 +1718,6 @@ class WriteResults:
             # Save flow illustrations
             self.log_image(target_frame, flow_occlusion_image, occlusion_path,
                            RerunAnnotations.observed_flow_occlusion_frontview)
-            imageio.imwrite(theoretical_flow_path, flow_illustration)
-            imageio.imwrite(flow_difference_path, flow_difference_illustration)
 
     def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs,
                                 flow_tracks_inits: List[int], view=Cameras.FRONTVIEW):
