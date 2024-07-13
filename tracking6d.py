@@ -480,7 +480,7 @@ class Tracking6D:
             if self.config.write_results:
                 new_flow_arcs = [arc for arc in flow_arcs if arc[1] == frame_i]
 
-                self.write_results.write_results(bounding_box=b0, frame_i=frame_i, tex=tex, new_flow_arcs=new_flow_arcs,
+                self.write_results.write_results(frame_i=frame_i, tex=tex, new_flow_arcs=new_flow_arcs,
                                                  active_keyframes=self.active_keyframes,
                                                  active_keyframes_backview=self.active_keyframes_backview,
                                                  best_model=self.best_model, observations=all_frame_observations,

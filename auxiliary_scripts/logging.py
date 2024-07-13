@@ -528,7 +528,7 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, bounding_box, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer,
+    def write_results(self, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer,
                       active_keyframes_backview: KeyframeBuffer, best_model, observations: FrameObservation,
                       observations_backview: FrameObservation, gt_rotations, gt_translations,
                       flow_tracks_inits: List[int], pose_icosphere: PoseIcosphere):
