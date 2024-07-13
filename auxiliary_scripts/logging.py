@@ -546,12 +546,15 @@ class WriteResults:
             self.visualize_flow_with_matching(new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
-        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
-        detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
-                                          for it in encoder_result])
+        if self.tracking_config.dump_correspondences:
+            self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
+                                      gt_translations)
 
-        self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
-                                  gt_translations)
+        if self.tracking_config.save_3d_model:
+            encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
+            detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
+                                              for it in encoder_result])
+            self.save_3d_model(frame_i, tex, best_model, detached_result)
 
         self.visualize_logged_metrics(plot_losses=False)
 
@@ -675,7 +678,7 @@ class WriteResults:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
-    def measure_ransac_stats(self, frame_i, camera = Cameras.FRONTVIEW):
+    def measure_ransac_stats(self, frame_i, camera=Cameras.FRONTVIEW):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
         results = defaultdict(list)
 

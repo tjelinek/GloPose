@@ -25,6 +25,8 @@ class TrackerConfig:
     training_print_status_frequency = 20
     plot_mft_flow_kde_error_plot: bool = True
     mft_flow_kde_error_plot_frequency: int = 10
+    dump_correspondences: bool = False
+    save_3d_model: bool = False
 
     # Frame and keyframe settings
     input_frames: int = 0
