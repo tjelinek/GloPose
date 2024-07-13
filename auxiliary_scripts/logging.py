@@ -1243,11 +1243,11 @@ class WriteResults:
         rr.set_time_sequence("frame", max(frame_indices))
 
         for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][0]))
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][0]))
-            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][0]))
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][axis]))
             rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'),
-                   rr.Scalar(gt_translations[-1][0]))
+                   rr.Scalar(gt_translations[-1][axis]))
 
     def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
 
