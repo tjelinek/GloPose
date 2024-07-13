@@ -1260,23 +1260,14 @@ class WriteResults:
         gt_translations = np.array(gt_translations)
 
         # Rerun
-        rr.set_time_sequence("frame", max(frame_indices))
+        if not plot_losses:
+            rr.set_time_sequence("frame", max(frame_indices))
 
-        rr.log(RerunAnnotations.pose_rotation_x, rr.Scalar(rotations[-1][0]))
-        rr.log(RerunAnnotations.pose_rotation_y, rr.Scalar(rotations[-1][1]))
-        rr.log(RerunAnnotations.pose_rotation_z, rr.Scalar(rotations[-1][2]))
-
-        rr.log(RerunAnnotations.pose_rotation_x_gt, rr.Scalar(gt_rotations[-1][0]))
-        rr.log(RerunAnnotations.pose_rotation_y_gt, rr.Scalar(gt_rotations[-1][1]))
-        rr.log(RerunAnnotations.pose_rotation_z_gt, rr.Scalar(gt_rotations[-1][2]))
-
-        rr.log(RerunAnnotations.pose_translation_x, rr.Scalar(translations[-1][0]))
-        rr.log(RerunAnnotations.pose_translation_y, rr.Scalar(translations[-1][1]))
-        rr.log(RerunAnnotations.pose_translation_z, rr.Scalar(translations[-1][2]))
-
-        rr.log(RerunAnnotations.pose_translation_x_gt, rr.Scalar(gt_translations[-1][0]))
-        rr.log(RerunAnnotations.pose_translation_y_gt, rr.Scalar(gt_translations[-1][1]))
-        rr.log(RerunAnnotations.pose_translation_z_gt, rr.Scalar(gt_translations[-1][2]))
+            for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
+                rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][0]))
+                rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][0]))
+                rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][0]))
+                rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'), rr.Scalar(gt_translations[-1][0]))
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
