@@ -544,7 +544,7 @@ class WriteResults:
                                             new_flow_arcs=new_flow_arcs)
 
             if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
-                self.visualize_flow_with_matching(active_keyframes, active_keyframes_backview, new_flow_arcs)
+                self.visualize_flow_with_matching(new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
@@ -873,7 +873,7 @@ class WriteResults:
         plt.savefig(self.ransac_path / f'inliers_errors_frame_{frame}.svg')
         plt.close()
 
-    def visualize_flow_with_matching(self, active_keyframes, active_keyframes_backview, new_flow_arcs):
+    def visualize_flow_with_matching(self, new_flow_arcs):
 
         for new_flow_arc in new_flow_arcs:
 
@@ -895,46 +895,49 @@ class WriteResults:
                            fontsize='medium')
 
             for i, camera in enumerate(self.cameras):
-                new_flow_arc_data_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                                camera=camera)
 
                 if flow_arc_source != 0:
                     continue
                     # TODO not the most elegant thing to do
 
-                arc_observation_front = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target,
-                                                                              camera)
+                arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target, camera)
 
-                rendered_flow_res = arc_observation_front.synthetic_flow_result
+                rendered_flow_res = arc_observation.synthetic_flow_result
 
                 rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
                 rend_flow_np = rend_flow.numpy(force=True)
 
-                if camera == Cameras.FRONTVIEW:
-                    values = self.get_values_for_matching(active_keyframes, flow_arc_source, flow_arc_target)
-                elif camera == Cameras.BACKVIEW:
-                    values = self.get_values_for_matching(active_keyframes_backview, flow_arc_source, flow_arc_target)
-                else:
-                    # TODO: also do a dict of active keyframes
-                    raise ValueError("Unknown camera value")
+                flow_observation = arc_observation.observed_flow
+                opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
+                occlusion_mask = self.convert_observation_to_numpy(flow_observation.observed_flow_occlusion)
+                segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
 
-                occlusion_mask, seg_mask, target, template, template_overlay, step, opt_flow = values
+                template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source, camera)
+                target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target, camera)
+                template_observation_frontview = template_data.frame_observation
+                target_observation_frontview = target_data.frame_observation
+                template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
+                target_image = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
 
-                display_bounds = (0, target.shape[0], 0, target.shape[1])
+                template_overlay = self.overlay_occlusion(template_image, occlusion_mask >=
+                                                          self.tracking_config.occlusion_coef_threshold)
+
+                display_bounds = (0, self.image_width, 0, self.image_height)
 
                 for ax in axs.flat:
                     ax.axis('off')
 
                 darkening_factor = 0.5
-                axs[0, i].imshow(template * darkening_factor, extent=display_bounds)
+                axs[0, i].imshow(template_image * darkening_factor, extent=display_bounds)
                 axs[0, i].set_title(f'Template {camera}')
 
                 axs[1, i].imshow(template_overlay * darkening_factor, extent=display_bounds)
                 axs[1, i].set_title(f'Template {camera} occlusion')
 
-                axs[2, i].imshow(target * darkening_factor, extent=display_bounds)
+                axs[2, i].imshow(target_image * darkening_factor, extent=display_bounds)
                 axs[2, i].set_title(f'Target {camera}')
 
+                step = self.image_width // 20
                 x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
                 template_coords = np.stack((y, x), axis=0).reshape(2, -1)
 
@@ -944,12 +947,12 @@ class WriteResults:
                 flow_frontview_np = opt_flow.numpy(force=True)
 
                 self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
-                                                         rend_flow_np, seg_mask, occlusion_mask,
-                                                         new_flow_arc_data_front.ransac_inliers,
-                                                         new_flow_arc_data_front.ransac_outliers)
+                                                         rend_flow_np, segmentation_mask, occlusion_mask,
+                                                         arc_observation.ransac_inliers,
+                                                         arc_observation.ransac_outliers)
 
                 self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask, occlusion_threshold,
-                                        flow_frontview_np, cmap='spring', marker='o', segment_mask=seg_mask)
+                                        flow_frontview_np, cmap='spring', marker='o', segment_mask=segmentation_mask)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
