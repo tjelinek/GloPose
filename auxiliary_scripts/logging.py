@@ -898,10 +898,6 @@ class WriteResults:
 
             for i, camera in enumerate(self.cameras):
 
-                if flow_arc_source != 0:
-                    continue
-                    # TODO not the most elegant thing to do
-
                 arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target, camera)
 
                 rendered_flow_res = arc_observation.synthetic_flow_result
