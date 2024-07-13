@@ -1213,26 +1213,6 @@ class WriteResults:
             axs1.scatter(*zip(*dots_axs1), c=colors_axs1, marker='X', s=0.5, alpha=0.33)
             axs2.scatter(*zip(*dots_axs2), c=colors_axs2, marker='X', s=0.5, alpha=0.33)
 
-    def get_values_for_matching(self, active_keyframes, flow_arc_source, flow_arc_target):
-        flow_observation_frontview = active_keyframes.get_flows_between_frames(flow_arc_source, flow_arc_target)
-        flow_frontview = flow_observation_frontview.observed_flow
-        occlusion_mask_front = self.convert_observation_to_numpy(flow_observation_frontview.observed_flow_occlusion)
-        seg_mask_front = flow_observation_frontview.observed_flow_segmentation.numpy(force=True)
-        flow_frontview = flow_unit_coords_to_image_coords(flow_frontview.clone())
-        template_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_source)
-        target_observation_frontview = active_keyframes.get_observations_for_keyframe(flow_arc_target)
-        template_front = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
-        target_front = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
-
-        N = 20
-        step = template_front.shape[0] // N
-
-        template_front_overlay = self.overlay_occlusion(template_front, occlusion_mask_front >=
-                                                        self.tracking_config.occlusion_coef_threshold)
-
-        return (occlusion_mask_front, seg_mask_front, target_front,
-                template_front, template_front_overlay, step, flow_frontview)
-
     @staticmethod
     def add_loss_plot(ax_, frame_losses_, indices=None):
         if indices is None:
