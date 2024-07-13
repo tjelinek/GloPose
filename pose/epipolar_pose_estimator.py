@@ -35,7 +35,7 @@ class EpipolarPoseEstimator:
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
         if camera_instrinsics is None:
-            self.camera_intrinsics = self.rendering.camera_intrinsics
+            self.camera_intrinsics = self.rendering.intrinsics
         else:
             self.camera_intrinsics = camera_instrinsics
 
