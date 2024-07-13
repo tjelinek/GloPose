@@ -1339,26 +1339,6 @@ class WriteResults:
     def convert_observation_to_numpy(observation):
         return observation[0, 0].permute(1, 2, 0).numpy(force=True)
 
-    @staticmethod
-    def overlay_occlusion(image, occlusion_mask):
-        """
-        Overlay an occlusion mask on an image.
-
-        Args:
-        - image: The original image as a numpy array of shape (H, W, C).
-        - occlusion_mask: The occlusion mask as a numpy array of shape (H, W, 1), values in [0, 1].
-
-        Returns:
-        - The image with the occlusion mask overlay as a numpy array of shape (H, W, C).
-        """
-        occlusion_mask = occlusion_mask.squeeze() * 0.2  # Remove the singleton dimension if present
-        if image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1):  # Grayscale or single-channel
-            image = np.dstack([image] * 3)  # Convert to 3-channel for coloring
-
-        white_overlay = np.ones_like(image) * 255
-        overlay_image = (1 - occlusion_mask[..., np.newaxis]) * image + occlusion_mask[..., np.newaxis] * white_overlay
-
-        return overlay_image.astype(image.dtype)
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
