@@ -169,7 +169,7 @@ class Tracking6D:
         self.initialize_optimizer_and_loss(ivertices)
 
         if self.config.features == 'deep':
-            self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.shape)
+            self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.image_shape)
 
         self.best_model = {"value": 100.,
                            "face_features": self.encoder.face_features.detach().clone(),
