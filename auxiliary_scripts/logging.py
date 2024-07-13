@@ -877,11 +877,12 @@ class WriteResults:
         if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
             return
 
+        dpi = 600
         for new_flow_arc in new_flow_arcs:
 
             flow_arc_source, flow_arc_target = new_flow_arc
 
-            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 12))
+            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 12), dpi=600)
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
@@ -961,7 +962,7 @@ class WriteResults:
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
-                            dpi=600, bbox_inches='tight')
+                            dpi=dpi, bbox_inches='tight')
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
