@@ -195,8 +195,8 @@ class WriteResults:
                                                       origin=RerunAnnotations.observed_flow_frontview),
                                     rrb.Spatial2DView(name="Observed Flow Uncertainty",
                                                       origin=RerunAnnotations.observed_flow_with_uncertainty_frontview),
-                                    rrb.Spatial2DView(name="Observed Flow GT Disparity",
-                                                      origin=RerunAnnotations.observed_flow_errors_frontview),
+                                    # rrb.Spatial2DView(name="Observed Flow GT Disparity",
+                                    #                   origin=RerunAnnotations.observed_flow_errors_frontview),
                                 ],
                                 name='Flows'
                             ),
@@ -558,10 +558,19 @@ class WriteResults:
 
         self.visualize_logged_metrics(plot_losses=False)
 
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            self.log_poses_into_rerun()
+
         if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
-            self.analyze_ransac_matchings_errors(frame_i)
-            self.analyze_ransac_matchings(frame_i)
-            self.visualize_point_clouds_from_ransac(frame_i)
+            if self.tracking_config.analyze_ransac_matching_errors:
+                self.analyze_ransac_matchings_errors(frame_i)
+
+            if (self.tracking_config.analyze_ransac_matchings and
+                    frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
+                self.analyze_ransac_matchings(frame_i)
+
+            if self.tracking_config.visualize_point_clouds_from_ransac:
+                self.visualize_point_clouds_from_ransac(frame_i)
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
@@ -1798,8 +1807,8 @@ class WriteResults:
                 flow_illustration_uncertainty_torch = (
                     torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
 
-                self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
-                                observed_flow_errors_annotations)
+                # self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
+                #                 observed_flow_errors_annotations)
                 self.log_image(target_frame, flow_occlusions_image, occlusion_path,
                                observed_flow_occlusion_annotation)
                 self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,

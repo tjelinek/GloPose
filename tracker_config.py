@@ -21,12 +21,18 @@ class TrackerConfig:
     write_to_rerun_rather_than_disk: bool = True
     write_results_frequency: int = 1
     visualize_loss_landscape: bool = False
-    loss_landscape_visualization_frequency: int = 18
-    training_print_status_frequency = 20
     plot_mft_flow_kde_error_plot: bool = True
-    mft_flow_kde_error_plot_frequency: int = 10
     dump_correspondences: bool = False
     save_3d_model: bool = False
+    visualize_point_clouds_from_ransac: bool = False
+    analyze_ransac_matchings: bool = False
+    analyze_ransac_matching_errors: bool = False
+    visualize_outliers_distribution: bool = False
+
+    analyze_ransac_matchings_frequency: int = 25
+    loss_landscape_visualization_frequency: int = 18
+    training_print_status_frequency = 20
+    mft_flow_kde_error_plot_frequency: int = 10
 
     # Frame and keyframe settings
     input_frames: int = 0
