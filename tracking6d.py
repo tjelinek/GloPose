@@ -400,10 +400,13 @@ class Tracking6D:
                 template_frame_observation_from_back.send_to_device('cpu'))
 
         initial_rotation = self.encoder.quaternion_offsets[0, [0]]
-        self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
 
-        self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_rotation,
-                                             self.config.icosphere_trust_region_degrees, 0)
+        if self.config.icosphere_add_inplane_rotatiosn:
+            self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_rotation,
+                                                 self.config.icosphere_trust_region_degrees, 0)
+        else:
+            self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
+
 
         for frame_i in range(1, self.config.input_frames):
 
@@ -524,7 +527,7 @@ class Tracking6D:
 
                     self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
 
-                    if True or 'generate_multiple_in_plane_rotated_templates':
+                    if self.config.icosphere_add_inplane_rotatiosn:
                         obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
 
                         self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_rotation_q,

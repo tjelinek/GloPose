@@ -170,3 +170,4 @@ class TrackerConfig:
 
     # Icosphere templates
     icosphere_trust_region_degrees = 30
+    icosphere_add_inplane_rotatiosn = False
