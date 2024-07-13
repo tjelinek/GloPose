@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 import imageio
+import numpy as np
 from scipy.ndimage import uniform_filter
 from torch.nn import functional as F
 from torchvision import transforms
@@ -36,3 +37,27 @@ def resize_and_filter_image(image, new_width, new_height):
     image = image_tensor.unsqueeze(0).float()
 
     return image
+
+
+def overlay_occlusion(image: np.ndarray, occlusion_mask: np.ndarray, alpha: float = 0.2):
+    """
+    Overlay an occlusion mask on an image.
+
+    Args:
+    - image: The original image as a numpy array of shape (H, W, C).
+    - occlusion_mask: The occlusion mask as a numpy array of shape (H, W, 1), values in [0, 1].
+    - alpha: The alpha value for the overlay, where 0 means no overlay and 1 means full overlay.
+
+    Returns:
+    - The image with the occlusion mask overlay as a numpy array of shape (H, W, C).
+    """
+    occlusion_mask = occlusion_mask.squeeze()  # Remove the singleton dimension if present
+    occlusion_mask = occlusion_mask * alpha  # Apply the alpha value to the occlusion mask
+
+    if image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1):  # Grayscale or single-channel
+        image = np.dstack([image] * 3)  # Convert to 3-channel for coloring
+
+    white_overlay = np.ones_like(image) * 255
+    overlay_image = (1 - occlusion_mask[..., np.newaxis]) * image + occlusion_mask[..., np.newaxis] * white_overlay
+
+    return overlay_image.astype(image.dtype)

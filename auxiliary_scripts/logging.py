@@ -30,7 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
-from auxiliary_scripts.image_utils import ImageShape
+from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
@@ -881,7 +881,7 @@ class WriteResults:
 
             flow_arc_source, flow_arc_target = new_flow_arc
 
-            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 8), dpi=200)
+            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 12))
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
@@ -908,6 +908,7 @@ class WriteResults:
                 flow_observation = arc_observation.observed_flow
                 opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
                 occlusion_mask = self.convert_observation_to_numpy(flow_observation.observed_flow_occlusion)
+                occlusion_mask_thresh = np.greater_equal(occlusion_mask, self.tracking_config.occlusion_coef_threshold)
                 segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
 
                 template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source, camera)
@@ -917,8 +918,7 @@ class WriteResults:
                 template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
                 target_image = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
 
-                template_overlay = self.overlay_occlusion(template_image, occlusion_mask >=
-                                                          self.tracking_config.occlusion_coef_threshold)
+                template_overlay = overlay_occlusion(template_image, occlusion_mask_thresh.astype(np.float32))
 
                 display_bounds = (0, self.image_width, 0, self.image_height)
 
@@ -926,11 +926,11 @@ class WriteResults:
                     ax.axis('off')
 
                 darkening_factor = 0.5
-                axs[0, i].imshow(template_image * darkening_factor, extent=display_bounds)
-                axs[0, i].set_title(f'Template {camera}')
+                axs[0, i].imshow(template_overlay * darkening_factor, extent=display_bounds)
+                axs[0, i].set_title(f'Template {camera} occlusion')
 
-                axs[1, i].imshow(template_overlay * darkening_factor, extent=display_bounds)
-                axs[1, i].set_title(f'Template {camera} occlusion')
+                axs[1, i].imshow(template_image * darkening_factor, extent=display_bounds)
+                axs[1, i].set_title(f'Template {camera}')
 
                 axs[2, i].imshow(target_image * darkening_factor, extent=display_bounds)
                 axs[2, i].set_title(f'Target {camera}')
@@ -961,7 +961,7 @@ class WriteResults:
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
-                            dpi=200, bbox_inches='tight')
+                            dpi=600, bbox_inches='tight')
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
