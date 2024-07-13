@@ -1222,6 +1222,21 @@ class WriteResults:
         ax_loss.spines.right.set_position(("axes", 1.15))
         ax_loss.legend(loc='upper left')
 
+    def log_poses_into_rerun(self):
+        frame_indices = sorted(self.data_graph.G.nodes)[1:]
+
+        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(frame_indices)
+
+        # Rerun
+        rr.set_time_sequence("frame", max(frame_indices))
+
+        for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][0]))
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][0]))
+            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][0]))
+            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'),
+                   rr.Scalar(gt_translations[-1][0]))
+
     def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
 
         using_own_axes = False
@@ -1235,39 +1250,7 @@ class WriteResults:
         frame_indices = sorted(self.data_graph.G.nodes)[1:]
         losses = [self.data_graph.get_frame_data(frame).frame_losses for frame in frame_indices]
 
-        rotations = []
-        translations = []
-        gt_rotations = []
-        gt_translations = []
-
-        for frame in frame_indices:
-            frame_data = self.data_graph.get_frame_data(frame)
-            last_quaternion = quaternion_to_axis_angle(frame_data.quaternions_during_optimization[-1])
-            last_rotation = np.rad2deg(last_quaternion[0, -1].numpy(force=True))
-            last_translation = frame_data.translations_during_optimization[-1][0, 0, -1].numpy(force=True)
-            rotations.append(last_rotation)
-            translations.append(last_translation)
-
-            frame_data = self.data_graph.get_frame_data(frame)
-            gt_rotation = np.rad2deg(frame_data.gt_rot_axis_angle.squeeze().numpy(force=True))
-            gt_translation = frame_data.gt_translation.squeeze().numpy(force=True)
-            gt_rotations.append(gt_rotation)
-            gt_translations.append(gt_translation)
-
-        rotations = np.array(rotations)
-        translations = np.array(translations)
-        gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
-        gt_translations = np.array(gt_translations)
-
-        # Rerun
-        if not plot_losses:
-            rr.set_time_sequence("frame", max(frame_indices))
-
-            for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
-                rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][0]))
-                rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][0]))
-                rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][0]))
-                rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'), rr.Scalar(gt_translations[-1][0]))
+        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(frame_indices)
 
         # Plot Rotation
         colors = ['yellow', 'green', 'blue']
@@ -1325,6 +1308,30 @@ class WriteResults:
             self.log_pyplot(max(frame_indices), fig, fig_path, RerunAnnotations.pose_per_frame)
             plt.savefig(fig_path)
             plt.close()
+
+    def read_poses_from_datagraph(self, frame_indices):
+        rotations = []
+        translations = []
+        gt_rotations = []
+        gt_translations = []
+        for frame in frame_indices:
+            frame_data = self.data_graph.get_frame_data(frame)
+            last_quaternion = quaternion_to_axis_angle(frame_data.quaternions_during_optimization[-1])
+            last_rotation = np.rad2deg(last_quaternion[0, -1].numpy(force=True))
+            last_translation = frame_data.translations_during_optimization[-1][0, 0, -1].numpy(force=True)
+            rotations.append(last_rotation)
+            translations.append(last_translation)
+
+            frame_data = self.data_graph.get_frame_data(frame)
+            gt_rotation = np.rad2deg(frame_data.gt_rot_axis_angle.squeeze().numpy(force=True))
+            gt_translation = frame_data.gt_translation.squeeze().numpy(force=True)
+            gt_rotations.append(gt_rotation)
+            gt_translations.append(gt_translation)
+        rotations = np.array(rotations)
+        translations = np.array(translations)
+        gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
+        gt_translations = np.array(gt_translations)
+        return gt_rotations, gt_translations, rotations, translations
 
     @staticmethod
     def convert_observation_to_numpy(observation):
