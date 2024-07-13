@@ -70,13 +70,14 @@ def estimate_pose_using_2D_2D_E_solver(src_pts_yx: torch.Tensor, dst_pts_yx: tor
             E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
             E = (E_inliers / torch.norm(E_inliers)).squeeze().numpy(force=True)
         elif ransac_config.ransac_inlier_pose_method == 'zaragoza':
-            src_pts_yx_inliers = src_pts_xy[mask_tensor]
+            src_pts_yx_inliers = src_pts_xy[mask_tensor]  # TODO may be a bug... use src_pts_yx
             dst_pts_yx_inliers = dst_pts_xy[mask_tensor]
 
             rot_cam, t_cam, _, _ = estimate_pose_using_directly_zaragoza(src_pts_yx_inliers, dst_pts_yx_inliers,
                                                                          K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
 
             rot_cam = rot_cam[[1, 0, 2]]
+            rot_cam[[1, 2]] *= -1.  # TODO make order in your correspondences so that it works
 
             tx_cam = vector_to_skew_symmetric_matrix(t_cam[None, :, 0])
             R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
