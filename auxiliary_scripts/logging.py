@@ -543,8 +543,7 @@ class WriteResults:
             self.visualize_optimized_values(bounding_box=bounding_box, keyframe_buffer=active_keyframes,
                                             new_flow_arcs=new_flow_arcs)
 
-            if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
-                self.visualize_flow_with_matching(new_flow_arcs)
+            self.visualize_flow_with_matching(new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
@@ -874,6 +873,8 @@ class WriteResults:
         plt.close()
 
     def visualize_flow_with_matching(self, new_flow_arcs):
+        if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
+            return
 
         for new_flow_arc in new_flow_arcs:
 
