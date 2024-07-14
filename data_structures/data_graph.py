@@ -17,6 +17,9 @@ class CommonFrameData:
     translations_during_optimization: List = field(default_factory=list)
     quaternions_during_optimization: List = field(default_factory=list)
 
+    ransac_rot_obj_axis_angle: torch.Tensor = None
+    ransac_rot_cam_axis_angle: torch.Tensor = None
+
     frame_losses: Any = None
     encoder_result: EncoderResult = None
 
@@ -53,9 +56,6 @@ class CrossFrameData:
     gt_visible_fg_points_mask: torch.Tensor = None
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
-
-    ransac_rot_obj_axis_angle: torch.Tensor = None
-    ransac_rot_cam_axis_angle: torch.Tensor = None
 
     ransac_triangulated_points: torch.Tensor = None
     ransac_triangulated_points_gt_Rt: torch.Tensor = None
