@@ -54,6 +54,9 @@ class CrossFrameData:
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
 
+    ransac_rot_obj_axis_angle: torch.Tensor = None
+    ransac_rot_cam_axis_angle: torch.Tensor = None
+
     ransac_triangulated_points: torch.Tensor = None
     ransac_triangulated_points_gt_Rt: torch.Tensor = None
     ransac_triangulated_points_gt_Rt_gt_flow: torch.Tensor = None

@@ -176,6 +176,8 @@ class EpipolarPoseEstimator:
         data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow.cpu()
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
+        data.ransac_rot_cam_axis_angle = rot_cam.squeeze().cpu()
+        data.ransac_rot_obj_axis_angle = rot_obj.squeeze().cpu()
 
         return inlier_ratio, quat_obj, t_obj
 
