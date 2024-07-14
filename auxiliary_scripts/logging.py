@@ -276,6 +276,18 @@ class WriteResults:
                 name=f'Results - {self.tracking_config.sequence}'
             )
         )
+        rr.log(RerunAnnotations.pose_rotation_x,
+               rr.SeriesLine(color=(51, 0, 102), name=RerunAnnotations.pose_rotation_x), static=True)
+        rr.log(RerunAnnotations.pose_rotation_y,
+               rr.SeriesLine(color=(0, 51, 102), name=RerunAnnotations.pose_rotation_y), static=True)
+        rr.log(RerunAnnotations.pose_rotation_z,
+               rr.SeriesLine(color=(102, 0, 102), name=RerunAnnotations.pose_rotation_z), static=True)
+        rr.log(RerunAnnotations.pose_rotation_x_gt,
+               rr.SeriesLine(color=(128, 255, 0), name=RerunAnnotations.pose_rotation_x_gt), static=True)
+        rr.log(RerunAnnotations.pose_rotation_y_gt,
+               rr.SeriesLine(color=(102, 178, 255), name=RerunAnnotations.pose_rotation_y_gt), static=True)
+        rr.log(RerunAnnotations.pose_rotation_z_gt,
+               rr.SeriesLine(color=(255, 155, 255), name=RerunAnnotations.pose_rotation_z_gt), static=True)
 
         rr.send_blueprint(blueprint)
 
@@ -562,7 +574,7 @@ class WriteResults:
         self.visualize_logged_metrics(plot_losses=False)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
-            self.log_poses_into_rerun()
+            self.log_poses_into_rerun(frame_i)
 
         if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
             if self.tracking_config.analyze_ransac_matching_errors:
@@ -1234,13 +1246,13 @@ class WriteResults:
         ax_loss.spines.right.set_position(("axes", 1.15))
         ax_loss.legend(loc='upper left')
 
-    def log_poses_into_rerun(self):
+    def log_poses_into_rerun(self, frame_i: int):
         frame_indices = sorted(self.data_graph.G.nodes)[1:]
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(frame_indices)
 
         # Rerun
-        rr.set_time_sequence("frame", max(frame_indices))
+        rr.set_time_sequence("frame", frame_i)
 
         for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
             rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][axis]))
