@@ -18,7 +18,6 @@ class CommonFrameData:
     quaternions_during_optimization: List = field(default_factory=list)
 
     ransac_rot_obj_axis_angle: torch.Tensor = None
-    ransac_rot_cam_axis_angle: torch.Tensor = None
 
     frame_losses: Any = None
     encoder_result: EncoderResult = None
