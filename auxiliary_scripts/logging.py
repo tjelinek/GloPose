@@ -772,22 +772,18 @@ class WriteResults:
 
         if frame_i % 10 == 0:
             return
-        fig = plt.figure(figsize=(20, 10))
-        gs = gridspec.GridSpec(2, 3, figure=fig)
+        fig, axs = plt.subplots(2, 3, figsize=(20, 10))
 
-        axs = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[0, 2]),
-               fig.add_subplot(gs[1, 2])]
+        axs[0, 0].set_title('Front View')
+        axs[0, 1].set_title('Back View')
+        axs[0, 2].set_title('Template Front')
+        axs[1, 2].set_title('Template Back')
 
-        axs[0].set_title('Front View')
-        axs[1].set_title('Back View')
-        axs[2].set_title('Template Front')
-        axs[3].set_title('Template Back')
-
-        for ax in [axs[1], axs[2]]:
+        for ax in [axs[0, 2], axs[1, 2]]:
             ax.xaxis.set_visible(False)
             ax.yaxis.set_visible(False)
 
-        for ax in axs:
+        for ax in [axs[0, 0], axs[0, 1]]:
             step = 1 if frame_i < 30 else 5
             x_ticks = np.arange(1, frame_i + 1, step)
             x_labels = np.arange(1, frame_i + 1, step)
@@ -807,11 +803,11 @@ class WriteResults:
                   'ransac_inlier_ratio': 'deeppink',
                   }
 
-        self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
-                                      translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
+        self.visualize_logged_metrics(rotation_ax=axs[1, 0],
+                                      translation_ax=axs[1, 1], plot_losses=False)
 
-        template_axes = {Cameras.FRONTVIEW: 2, Cameras.BACKVIEW: 3}
-        ransac_stats_axes = {Cameras.FRONTVIEW: 0, Cameras.BACKVIEW: 1}
+        template_axes = {Cameras.FRONTVIEW: (0, 2), Cameras.BACKVIEW: (1, 2)}
+        ransac_stats_axes = {Cameras.FRONTVIEW: (0, 0), Cameras.BACKVIEW: (0, 1)}
 
         for camera in self.cameras:
             ransac_stats = self.measure_ransac_stats(frame_i, camera)
@@ -851,7 +847,7 @@ class WriteResults:
                 else:
                     line, = axs[ransac_stats_axes[camera]].plot(xs, ransac_stats[metric], label=metric, color=color)
 
-                if ransac_stats_axes[camera] == axs[0]:
+                if ransac_stats_axes[camera] == axs[0, 0]:
                     handles.append(line)
                     labels.append(metric)
 
@@ -861,9 +857,8 @@ class WriteResults:
                     if not is_foreground:
                         axs[ransac_stats_axes[camera]].fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
 
-            for ax in axs:
-                ax.set_xlabel('Frame')
-                ax.set_ylabel('Percentage')
+            axs[ransac_stats_axes[camera]].set_xlabel('Frame')
+            axs[ransac_stats_axes[camera]].set_ylabel('Percentage')
 
             fig.legend(handles, labels, loc='upper left')
 
