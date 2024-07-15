@@ -62,6 +62,8 @@ class RerunAnnotations:
     observed_image_segmentation_frontview: str = '/observations/observed_image_frontview/segment'
     observed_image_segmentation_backview: str = '/observations/observed_image_backview/segment'
 
+    template_image_frontview_grid: str = '/observations/template_image_grid_frontview'
+
     observed_flow_frontview: str = '/observed_flow/observed_flow_frontview'
     observed_flow_backview: str = '/observed_flow/observed_flow_backview'
     observed_flow_occlusion_frontview: str = '/observed_flow/occlusion_frontview'
@@ -210,12 +212,21 @@ class WriteResults:
                             ),
                             rrb.Horizontal(
                                 contents=[
-                                    rrb.Spatial2DView(name="Template Image",
+                                    rrb.Spatial2DView(name="Template Image Current",
                                                       origin=RerunAnnotations.template_image_frontview),
                                     rrb.Spatial2DView(name="Observed Image",
                                                       origin=RerunAnnotations.observed_image_frontview),
                                 ],
                                 name='Observed Images'
+                            ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.Spatial2DView(name=f"Template {i * 5 + j}",
+                                                      origin=f'RerunAnnotations.template_image_frontview_grid {i * 5 + j}')
+                                    for i, j in product(range(5), range(5))
+                                ],
+                                grid_columns=5,
+                                name='Templates'
                             ),
                         ],
                         name='Observed Input'
@@ -1753,6 +1764,9 @@ class WriteResults:
             if self.tracking_config.write_to_rerun_rather_than_disk:
                 rr.set_time_sequence("frame", not_logged_flow_tracks_init)
                 rr.log(template_image_segmentation_annotation, rr.SegmentationImage(template_segmentation))
+                template_idx = len(self.logged_flow_tracks_inits[view])
+                template_image_grid_annotation = f'{RerunAnnotations.template_image_frontview_grid}/{template_idx}'
+                rr.log(template_image_grid_annotation, rr.Image(template))
 
             self.logged_flow_tracks_inits[view].append(not_logged_flow_tracks_init)
 
