@@ -1,3 +1,4 @@
+import sys
 from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import Callable, List
@@ -16,6 +17,8 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
+
+# sys.path.append('repositories/XMem')
 
 
 class BaseTracker(ABC):
@@ -142,6 +145,4 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
         # self.predictor.set_image(image.squeeze())
         masks = self.mask_generator.generate(image.squeeze())
 
-        return masks[0][None, None]
-
-
+        return masks[0]['segmentation'][None, None]
