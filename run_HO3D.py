@@ -26,6 +26,8 @@ def main():
 
         ]
 
+    skip_indices = 5
+
     for sequence in sequences:
         config = load_config(args.config)
 
@@ -80,6 +82,7 @@ def main():
         eert0 = set(i for i in range(len(gt_rotations)) if len(gt_translations[i].shape) < 1)
 
         valid_indices = [i for i in range(len(gt_rotations)) if i not in (eerr0 | eert0)]
+        valid_indices = valid_indices[::skip_indices]
 
         # Filter the lists to include only valid elements
         filtered_gt_rotations = [gt_rotations[i] for i in valid_indices]
