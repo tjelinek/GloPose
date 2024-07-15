@@ -218,18 +218,32 @@ class WriteResults:
                                                       origin=RerunAnnotations.observed_image_frontview),
                                 ],
                                 name='Observed Images'
+                            )
+                        ],
+                        name='Observed Input'
+                    ),
+                    rrb.Vertical(
+                        contents=[
+                            rrb.Horizontal(
+                                contents=[
+                                    rrb.Spatial2DView(name="Template Image Current",
+                                                      origin=RerunAnnotations.template_image_frontview),
+                                    rrb.Spatial2DView(name="Observed Image",
+                                                      origin=RerunAnnotations.observed_image_frontview),
+                                ],
+                                name='Observed Images'
                             ),
                             rrb.Grid(
                                 contents=[
-                                    rrb.Spatial2DView(name=f"Template {i * 5 + j}",
-                                                      origin=f'RerunAnnotations.template_image_frontview_grid {i * 5 + j}')
-                                    for i, j in product(range(5), range(5))
+                                    rrb.Spatial2DView(name=f"Template {i}",
+                                                      origin=f'{RerunAnnotations.template_image_frontview_grid}/{i}')
+                                    for i in range(27)
                                 ],
-                                grid_columns=5,
+                                grid_columns=9,
                                 name='Templates'
                             ),
                         ],
-                        name='Observed Input'
+                        name='Templates'
                     ),
                     rrb.Grid(
                         contents=[
@@ -308,10 +322,10 @@ class WriteResults:
         rr.log(RerunAnnotations.pose_rotation_z_gt,
                rr.SeriesLine(color=(255, 155, 255), name=RerunAnnotations.pose_rotation_z_gt), timeless=True)
 
-        rr.log(RerunAnnotations.observed_image_segmentation_frontview,
-               rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), timeless=True)
-        rr.log(RerunAnnotations.template_image_segmentation_frontview,
-               rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), timeless=True)
+        # rr.log(RerunAnnotations.observed_image_segmentation_frontview,
+        #        rr.AnnotationContext([(1, "white", (255, 255, 255))]), timeless=True)
+        # rr.log(RerunAnnotations.template_image_segmentation_backview,
+        #        rr.AnnotationContext([(1, "white", (255, 255, 255))]), timeless=True)
 
         rr.send_blueprint(blueprint)
 
