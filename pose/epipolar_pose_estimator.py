@@ -46,6 +46,8 @@ class EpipolarPoseEstimator:
 
         K1 = K2 = self.camera_intrinsics.params.to(torch.float32)
 
+        camera = Cameras.FRONTVIEW if not backview else backview
+
         W_4x4 = self.rendering.camera_transformation_matrix_4x4()
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
@@ -69,6 +71,10 @@ class EpipolarPoseEstimator:
             self.config.occlusion_coef_threshold, self.config.segmentation_mask_threshold))
 
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
+
+        target_frame_data = self.data_graph.get_camera_specific_frame_data(flow_arc[1], camera)
+        target_frame_segmentation = target_frame_data.frame_observation.observed_segmentation
+
         gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
         src_pts_yx_gt_flow = src_pts_yx.clone()
