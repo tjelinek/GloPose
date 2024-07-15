@@ -582,7 +582,7 @@ class WriteResults:
 
             if (self.tracking_config.analyze_ransac_matchings and
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
-                self.analyze_ransac_matchings(frame_i)
+                self.analyze_ransac_matchings(frame_i, flow_tracks_inits)
 
             if self.tracking_config.visualize_point_clouds_from_ransac:
                 self.visualize_point_clouds_from_ransac(frame_i)
@@ -768,7 +768,7 @@ class WriteResults:
                 if self.tracking_config.plot_mft_flow_kde_error_plot and camera == Cameras.FRONTVIEW:
                     self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
-    def analyze_ransac_matchings(self, frame_i):
+    def analyze_ransac_matchings(self, frame_i, flow_tracks_inits):
 
         if frame_i % 10 == 0:
             return
@@ -826,7 +826,9 @@ class WriteResults:
             self.visualize_logged_metrics(rotation_ax=fig.add_subplot(gs[1, 0]),
                                           translation_ax=fig.add_subplot(gs[1, 1]), plot_losses=False)
 
-            template_image = self.data_graph.get_camera_specific_frame_data(1, camera).frame_observation.observed_image
+            template_image_idx = flow_tracks_inits[-1]
+            template_image = self.data_graph.get_camera_specific_frame_data(template_image_idx,
+                                                                            camera).frame_observation.observed_image
             template_image = template_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
             axs[template_axes[camera]].imshow(template_image, aspect='equal')
