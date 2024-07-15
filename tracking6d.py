@@ -36,7 +36,7 @@ from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTrackerHO3D
+from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker
 from tracker_config import TrackerConfig
 from utils import normalize_vertices, pinhole_intrinsics_from_tensor
 
@@ -164,7 +164,7 @@ class Tracking6D:
         else:
             assert not config.matching_target_to_backview
 
-            self.tracker = PrecomputedTrackerHO3D(self.config, self.feat, images_paths, segmentation_paths)
+            self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
 
         self.initialize_optimizer_and_loss(ivertices)
 
