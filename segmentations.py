@@ -6,6 +6,7 @@ import cv2
 import torch
 import imageio
 import numpy as np
+from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -131,6 +132,16 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
 
+        sam = (sam_model_registry["vit_h"]
+                    (checkpoint="/mnt/personal/jelint19/weights/SegmentAnything/sam_vit_h_4b8939.pth"))
+        self.predictor = SamPredictor(sam)
+        self.mask_generator = SamAutomaticMaskGenerator(sam)
+
     def next_segmentation(self, frame_i):
         image = self.next_image(frame_i)
+        # self.predictor.set_image(image.squeeze())
+        masks = self.mask_generator.generate(image.squeeze())
+
+        return masks[0][None, None]
+
 
