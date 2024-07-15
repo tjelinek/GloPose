@@ -17,7 +17,7 @@ import seaborn as sns
 import torchvision
 from PIL import Image
 from kornia.geometry import normalize_quaternion
-from matplotlib import pyplot as plt, gridspec
+from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
@@ -50,20 +50,28 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 @dataclass
 class RerunAnnotations:
     # Observations
-    template_image_frontview: str = '/observations/template_image_front'
-    template_image_backview: str = '/observations/template_image_back'
-    observed_image_frontview: str = '/observations/observed_image_front'
-    observed_image_backview: str = '/observations/observed_image_back'
-    observed_flow_frontview: str = '/observed_flow/observed_flow_front'
-    observed_flow_backview: str = '/observed_flow/observed_flow_back'
-    observed_flow_occlusion_frontview: str = '/observed_flow/occlusion_front'
-    observed_flow_occlusion_backview: str = '/observed_flow/occlusion_back'
-    observed_flow_uncertainty_frontview: str = '/observed_flow/uncertainty_front'
-    observed_flow_uncertainty_backview: str = '/observed_flow/uncertainty_back'
+    template_image_frontview: str = '/observations/template_image_frontview'
+    template_image_backview: str = '/observations/template_image_backview'
+    
+    template_image_segmentation_frontview: str = '/observations/template_image_frontview/segment'
+    template_image_segmentation_backview: str = '/observations/template_image_backview/segment'
+    
+    observed_image_frontview: str = '/observations/observed_image_frontview'
+    observed_image_backview: str = '/observations/observed_image_backview'
+
+    observed_image_segmentation_frontview: str = '/observations/observed_image_frontview/segment'
+    observed_image_segmentation_backview: str = '/observations/observed_image_backview/segment'
+
+    observed_flow_frontview: str = '/observed_flow/observed_flow_frontview'
+    observed_flow_backview: str = '/observed_flow/observed_flow_backview'
+    observed_flow_occlusion_frontview: str = '/observed_flow/occlusion_frontview'
+    observed_flow_occlusion_backview: str = '/observed_flow/occlusion_backview'
+    observed_flow_uncertainty_frontview: str = '/observed_flow/uncertainty_frontview'
+    observed_flow_uncertainty_backview: str = '/observed_flow/uncertainty_backview'
     observed_flow_with_uncertainty_frontview: str = '/observed_flow/observed_flow_front_uncertainty'
     observed_flow_with_uncertainty_backview: str = '/observed_flow/observed_flow_back_uncertainty'
     observed_flow_errors_frontview: str = '/observed_flow/observed_flow_gt_disparity'
-    observed_flow_errors_backview: str = '/observed_flow/observed_flow_gt_disparity_back'
+    observed_flow_errors_backview: str = '/observed_flow/observed_flow_gt_disparity_backview'
 
     # Optimized model visualizations
     optimized_model_occlusion: str = '/optimized_values/occlusion'
@@ -187,20 +195,20 @@ class WriteResults:
         blueprint = rrb.Blueprint(
             rrb.Tabs(
                 contents=[
-                    rrb.Horizontal(
+                    rrb.Vertical(
                         contents=[
-                            rrb.Vertical(
+                            rrb.Horizontal(
                                 contents=[
                                     rrb.Spatial2DView(name="Observed Flow Occlusion",
                                                       origin=RerunAnnotations.observed_flow_frontview),
-                                    rrb.Spatial2DView(name="Observed Flow Uncertainty",
-                                                      origin=RerunAnnotations.observed_flow_with_uncertainty_frontview),
+                                    # rrb.Spatial2DView(name="Observed Flow Uncertainty",
+                                    #                   origin=RerunAnnotations.observed_flow_with_uncertainty_frontview),
                                     # rrb.Spatial2DView(name="Observed Flow GT Disparity",
                                     #                   origin=RerunAnnotations.observed_flow_errors_frontview),
                                 ],
                                 name='Flows'
                             ),
-                            rrb.Vertical(
+                            rrb.Horizontal(
                                 contents=[
                                     rrb.Spatial2DView(name="Template Image",
                                                       origin=RerunAnnotations.template_image_frontview),
@@ -288,6 +296,11 @@ class WriteResults:
                rr.SeriesLine(color=(102, 178, 255), name=RerunAnnotations.pose_rotation_y_gt), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_z_gt,
                rr.SeriesLine(color=(255, 155, 255), name=RerunAnnotations.pose_rotation_z_gt), timeless=True)
+
+        rr.log(RerunAnnotations.observed_image_segmentation_frontview,
+               rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), timeless=True)
+        rr.log(RerunAnnotations.template_image_segmentation_frontview,
+               rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), timeless=True)
 
         rr.send_blueprint(blueprint)
 
@@ -547,7 +560,7 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        if frame_i % 5 == 0 or frame_i == 1:
+        if frame_i % 1 == 0 or frame_i == 1:
             for camera in self.cameras:
                 self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
 
@@ -1702,41 +1715,44 @@ class WriteResults:
     def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs,
                                 flow_tracks_inits: List[int], view=Cameras.FRONTVIEW):
 
+        view_name = view.value
+
+        observed_image_annotation = getattr(RerunAnnotations, f'observed_image_{view_name}')
+        observed_image_segmentation_annotation = getattr(RerunAnnotations, f'observed_image_segmentation_{view_name}')
+        template_image_annotation = getattr(RerunAnnotations, f'template_image_{view_name}')
+        template_image_segmentation_annotation = getattr(RerunAnnotations, f'template_image_segmentation_{view_name}')
+        observed_flow_errors_annotations = getattr(RerunAnnotations, f'observed_flow_errors_{view_name}')
+        observed_flow_occlusion_annotation = getattr(RerunAnnotations, f'observed_flow_occlusion_{view_name}')
+        observed_flow_uncertainty_annotation = getattr(RerunAnnotations, f'observed_flow_uncertainty_{view_name}')
+        observed_flow_uncertainty_illustration_annotation = getattr(RerunAnnotations,
+                                                                    f'observed_flow_with_uncertainty_{view_name}')
+        observed_flow_annotation = getattr(RerunAnnotations, f'observed_flow_{view_name}')
+
         # Save the images to disk
         last_frame_observation = keyframe_buffer.get_observations_for_keyframe(frame_i)
 
         new_image_path = self.observations_path / Path(f'gt_img_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
 
-        if view == Cameras.FRONTVIEW:
-            observed_image_annotation = RerunAnnotations.observed_image_frontview
-            template_image_annotation = RerunAnnotations.template_image_frontview
-            observed_flow_errors_annotations = RerunAnnotations.observed_flow_errors_frontview
-            observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion_frontview
-            observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty_frontview
-            observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty_frontview
-            observed_flow_annotation = RerunAnnotations.observed_flow_frontview
-
-        elif view == Cameras.BACKVIEW:
-            observed_image_annotation = RerunAnnotations.observed_image_backview
-            template_image_annotation = RerunAnnotations.template_image_backview
-            observed_flow_errors_annotations = RerunAnnotations.observed_flow_errors_backview
-            observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion_backview
-            observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty_backview
-            observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty_backview
-            observed_flow_annotation = RerunAnnotations.observed_flow_backview
-        else:
-            raise ValueError("Unsupported camera")
-
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
+
+        if self.tracking_config.write_to_rerun_rather_than_disk:
+            rr.set_time_sequence("frame", frame_i)
+            image_segmentation = last_frame_observation.observed_segmentation
+            rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
         not_logged_template_idx = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
         for not_logged_flow_tracks_init in not_logged_template_idx:
             datagraph_data = self.data_graph.get_camera_specific_frame_data(not_logged_flow_tracks_init, view)
             template = datagraph_data.frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
+            template_segmentation = datagraph_data.frame_observation.observed_segmentation
 
             template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
             self.log_image(frame_i, template, template_image_path, template_image_annotation)
+
+            if self.tracking_config.write_to_rerun_rather_than_disk:
+                rr.set_time_sequence("frame", not_logged_flow_tracks_init)
+                rr.log(template_image_segmentation_annotation, rr.SegmentationImage(template_segmentation))
 
             self.logged_flow_tracks_inits[view].append(not_logged_flow_tracks_init)
 
