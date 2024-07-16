@@ -7,7 +7,7 @@ import cv2
 import torch
 import imageio
 import numpy as np
-from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry, SamPredictor
 
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -18,8 +18,6 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-
-# sys.path.append('repositories/XMem')
 
 
 class BaseTracker(ABC):
@@ -162,3 +160,76 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
         # masks = self.mask_generator.generate(image_np)
         return masks[None, None]
 
+
+class PrecomputedTrackerXMem(PrecomputedTracker):
+
+    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+                 segmentations_paths: List[Path]):
+        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
+
+        config = {
+            'generic_path': None,  # Set this to the appropriate path if needed
+            'split': 'val',
+            'output': None,
+            'save_all': False,
+            'benchmark': False,
+            'disable_long_term': False,
+            'max_mid_term_frames': 10,
+            'min_mid_term_frames': 5,
+            'max_long_term_elements': 10000,
+            'num_prototypes': 128,
+            'top_k': 30,
+            'mem_every': 5,
+            'deep_update_every': -1,
+            'save_scores': False,
+            'flip': False,
+            'size': 480,
+            'enable_long_term': True,
+        }
+
+        # Example usage
+        vid_length = len(images_paths)
+
+        config['enable_long_term_count_usage'] = (
+                not config['disable_long_term'] and
+                (vid_length / (config['max_mid_term_frames'] - config['min_mid_term_frames']) * config[
+                    'num_prototypes'])
+                >= config['max_long_term_elements']
+        )
+
+        sys.path.append('repositories/XMem')
+
+        model_path = Path('/mnt/personal/jelint19/weights/XMem/XMem.pth')
+
+        sys.path.append('repositories/XMem')
+
+        from repositories.XMem.inference.inference_core import InferenceCore
+        from repositories.XMem.model.network import XMem
+        from repositories.XMem.inference.data.mask_mapper import MaskMapper
+
+        network = XMem(config, str(model_path)).cuda().eval()
+
+        self.processor = InferenceCore(network, config=config)
+        self.mapper = MaskMapper()
+
+    def next_segmentation(self, frame_i):
+        from time import time
+        start_time = time()
+        image = self.next_image(frame_i).squeeze()
+
+        msk = None
+        labels = None
+        if frame_i == 0:
+
+            segmentation_init = super().next_segmentation(0)[0, 0]
+            image_init = self.next_image(0).squeeze()
+
+            msk, labels = self.mapper.convert_mask(segmentation_init[0].numpy(force=True))
+            msk = torch.Tensor(msk).cuda()
+            self.processor.set_all_labels(list(self.mapper.remappings.values()))
+            self.processor.step(image_init, msk, valid_labels=labels)
+
+        segmentation, pad = self.processor.step(image, msk, valid_labels=labels)
+        segmentation = segmentation[None, None, None]
+
+        return segmentation
