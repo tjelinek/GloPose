@@ -119,11 +119,9 @@ class PrecomputedTracker(BaseTracker, ABC):
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
         segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation_resized = self.resize_transform(segmentation_p)[None, [1]].to(torch.bool).to(torch.float32)
+        segmentation_resized = self.resize_transform(segmentation_p)[None, None, [1]].to(torch.bool).to(torch.float32)
 
-        segmentation_downsampled = F.interpolate(segmentation_resized, scale_factor=self.downsample_factor,
-                                                 mode='nearest')[None]
-        return segmentation_downsampled
+        return segmentation_resized
 
     def next(self, frame_i):
         image = self.next_image(frame_i)
