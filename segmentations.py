@@ -11,6 +11,7 @@ from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskG
 
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
+import torch.nn.functional as F
 
 from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape
 from data_structures.keyframe_buffer import FrameObservation
@@ -98,7 +99,7 @@ class PrecomputedTracker(BaseTracker, ABC):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
 
-        self.shape = get_shape(images_paths[0])
+        self.shape = get_shape(images_paths[0], self.downsample_factor)
         self.images_paths: List[Path] = images_paths
         self.segmentations_paths: List[Path] = segmentations_paths
 
@@ -107,17 +108,22 @@ class PrecomputedTracker(BaseTracker, ABC):
 
     def next_image(self, frame_i):
         image = imageio.v3.imread(self.images_paths[frame_i])
-        image_perm = torch.from_numpy(image).cuda().permute(2, 0, 1)[None, None].to(torch.float32) / 255.0
+        image_perm = torch.from_numpy(image).cuda().permute(2, 0, 1)[None].to(torch.float32) / 255.0
 
-        return image_perm
+        image_downsampled = F.interpolate(image_perm, scale_factor=self.downsample_factor, mode='bilinear',
+                                          align_corners=False)[None]
+        return image_downsampled
 
     def next_segmentation(self, frame_i):
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_i])
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
         segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation_resized = self.resize_transform(segmentation_p)[None, None, [1]].to(torch.bool).to(torch.float32)
-        return segmentation_resized
+        segmentation_resized = self.resize_transform(segmentation_p)[None, [1]].to(torch.bool).to(torch.float32)
+
+        segmentation_downsampled = F.interpolate(segmentation_resized, scale_factor=self.downsample_factor,
+                                                 mode='nearest')[None]
+        return segmentation_downsampled
 
     def next(self, frame_i):
         image = self.next_image(frame_i)

@@ -133,9 +133,10 @@ class Tracking6D:
             self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
         if self.config.generate_synthetic_observations_if_possible:
-            self.image_shape = ImageShape(width=self.config.max_width, height=self.config.max_width)
+            self.image_shape = ImageShape(width=int(self.config.image_downsample * self.config.max_width),
+                                          height=int(self.config.image_downsample * self.config.max_width))
         else:
-            self.image_shape = get_shape(images_paths[0])
+            self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
 
         if cam_intrinsics is not None:
             self.cam_intrinsics = pinhole_intrinsics_from_tensor(cam_intrinsics, self.image_shape.width,

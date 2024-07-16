@@ -11,10 +11,11 @@ from torchvision import transforms
 ImageShape = namedtuple('ImageShape', ['width', 'height'])
 
 
-def get_shape(image_path: Path) -> ImageShape:
+def get_shape(image_path: Path, image_downsample: float=1.0) -> ImageShape:
     image = imageio.v3.imread(image_path)
 
-    return ImageShape(width=image.shape[1], height=image.shape[0])
+    return ImageShape(width=int(image_downsample * image.shape[1]),
+                      height=int(image_downsample * image.shape[0]))
 
 
 def pad_image(image):
