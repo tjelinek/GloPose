@@ -1,11 +1,6 @@
 import numpy as np
 import torch
 
-def generate_initial_mesh(meshsize):
-    vertices, faces = meshzoo.icosa_sphere(meshsize)
-    face_features = generate_face_features(vertices, faces)
-    return vertices, faces, face_features
-
 
 def generate_face_features(vertices, faces):
     face_features = np.zeros([faces.shape[0], 3, 2])
@@ -21,24 +16,40 @@ def generate_face_features(vertices, faces):
     return face_features
 
 
-def sphere_to_cube(vertices):
-    # ensure vertices are a unit sphere
-    vertices = vertices / torch.sqrt(torch.sum(vertices**2, dim=-1, keepdim=True))
+def average_face_vertex_features(faces, face_features, num_vertices=None):
+    r"""Given features assigned for every vertex of every face, computes per-vertex features by
+    averaging values across all faces incident each vertex.
 
-    # apply spheric coordinates
-    radius = 1.0
-    theta = torch.acos(vertices[..., 2] / radius)
-    phi = torch.atan2(vertices[..., 1], vertices[..., 0])
+    Args:
+       faces (torch.LongTensor): vertex indices of faces of a fixed-topology mesh batch with
+            shape :math:`(\text{num_faces}, \text{face_size})`.
+       face_features (torch.FloatTensor): any features assigned for every vertex of every face, of shape
+            :math:`(\text{batch_size}, \text{num_faces}, \text{face_size}, N)`.
+       num_vertices (int, optional): number of vertices V (set to max index in faces, if not set)
 
-    # map to cube
-    xi = torch.sin(theta) * torch.cos(phi)
-    yi = torch.sin(theta) * torch.sin(phi)
-    zi = torch.cos(theta)
+    Return:
+        (torch.FloatTensor): of shape (B, V, 3)
+    """
+    if num_vertices is None:
+        num_vertices = int(faces.max()) + 1
 
-    # scale factor for each dimension
-    scale = torch.pow(1. / (xi.abs() + yi.abs() + zi.abs()), 1 / 3)
+    B = face_features.shape[0]
+    V = num_vertices
+    F = faces.shape[0]
+    FSz = faces.shape[1]
+    Nfeat = face_features.shape[-1]
+    vertex_features = torch.zeros((B, V, Nfeat), dtype=face_features.dtype, device=face_features.device)
+    counts = torch.zeros((B, V), dtype=face_features.dtype, device=face_features.device)
 
-    # cube vertices
-    cube_vertices = torch.stack([scale * xi, scale * yi, scale * zi], dim=-1)
+    faces = faces.unsqueeze(0).repeat(B, 1, 1)
+    fake_counts = torch.ones((B, F), dtype=face_features.dtype, device=face_features.device)
+    #              B x F          B x F x 3
+    # self[index[i][j][k]][j][k] += src[i][j][k]  # if dim == 0
+    # self[i][index[i][j][k]][k] += src[i][j][k]  # if dim == 1
+    for i in range(FSz):
+        vertex_features.scatter_add_(1, faces[..., i:i + 1].repeat(1, 1, Nfeat), face_features[..., i, :])
+        counts.scatter_add_(1, faces[..., i], fake_counts)
 
-    return cube_vertices
+    counts = counts.clip(min=1).unsqueeze(-1)
+    vertex_normals = vertex_features / counts
+    return vertex_normals
