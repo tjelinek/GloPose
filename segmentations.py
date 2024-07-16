@@ -140,14 +140,25 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
 
-        sam = (sam_model_registry["vit_h"]
-                    (checkpoint="/mnt/personal/jelint19/weights/SegmentAnything/sam_vit_h_4b8939.pth"))
+        weights_path = "/mnt/personal/jelint19/weights/SegmentAnything/sam_vit_h_4b8939.pth"
+        sam = sam_model_registry["vit_h"](checkpoint=weights_path).cuda()
         self.predictor = SamPredictor(sam)
-        self.mask_generator = SamAutomaticMaskGenerator(sam)
+        # self.mask_generator = SamAutomaticMaskGenerator(sam)
 
     def next_segmentation(self, frame_i):
         image = self.next_image(frame_i)
-        # self.predictor.set_image(image.squeeze())
-        masks = self.mask_generator.generate(image.squeeze())
+        image_np = image.squeeze().permute(1, 2, 0).numpy(force=True)
 
-        return masks[0]['segmentation'][None, None]
+        from time import time
+        start = time()
+        self.predictor.set_image(image_np)
+        gt_mask = super().next_segmentation(frame_i)
+        prompts = torch.nonzero(gt_mask.squeeze()).numpy(force=True)
+        point_labels = np.ones_like(prompts[:, 0])
+        masks, _, _ = self.predictor.predict(prompts, point_labels, multimask_output=False)
+        masks = torch.from_numpy(masks).cuda().to(torch.float32)
+        print(f"SAM inference took {time() - start} seconds")
+
+        # masks = self.mask_generator.generate(image_np)
+        return masks[None, None]
+
