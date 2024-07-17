@@ -26,7 +26,8 @@ from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
-from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
+from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion, \
+    axis_angle_to_rotation_matrix, rotation_matrix_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
@@ -40,7 +41,7 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
-from auxiliary_scripts.math_utils import quaternion_angular_difference
+from auxiliary_scripts.math_utils import quaternion_angular_difference, Rt_epipolar_cam_from_Rt_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -680,10 +681,8 @@ class WriteResults:
             vertex_texcoords = gt_mesh.visual.uv
             vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
-            rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
-
             rr.log(
-                RerunAnnotations.space_visualization,
+                RerunAnnotations.space_gt_mesh,
                 rr.Mesh3D(
                     indices=gt_mesh.faces,
                     albedo_texture=gt_texture_int,
@@ -692,6 +691,46 @@ class WriteResults:
                 )
             )
 
+            rr.log(
+                RerunAnnotations.space_gt_camera_path,
+                rr.Pinhole(
+                    resolution=[self.image_width, self.image_height],
+                    image_from_camera=self.rendering.intrinsics,
+                    camera_xyz=rr.ViewCoordinates.RDF,
+                ),
+            )
+
+            rr.log(
+                RerunAnnotations.space_predicted_camera_path,
+                rr.Pinhole(
+                    resolution=[self.image_width, self.image_height],
+                    image_from_camera=self.rendering.intrinsics,
+                    camera_xyz=rr.ViewCoordinates.RDF,
+                ),
+            )
+
+        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph([frame_i])
+        gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.from_numpy(gt_rotations)).cuda()
+        pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.from_numpy(rotations)).cuda()
+        gt_translations = torch.from_numpy(gt_translations)[..., None].cuda()
+        translations = torch.from_numpy(translations)[..., None].cuda()
+
+        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
+        R_cam_gt, t_cam_gt = Rt_epipolar_cam_from_Rt_obj(gt_rotations_matrix, gt_translations, T_world_to_cam)
+        R_cam, t_cam = Rt_epipolar_cam_from_Rt_obj(pred_rotations_matrix, translations, T_world_to_cam)
+        q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).squeeze().flip(0).numpy(force=True)
+        q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).squeeze().flip(0).numpy(force=True)
+
+        rr.log(
+            RerunAnnotations.space_predicted_camera_path,
+            rr.Transform3D(translation=t_cam.squeeze().numpy(force=True),
+                           rotation=rr.Quaternion(xyzw=q_cam_xyzw))
+        )
+        rr.log(
+            RerunAnnotations.space_gt_camera_path,
+            rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
+                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw))
+        )
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
