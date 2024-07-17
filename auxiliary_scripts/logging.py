@@ -54,8 +54,8 @@ class RerunAnnotations:
     # Observations
     space_visualization: str = '/3d_space'
     space_gt_mesh: str = '/3d_space/gt_mesh'
-    space_gt_camera_path: str = '/3d_space/gt_camera_path'
-    space_predicted_camera_path: str = '/3d_space/predicted_object_path'
+    space_gt_camera_path: str = '/3d_space/gt_camera'
+    space_predicted_camera_path: str = '/3d_space/predicted_object'
 
     template_image_frontview: str = '/observations/template_image_frontview'
     template_image_backview: str = '/observations/template_image_backview'
@@ -614,6 +614,8 @@ class WriteResults:
             self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
                                       gt_translations)
 
+        self.visualize_3d_camera_space(frame_i)
+
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
@@ -671,6 +673,7 @@ class WriteResults:
         if self.tracking_config.gt_mesh_path is None or self.tracking_config.gt_texture_path is None:
             return
 
+        rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
         if frame_i == 1 or True:
             gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
                                       self.tracking_config.texture_size)
@@ -681,37 +684,19 @@ class WriteResults:
             vertex_texcoords = gt_mesh.visual.uv
             vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
-            rr.log(
-                RerunAnnotations.space_gt_mesh,
-                rr.Mesh3D(
-                    indices=gt_mesh.faces,
-                    albedo_texture=gt_texture_int,
-                    vertex_texcoords=vertex_texcoords,
-                    vertex_positions=gt_mesh.vertices
-                )
-            )
-
-            rr.log(
-                RerunAnnotations.space_gt_camera_path,
-                rr.Pinhole(
-                    resolution=[self.image_width, self.image_height],
-                    image_from_camera=self.rendering.intrinsics,
-                    camera_xyz=rr.ViewCoordinates.RDF,
-                ),
-            )
-
-            rr.log(
-                RerunAnnotations.space_predicted_camera_path,
-                rr.Pinhole(
-                    resolution=[self.image_width, self.image_height],
-                    image_from_camera=self.rendering.intrinsics,
-                    camera_xyz=rr.ViewCoordinates.RDF,
-                ),
-            )
+            # rr.log(
+            #     RerunAnnotations.space_gt_mesh,
+            #     rr.Mesh3D(
+            #         indices=gt_mesh.faces,
+            #         albedo_texture=gt_texture_int,
+            #         vertex_texcoords=vertex_texcoords,
+            #         vertex_positions=gt_mesh.vertices
+            #     )
+            # )
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph([frame_i])
-        gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.from_numpy(gt_rotations)).cuda()
-        pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.from_numpy(rotations)).cuda()
+        gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(gt_rotations))).cuda()
+        pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(rotations))).cuda()
         gt_translations = torch.from_numpy(gt_translations)[..., None].cuda()
         translations = torch.from_numpy(translations)[..., None].cuda()
 
@@ -721,9 +706,12 @@ class WriteResults:
         q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).squeeze().flip(0).numpy(force=True)
         q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).squeeze().flip(0).numpy(force=True)
 
+        rr.set_time_sequence(RerunAnnotations.space_predicted_camera_path, frame_i)
+        rr.set_time_sequence(RerunAnnotations.space_gt_camera_path, frame_i)
+
         rr.log(
             RerunAnnotations.space_predicted_camera_path,
-            rr.Transform3D(translation=t_cam.squeeze().numpy(force=True),
+            rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
                            rotation=rr.Quaternion(xyzw=q_cam_xyzw))
         )
         rr.log(
@@ -731,6 +719,24 @@ class WriteResults:
             rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
                            rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw))
         )
+
+        # rr.log(
+        #     RerunAnnotations.space_predicted_camera_path,
+        #     rr.Pinhole(
+        #         resolution=[self.image_width, self.image_height],
+        #         image_from_camera=self.rendering.intrinsics,
+        #         camera_xyz=rr.ViewCoordinates.RDF,
+        #     ),
+        # )
+
+        # rr.log(
+        #     RerunAnnotations.space_gt_camera_path,
+        #     rr.Pinhole(
+        #         resolution=[self.image_width, self.image_height],
+        #         image_from_camera=self.rendering.intrinsics,
+        #         camera_xyz=rr.ViewCoordinates.RDF,
+        #     ),
+        # )
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
