@@ -122,7 +122,6 @@ class EpipolarPoseEstimator:
                                                         self.camera_intrinsics.height, self.config, confidences)
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
-            rot_cam[[0, 1]] *= -1.  # TODO Delete this mathematically unjustified ugly piece of code
         elif self.config.relative_camera_pose_algorithm == 'zaragoza':
             result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
                                                            self.camera_intrinsics.focal_x.cuda(),
@@ -182,10 +181,6 @@ class EpipolarPoseEstimator:
         data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow.cpu()
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
-
-        common_frame_data = self.data_graph.get_frame_data(flow_arc[1])
-        common_frame_data.ransac_rot_cam_axis_angle = rot_cam.squeeze().cpu()
-        common_frame_data.ransac_rot_obj_axis_angle = rot_obj.squeeze().cpu()
 
         return inlier_ratio, quat_obj, t_obj
 
