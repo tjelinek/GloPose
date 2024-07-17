@@ -9,6 +9,7 @@ import numpy as np
 import time
 import torch
 from kaolin.render.camera import PinholeIntrinsics
+from kornia.geometry import So3
 from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle
 from pathlib import Path
 
@@ -909,18 +910,20 @@ class Tracking6D:
         result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(front_flow_observations,
                                                                                flow_arc_idx, flow_arc,
                                                                                front_observations)
-        inlier_ratio_frontview, q_total, t_total = result
+        inlier_ratio_frontview, Se3_obj = result
 
-        # self.encoder.translation_offsets[:, :, flow_target] = t_total
-        # self.encoder.quaternion_offsets[:, flow_target] = q_total
-        new_quaternion = quaternion_multiply(self.encoder.quaternion_offsets[:, flow_target], q_total[None])
+        obj_rotation_offset_so3 = So3.from_wxyz(self.encoder.quaternion_offsets[:, flow_target])
+        new_obj_rotation_so3: So3 = obj_rotation_offset_so3 * Se3_obj.so3
+
+        new_obj_quaternion = new_obj_rotation_so3.q.data
+
+        self.encoder.quaternion_offsets[:, flow_target] = new_obj_quaternion
         print(
             f"Frame {flow_target} offset: {torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_target])).numpy(force=True).round(2)}")
         print(
-            f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(q_total)).numpy(force=True).round(2)}")
+            f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
         print(
-            f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_quaternion)).numpy(force=True).round(2)}")
-        self.encoder.quaternion_offsets[:, flow_target] = new_quaternion
+            f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
 
         if self.config.matching_target_to_backview:
             self.data_graph.get_edge_observations(flow_source, flow_target,
@@ -938,13 +941,13 @@ class Tracking6D:
                                                                                    back_observations,
                                                                                    backview=True)
 
-            inlier_ratio_backview, q_total_backview, t_total_backview = result
+            inlier_ratio_backview, Se3_obj_backview = result
 
             if False and inlier_ratio_frontview < inlier_ratio_backview:
                 # self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
                 # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
                 #                                                         q_total_backview[None])
-                self.encoder.quaternion_offsets[:, flow_target] = q_total_backview
+                self.encoder.quaternion_offsets[:, flow_target] = Se3_obj_backview.quaternion.data
 
                 self.data_graph.get_edge_observations(flow_source, flow_target,
                                                       Cameras.BACKVIEW).is_source_of_matching = True

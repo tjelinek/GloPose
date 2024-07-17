@@ -1,7 +1,9 @@
+from typing import Tuple
+
 import numpy as np
 import torch
 from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle, axis_angle_to_quaternion
+from kornia.geometry import axis_angle_to_rotation_matrix, Se3, Quaternion
 
 from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
@@ -42,7 +44,7 @@ class EpipolarPoseEstimator:
             self.camera_intrinsics = camera_instrinsics
 
     def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
-                                         camera_observation: FrameObservation, backview=False):
+                                         camera_observation: FrameObservation, backview=False) -> Tuple[float, Se3]:
 
         K1 = K2 = self.camera_intrinsics.params.to(torch.float32)
 
@@ -136,11 +138,10 @@ class EpipolarPoseEstimator:
         R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 
         R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
+        t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
 
-        rot_obj = rotation_matrix_to_axis_angle(R_obj)
-        quat_obj = axis_angle_to_quaternion(rot_obj).squeeze()
-
-        t_obj = t_obj.squeeze()
+        quat_obj = Quaternion.from_matrix(R_obj)
+        Se3_obj = Se3(quat_obj, t_obj)
 
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
         outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
@@ -182,7 +183,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return inlier_ratio, quat_obj, t_obj
+        return inlier_ratio, Se3_obj
 
     def get_occlusion_and_segmentation(self, backview, flow_arc, flow_observation_current_frame):
         renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
