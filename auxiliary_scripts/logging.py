@@ -30,6 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
+from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
@@ -50,6 +51,11 @@ from flow import visualize_flow_with_images, compare_flows_with_images, flow_uni
 @dataclass
 class RerunAnnotations:
     # Observations
+    space_visualization: str = '/3d_space'
+    space_gt_mesh: str = '/3d_space/gt_mesh'
+    space_gt_camera_path: str = '/3d_space/gt_camera_path'
+    space_predicted_camera_path: str = '/3d_space/predicted_object_path'
+
     template_image_frontview: str = '/observations/template_image_frontview'
     template_image_backview: str = '/observations/template_image_backview'
     
@@ -244,6 +250,10 @@ class WriteResults:
                             ),
                         ],
                         name='Templates'
+                    ),
+                    rrb.Spatial3DView(
+                        origin=RerunAnnotations.space_visualization,
+                        name='3D Space',
                     ),
                     rrb.Grid(
                         contents=[
@@ -655,6 +665,33 @@ class WriteResults:
                                                      observed_segmentations[:, -1:, [-1]]).detach().cpu()
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
+
+    def visualize_3d_camera_space(self, frame_i):
+        if self.tracking_config.gt_mesh_path is None or self.tracking_config.gt_texture_path is None:
+            return
+
+        if frame_i == 1 or True:
+            gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
+                                      self.tracking_config.texture_size)
+            gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
+
+            gt_mesh = load_mesh_using_trimesh(Path(self.tracking_config.gt_mesh_path))
+
+            vertex_texcoords = gt_mesh.visual.uv
+            vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
+
+            rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
+
+            rr.log(
+                RerunAnnotations.space_visualization,
+                rr.Mesh3D(
+                    indices=gt_mesh.faces,
+                    albedo_texture=gt_texture_int,
+                    vertex_texcoords=vertex_texcoords,
+                    vertex_positions=gt_mesh.vertices
+                )
+            )
+
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
