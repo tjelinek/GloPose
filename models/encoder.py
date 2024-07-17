@@ -22,7 +22,9 @@ class Encoder(nn.Module):
 
         # Translation initialization
         translation_init = torch.zeros(1, 1, config.input_frames, 3)
-        translation_init[:, :, 0, 2] = self.config.tran_init
+        translation_init[:, :, 0, 0] = self.config.tran_init[0]
+        translation_init[:, :, 0, 1] = self.config.tran_init[1]
+        translation_init[:, :, 0, 2] = self.config.tran_init[2]
 
         # Quaternion initialization
         qinit = torch.zeros(1, config.input_frames, 4)
