@@ -1,7 +1,7 @@
 import kaolin
 import numpy as np
 import torch
-from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle
+from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle, So3
 
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from dataset_generators import scenarios
@@ -37,19 +37,30 @@ for camera_up_idx in range(3):
 
 
     def print_tensor(name, tensor: torch.Tensor, max_vals=80):
-        print(f"{name}:\n{tensor[:max_vals].squeeze()}\n\n")
+        tensor = tensor[:max_vals].squeeze()
+        tensor_numpy = tensor.cpu().detach().numpy()
+        formatted_tensor = "\n".join(" ".join(f"{val:.3f}" for val in row) for row in tensor_numpy)
+        print(f"{name}:\n{formatted_tensor}\n")
 
-    r_obj = torch.rad2deg(obj_rot)
-    r_cam = torch.rad2deg(r_cam)
-    r_obj_prime = torch.rad2deg(r_obj_prime)
+    r_obj_print = torch.rad2deg(obj_rot)
+    r_cam_print = torch.rad2deg(r_cam)
+    r_obj_prime_print = torch.rad2deg(r_obj_prime)
+
+    R_obj = axis_angle_to_rotation_matrix(obj_rot)
+    so3_obj = So3.from_matrix(R_obj)
+    so3_obj_prime = So3.from_matrix(R_obj_prime)
+    so3_rot_error: So3 = so3_obj * so3_obj_prime.inverse()
+    rot_error_angle = torch.rad2deg(so3_rot_error.q.polar_angle)
 
     try:
         assert torch.max(torch.abs(t_obj - t_obj_prime)) < 1e-3
-        assert torch.max(torch.abs(r_obj - r_obj_prime)) < 1e-3
+        assert torch.max(torch.abs(rot_error_angle)) < 1e-3
     except:
-        print_tensor("t_obj", t_obj)
-        print_tensor("t_cam", t_cam)
-        print_tensor("t_obj_prime", t_obj_prime)
-        print_tensor("r_obj", r_obj)
-        print_tensor("r_cam", r_cam)
-        print_tensor("r_obj_prime", r_obj_prime)
+        print("camera_ip", camera_up)
+        print_tensor("t_obj", t_obj[:5])
+        # print_tensor("t_cam", t_cam)
+        print_tensor("t_obj_prime", t_obj_prime[:5])
+        print_tensor("r_obj", r_obj_prime_print[:5])
+        # print_tensor("r_cam", r_cam_print)
+        print_tensor("r_obj_prime", r_obj_prime[:5])
+        breakpoint()
