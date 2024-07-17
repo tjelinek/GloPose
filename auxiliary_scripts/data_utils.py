@@ -1,10 +1,11 @@
 import csv
 import math
 from pathlib import Path
-from typing import Iterable, Dict, Tuple
+from typing import Iterable, Dict, Tuple, cast
 
 import kaolin
 import torch
+import trimesh
 from kaolin.io.utils import mesh_handler_naive_triangulate
 from torchvision import transforms
 
@@ -28,6 +29,11 @@ def load_mesh(mesh_path: Path) -> kaolin.rep.SurfaceMesh:
                                                   heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
 
     return gt_mesh_prototype
+
+
+def load_mesh_using_trimesh(mesh_path: Path) -> trimesh.Trimesh:
+    mesh = trimesh.load(mesh_path, force="mesh")
+    return cast(trimesh.Trimesh, mesh)
 
 
 def load_gt_annotations_file(file_path) -> Tuple[torch.Tensor, torch.Tensor]:
