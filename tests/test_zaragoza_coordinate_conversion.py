@@ -2,7 +2,9 @@ from pathlib import Path
 
 import kaolin
 import torch
+from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix
 
+from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam
 from dataset_generators import scenarios
 from flow import source_coords_to_target_coords
 from models.encoder import Encoder
@@ -43,8 +45,18 @@ src_pts_yx, observed_visible_fg_points_mask = (
 dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow_observation.theoretical_flow).permute(1, 0)
 K1 = rendering.camera_intrinsics
 
-rot_cam, t_cam, inlier_mask = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
-                                                                    K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
+rot_cam, t_cam, inlier_mask, _ = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
+                                                                       K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
 
-print(f'Rot cam: {torch.rad2deg(rot_cam)}')
-print(f'T cam: {torch.rad2deg(t_cam)}')
+R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
+quat_cam = Quaternion.from_matrix(R_cam)
+
+R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
+t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
+
+print('----------------------------------------')
+print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True)}')
+print(f'T cam  : {t_cam.squeeze().numpy(force=True)}')
+print(f'Rot obj: {torch.rad2deg(rot_cam).numpy(force=True)}')
+print(f'T obj  : {t_obj.squeeze().numpy(force=True)}')
+print('----------------------------------------')
