@@ -14,7 +14,7 @@ from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
 from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, triangulate_points_from_Rt, \
-    estimate_pose_using_directly_zaragoza
+    estimate_pose_zaragoza, estimate_pose_using_8pt_algorithm
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
 from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor, \
@@ -88,7 +88,7 @@ class EpipolarPoseEstimator:
         dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
         dst_pts_xy_gt_flow = tensor_index_to_coordinates_xy(dst_pts_yx_gt_flow)
 
-        if self.config.ransac_inlier_filter == 'pnp':
+        if self.config.ransac_inlier_filter == 'pnp_ransac':
             point_map = rendered_obj_cam0_coords
 
             # observed_image_target = camera_observation.observed_image[:, 0]
@@ -98,7 +98,7 @@ class EpipolarPoseEstimator:
                                                     self.camera_intrinsics.width, self.camera_intrinsics.height,
                                                     self.config, confidences)
             rot_cam, t_cam, inlier_mask, triangulated_points = result
-        elif self.config.ransac_inlier_pose_method is not None:
+        elif self.config.ransac_inlier_filter in ['magsac++', 'ransac', '8point', 'pygcransac']:
             result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.camera_intrinsics.width,
                                                  self.camera_intrinsics.height, self.config, confidences)
 

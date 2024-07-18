@@ -24,7 +24,7 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
     N_matches = src_pts_xy.shape[0]
     min_matches_for_ransac = 5
 
-    E_method = ransac_config.ransac_essential_matrix_algorithm
+    E_method = ransac_config.ransac_inlier_filter
     ransac_confidence = ransac_config.ransac_confidence
     if E_method == 'pygcransac' and N_matches >= min_matches_for_ransac:
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))

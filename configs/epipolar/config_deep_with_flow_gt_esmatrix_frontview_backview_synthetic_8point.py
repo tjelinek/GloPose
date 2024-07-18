@@ -12,6 +12,6 @@ def get_config() -> TrackerConfig:
     cfg.run_main_optimization_loop = False
     cfg.preinitialization_method = 'essential_matrix_decomposition'
     cfg.gt_flow_source = 'GenerateSynthetic'
-    cfg.ransac_essential_matrix_algorithm = '8point'
+    cfg.ransac_inlier_filter = '8point'
 
     return cfg
