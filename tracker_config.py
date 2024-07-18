@@ -138,7 +138,8 @@ class TrackerConfig:
 
     # RANSAC settings
     ransac_inlier_filter: str = 'pygcransac'  # 'magsac++', 'ransac', '8point', 'pygcransac', 'pnp_ransac'
-    ransac_inlier_pose_method: str = 'zaragoza'
+    ransac_inlier_pose_method: str = 'zaragoza'  # 'zaragoza', '8point', 'numerical_E_optimization'
+    ransac_refine_E_numerically: bool = False
 
     ransac_outlier_threshold: float = 0.01
     ransac_min_iters: int = 1000
@@ -164,10 +165,6 @@ class TrackerConfig:
     ransac_distant_pixels_sample_size: int = 1000
 
     ransac_confidences_from_occlusion: bool = False
-
-    ransac_inlier_pose_method: str = 'zaragoza'
-
-    refine_pose_using_numerical_optimization: bool = False
 
     levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
     use_custom_jacobian: bool = False
