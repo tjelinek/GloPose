@@ -111,6 +111,7 @@ class EpipolarPoseEstimator:
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
         elif self.config.relative_camera_pose_algorithm == 'zaragoza':
+            raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
             result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
                                                            self.camera_intrinsics.focal_x.cuda(),
                                                            self.camera_intrinsics.focal_y.cuda(),
