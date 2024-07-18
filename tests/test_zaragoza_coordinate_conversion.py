@@ -48,6 +48,11 @@ src_pts_yx, observed_visible_fg_points_mask = (
 
 flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
 dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow).permute(1, 0)
+
+src_pts_xy = src_pts_yx[..., [1, 0]]
+flow_xy = flow[:, :, [1, 0]].permute(0, 1, 2, 4, 3)
+dst_pts_xy = source_coords_to_target_coords(src_pts_xy.permute(1, 0), flow_xy).permute(1, 0)
+
 K1 = rendering.camera_intrinsics
 
 rot_cam, t_cam, inlier_mask, _ = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
@@ -61,8 +66,8 @@ R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
 t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
 
 print('----------------------------------------')
-print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
 print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
-print(f'Rot obj: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
 print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
+print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
+print(f'Rot obj: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
 print('----------------------------------------')
