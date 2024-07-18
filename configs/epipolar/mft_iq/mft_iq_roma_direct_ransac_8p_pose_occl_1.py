@@ -4,7 +4,7 @@ from configs.epipolar.config_deep_with_flow_gt_esmatrix_frontview_backview_flown
 def get_config() -> TrackerConfig8P:
     cfg = TrackerConfig8P()
 
-    cfg.relative_inlier_filter_method = 'RANSAC_2D_to_2D_E_solver'
+    cfg.ransac_inlier_filter = 'RANSAC_2D_to_2D_E_solver'
     cfg.ransac_essential_matrix_algorithm = 'pygcransac'
     cfg.long_flow_model = 'MFT_IQ'
     cfg.MFT_backbone_cfg = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_direct_cfg'
