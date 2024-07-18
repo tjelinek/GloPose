@@ -88,7 +88,7 @@ class EpipolarPoseEstimator:
         dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
         dst_pts_xy_gt_flow = tensor_index_to_coordinates_xy(dst_pts_yx_gt_flow)
 
-        if self.config.relative_inlier_filter_method == 'pnp':
+        if self.config.ransac_inlier_filter == 'pnp':
             point_map = rendered_obj_cam0_coords
 
             # observed_image_target = camera_observation.observed_image[:, 0]
@@ -104,32 +104,29 @@ class EpipolarPoseEstimator:
 
             rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
         else:
-            assert self.config.relative_inlier_filter_method is None
+            assert self.config.ransac_inlier_filter is None
             inlier_mask = torch.ones(src_pts_yx.shape[0], dtype=torch.bool)
 
-        src_pts_yx = src_pts_yx[inlier_mask]
-        dst_pts_yx = dst_pts_yx[inlier_mask]
-        src_pts_xy = src_pts_xy[inlier_mask]
-        dst_pts_xy = dst_pts_xy[inlier_mask]
-        dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[inlier_mask]
-        dst_pts_xy_gt_flow = dst_pts_xy_gt_flow[inlier_mask]
+        src_pts_yx_inliers = src_pts_yx[inlier_mask]
+        dst_pts_yx_inliers = dst_pts_yx[inlier_mask]
+        src_pts_xy_inliers = src_pts_xy[inlier_mask]
+        dst_pts_xy_inliers = dst_pts_xy[inlier_mask]
+        dst_pts_yx_gt_flow_inliers = dst_pts_yx_gt_flow[inlier_mask]
+        dst_pts_xy_gt_flow_inliers = dst_pts_xy_gt_flow[inlier_mask]
 
-        if self.config.ransac_inlier_pose_method == 'RANSAC_2D_to_2D_E_solver':
-            result = filter_inliers_using_ransac(src_pts_yx, dst_pts_yx, K1, K2, self.camera_intrinsics.width,
-                                                 self.camera_intrinsics.height, self.config, confidences)
+        if self.config.ransac_inlier_pose_method == '8point':
+            result = estimate_pose_using_8pt_algorithm(src_pts_xy_inliers, dst_pts_xy_inliers, K1, K2)
+            r_cam, t_cam, inlier_mask, triangulated_points = result
 
-            rot_cam, t_cam, inlier_mask, triangulated_points = result
-        elif self.config.relative_inlier_filter_method == 'zaragoza':
+        elif self.config.ransac_inlier_pose_method == 'zaragoza':
             # raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
-            result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
-                                                           self.camera_intrinsics.focal_x.cuda(),
-                                                           self.camera_intrinsics.focal_y.cuda(),
-                                                           self.camera_intrinsics.x0.cuda(),
-                                                           self.camera_intrinsics.y0.cuda())
-
-            rot_cam, t_cam, inlier_mask, triangulated_points = result
+            r_cam, t_cam = estimate_pose_zaragoza(src_pts_xy_inliers, dst_pts_xy_inliers,
+                                                  self.camera_intrinsics.focal_x.cuda(),
+                                                  self.camera_intrinsics.focal_y.cuda(),
+                                                  self.camera_intrinsics.x0.cuda(),
+                                                  self.camera_intrinsics.y0.cuda())
         else:
-            raise ValueError("Unknown value of 'ransac_use_zaragoza_algorithm'.")
+            raise ValueError("Unknown value of 'relative_inlier_filter_method'.")
 
         R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 
