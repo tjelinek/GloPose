@@ -46,8 +46,11 @@ class RenderingKaolin(nn.Module):
         self.fov = torch.pi / 4  # 45 degrees
         camera_proj = kaolin.render.camera.generate_perspective_projection(self.fov, self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
-        self.register_buffer('camera_trans', torch.Tensor(self.config.camera_position)[None])
-        self.register_buffer('camera_trans_backview', -torch.Tensor(self.config.camera_position)[None])
+
+        camera_position = torch.Tensor(self.config.camera_position)[None]
+        # camera_position[:, 2] *= -1.  # Compensating for different kaolin coordinate system
+        self.register_buffer('camera_trans', camera_position)
+        self.register_buffer('camera_trans_backview', -camera_position)
         self.register_buffer('obj_center', torch.zeros((1, 3)))
         camera_up_direction = torch.Tensor(self.config.camera_up)[None]
         self.register_buffer('camera_up', camera_up_direction)
