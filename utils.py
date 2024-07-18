@@ -152,21 +152,13 @@ def get_foreground_and_segment_mask(observed_occlusion: torch.Tensor, observed_s
 
 
 def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
-                                       occlusion_threshold: float, segmentation_threshold: float, order='yx'):
-    _, _, not_occluded_foreground_mask_yx = get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
+                                       occlusion_threshold: float, segmentation_threshold: float):
+    _, _, not_occluded_foreground_mask = get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
                                                                             occlusion_threshold, segmentation_threshold)
 
-    src_pts_yx = torch.nonzero(not_occluded_foreground_mask_yx).to(torch.float32)
-    if order == 'xy':
-        src_pts = src_pts_yx[:, [1, 0]]
-        not_occluded_foreground_mask = not_occluded_foreground_mask_yx.permute(0, 1, 2, 4, 3)
-    elif order == 'yx':
-        src_pts = src_pts_yx
-        not_occluded_foreground_mask = not_occluded_foreground_mask_yx
-    else:
-        raise ValueError("Invalid value of 'order'")
+    src_pts_yx = torch.nonzero(not_occluded_foreground_mask).to(torch.float32)
 
-    return src_pts, not_occluded_foreground_mask
+    return src_pts_yx, not_occluded_foreground_mask
 
 
 def print_cuda_occupied_memory(device='cuda:0'):
