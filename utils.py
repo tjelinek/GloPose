@@ -154,7 +154,7 @@ def get_foreground_and_segment_mask(observed_occlusion: torch.Tensor, observed_s
 def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observed_segmentation: torch.Tensor,
                                        occlusion_threshold: float, segmentation_threshold: float):
     _, _, not_occluded_foreground_mask = get_foreground_and_segment_mask(observed_occlusion, observed_segmentation,
-                                                                            occlusion_threshold, segmentation_threshold)
+                                                                         occlusion_threshold, segmentation_threshold)
 
     src_pts_yx = torch.nonzero(not_occluded_foreground_mask).to(torch.float32)
 
