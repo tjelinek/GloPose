@@ -41,10 +41,10 @@ src_pts_yx, observed_visible_fg_points_mask = (
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
 dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow_observation.theoretical_flow).permute(1, 0)
-camera_intrinsics = pinhole_intrinsics_from_tensor(rendering.camera_intrinsics, rendering.width, rendering.height)
+K1 = rendering.camera_intrinsic
 
 rot_cam, t_cam, inlier_mask = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
-                                                                    camera_intrinsics.focal_x.cuda(),
-                                                                    camera_intrinsics.focal_y.cuda(),
-                                                                    camera_intrinsics.x0.cuda(),
-                                                                    camera_intrinsics.y0.cuda())
+                                                                    K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
+
+print(f'Rot cam: {torch.rad2deg(rot_cam)}')
+print(f'T cam: {torch.rad2deg(t_cam)}')
