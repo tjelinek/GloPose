@@ -17,7 +17,8 @@ from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, t
     estimate_pose_using_directly_zaragoza
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor
+from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor, \
+    tensor_index_to_coordinates_xy
 
 
 class EpipolarPoseEstimator:
@@ -82,25 +83,40 @@ class EpipolarPoseEstimator:
                                                                                                dst_pts_yx_gt_flow,
                                                                                                confidences,
                                                                                                gt_flow_image_coord)
+
+        src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+        dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
+        dst_pts_xy_gt_flow = tensor_index_to_coordinates_xy(dst_pts_yx_gt_flow)
+
         if self.config.relative_inlier_filter_method == 'pnp':
             point_map = rendered_obj_cam0_coords
 
-            observed_image_target = camera_observation.observed_image[:, 0]
-            depth_image = self.depth_anything.infer_depth_anything(observed_image_target)
+            # observed_image_target = camera_observation.observed_image[:, 0]
+            # depth_image = self.depth_anything.infer_depth_anything(observed_image_target)
 
-            intrinsics = self.camera_intrinsics
-            point_map_from_depth = depth_to_point_cloud(depth_image, float(intrinsics.focal_x),
-                                                        float(intrinsics.focal_y), float(intrinsics.x0),
-                                                        float(intrinsics.y0))
-
-            result = estimate_pose_using_PnP_solver(src_pts_yx, dst_pts_yx, K1, K2, point_map,
+            result = estimate_pose_using_PnP_solver(src_pts_xy, dst_pts_xy, K1, K2, point_map,
                                                     self.camera_intrinsics.width, self.camera_intrinsics.height,
                                                     self.config, confidences)
             rot_cam, t_cam, inlier_mask, triangulated_points = result
+        elif self.config.ransac_inlier_pose_method is not None:
+            result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.camera_intrinsics.width,
+                                                 self.camera_intrinsics.height, self.config, confidences)
 
-        elif self.config.relative_inlier_filter_method == 'RANSAC_2D_to_2D_E_solver':
-            result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.camera_intrinsics.width,
-                                                        self.camera_intrinsics.height, self.config, confidences)
+            rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
+        else:
+            assert self.config.relative_inlier_filter_method is None
+            inlier_mask = torch.ones(src_pts_yx.shape[0], dtype=torch.bool)
+
+        src_pts_yx = src_pts_yx[inlier_mask]
+        dst_pts_yx = dst_pts_yx[inlier_mask]
+        src_pts_xy = src_pts_xy[inlier_mask]
+        dst_pts_xy = dst_pts_xy[inlier_mask]
+        dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[inlier_mask]
+        dst_pts_xy_gt_flow = dst_pts_xy_gt_flow[inlier_mask]
+
+        if self.config.ransac_inlier_pose_method == 'RANSAC_2D_to_2D_E_solver':
+            result = filter_inliers_using_ransac(src_pts_yx, dst_pts_yx, K1, K2, self.camera_intrinsics.width,
+                                                 self.camera_intrinsics.height, self.config, confidences)
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
         elif self.config.relative_inlier_filter_method == 'zaragoza':
