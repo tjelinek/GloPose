@@ -10,10 +10,9 @@ import time
 import torch
 from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry import So3
-from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle
+from kornia.geometry.conversions import quaternion_to_axis_angle
 from pathlib import Path
 
-from pytorch3d.transforms import quaternion_multiply
 from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable
 

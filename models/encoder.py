@@ -129,6 +129,12 @@ class Encoder(nn.Module):
         qdiff = weights * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
         return tdiff, qdiff
 
+    def set_encoder_poses(self, rotations: torch.Tensor, translations: torch.Tensor):
+        rotation_quaternion = axis_angle_to_quaternion(rotations)
+
+        self.quaternion = torch.nn.Parameter(rotation_quaternion)
+        self.translation = torch.nn.Parameter(translations)
+
     def get_total_rotation_at_frame_vectorized(self):
         offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.initial_quaternion),
                                                         normalize_quaternion(self.quaternion_offsets))
