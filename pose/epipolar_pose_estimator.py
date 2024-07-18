@@ -35,6 +35,9 @@ class EpipolarPoseEstimator:
         self.gt_encoder: Encoder = gt_encoder
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
+        self.occlusion_threshold = self.config.occlusion_coef_threshold
+        self.segmentation_threshold = self.config.segmentation_mask_threshold
+
         if camera_instrinsics is None:
             self.camera_intrinsics = pinhole_intrinsics_from_tensor(self.rendering.camera_intrinsics,
                                                                     self.rendering.width,
@@ -56,16 +59,15 @@ class EpipolarPoseEstimator:
 
         optical_flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
 
-        observed_segmentation_binary_mask = segmentation > float(self.config.segmentation_mask_threshold)
+        observed_segmentation_binary_mask = segmentation > float(self.segmentation_threshold)
 
         src_pts_yx, observed_visible_fg_points_mask = (
-            get_not_occluded_foreground_points(occlusions, segmentation,
-                                               self.config.occlusion_coef_threshold,
-                                               self.config.segmentation_mask_threshold))
+            get_not_occluded_foreground_points(occlusions, segmentation, self.occlusion_threshold,
+                                               self.segmentation_threshold))
 
         _, gt_visible_fg_points_mask = (get_not_occluded_foreground_points(
             gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
-            self.config.occlusion_coef_threshold, self.config.segmentation_mask_threshold))
+            self.occlusion_threshold, self.segmentation_threshold))
 
         dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
 
