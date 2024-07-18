@@ -129,8 +129,8 @@ def compute_bearing_vectors(pts_xy, focal_x, focal_y, c_x, c_y):
     return bearing_vectors
 
 
-def estimate_pose_using_directly_zaragoza(src_pts_yx: torch.Tensor, dst_pts_yx: torch.Tensor, focal_x: torch.Tensor,
-                                          focal_y: torch.Tensor, c_x: torch.Tensor, c_y: torch.Tensor):
+def estimate_pose_zaragoza(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, focal_x: torch.Tensor,
+                           focal_y: torch.Tensor, c_x: torch.Tensor, c_y: torch.Tensor):
     configuration = {
         # threshold for the singular values of X to check if rank(X)\in[1,3] (condition for tightness),
         # where X is the SDP-solution submatrix corresponding to E, t, q and h.
@@ -144,28 +144,18 @@ def estimate_pose_using_directly_zaragoza(src_pts_yx: torch.Tensor, dst_pts_yx: 
 
     solver = C2P(cfg=configuration)
 
-    src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
-    dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
-
     src_pts_bearings_xy = compute_bearing_vectors(src_pts_xy, focal_x, focal_y, c_x, c_y)
     dst_pts_bearings_xy = compute_bearing_vectors(dst_pts_xy, focal_x, focal_y, c_x, c_y)
 
     src_pts_xy_bearings_np = src_pts_bearings_xy.numpy(force=True).T
     dst_pts_xy_bearings_np = dst_pts_bearings_xy.numpy(force=True).T
 
-    mask_tensor = torch.ones(src_pts_yx.shape[0], dtype=torch.bool).cuda()  # TODO fill me with something meaningful
-    triangulated_points = torch.zeros_like(src_pts_bearings_xy).cuda()  # TODO fill me with something meaningful
+    solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
 
-    if src_pts_yx.shape[0] < 5:
-        R_cam = torch.eye(3).to(torch.float32).cuda()
-        t_cam = torch.zeros(3).to(torch.float32).cuda().unsqueeze(-1)
-    else:
-        solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
-
-        R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
-        t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
+    R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
+    t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
 
     r_cam = rotation_matrix_to_axis_angle(R_cam)
 
-    return r_cam, t_cam, mask_tensor, triangulated_points
+    return r_cam, t_cam
 
