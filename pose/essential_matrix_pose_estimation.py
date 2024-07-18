@@ -1,4 +1,5 @@
 import cv2
+import kornia
 import numpy as np
 import pygcransac
 import torch
@@ -60,6 +61,27 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
     r_cam = rotation_matrix_to_axis_angle(R.contiguous())
 
     return r_cam, t_cam, mask_tensor, triangulated_points
+
+
+def estimate_pose_using_8pt_algorithm(src_pts_xy_inliers: torch.Tensor, dst_pts_xy_inliers: torch.Tensor,
+                                      K1: torch.Tensor, K2: torch.Tensor):
+
+    N_matches = src_pts_xy_inliers.shape[0]
+
+    if N_matches < 8:
+        raise ValueError("Not Enough Correspondences")
+
+    F_mat = kornia.geometry.epipolar.find_fundamental(src_pts_xy_inliers[None], dst_pts_xy_inliers[None],
+                                                      method='8POINT')
+
+    E_inliers = kornia.geometry.epipolar.essential_from_fundamental(F_mat, K1[None], K2[None])
+    E = (E_inliers / torch.norm(E_inliers)).squeeze()
+
+    R, t_cam, triangulated_points = motion_from_essential_choose_solution(E, K1, K2, src_pts_xy_inliers,
+                                                                          dst_pts_xy_inliers)
+    r_cam = rotation_matrix_to_axis_angle(R.contiguous())
+
+    return r_cam, t_cam
 
 
 def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts_yx: torch.Tensor,
