@@ -79,20 +79,6 @@ class EpipolarPoseEstimator:
 
         gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
-        src_pts_yx_gt_flow = src_pts_yx.clone()
-
-        pts3d_dust3r = None
-        if self.config.ransac_use_dust3r:
-            observed_images = camera_observation.observed_image[0][[0, -1]]
-            images_sequence = list(torch.unbind(observed_images, 0))
-            src_pts_yx_dust3r, dst_pts_yx_dust3r, pts3d_dust3r = get_matches_using_dust3r(images_sequence)
-
-            dust3r_fg_points_mask = gt_segmentation_binary_mask[0, 0, 0, src_pts_yx_dust3r[:, 0], src_pts_yx_dust3r[:, 1]]
-            src_pts_yx = src_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
-            dst_pts_yx = dst_pts_yx_dust3r[dust3r_fg_points_mask][:, [1, 0]].to(torch.float32)
-
-            src_pts_yx_gt_flow = src_pts_yx.clone()
-            dst_pts_yx_gt_flow = dst_pts_yx.clone()
 
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
@@ -162,9 +148,6 @@ class EpipolarPoseEstimator:
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points.cpu()
-        if pts3d_dust3r is not None:
-            data.dust3r_point_cloud_im1 = pts3d_dust3r[0].flatten(0, 1).cpu()
-            data.dust3r_point_cloud_im2 = pts3d_dust3r[1].flatten(0, 1).cpu()
 
         gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
         gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
