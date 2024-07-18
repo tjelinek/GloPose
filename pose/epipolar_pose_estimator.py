@@ -96,15 +96,21 @@ class EpipolarPoseEstimator:
 
             result = estimate_pose_using_PnP_solver(src_pts_xy, dst_pts_xy, K1, K2, point_map_xy)
 
-            rot_cam, t_cam, inlier_mask, triangulated_points = result
+            rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
         elif self.config.ransac_inlier_filter in ['magsac++', 'ransac', '8point', 'pygcransac']:
             result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.camera_intrinsics.width,
-                                                 self.camera_intrinsics.height, self.config, confidences)
+                                                 self.camera_intrinsics.height, self.config.ransac_inlier_filter,
+                                                 self.config.ransac_confidence, confidences,
+                                                 ransac_refine_E_numerically=self.config.ransac_refine_E_numerically)
 
             rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
-        else:
-            assert self.config.ransac_inlier_filter is None
+        elif self.config.ransac_inlier_filter is None:
             inlier_mask = torch.ones(src_pts_yx.shape[0], dtype=torch.bool)
+            rot_cam_ransac = None
+            t_cam_ransac = None
+            triangulated_points_ransac = None
+        else:
+            raise ValueError("Unknown RANSAC method")
 
         src_pts_yx_inliers = src_pts_yx[inlier_mask]
         dst_pts_yx_inliers = dst_pts_yx[inlier_mask]
@@ -115,7 +121,7 @@ class EpipolarPoseEstimator:
 
         if self.config.ransac_inlier_pose_method == '8point':
             result = estimate_pose_using_8pt_algorithm(src_pts_xy_inliers, dst_pts_xy_inliers, K1, K2)
-            r_cam, t_cam, inlier_mask, triangulated_points = result
+            r_cam, t_cam = result
 
         elif self.config.ransac_inlier_pose_method == 'zaragoza':
             # raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
@@ -124,10 +130,18 @@ class EpipolarPoseEstimator:
                                                   self.camera_intrinsics.focal_y.cuda(),
                                                   self.camera_intrinsics.x0.cuda(),
                                                   self.camera_intrinsics.y0.cuda())
+        elif self.config.ransac_inlier_pose_method is None:
+            if self.config.ransac_inlier_filter is None:
+                raise ValueError("At least one of 'ransac_inlier_filter' or 'ransac_inlier_filter' must not be None.")
+            r_cam = rot_cam_ransac
+            t_cam = t_cam_ransac
         else:
-            raise ValueError("Unknown value of 'relative_inlier_filter_method'.")
+            raise ValueError("Unknown inlier pose method")
 
-        R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
+        R_cam = axis_angle_to_rotation_matrix(r_cam[None])
+
+        quat_cam = Quaternion.from_matrix(R_cam)
+        Se3_cam = Se3(quat_cam, t_cam.squeeze()[None])
 
         R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
         t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
@@ -153,7 +167,7 @@ class EpipolarPoseEstimator:
         data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         data.ransac_inliers = inlier_src_pts.cpu()
         data.ransac_outliers = outlier_src_pts.cpu()
-        data.ransac_triangulated_points = triangulated_points.cpu()
+        data.ransac_triangulated_points = triangulated_points_ransac.cpu()
 
         gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
         gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
