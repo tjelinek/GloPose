@@ -13,7 +13,6 @@ from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coord
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
-from pose.dust3r import get_matches_using_dust3r
 from pose.essential_matrix_pose_estimation import estimate_pose_using_2D_2D_E_solver, triangulate_points_from_Rt, \
     estimate_pose_using_directly_zaragoza
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
