@@ -157,12 +157,14 @@ def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observe
                                                                             occlusion_threshold, segmentation_threshold)
 
     src_pts_yx = torch.nonzero(not_occluded_foreground_mask_yx).to(torch.float32)
-    if order == 'yx':
+    if order == 'xy':
         src_pts = src_pts_yx[:, [1, 0]]
         not_occluded_foreground_mask = not_occluded_foreground_mask_yx.permute(0, 1, 2, 4, 3)
-    else:
+    elif order == 'yx':
         src_pts = src_pts_yx
         not_occluded_foreground_mask = not_occluded_foreground_mask_yx
+    else:
+        raise ValueError("Invalid value of 'order'")
 
     return src_pts, not_occluded_foreground_mask
 
