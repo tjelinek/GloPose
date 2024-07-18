@@ -41,7 +41,7 @@ src_pts_yx, observed_visible_fg_points_mask = (
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
 dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow_observation.theoretical_flow).permute(1, 0)
-K1 = rendering.camera_intrinsic
+K1 = rendering.camera_intrinsics
 
 rot_cam, t_cam, inlier_mask = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
                                                                     K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
