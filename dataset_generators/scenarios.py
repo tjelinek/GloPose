@@ -6,6 +6,7 @@ from typing import List
 
 import numpy as np
 
+
 def default_initial_rotation():
     return np.array([0., 0., 0.])
 
@@ -166,6 +167,39 @@ def generate_circular_translation(steps=72) -> MovementScenario:
     initial_translation = np.array([0.0, 0.0, 0.0])
     result = MovementScenario(translations=translations, initial_translation=initial_translation)
     return result
+
+
+def generate_translation(steps: int, axes: List[str]) -> MovementScenario:
+    translations = np.zeros((steps, 3))
+    for axis in axes:
+        axis_index = {'x': 0, 'y': 1, 'z': 2}[axis]
+        translations[:, axis_index] = np.arange(steps)
+
+    translations_list = [translations[i] for i in range(steps)]
+    initial_translation = np.array([0.0, 0.0, 0.0])
+    result = MovementScenario(translations=translations_list, initial_translation=initial_translation)
+    return result
+
+
+# Specific functions for common cases
+def generate_x_translation(steps: int) -> MovementScenario:
+    return generate_translation(steps, ['x'])
+
+
+def generate_y_translation(steps: int) -> MovementScenario:
+    return generate_translation(steps, ['y'])
+
+
+def generate_z_translation(steps: int) -> MovementScenario:
+    return generate_translation(steps, ['z'])
+
+
+def generate_xy_translation(steps: int) -> MovementScenario:
+    return generate_translation(steps, ['x', 'y'])
+
+
+def generate_xyz_translation(steps: int) -> MovementScenario:
+    return generate_translation(steps, ['x', 'y', 'z'])
 
 
 def generate_in_depth_translations(steps=72) -> MovementScenario:
