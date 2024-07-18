@@ -6,12 +6,13 @@ from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix
 
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam
 from dataset_generators import scenarios
-from flow import source_coords_to_target_coords
+from flow import source_coords_to_target_coords, flow_unit_coords_to_image_coords
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
-from pose.essential_matrix_pose_estimation import estimate_pose_using_directly_zaragoza
+from pose.essential_matrix_pose_estimation import estimate_pose_using_directly_zaragoza, \
+    estimate_pose_using_2D_2D_E_solver
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor
+from utils import normalize_vertices, get_not_occluded_foreground_points
 
 sequence_len = 2
 config = TrackerConfig()
@@ -42,11 +43,14 @@ src_pts_yx, observed_visible_fg_points_mask = (
                                        flow_observation.rendered_flow_segmentation,
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
-dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow_observation.theoretical_flow).permute(1, 0)
+
+flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
+dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), flow).permute(1, 0)
 K1 = rendering.camera_intrinsics
 
 rot_cam, t_cam, inlier_mask, _ = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
                                                                        K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
+# rot_cam, t_cam, inlier_mask, _ = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K1, w, h, config, None)
 
 R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 quat_cam = Quaternion.from_matrix(R_cam)
