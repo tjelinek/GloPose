@@ -81,7 +81,7 @@ class EpipolarPoseEstimator:
                                                                                                dst_pts_yx_gt_flow,
                                                                                                confidences,
                                                                                                gt_flow_image_coord)
-        if self.config.relative_camera_pose_algorithm == 'pnp':
+        if self.config.relative_inlier_filter_method == 'pnp':
             point_map = rendered_obj_cam0_coords
 
             observed_image_target = camera_observation.observed_image[:, 0]
@@ -97,13 +97,13 @@ class EpipolarPoseEstimator:
                                                     self.config, confidences)
             rot_cam, t_cam, inlier_mask, triangulated_points = result
 
-        elif self.config.relative_camera_pose_algorithm == 'RANSAC_2D_to_2D_E_solver':
+        elif self.config.relative_inlier_filter_method == 'RANSAC_2D_to_2D_E_solver':
             result = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K2, self.camera_intrinsics.width,
                                                         self.camera_intrinsics.height, self.config, confidences)
 
             rot_cam, t_cam, inlier_mask, triangulated_points = result
-        elif self.config.relative_camera_pose_algorithm == 'zaragoza':
-            raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
+        elif self.config.relative_inlier_filter_method == 'zaragoza':
+            # raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
             result = estimate_pose_using_directly_zaragoza(src_pts_yx, dst_pts_yx,
                                                            self.camera_intrinsics.focal_x.cuda(),
                                                            self.camera_intrinsics.focal_y.cuda(),
