@@ -74,10 +74,9 @@ class EpipolarPoseEstimator:
         gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
 
+        confidences = None
         if self.config.ransac_confidences_from_occlusion:
             confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
-        else:
-            confidences = None
 
         confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = self.augment_correspondences(src_pts_yx, dst_pts_yx,
                                                                                                dst_pts_yx_gt_flow,
