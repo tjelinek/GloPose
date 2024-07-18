@@ -46,6 +46,10 @@ class MovementScenario:
 
         return quaternions
 
+    @property
+    def rotation_axis_angles(self) -> np.ndarray:
+        return np.deg2rad(np.asarray(self.rotations))
+
     def get_dict(self):
         scenario_dict = asdict(self)
 
