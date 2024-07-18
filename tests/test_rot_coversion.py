@@ -10,7 +10,7 @@ from utils import homogenize_3x4_transformation_matrix
 for camera_up_idx in range(3):
     camera_up = torch.tensor([0, 0, 0]).to(torch.float).unsqueeze(0)
     camera_up[:, camera_up_idx] = 1
-    camera_translation = torch.tensor([1.0, -2.0, 5.0]).to(torch.float).unsqueeze(0)
+    camera_translation = torch.tensor([4.0, -2.0, 5.0]).to(torch.float).unsqueeze(0)
     obj_center = torch.tensor([0, 0, 0]).to(torch.float).unsqueeze(0)
 
     obj_rot_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
@@ -48,19 +48,23 @@ for camera_up_idx in range(3):
 
     R_obj = axis_angle_to_rotation_matrix(obj_rot)
     so3_obj = So3.from_matrix(R_obj)
+    so3_cam = So3.from_matrix(R_cam)
     so3_obj_prime = So3.from_matrix(R_obj_prime)
     so3_rot_error: So3 = so3_obj * so3_obj_prime.inverse()
+    so3_rot_error_cam_obj = so3_obj * so3_cam.inverse()
     rot_error_angle = torch.rad2deg(so3_rot_error.q.polar_angle)
+    rot_error_cam_obj_angle = torch.rad2deg(so3_rot_error_cam_obj.q.polar_angle)
 
     try:
         assert torch.max(torch.abs(t_obj - t_obj_prime)) < 1e-3
         assert torch.max(torch.abs(rot_error_angle)) < 1e-3
+        assert torch.max(torch.abs(rot_error_cam_obj_angle)) < 1e-3
     except:
         print("camera_ip", camera_up)
         print_tensor("t_obj", t_obj[:5])
         # print_tensor("t_cam", t_cam)
         print_tensor("t_obj_prime", t_obj_prime[:5])
-        print_tensor("r_obj", r_obj_prime_print[:5])
-        # print_tensor("r_cam", r_cam_print)
-        print_tensor("r_obj_prime", r_obj_prime[:5])
+        print_tensor("r_obj", r_obj_print[:5])
+        print_tensor("r_cam", r_cam_print[:5])
+        print_tensor("r_obj_prime", r_obj_prime_print[:5])
         breakpoint()
