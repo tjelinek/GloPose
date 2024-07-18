@@ -12,10 +12,11 @@ from models.rendering import RenderingKaolin
 from pose.essential_matrix_pose_estimation import estimate_pose_using_directly_zaragoza, \
     estimate_pose_using_2D_2D_E_solver
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, get_not_occluded_foreground_points
+from utils import normalize_vertices, get_not_occluded_foreground_points, erode_segment_mask2
 
 sequence_len = 2
 config = TrackerConfig()
+config.camera_up = (1, 0, 0)
 config.input_frames = sequence_len
 
 path = Path('./prototypes/sphere.obj')
@@ -26,7 +27,7 @@ iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
 h = 500
 w = 500
-scenario = scenarios.generate_rotations_z(10.0)
+scenario = scenarios.generate_rotations_y(10.0)
 gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[None, :sequence_len].cuda()
 gt_translation = torch.zeros(1, 1, sequence_len, 3).cuda()
 
@@ -37,10 +38,11 @@ rendering = RenderingKaolin(config, faces, w, h).cuda()
 W_4x4 = rendering.camera_transformation_matrix_4x4()
 
 flow_observation = rendering.render_flow_for_frame(gt_encoder, 0, 1)
+segmentation = erode_segment_mask2(7, flow_observation.rendered_flow_segmentation[0])[None]
 
 src_pts_yx, observed_visible_fg_points_mask = (
     get_not_occluded_foreground_points(flow_observation.rendered_flow_occlusion,
-                                       flow_observation.rendered_flow_segmentation,
+                                       segmentation,
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
 
@@ -59,8 +61,8 @@ R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
 t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
 
 print('----------------------------------------')
-print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True)}')
-print(f'T cam  : {t_cam.squeeze().numpy(force=True)}')
-print(f'Rot obj: {torch.rad2deg(rot_cam).numpy(force=True)}')
-print(f'T obj  : {t_obj.squeeze().numpy(force=True)}')
+print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
+print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
+print(f'Rot obj: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
+print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
 print('----------------------------------------')
