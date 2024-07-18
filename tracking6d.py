@@ -206,17 +206,11 @@ class Tracking6D:
             self.encoder.texture_map = torch.nn.Parameter(self.gt_texture_features)
             self.encoder.texture_map.requires_grad = False
 
-        def set_encoder_poses(encoder, rotations, translations):
-            rotation_quaternion = axis_angle_to_quaternion(rotations)
-
-            encoder.quaternion = torch.nn.Parameter(rotation_quaternion)
-            encoder.translation = torch.nn.Parameter(translations)
-
         self.encoder.train()
 
         if not self.config.optimize_pose:
             if self.gt_rotations is not None and self.gt_translations is not None:
-                set_encoder_poses(self.encoder, self.gt_rotations, self.gt_translations)
+                self.encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
 
                 # Do not optimize the poses
                 for param in [self.encoder.quaternion, self.encoder.translation]:
@@ -233,7 +227,7 @@ class Tracking6D:
                 param.detach_()
 
         if self.gt_rotations is not None and self.gt_translations is not None:
-            set_encoder_poses(self.gt_encoder, self.gt_rotations, self.gt_translations)
+            self.gt_encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
 
         if self.gt_texture is not None:
             self.gt_encoder.gt_texture = self.gt_texture
