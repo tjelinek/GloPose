@@ -7,7 +7,7 @@ from kornia.geometry import axis_angle_to_rotation_matrix, Se3, Quaternion
 
 from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
-from auxiliary_scripts.depth import DepthAnythingProvider, depth_to_point_cloud
+from auxiliary_scripts.depth import DepthAnythingProvider
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords, get_correct_correspondences_mask
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation
