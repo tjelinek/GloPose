@@ -3,11 +3,12 @@ from pathlib import Path
 import kaolin
 import numpy as np
 import torch
-from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix
+from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix, rotation_matrix_to_axis_angle
 
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam
 from dataset_generators import scenarios
-from flow import source_coords_to_target_coords, flow_unit_coords_to_image_coords
+from flow import source_coords_to_target_coords, flow_unit_coords_to_image_coords, \
+    source_coords_to_target_coords_world_frame
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from pose.essential_matrix_pose_estimation import estimate_pose_using_directly_zaragoza, \
@@ -18,8 +19,8 @@ from utils import normalize_vertices, get_not_occluded_foreground_points, erode_
 
 sequence_len = 2
 config = TrackerConfig()
-config.camera_up = (1, 0, 0)
-config.camera_position = (0, 0, 5)
+config.camera_up = (0, 1, 0)
+config.camera_position = (-6, 5.18, 10)
 config.input_frames = sequence_len
 
 path = Path('./prototypes/sphere.obj')
@@ -28,8 +29,8 @@ ivertices = normalize_vertices(mesh.vertices).numpy()
 faces = mesh.faces.numpy()
 iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
-h = 500
-w = 500
+h = 564
+w = 300
 scenario = scenarios.generate_rotations_xyz(10.0)
 scenario_t = scenarios.generate_xyz_translation(36)
 gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[None, :sequence_len].cuda()# * 0
@@ -59,7 +60,6 @@ src_pts_yx, observed_visible_fg_points_mask = (
                                        config.segmentation_mask_threshold))
 
 flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
-dst_pts_yx = source_coords_to_target_coords_world_frame(src_pts_yx.permute(1, 0), flow).permute(1, 0)
 
 src_pts_xy = src_pts_yx[..., [1, 0]]
 flow_xy = flow[:, :, [1, 0]].permute(0, 1, 2, 4, 3)
@@ -69,8 +69,6 @@ K1 = rendering.camera_intrinsics
 
 rot_cam, t_cam = estimate_pose_zaragoza(src_pts_xy, dst_pts_xy, K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
 # rot_cam, t_cam, inlier_mask, _ = estimate_pose_using_2D_2D_E_solver(src_pts_yx, dst_pts_yx, K1, K1, w, h, config, None)
-src_pts_xy = src_pts_xy2
-dst_pts_xy = dst_pts_xy2
 
 R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 quat_cam = Quaternion.from_matrix(R_cam)
