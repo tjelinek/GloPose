@@ -1176,7 +1176,7 @@ class WriteResults:
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, seg_mask,
                                             occlusion, inliers, outliers):
-        matching_text = f'ransac method: {self.tracking_config.ransac_essential_matrix_algorithm}\n'
+        matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
         if inliers is not None:
             inliers = inliers.numpy(force=True).T  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(inliers, occlusion, flow_np, rendered_flow,
