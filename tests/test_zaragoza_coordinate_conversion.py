@@ -34,11 +34,13 @@ scenario = scenarios.generate_rotations_xyz(10.0)
 scenario_t = scenarios.generate_xyz_translation(36)
 gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[None, :sequence_len].cuda()# * 0
 gt_rotation[..., 0] *= 2.
+gt_rotation[..., 1] *= 1.
 gt_rotation[..., 2] *= 0.5
 
 # gt_translation = torch.zeros(1, 1, sequence_len, 3).cuda()
 gt_translation = torch.from_numpy(np.asarray(scenario_t.translations)).cuda()[None, None, :sequence_len].to(torch.float32) * 0
 gt_translation[..., 0] *= 2.
+gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
 gt_encoder = Encoder(config, ivertices, iface_features, w, h, 3).cuda()
