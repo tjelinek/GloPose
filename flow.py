@@ -202,6 +202,18 @@ def source_coords_to_target_coords(source_coords: torch.Tensor, flow: torch.Tens
     return torch.stack([y2_f, x2_f], dim=0)
 
 
+def source_coords_to_target_coords_world_frame(source_coords_yx: torch.Tensor, flow: torch.Tensor):
+
+    y1, x1 = source_coords_yx
+    delta_x, delta_y = flow[0, 0, :, -y1.to(torch.int), x1.to(torch.int)]
+
+    # Compute target coordinates
+    # breakpoint()
+    x2_f, y2_f = x1 + delta_x, y1 - delta_y
+
+    return torch.stack([y2_f, x2_f], dim=0)
+
+
 def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
     y1, x1 = source_coords
     delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
