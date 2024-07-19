@@ -47,7 +47,7 @@ gt_encoder = Encoder(config, ivertices, iface_features, w, h, 3).cuda()
 gt_encoder.set_encoder_poses(gt_rotation, gt_translation)
 
 rendering = RenderingKaolin(config, faces, w, h).cuda()
-W_4x4 = rendering.camera_transformation_matrix_4x4()
+W_4x4 = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
 flow_observation = rendering.render_flow_for_frame(gt_encoder, 0, 1)
 segmentation = erode_segment_mask2(7, flow_observation.rendered_flow_segmentation[0])[None]

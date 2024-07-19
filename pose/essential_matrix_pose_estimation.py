@@ -76,7 +76,7 @@ def estimate_pose_using_8pt_algorithm(src_pts_xy_inliers: torch.Tensor, dst_pts_
 
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E, K1, K2, src_pts_xy_inliers,
                                                                           dst_pts_xy_inliers)
-    r_cam = rotation_matrix_to_axis_angle(R.contiguous())
+    r_cam = -rotation_matrix_to_axis_angle(R.contiguous())  # Clockwise->anti-clockwise rotation convention
 
     return r_cam, t_cam
 
@@ -193,6 +193,6 @@ def estimate_pose_zaragoza(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, f
     R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
     t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
 
-    r_cam = rotation_matrix_to_axis_angle(R_cam)
+    r_cam = -rotation_matrix_to_axis_angle(R_cam)  # Clockwise->anti-clockwise rotation convention
 
     return r_cam, t_cam

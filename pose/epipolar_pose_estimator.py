@@ -51,7 +51,7 @@ class EpipolarPoseEstimator:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
-        W_4x4 = self.rendering.camera_transformation_matrix_4x4()
+        W_4x4 = self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
