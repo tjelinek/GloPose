@@ -39,17 +39,17 @@ class EpipolarPoseEstimator:
         self.occlusion_threshold = self.config.occlusion_coef_threshold
         self.segmentation_threshold = self.config.segmentation_mask_threshold
 
-        if camera_instrinsics is None:
+        if camera_intrinsics is None:
             self.camera_intrinsics = pinhole_intrinsics_from_tensor(self.rendering.camera_intrinsics,
                                                                     self.rendering.width,
                                                                     self.rendering.height)
         else:
-            self.camera_intrinsics = camera_instrinsics
+            self.camera_intrinsics = camera_intrinsics
 
     def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
                                          camera_observation: FrameObservation, backview=False) -> Tuple[float, Se3]:
 
-        K1 = K2 = self.camera_intrinsics.params.to(torch.float32)
+        K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
         W_4x4 = self.rendering.camera_transformation_matrix_4x4()
 

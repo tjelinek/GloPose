@@ -10,7 +10,7 @@ from kornia.geometry.conversions import quaternion_to_rotation_matrix
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
-from utils import homogenize_3x4_transformation_matrix
+from utils import homogenize_3x4_transformation_matrix, pinhole_intrinsics_to_tensor
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',
@@ -68,9 +68,7 @@ class RenderingKaolin(nn.Module):
             PinholeIntrinsics.from_fov(width, height, self.fov, x0=width / 2, y0=height / 2,
                                        fov_direction=kaolin.render.camera.CameraFOV.VERTICAL))
 
-        camera_intrinsics = torch.Tensor([[self.intrinsics.focal_x, 0., self.intrinsics.x0],
-                                          [0., self.intrinsics.focal_y, self.intrinsics.y0],
-                                          [0., 0., 1.]])
+        camera_intrinsics = pinhole_intrinsics_to_tensor(self.intrinsics).cuda()
 
         self.register_buffer('camera_intrinsics', camera_intrinsics)
         self.set_faces(faces)

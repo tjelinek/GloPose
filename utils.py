@@ -212,7 +212,26 @@ def unpad_image(image, pad_h, pad_w):
 
 
 def pinhole_intrinsics_from_tensor(intrinsics: torch.Tensor, width: int, height: int) -> PinholeIntrinsics:
+    """
+    intrinsics: Shape [3, 3]
+    """
 
-    pinhole_intrinsics = PinholeIntrinsics(width, height, intrinsics)
+    fx = intrinsics[0, 0]
+    fy = intrinsics[1, 1]
+    x0 = intrinsics[0, 2]
+    y0 = intrinsics[1, 2]
+    intrinsics_kaolin_format = torch.stack([x0, y0, fx, fy], dim=0)
+    pinhole_intrinsics = PinholeIntrinsics(width, height, intrinsics_kaolin_format)
 
     return pinhole_intrinsics
+
+
+def pinhole_intrinsics_to_tensor(intrinsics: PinholeIntrinsics) -> torch.Tensor:
+
+    intrinsics_tensor = torch.Tensor([[intrinsics.focal_x, 0., intrinsics.x0],
+                                      [0., intrinsics.focal_y, intrinsics.y0],
+                                      [0., 0., 1.]])
+    if len(intrinsics_tensor.shape) == 2:
+        intrinsics_tensor = intrinsics_tensor
+
+    return intrinsics_tensor
