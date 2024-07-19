@@ -208,7 +208,7 @@ def source_coords_to_target_coords_world_frame(src_pts_yx: torch.Tensor, flow: t
     delta_x, delta_y = flow[0, 0, :, y1.to(torch.int), -x1.to(torch.int)]
 
     # Compute target coordinates
-    x2_f, y2_f = y1 + delta_y, x1 - delta_x
+    y2_f, x2_f = y1 + delta_y, x1 - delta_x
 
     return torch.stack([y2_f, x2_f], dim=0).permute(1, 0)
 
