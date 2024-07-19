@@ -53,8 +53,8 @@ flow_observation = rendering.render_flow_for_frame(gt_encoder, 0, 1)
 segmentation = erode_segment_mask2(7, flow_observation.rendered_flow_segmentation[0])[None]
 
 src_pts_yx, observed_visible_fg_points_mask = (
-    get_not_occluded_foreground_points(flow_observation.rendered_flow_occlusion.permute(0, 1, 2, 4, 3),
-                                       segmentation.permute(0, 1, 2, 4, 3),
+    get_not_occluded_foreground_points(flow_observation.rendered_flow_occlusion,
+                                       segmentation,
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
 
