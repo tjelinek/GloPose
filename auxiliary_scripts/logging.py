@@ -837,10 +837,8 @@ class WriteResults:
             gt_flow_image = flow_unit_coords_to_image_coords(arc_data.synthetic_flow_result.observed_flow)
 
             src_pts_pred_visible_yx = arc_data.observed_visible_fg_points_mask.nonzero()
-            dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx.permute(1, 0),
-                                                                     observed_flow_image).permute(1, 0)
-            dst_pts_pred_visible_yx_gt = source_coords_to_target_coords(src_pts_pred_visible_yx.permute(1, 0),
-                                                                        gt_flow_image).permute(1, 0)
+            dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx,observed_flow_image)
+            dst_pts_pred_visible_yx_gt = source_coords_to_target_coords(src_pts_pred_visible_yx, gt_flow_image)
 
             correct_flows_epe = torch.linalg.norm(dst_pts_pred_visible_yx - dst_pts_pred_visible_yx_gt, dim=1)
 
@@ -1117,7 +1115,7 @@ class WriteResults:
 
         src_pts_front = new_flow_arc_data.src_pts_yx
         dst_pts_front = new_flow_arc_data.dst_pts_yx
-        dst_pts_gt_flow_front = source_coords_to_target_coords(src_pts_front.T, gt_flow).T
+        dst_pts_gt_flow_front = source_coords_to_target_coords(src_pts_front, gt_flow)
 
         src_pts_front_inliers = src_pts_front[inlier_list]
         src_pts_front_outliers = src_pts_front[outlier_list]
