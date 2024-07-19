@@ -9,7 +9,7 @@ from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
-from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords, get_correct_correspondences_mask
+from flow import flow_unit_coords_to_image_coords, get_correct_correspondences_mask, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
@@ -70,10 +70,10 @@ class EpipolarPoseEstimator:
             gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
             self.occlusion_threshold, self.segmentation_threshold))
 
-        dst_pts_yx = source_coords_to_target_coords_world_frame(src_pts_yx.permute(1, 0), flow).permute(1, 0)
+        dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
 
         gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
-        dst_pts_yx_gt_flow = source_coords_to_target_coords_world_frame(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
+        dst_pts_yx_gt_flow = source_to_target_coords_world_coord_system(src_pts_yx, gt_flow)
 
         confidences = None
         if self.config.ransac_confidences_from_occlusion:
