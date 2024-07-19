@@ -7,16 +7,14 @@ from kornia import vec_like, eye_like
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, projection_from_KRt, \
     triangulate_points
 from nonmin_pose import C2P
+from pymagsac import optimizeEssentialMatrix
 
-from tracker_config import TrackerConfig
 
-
-def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, K1: torch.Tensor,
-                                K2: torch.Tensor, width: int, height: int, ransac_config: TrackerConfig,
-                                confidences=None):
-
-    src_pts_np = src_pts_xy.numpy(force=True)
-    dst_pts_np = dst_pts_xy.numpy(force=True)
+def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, K1: torch.Tensor, K2: torch.Tensor,
+                                width: int, height: int, ransac_method, ransac_confidence, confidences=None,
+                                ransac_refine_E_numerically: bool = False):
+    src_pts_xy_np = src_pts_xy.numpy(force=True)
+    dst_pts_xy_np = dst_pts_xy.numpy(force=True)
 
     K1_np = K1.numpy(force=True)
     K2_np = K2.numpy(force=True)
@@ -24,10 +22,8 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
     N_matches = src_pts_xy.shape[0]
     min_matches_for_ransac = 5
 
-    E_method = ransac_config.ransac_inlier_filter
-    ransac_confidence = ransac_config.ransac_confidence
-    if E_method == 'pygcransac' and N_matches >= min_matches_for_ransac:
-        correspondences = np.ascontiguousarray(np.concatenate([src_pts_np, dst_pts_np], axis=1))
+    if ransac_method == 'pygcransac' and N_matches >= min_matches_for_ransac:
+        correspondences = np.ascontiguousarray(np.concatenate([src_pts_xy_np, dst_pts_xy_np], axis=1))
 
         if confidences is not None:
             confidences_np = torch.numpy(confidences)
@@ -37,23 +33,25 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
             E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
                                                      ransac_confidence, threshold=0.1, min_iters=10000)
 
-    elif E_method is not None and N_matches >= min_matches_for_ransac:
+    elif ransac_method is not None and N_matches >= min_matches_for_ransac:
         methods = {'magsac++': cv2.USAC_MAGSAC,
                    'ransac': cv2.RANSAC,
                    '8point': cv2.USAC_FM_8PTS}
-        if E_method not in methods:
+        if ransac_method not in methods:
             raise ValueError("Unknown RANSAC method")
 
-        chosen_method = methods[E_method]
+        chosen_method = methods[ransac_method]
         K1_np = K1.numpy(force=True)
-        E, mask = cv2.findEssentialMat(src_pts_np, dst_pts_np, K1_np, method=chosen_method, threshold=1.,
+        E, mask = cv2.findEssentialMat(src_pts_xy_np, dst_pts_xy_np, K1_np, method=chosen_method, threshold=1.,
                                        prob=ransac_confidence)
         mask = mask[:, 0].astype(np.bool_)
     else:
         raise ValueError("Not enough points to run 5pt algorithm RANSAC")
 
-    mask_tensor = torch.from_numpy(mask).cuda()
+    if ransac_refine_E_numerically:
+        E = refine_pose_using_numerical_optimization(src_pts_xy_np, dst_pts_xy_np, E, K1_np, K2_np, mask)
 
+    mask_tensor = torch.from_numpy(mask).cuda()
     E_tensor = torch.from_numpy(E).cuda().to(torch.float32)
 
     R, t_cam, triangulated_points = motion_from_essential_choose_solution(E_tensor, K1, K2, src_pts_xy, dst_pts_xy,
@@ -65,7 +63,6 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
 
 def estimate_pose_using_8pt_algorithm(src_pts_xy_inliers: torch.Tensor, dst_pts_xy_inliers: torch.Tensor,
                                       K1: torch.Tensor, K2: torch.Tensor):
-
     N_matches = src_pts_xy_inliers.shape[0]
 
     if N_matches < 8:
@@ -82,6 +79,25 @@ def estimate_pose_using_8pt_algorithm(src_pts_xy_inliers: torch.Tensor, dst_pts_
     r_cam = rotation_matrix_to_axis_angle(R.contiguous())
 
     return r_cam, t_cam
+
+
+def refine_pose_using_numerical_optimization(src_pts_xy: np.ndarray, dst_pts_xy: np.ndarray, E: np.ndarray,
+                                             K1: np.ndarray, K2: np.ndarray, mask: np.ndarray):
+    src_pts_xy_inliers_np = src_pts_xy.astype(np.float64)
+    dst_pts_xy_inliers_np = dst_pts_xy.astype(np.float64)
+    correspondences_inliers = np.ascontiguousarray(np.concatenate([src_pts_xy_inliers_np,
+                                                                   dst_pts_xy_inliers_np], axis=1))
+
+    E_old = E.copy()
+    E_best = E.astype(np.float64)
+    mask_uint64 = mask.astype(np.uint64)
+
+    E, mask = optimizeEssentialMatrix(correspondences_inliers, K1, K2, mask_uint64, E_best)
+
+    if np.linalg.norm(E_old - E) < 0.01:
+        breakpoint()
+
+    return E
 
 
 def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts_yx: torch.Tensor,
