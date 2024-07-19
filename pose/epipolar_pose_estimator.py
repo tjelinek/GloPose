@@ -82,7 +82,7 @@ class EpipolarPoseEstimator:
         confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = self.augment_correspondences(src_pts_yx, dst_pts_yx,
                                                                                                dst_pts_yx_gt_flow,
                                                                                                confidences,
-                                                                                               gt_flow_image_coord)
+                                                                                               gt_flow)
 
         src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
         dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
