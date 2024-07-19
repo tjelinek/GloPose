@@ -18,14 +18,14 @@ from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, t
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
 from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor, \
-    tensor_index_to_coordinates_xy
+    tensor_index_to_coordinates_xy, pinhole_intrinsics_to_tensor
 
 
 class EpipolarPoseEstimator:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, gt_rotations, gt_translations,
                  rendering: RenderingKaolin, rendering_backview: RenderingKaolin, gt_encoder,
-                 camera_instrinsics: PinholeIntrinsics = None):
+                 camera_intrinsics: PinholeIntrinsics = None):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
