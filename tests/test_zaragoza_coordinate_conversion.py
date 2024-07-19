@@ -7,7 +7,7 @@ from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix, rotation_
 
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam
 from dataset_generators import scenarios
-from flow import flow_unit_coords_to_image_coords, source_coords_to_target_coords_world_frame
+from flow import flow_unit_coords_to_image_coords, source_to_target_coords_world_coord_system
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from pose.essential_matrix_pose_estimation import estimate_pose_zaragoza
@@ -59,7 +59,7 @@ src_pts_yx, observed_visible_fg_points_mask = (
 
 flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
 
-dst_pts_yx = source_coords_to_target_coords_world_frame(src_pts_yx, flow)
+dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
 
 src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
 dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
