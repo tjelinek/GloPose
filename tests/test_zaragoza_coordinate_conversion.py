@@ -62,8 +62,7 @@ src_pts_yx, observed_visible_fg_points_mask = (
 flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
 
 src_pts_xy = src_pts_yx[..., [1, 0]]
-flow_xy = flow[:, :, [1, 0]].permute(0, 1, 2, 4, 3)
-dst_pts_xy = source_coords_to_target_coords_world_frame(src_pts_xy.permute(1, 0), flow_xy).permute(1, 0)
+dst_pts_xy = source_coords_to_target_coords_world_frame(src_pts_yx, flow)
 
 K1 = rendering.camera_intrinsics
 
