@@ -58,7 +58,7 @@ class EpipolarPoseEstimator:
         gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords = (
             self.get_occlusion_and_segmentation(backview, flow_arc, flow_observation_current_frame))
 
-        optical_flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
+        flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
 
         observed_segmentation_binary_mask = segmentation > float(self.segmentation_threshold)
 
@@ -70,10 +70,10 @@ class EpipolarPoseEstimator:
             gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
             self.occlusion_threshold, self.segmentation_threshold))
 
-        dst_pts_yx = source_coords_to_target_coords(src_pts_yx.permute(1, 0), optical_flow).permute(1, 0)
+        dst_pts_yx = source_coords_to_target_coords_world_frame(src_pts_yx.permute(1, 0), flow).permute(1, 0)
 
-        gt_flow_image_coord = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
-        dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx.permute(1, 0), gt_flow_image_coord).permute(1, 0)
+        gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
+        dst_pts_yx_gt_flow = source_coords_to_target_coords_world_frame(src_pts_yx.permute(1, 0), gt_flow).permute(1, 0)
 
         confidences = None
         if self.config.ransac_confidences_from_occlusion:
