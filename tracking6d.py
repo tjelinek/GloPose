@@ -345,7 +345,7 @@ class Tracking6D:
 
         # For short_flow_model
         if self.config.short_flow_model in short_flow_models:
-            self.short_flow_model = short_flow_models[self.config.short_flow_model]()
+            self.short_flow_model = short_flow_models[self.config.short_flow_model](config=self.config)
         else:
             # Default case or raise an error if you don't want a default FlowProvider
             raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")

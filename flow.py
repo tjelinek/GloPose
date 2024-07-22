@@ -252,6 +252,7 @@ class FlowProvider(ABC):
     def __init__(self, **kwargs):
         super().__init__()
         self.flow_model = self.get_flow_model()
+        self.tracker_config: TrackerConfig = kwargs['config']
 
     @staticmethod
     @abstractmethod
@@ -267,18 +268,9 @@ class FlowProvider(ABC):
         model.eval()
         return model
 
+    @abstractmethod
     def next_flow(self, source_image, target_image):
-        padder = InputPadder(source_image.shape)
-
-        image1, image2 = padder.pad(source_image, target_image)
-
-        flow_low, flow_up = self.model(image1, image2, iters=12, test_mode=True)
-
-        # flow_low = padder.unpad(flow_low)[None]
-        flow_up = padder.unpad(flow_up)[None]
-
-        return flow_up
-
+        raise NotImplementedError
 
 class RAFTFlowProvider(FlowProvider):
 
