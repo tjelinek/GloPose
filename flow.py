@@ -212,7 +212,7 @@ def source_to_target_coords_world_coord_system(src_pts_yx: torch.Tensor, flow: t
     return torch.stack([y2_f, x2_f], dim=0).permute(1, 0)
 
 
-def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
+def source_coords_to_target_coords_image(source_coords: np.ndarray, flow: np.ndarray):
     y1, x1 = source_coords
     delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
 
@@ -220,6 +220,16 @@ def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarra
     x2_f, y2_f = x1 + delta_x, y1 - delta_y
 
     return np.stack([y2_f, x2_f], axis=0)
+
+
+def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
+    y1, x1 = source_coords.T
+    delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
+
+    # Compute target coordinates
+    x2_f, y2_f = x1 + delta_x, y1 - delta_y
+
+    return np.stack([y2_f, x2_f], axis=0).T
 
 
 def get_correct_correspondences_mask(gt_flow, src_pts_yx, dst_pts_yx, epe_threshold):

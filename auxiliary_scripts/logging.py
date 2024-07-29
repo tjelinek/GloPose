@@ -45,8 +45,8 @@ from auxiliary_scripts.math_utils import quaternion_angular_difference, Rt_epipo
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_np, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
-    get_correct_correspondences_mask
+    source_coords_to_target_coords_image, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
+    get_correct_correspondences_mask, source_coords_to_target_coords_np
 
 
 @dataclass
@@ -825,7 +825,7 @@ class WriteResults:
             gt_flow_image = flow_unit_coords_to_image_coords(arc_data.synthetic_flow_result.observed_flow)
 
             src_pts_pred_visible_yx = arc_data.observed_visible_fg_points_mask.nonzero()
-            dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx,observed_flow_image)
+            dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx, observed_flow_image)
             dst_pts_pred_visible_yx_gt = source_coords_to_target_coords(src_pts_pred_visible_yx, gt_flow_image)
 
             correct_flows_epe = torch.linalg.norm(dst_pts_pred_visible_yx - dst_pts_pred_visible_yx_gt, dim=1)
@@ -1278,8 +1278,8 @@ class WriteResults:
             source_coords = source_coords[:, random_sample]
 
         source_coords[0, :] = flow_np.shape[-2] - source_coords[0, :]
-        target_coords = source_coords_to_target_coords_np(source_coords, flow_np)
-        target_coords_from_pred_movement = source_coords_to_target_coords_np(source_coords, flow_np_from_movement)
+        target_coords = source_coords_to_target_coords_image(source_coords, flow_np)
+        target_coords_from_pred_movement = source_coords_to_target_coords_image(source_coords, flow_np_from_movement)
 
         norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
         cmap_correct = plt.get_cmap(cmap_correct)
@@ -1466,7 +1466,6 @@ class WriteResults:
     def convert_observation_to_numpy(observation):
         return observation[0, 0].permute(1, 2, 0).numpy(force=True)
 
-
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
                            segment_mask=None, segment_threshold=0.99):
@@ -1482,7 +1481,7 @@ class WriteResults:
         """
         # Assuming flow is [2, H, W] and source_coords is [2, N]
         y1, x1 = source_coords
-        y2_f, x2_f = source_coords_to_target_coords_np(source_coords, flow)
+        y2_f, x2_f = source_coords_to_target_coords_image(source_coords, flow)
 
         # Apply masks
         valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold
