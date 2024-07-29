@@ -58,29 +58,20 @@ class RerunAnnotations:
     space_predicted_camera_path: str = '/3d_space/predicted_object'
 
     template_image_frontview: str = '/observations/template_image_frontview'
-    template_image_backview: str = '/observations/template_image_backview'
-    
+
     template_image_segmentation_frontview: str = '/observations/template_image_frontview/segment'
-    template_image_segmentation_backview: str = '/observations/template_image_backview/segment'
-    
+
     observed_image_frontview: str = '/observations/observed_image_frontview'
-    observed_image_backview: str = '/observations/observed_image_backview'
 
     observed_image_segmentation_frontview: str = '/observations/observed_image_frontview/segment'
-    observed_image_segmentation_backview: str = '/observations/observed_image_backview/segment'
 
     template_image_frontview_grid: str = '/observations/template_image_grid_frontview'
 
     observed_flow_frontview: str = '/observed_flow/observed_flow_frontview'
-    observed_flow_backview: str = '/observed_flow/observed_flow_backview'
     observed_flow_occlusion_frontview: str = '/observed_flow/occlusion_frontview'
-    observed_flow_occlusion_backview: str = '/observed_flow/occlusion_backview'
     observed_flow_uncertainty_frontview: str = '/observed_flow/uncertainty_frontview'
-    observed_flow_uncertainty_backview: str = '/observed_flow/uncertainty_backview'
     observed_flow_with_uncertainty_frontview: str = '/observed_flow/observed_flow_front_uncertainty'
-    observed_flow_with_uncertainty_backview: str = '/observed_flow/observed_flow_back_uncertainty'
     observed_flow_errors_frontview: str = '/observed_flow/observed_flow_gt_disparity'
-    observed_flow_errors_backview: str = '/observed_flow/observed_flow_gt_disparity_backview'
 
     # Optimized model visualizations
     optimized_model_occlusion: str = '/optimized_values/occlusion'
@@ -105,12 +96,6 @@ class RerunAnnotations:
     ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
 
     ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
-    ransac_stats_backview_visible: str = '/epipolar/ransac_stats_backview/visible'
-    ransac_stats_backview_predicted_as_visible: str = '/epipolar/ransac_stats_backview/predicted_as_visible'
-    ransac_stats_backview_correctly_predicted_flows: str = '/epipolar/ransac_stats_backview/correctly_predicted_flows'
-    ransac_stats_backview_ransac_predicted_inliers: str = '/epipolar/ransac_stats_backview/ransac_predicted_inliers'
-    ransac_stats_backview_correctly_predicted_inliers: str = '/epipolar/ransac_stats_backview/correctly_predicted_inliers'
-    ransac_stats_backview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_backview/ransac_inlier_ratio'
 
     # Pose
     pose_rotation: str = '/pose/rotation'
