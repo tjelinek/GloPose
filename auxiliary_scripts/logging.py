@@ -1973,8 +1973,8 @@ class WriteResults:
             image_bytes_np = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
             image_np = image_bytes_np.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             image = Image.fromarray(image_np)
-            rr.log(rerun_annotation, rr.Image(image))
             rr.set_time_sequence("frame", frame)
+            rr.log(rerun_annotation, rr.Image(image))
         else:
             plt.savefig(str(save_path), **kwargs)
 
