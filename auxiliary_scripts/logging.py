@@ -1227,13 +1227,13 @@ class WriteResults:
                                             occlusion, inliers, outliers):
         matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
         if inliers is not None:
-            inliers = inliers.numpy(force=True).T  # Ensure shape is (2, N)
+            inliers = inliers.numpy(force=True)  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(inliers, occlusion, flow_np, rendered_flow,
                                               ax_source, axs_target, 'Greens', 'Reds', 'inliers',
                                               max_points=20)
             matching_text += f'inliers: {inliers.shape[1]}\n'
         if outliers is not None:
-            outliers = outliers.numpy(force=True).T  # Ensure shape is (2, N)
+            outliers = outliers.numpy(force=True)  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(outliers, occlusion, flow_np, rendered_flow, ax_source,
                                               axs_target, 'Blues', 'Oranges', 'outliers',
                                               max_points=10)
