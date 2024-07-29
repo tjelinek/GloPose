@@ -684,15 +684,15 @@ class WriteResults:
             vertex_texcoords = gt_mesh.visual.uv
             vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
-            # rr.log(
-            #     RerunAnnotations.space_gt_mesh,
-            #     rr.Mesh3D(
-            #         indices=gt_mesh.faces,
-            #         albedo_texture=gt_texture_int,
-            #         vertex_texcoords=vertex_texcoords,
-            #         vertex_positions=gt_mesh.vertices
-            #     )
-            # )
+            rr.log(
+                RerunAnnotations.space_gt_mesh,
+                rr.Mesh3D(
+                    indices=gt_mesh.faces,
+                    albedo_texture=gt_texture_int,
+                    vertex_texcoords=vertex_texcoords,
+                    vertex_positions=gt_mesh.vertices
+                )
+            )
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph([frame_i])
         gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(gt_rotations))).cuda()
@@ -706,18 +706,21 @@ class WriteResults:
         q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).squeeze().flip(0).numpy(force=True)
         q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).squeeze().flip(0).numpy(force=True)
 
+        q_obj_xyzw = rotation_matrix_to_quaternion(pred_rotations_matrix).squeeze().flip(0).numpy(force=True)
+        q_obj_gt_xyzw = rotation_matrix_to_quaternion(gt_rotations_matrix).squeeze().flip(0).numpy(force=True)
+
         rr.set_time_sequence(RerunAnnotations.space_predicted_camera_path, frame_i)
         rr.set_time_sequence(RerunAnnotations.space_gt_camera_path, frame_i)
 
         rr.log(
             RerunAnnotations.space_predicted_camera_path,
             rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
-                           rotation=rr.Quaternion(xyzw=q_cam_xyzw))
+                           rotation=rr.Quaternion(xyzw=q_obj_xyzw))
         )
         rr.log(
             RerunAnnotations.space_gt_camera_path,
             rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
-                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw))
+                           rotation=rr.Quaternion(xyzw=q_obj_gt_xyzw))
         )
 
         # rr.log(
@@ -1822,16 +1825,15 @@ class WriteResults:
 
         view_name = view.value
 
-        observed_image_annotation = getattr(RerunAnnotations, f'observed_image_{view_name}')
-        observed_image_segmentation_annotation = getattr(RerunAnnotations, f'observed_image_segmentation_{view_name}')
-        template_image_annotation = getattr(RerunAnnotations, f'template_image_{view_name}')
-        template_image_segmentation_annotation = getattr(RerunAnnotations, f'template_image_segmentation_{view_name}')
-        observed_flow_errors_annotations = getattr(RerunAnnotations, f'observed_flow_errors_{view_name}')
-        observed_flow_occlusion_annotation = getattr(RerunAnnotations, f'observed_flow_occlusion_{view_name}')
-        observed_flow_uncertainty_annotation = getattr(RerunAnnotations, f'observed_flow_uncertainty_{view_name}')
-        observed_flow_uncertainty_illustration_annotation = getattr(RerunAnnotations,
-                                                                    f'observed_flow_with_uncertainty_{view_name}')
-        observed_flow_annotation = getattr(RerunAnnotations, f'observed_flow_{view_name}')
+        observed_image_annotation = RerunAnnotations.observed_image_frontview
+        observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation_frontview
+        template_image_annotation = RerunAnnotations.template_image_frontview
+        template_image_segmentation_annotation = RerunAnnotations.template_image_segmentation_frontview
+        observed_flow_errors_annotations = RerunAnnotations.observed_flow_errors_frontview
+        observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion_frontview
+        observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty_frontview
+        observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty_frontview
+        observed_flow_annotation = RerunAnnotations.observed_flow_frontview
 
         # Save the images to disk
         last_frame_observation = keyframe_buffer.get_observations_for_keyframe(frame_i)
