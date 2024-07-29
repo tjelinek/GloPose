@@ -22,15 +22,13 @@ class Encoder(nn.Module):
 
         # Translation initialization
         translation_init = torch.zeros(1, 1, config.input_frames, 3)
-        translation_init[:, :, 0, 0] = self.config.tran_init[0]
-        translation_init[:, :, 0, 1] = self.config.tran_init[1]
-        translation_init[:, :, 0, 2] = self.config.tran_init[2]
+        translation_init[:, :, :, :] = torch.Tensor(self.config.tran_init)
 
         # Quaternion initialization
         qinit = torch.zeros(1, config.input_frames, 4)
         qinit[:, :, 0] = 1.0
         init_angle = torch.Tensor(self.config.rot_init)
-        qinit[:, 0, :] = axis_angle_to_quaternion(init_angle)
+        qinit[:, :, :] = axis_angle_to_quaternion(init_angle)
 
         # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
