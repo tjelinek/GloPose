@@ -84,7 +84,8 @@ class RerunAnnotations:
     point_cloud_dust3r_im2: str = '/point_clouds/point_cloud_dust3r_im2'
 
     # Ransac
-    matching_correspondences: str = '/epipolar/matching'
+    matching_correspondences_inliers: str = '/epipolar/matching/correspondences_inliers'
+    matching_correspondences_outliers: str = '/epipolar/matching/correspondences_outliers'
 
     ransac_stats_old: str = '/epipolar/ransac_stats_img'
     ransac_stats_frontview: str = '/epipolar/ransac_stats_frontview'
@@ -261,10 +262,12 @@ class WriteResults:
                         grid_columns=2,
                         name='Point Clouds'
                     ),
-                    rrb.Horizontal(
+                    rrb.Vertical(
                         contents=[
                             rrb.Spatial2DView(name="Matching Visualization",
-                                              origin=RerunAnnotations.matching_correspondences),
+                                              origin=RerunAnnotations.matching_correspondences_inliers),
+                            rrb.Spatial2DView(name="Matching Visualization",
+                                              origin=RerunAnnotations.matching_correspondences_outliers),
                         ],
                         name='Matching'
                     ),
@@ -1092,7 +1095,7 @@ class WriteResults:
 
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
-            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
+            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences_inliers,
                             dpi=dpi, bbox_inches='tight')
 
     def visualize_flow_with_matching_rerun(self, new_flow_arcs):
@@ -1117,7 +1120,7 @@ class WriteResults:
         target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
-        rr.log(RerunAnnotations.matching_correspondences, rr.Image(template_target_image))
+        rr.log(RerunAnnotations.matching_correspondences_inliers, rr.Image(template_target_image))
 
         inliers_src_yx = arc_observation.ransac_inliers.numpy(force=True)
         outliers_src_yx = arc_observation.ransac_outliers.numpy(force=True)
@@ -1135,7 +1138,7 @@ class WriteResults:
             colors = (np.array(colors) * 255).astype(int).tolist()
 
             rr.log(
-                RerunAnnotations.matching_correspondences,
+                RerunAnnotations.matching_correspondences_inliers,
                 rr.LineStrips2D(
                     strips=line_strips_xy,
                     colors=colors,
