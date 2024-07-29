@@ -203,7 +203,6 @@ def source_coords_to_target_coords(source_coords: torch.Tensor, flow: torch.Tens
 
 
 def source_to_target_coords_world_coord_system(src_pts_yx: torch.Tensor, flow: torch.Tensor):
-
     y1, x1 = src_pts_yx.permute(1, 0)
     delta_x, delta_y = flow[0, 0, :, y1.to(torch.int), -x1.to(torch.int)]
 
@@ -249,10 +248,11 @@ def tensor_image_to_mft_format(image_tensor):
 
 class FlowProvider(ABC):
 
-    def __init__(self, **kwargs):
+    def __init__(self, get_model=True, **kwargs):
         super().__init__()
-        self.flow_model = self.get_flow_model()
         self.tracker_config: TrackerConfig = kwargs['config']
+        if get_model:
+            self.flow_model = self.get_flow_model()
 
     @staticmethod
     @abstractmethod
@@ -272,6 +272,7 @@ class FlowProvider(ABC):
     def next_flow(self, source_image, target_image):
         raise NotImplementedError
 
+
 class RAFTFlowProvider(FlowProvider):
 
     @staticmethod
@@ -289,6 +290,18 @@ class RAFTFlowProvider(FlowProvider):
         model = FlowProvider.prepare_model(args, model)
 
         return model
+
+    def next_flow(self, source_image, target_image):
+        padder = InputPadder(source_image.shape)
+
+        image1, image2 = padder.pad(source_image, target_image)
+
+        flow_low, flow_up = self.model(image1, image2, iters=12, test_mode=True)
+
+        # flow_low = padder.unpad(flow_low)[None]
+        flow_up = padder.unpad(flow_up)[None]
+
+        return flow_up
 
 
 class GMAFlowProvider(FlowProvider):
@@ -321,6 +334,7 @@ def temporary_change_directory(new_directory):
 class MFTFlowProvider(FlowProvider):
 
     def __init__(self, config_name, **kwargs):
+        super().__init__(**kwargs, get_model=False)
         self.add_to_path()
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
         self.need_to_init = True
@@ -417,6 +431,7 @@ class MFTIQFlowProvider(FlowProvider):
 class MFTIQSyntheticFlowProvider(MFTIQFlowProvider):
 
     def __init__(self, config_name, **kwargs):
+        super().__init__(config_name, **kwargs, get_model=False)
         self.add_to_path()
         from repositories.MFT_tracker.MFT.MFTIQ import MFT as MFTTracker
         from repositories.MFT_tracker.MFT.gt_flow import GTFlowWrapper
