@@ -90,7 +90,7 @@ def main():
         rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None, ..., 0]).cuda()
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None, None]).cuda()
 
-        config.rot_init = tuple(torch.rad2deg(rotations_array[0, 0]).numpy(force=True).tolist())
+        config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
         config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
         # config.camera_up = (0, 0, 1)
 

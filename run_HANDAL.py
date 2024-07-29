@@ -103,6 +103,9 @@ def main():
         rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None]).cuda().to(torch.float32)
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None, None]).cuda().to(torch.float32)
 
+        config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
+        config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
+
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         cam_intrinsics = torch.from_numpy(cam_intrinsics_list[0]).cuda()
