@@ -224,10 +224,10 @@ def source_coords_to_target_coords_image(source_coords: np.ndarray, flow: np.nda
 
 def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarray):
     y1, x1 = source_coords.T
-    delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
+    delta_x, delta_y = flow[0, 0, :, y1.astype(int), x1.astype(int)].T
 
     # Compute target coordinates
-    x2_f, y2_f = x1 + delta_x, y1 - delta_y
+    x2_f, y2_f = x1 + delta_x, y1 + delta_y
 
     return np.stack([y2_f, x2_f], axis=0).T
 

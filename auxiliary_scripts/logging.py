@@ -1131,7 +1131,8 @@ class WriteResults:
         outliers_target_yx = source_coords_to_target_coords_np(outliers_src_yx, opt_flow_np)
 
         def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation):
-            target_yx_2nd_image = target_yx + np.array([self.image_height, 0])
+            target_yx_2nd_image = target_yx
+            target_yx_2nd_image[:, 0] = self.image_height + target_yx_2nd_image[:, 0]
 
             line_strips_xy = np.stack([src_yx[:, [1, 0]], target_yx_2nd_image[:, [1, 0]]], axis=1)
 
