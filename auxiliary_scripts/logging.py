@@ -264,9 +264,9 @@ class WriteResults:
                     ),
                     rrb.Horizontal(
                         contents=[
-                            rrb.Spatial2DView(name="Matching Visualization",
+                            rrb.Spatial2DView(name="RANSAC Inliers Visualization",
                                               origin=RerunAnnotations.matching_correspondences_inliers),
-                            rrb.Spatial2DView(name="Matching Visualization",
+                            rrb.Spatial2DView(name="RANSAC Outliers Visualizations",
                                               origin=RerunAnnotations.matching_correspondences_outliers),
                         ],
                         name='Matching'
