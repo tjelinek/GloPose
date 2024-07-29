@@ -262,7 +262,7 @@ class WriteResults:
                         grid_columns=2,
                         name='Point Clouds'
                     ),
-                    rrb.Vertical(
+                    rrb.Horizontal(
                         contents=[
                             rrb.Spatial2DView(name="Matching Visualization",
                                               origin=RerunAnnotations.matching_correspondences_inliers),
@@ -1120,7 +1120,9 @@ class WriteResults:
         target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
-        rr.log(RerunAnnotations.matching_correspondences_inliers, rr.Image(template_target_image))
+        rerun_image = rr.Image(template_target_image)
+        rr.log(RerunAnnotations.matching_correspondences_inliers, rerun_image)
+        rr.log(RerunAnnotations.matching_correspondences_outliers, rerun_image)
 
         inliers_src_yx = arc_observation.ransac_inliers.numpy(force=True)
         outliers_src_yx = arc_observation.ransac_outliers.numpy(force=True)
@@ -1128,7 +1130,7 @@ class WriteResults:
         inliers_target_yx = source_coords_to_target_coords_np(inliers_src_yx, opt_flow_np)
         outliers_target_yx = source_coords_to_target_coords_np(outliers_src_yx, opt_flow_np)
 
-        def log_correspondences_rerun(cmap, src_yx, target_yx):
+        def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation):
             target_yx_2nd_image = target_yx + np.array([self.image_height, 0])
 
             line_strips_xy = np.stack([src_yx[:, [1, 0]], target_yx_2nd_image[:, [1, 0]]], axis=1)
@@ -1138,7 +1140,7 @@ class WriteResults:
             colors = (np.array(colors) * 255).astype(int).tolist()
 
             rr.log(
-                RerunAnnotations.matching_correspondences_inliers,
+                rerun_annotation,
                 rr.LineStrips2D(
                     strips=line_strips_xy,
                     colors=colors,
@@ -1146,9 +1148,11 @@ class WriteResults:
             )
 
         cmap_inliers = plt.get_cmap('Greens')
-        log_correspondences_rerun(cmap_inliers, inliers_src_yx, inliers_target_yx)
+        log_correspondences_rerun(cmap_inliers, inliers_src_yx, inliers_target_yx,
+                                  RerunAnnotations.matching_correspondences_inliers)
         cmap_outliers = plt.get_cmap('Reds')
-        log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx)
+        log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx,
+                                  RerunAnnotations.matching_correspondences_outliers)
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
