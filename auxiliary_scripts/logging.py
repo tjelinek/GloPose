@@ -1072,7 +1072,7 @@ class WriteResults:
 
                 step = self.image_width // 20
                 x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
-                template_coords = np.stack((y, x), axis=0).reshape(2, -1)
+                template_coords = np.stack((y, x), axis=0).reshape(2, -1).T
 
                 # Plot lines on the target front and back view subplots
                 occlusion_threshold = self.tracking_config.occlusion_coef_threshold
@@ -1336,9 +1336,9 @@ class WriteResults:
 
         if total_points > max_points and self.tracking_config.matching_visualization_type == 'matching':
             random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
-            source_coords = source_coords[:, random_sample]
+            source_coords = source_coords[random_sample, :]
 
-        source_coords[0, :] = flow_np.shape[-2] - source_coords[0, :]
+        source_coords[:, 0] = self.image_height - source_coords[:, 0]
         target_coords = source_coords_to_target_coords_image(source_coords, flow_np)
         target_coords_from_pred_movement = source_coords_to_target_coords_image(source_coords, flow_np_from_movement)
 
@@ -1541,7 +1541,7 @@ class WriteResults:
         - marker: Marker style for the points.
         """
         # Assuming flow is [2, H, W] and source_coords is [2, N]
-        y1, x1 = source_coords
+        y1, x1 = source_coords.T
         y2_f, x2_f = source_coords_to_target_coords_image(source_coords, flow)
 
         # Apply masks

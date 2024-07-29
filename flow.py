@@ -213,7 +213,7 @@ def source_to_target_coords_world_coord_system(src_pts_yx: torch.Tensor, flow: t
 
 
 def source_coords_to_target_coords_image(source_coords: np.ndarray, flow: np.ndarray):
-    y1, x1 = source_coords
+    y1, x1 = source_coords.T
     delta_x, delta_y = flow[0, 0, :, -y1.astype(int), x1.astype(int)].T
 
     # Compute target coordinates
