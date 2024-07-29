@@ -3,6 +3,7 @@ from typing import Any, List
 
 import networkx as nx
 import torch
+from kornia.geometry import Se3
 
 from auxiliary_scripts.cameras import Cameras
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
@@ -29,6 +30,9 @@ class CameraSpecificFrameData:
     frame_observation: FrameObservation = None
     renders: Any = None
     per_pixel_flow_error: Any = None
+
+    gt_pose_cam: Se3 = None
+    predicted_pose_cam: Se3 = None
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
