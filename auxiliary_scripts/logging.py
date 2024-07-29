@@ -588,7 +588,8 @@ class WriteResults:
         if frame_i % 25 == 0 or frame_i == 1:
             self.visualize_optimized_values(keyframe_buffer=active_keyframes, new_flow_arcs=new_flow_arcs)
 
-            self.visualize_flow_with_matching(new_flow_arcs)
+            if not self.tracking_config.write_to_rerun_rather_than_disk:
+                self.visualize_flow_with_matching(new_flow_arcs)
             self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
@@ -611,6 +612,7 @@ class WriteResults:
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             self.log_poses_into_rerun(frame_i)
+            self.visualize_flow_with_matching_rerun(new_flow_arcs)
 
         if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
             if self.tracking_config.analyze_ransac_matching_errors:
@@ -1092,6 +1094,58 @@ class WriteResults:
 
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences,
                             dpi=dpi, bbox_inches='tight')
+
+    def visualize_flow_with_matching_rerun(self, new_flow_arcs):
+        if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
+            return
+
+        new_flow_arc = new_flow_arcs[-1]
+        flow_arc_source, flow_arc_target = new_flow_arc
+
+        rr.set_time_sequence('frame', flow_arc_target)
+
+        camera = Cameras.FRONTVIEW
+        arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target, camera)
+
+        flow_observation = arc_observation.observed_flow
+        opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
+        opt_flow_np = opt_flow.numpy(force=True)
+
+        template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source, camera)
+        target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target, camera)
+        template_image = self.convert_observation_to_numpy(template_data.frame_observation.observed_image)
+        target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
+
+        template_target_image = np.concatenate([template_image, target_image], axis=0)
+        rr.log(RerunAnnotations.matching_correspondences, rr.Image(template_target_image))
+
+        inliers_src_yx = arc_observation.ransac_inliers.numpy(force=True)
+        outliers_src_yx = arc_observation.ransac_outliers.numpy(force=True)
+
+        inliers_target_yx = source_coords_to_target_coords_np(inliers_src_yx, opt_flow_np)
+        outliers_target_yx = source_coords_to_target_coords_np(outliers_src_yx, opt_flow_np)
+
+        def log_correspondences_rerun(cmap, src_yx, target_yx):
+            target_yx_2nd_image = target_yx + np.array([self.image_height, 0])
+
+            line_strips_xy = np.stack([src_yx[:, [1, 0]], target_yx_2nd_image[:, [1, 0]]], axis=1)
+
+            num_points = line_strips_xy.shape[0]
+            colors = [cmap(i / num_points)[:3] for i in range(num_points)]
+            colors = (np.array(colors) * 255).astype(int).tolist()
+
+            rr.log(
+                RerunAnnotations.matching_correspondences,
+                rr.LineStrips2D(
+                    strips=line_strips_xy,
+                    colors=colors,
+                ),
+            )
+
+        cmap_inliers = plt.get_cmap('Greens')
+        log_correspondences_rerun(cmap_inliers, inliers_src_yx, inliers_target_yx)
+        cmap_outliers = plt.get_cmap('Reds')
+        log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx)
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
