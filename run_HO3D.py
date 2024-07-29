@@ -90,8 +90,8 @@ def main():
         rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None, ..., 0]).cuda()
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None, None]).cuda()
 
-        config.camera_position = tuple(torch.rad2deg(rotations_array[0, 0]).numpy(force=True))
-        config.camera_position = tuple(translations_array[0, 0, 0].numpy(force=True))
+        config.rot_init = tuple(torch.rad2deg(rotations_array[0, 0]).numpy(force=True).tolist())
+        config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
         # config.camera_up = (0, 0, 1)
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
