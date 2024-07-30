@@ -23,6 +23,8 @@ def get_config() -> TrackerConfig:
 
     cfg.ransac_refine_E_numerically = False
 
+    cfg.augment_gt_track = True
+
     cfg.ransac_inlier_filter = 'pygcransac'
     cfg.long_flow_model = 'MFT'
     cfg.MFT_backbone_cfg = 'MFT_RoMa_direct_cfg'
