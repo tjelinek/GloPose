@@ -309,13 +309,13 @@ class WriteResults:
             )
         )
         rr.log(RerunAnnotations.pose_rotation_x,
-               rr.SeriesLine(color=(51, 0, 102), name=RerunAnnotations.pose_rotation_x), timeless=True)
+               rr.SeriesLine(color=(0, 127, 0), name=RerunAnnotations.pose_rotation_x), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_y,
                rr.SeriesLine(color=(0, 51, 102), name=RerunAnnotations.pose_rotation_y), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_z,
                rr.SeriesLine(color=(102, 0, 102), name=RerunAnnotations.pose_rotation_z), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_x_gt,
-               rr.SeriesLine(color=(128, 255, 0), name=RerunAnnotations.pose_rotation_x_gt), timeless=True)
+               rr.SeriesLine(color=(0, 255, 0), name=RerunAnnotations.pose_rotation_x_gt), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_y_gt,
                rr.SeriesLine(color=(102, 178, 255), name=RerunAnnotations.pose_rotation_y_gt), timeless=True)
         rr.log(RerunAnnotations.pose_rotation_z_gt,
