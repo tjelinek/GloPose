@@ -1,88 +1,267 @@
-from abc import ABC, abstractmethod
+import contextlib
+import importlib
+import os
+import sys
 
 import torch
 
-from flow import normalize_rendered_flows, MFTFlowProvider, FlowProvider
+from argparse import Namespace
+from abc import ABC, abstractmethod
+
+from flow import tensor_image_to_mft_format
+from repositories.GMA.core.utils.utils import InputPadder
+from tracker_config import TrackerConfig
 
 
-class FlowStrategy(ABC):
+class FlowProvider(ABC):
+
+    def __init__(self, get_model=True, **kwargs):
+        super().__init__()
+        self.tracker_config: TrackerConfig = kwargs['config']
+        if get_model:
+            self.flow_model = self.get_flow_model()
+
+    @staticmethod
     @abstractmethod
-    def compute_flow(self, *args, **kwargs):
-        pass
+    def get_flow_model():
+        raise NotImplementedError
 
+    @staticmethod
+    def prepare_model(args, model):
+        model.load_state_dict(torch.load(args.model))
+        print(f"Loaded checkpoint at {args.model}")
+        model = model.module
+        model.to('cuda')
+        model.eval()
+        return model
 
-class SyntheticFlowStrategy(FlowStrategy):
     @abstractmethod
-    def compute_flow(self, flow_source_index, flow_target_index, backview=False):
-        pass
+    def next_flow(self, source_image, target_image):
+        raise NotImplementedError
 
 
-class ExternalMethodFlowStrategy(FlowStrategy):
-    @abstractmethod
-    def compute_flow(self, flow_source_image, flow_target_image, backview=False):
-        pass
+class RAFTFlowProvider(FlowProvider):
+
+    @staticmethod
+    def get_flow_model():
+        sys.path.append('repositories/RAFTPrinceton')
+        from repositories.RAFTPrinceton.core.raft import RAFT
+
+        args = Namespace(model='/mnt/personal/jelint19/weights/RAFT/raft-things.pth',
+                         model_name='RAFTPrinceton',
+                         path=None,
+                         mixed_precision=True,
+                         alternate_corr=False, small=False)
+
+        model = torch.nn.DataParallel(RAFT(args))
+        model = FlowProvider.prepare_model(args, model)
+
+        return model
+
+    def next_flow(self, source_image, target_image):
+        padder = InputPadder(source_image.shape)
+
+        image1, image2 = padder.pad(source_image, target_image)
+
+        flow_low, flow_up = self.model(image1, image2, iters=12, test_mode=True)
+
+        # flow_low = padder.unpad(flow_low)[None]
+        flow_up = padder.unpad(flow_up)[None]
+
+        return flow_up
 
 
-class GenerateSyntheticFlowStrategy(SyntheticFlowStrategy):
-    def __init__(self, renderer, renderer_backview, gt_encoder, shape):
-        self.renderer = renderer
-        self.renderer_backview = renderer_backview
-        self.gt_encoder = gt_encoder
-        self.shape = shape
+class GMAFlowProvider(FlowProvider):
 
-    @torch.no_grad()
-    def compute_flow(self, flow_source_frame, flow_target_frame, backview=False):
-        keyframes = [flow_target_frame]
-        flow_frames = [flow_source_frame]
-        flow_arcs_indices = [(0, 0)]
+    @staticmethod
+    def get_flow_model():
+        sys.path.append('repositories/GMA')
+        from repositories.GMA.core.network import RAFTGMA
 
-        encoder_result, enc_flow = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
+        args = Namespace(model='GMA/checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
+                         position_only=False,
+                         position_and_content=False, mixed_precision=True)
 
-        renderer = self.renderer_backview if backview else self.renderer
-        observed_renderings = renderer.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
+        model = torch.nn.DataParallel(RAFTGMA(args=args))
+        model = FlowProvider.prepare_model(args, model)
 
-        observed_flow = observed_renderings.theoretical_flow.detach()
-        observed_flow = normalize_rendered_flows(observed_flow, self.renderer.width, self.renderer.height,
-                                                 self.shape[-1], self.shape[-2])
-        occlusion = observed_renderings.rendered_flow_occlusion.detach()
-        uncertainty = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
-
-        return observed_flow, occlusion, uncertainty
+        return model
 
 
-class ShortFlowStrategy(ExternalMethodFlowStrategy):
-    def __init__(self, short_flow_model_name: str):
-
-        if short_flow_model_name in short_flow_models:
-            self.short_flow_model = self.short_flow_model = short_flow_models[short_flow_model_name]()
-        else:
-            # Default case or raise an error if you don't want a default FlowProvider
-            raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
-
-    def compute_flow(self, source_image: torch.Tensor, target_image: torch.Tensor, backview=False):
-        source_image = source_image.float() * 255
-        target_image = target_image.float() * 255
-
-        observed_flow = self.short_flow_model.next_flow(source_image, target_image)
-
-        occlusion = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
-        uncertainty = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
-
-        return observed_flow, occlusion, uncertainty
+@contextlib.contextmanager
+def temporary_change_directory(new_directory):
+    original_directory = os.getcwd()
+    try:
+        os.chdir(new_directory)
+        yield
+    finally:
+        os.chdir(original_directory)
 
 
-class LongFlowStrategy(ExternalMethodFlowStrategy):
-    def __init__(self, long_flow_provider: MFTFlowProvider):
-        self.long_flow_provider = long_flow_provider
+class MFTFlowProvider(FlowProvider):
 
-    def compute_flow(self, source_image: torch.Tensor, target_image: torch.Tensor, backview=False):
-        source_image = source_image.float() * 255
-        target_image = target_image.float() * 255
+    def __init__(self, config_name, **kwargs):
+        super().__init__(**kwargs, get_model=False)
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
 
-        if self.long_flow_provider.need_to_init:
-            self.long_flow_provider.init(source_image)
-            self.long_flow_provider.need_to_init = False
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('repositories/MFT_tracker')
 
-        observed_flow, occlusion, uncertainty = self.long_flow_provider.next_flow(source_image, target_image)
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
 
-        return observed_flow, occlusion, uncertainty
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model(config_name=None):
+        MFTFlowProvider.add_to_path()
+
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("repositories/MFT_tracker"):
+            default_config = config_module.get_config()
+            model = MFTTracker(default_config)
+
+        return model
+
+
+class MFTIQFlowProvider(FlowProvider):
+
+    def __init__(self, config_name, **kwargs):
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
+
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('repositories/MFT_tracker')
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
+
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model(config_name=None):
+        MFTFlowProvider.add_to_path()
+
+        from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("repositories/MFT_tracker"):
+            default_config = config_module.get_config()
+            model = default_config.tracker_class(default_config)  #
+
+        return model
+
+
+class MFTIQSyntheticFlowProvider(MFTIQFlowProvider):
+
+    def __init__(self, config_name, **kwargs):
+        super().__init__(config_name, **kwargs, get_model=False)
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFTIQ import MFT as MFTTracker
+        from repositories.MFT_tracker.MFT.gt_flow import GTFlowWrapper
+
+        self.need_to_init = True
+        self.config: TrackerConfig = kwargs['config']
+        self.faces = kwargs['faces']
+        self.gt_encoder = kwargs['gt_encoder']
+
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
+        # TODO this does not work for some reason
+        # if not isinstance(self.flow_model.flower, GTFlowWrapper):
+        #     breakpoint()
+        #     raise ValueError("Something went wrong, the flower of MFT must be GTFlowWrapper")
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.flower.initialize_renderer(self.config, self.gt_encoder, self.faces)
+        self.flow_model.init(template_mft)
+
+
+class MFTEnsembleFlowProvider(FlowProvider):
+    def __init__(self, config_name, **kwargs):
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        self.need_to_init = True
+        self.flow_model: MFTTracker = self.get_flow_model(config_name)
+
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('repositories/MFT_tracker')
+
+    def init(self, template):
+        template_mft = tensor_image_to_mft_format(template)
+        self.flow_model.init(template_mft)
+
+    def next_flow(self, source_image, target_image):
+        # source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        all_predictions = self.flow_model.track(target_image_mft)
+
+        flow = all_predictions.result.flow.cuda()[None, None]
+        occlusion = all_predictions.result.occlusion.cuda()[None, None]
+        sigma = all_predictions.result.sigma.cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    class AttrDict(dict):
+        def __init__(self, *args, **kwargs):
+            super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
+            self.__dict__.update(kwargs)
+
+    @staticmethod
+    def get_flow_model(config_name=None):
+        MFTFlowProvider.add_to_path()
+
+        from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("repositories/MFT_tracker"):
+            default_config = config_module.get_config()
+            model = MFTTracker(default_config)
+
+        return model
