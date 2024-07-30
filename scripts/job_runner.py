@@ -8,6 +8,7 @@ class Datasets(Enum):
     SyntheticObjects = "SyntheticObjects"
     GoogleScannedObjects = "GoogleScannedObjects"
     HO3D = "HO3D"
+    HANDAL = "HANDAL"
     # photo360 = "360photo"
 
 
@@ -15,6 +16,7 @@ runners = {
     Datasets.SyntheticObjects: "run_SyntheticObjects.py",
     Datasets.GoogleScannedObjects: "run_GoogleScannedObjects.py",
     Datasets.HO3D: "run_HO3D.py",
+    Datasets.HANDAL: "run_HANDAL.py",
     # Datasets.photo360: "run_360.py"
 }
 
@@ -147,18 +149,22 @@ def main():
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_099_epe_leq_1',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975_epe_leq_1',
-        'base_config'
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose'
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track'
+        # 'base_config'
     ]
 
     sequences = {
         Datasets.SyntheticObjects: [
             'Textured_Sphere_5_y',
+            # 'Textured_Sphere_5_x',
+            # 'Textured_Sphere_5_z',
             # 'Textured_Cube_5_y',
-            'Textured_Sphere_5_z',
+            # 'Textured_Sphere_5_z',
             # 'Textured_Sphere_5_x',
             # 'Textured_Sphere_10_y',
             # 'Translating_Textured_Sphere',
-            'Textured_Sphere_5_xy',
+            # 'Textured_Sphere_5_xy',
             # 'Rotating_Translating_Textured_Sphere_5_y',
             # 'Rotating_Translating_Textured_Sphere_5_xy',
             # 'Rotating_Contra_Translating_Textured_Sphere_5_y',
@@ -168,23 +174,30 @@ def main():
         ],
         Datasets.GoogleScannedObjects: [
             # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
-            'Twinlab_Nitric_Fuel',
+            # 'Twinlab_Nitric_Fuel',
             # 'Squirrel',
             # 'STACKING_BEAR',
-            'Schleich_Allosaurus',
+            # 'Schleich_Allosaurus',
             'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
             # 'SCHOOL_BUS',
             'Sootheze_Cold_Therapy_Elephant',
-            'TOP_TEN_HI',
+            # 'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
         Datasets.HO3D: [
             'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
-            'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
-            'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
-            'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
+            # 'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
+            # 'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
+            # 'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
             'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
-        ]
+        ],
+        Datasets.HANDAL: [
+            '004002',
+            '004002',
+            '005010',
+            '005004',
+            '005006'
+        ],
         # Datasets.photo360: [
         #     "09"
         # ]
