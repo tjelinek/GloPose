@@ -1894,46 +1894,47 @@ class WriteResults:
             image_segmentation = last_frame_observation.observed_segmentation
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
-        not_logged_template_idx = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
-        for not_logged_flow_tracks_init in not_logged_template_idx:
-            datagraph_data = self.data_graph.get_camera_specific_frame_data(not_logged_flow_tracks_init, view)
-            template = datagraph_data.frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
-            template_segmentation = datagraph_data.frame_observation.observed_segmentation
-
-            template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
-            self.log_image(frame_i, template, template_image_path, template_image_annotation)
-
-            if self.tracking_config.write_to_rerun_rather_than_disk:
-                rr.set_time_sequence("frame", not_logged_flow_tracks_init)
-                rr.log(template_image_segmentation_annotation, rr.SegmentationImage(template_segmentation))
-                template_idx = len(self.logged_flow_tracks_inits[view])
-                template_image_grid_annotation = f'{RerunAnnotations.template_image_frontview_grid}/{template_idx}'
-                rr.log(template_image_grid_annotation, rr.Image(template))
-
-            self.logged_flow_tracks_inits[view].append(not_logged_flow_tracks_init)
-
         # Visualize new flow arcs
         if view == Cameras.FRONTVIEW:
-            for new_flow_arcs in new_flow_arcs:
+            for new_flow_arcs in sorted(new_flow_arcs):
                 source_frame = new_flow_arcs[0]
                 target_frame = new_flow_arcs[1]
 
-                flow_observation = keyframe_buffer.get_flows_between_frames(source_frame, target_frame)
-                flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords().send_to_device(
-                    'cpu')
-
                 data_graph_edge_data = self.data_graph.get_edge_observations(source_frame, target_frame,
                                                                              Cameras.FRONTVIEW)
-                synthetic_flow_observation = (
-                    data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords())
+                flow_observation = data_graph_edge_data.observed_flow
+                flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords()
 
-                source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame).send_to_device(
-                    'cpu')
-                target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame).send_to_device(
-                    'cpu')
+                synthetic_flow_obs = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
+
+                source_frame_data = self.data_graph.get_camera_specific_frame_data(source_frame, view)
+                target_frame_data = self.data_graph.get_camera_specific_frame_data(target_frame, view)
+
+                source_frame_observation = source_frame_data.frame_observation
+                target_frame_observation = target_frame_data.frame_observation
 
                 source_frame_image = source_frame_observation.observed_image
                 source_frame_segment = source_frame_observation.observed_segmentation
+
+                if (len(self.logged_flow_tracks_inits[view]) == 0 or
+                        source_frame != self.logged_flow_tracks_inits[view][-1]):
+                    template = source_frame_image.squeeze().permute(1, 2, 0)
+
+                    template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
+                    self.log_image(target_frame, template, template_image_path,
+                                   template_image_annotation)
+
+                    if self.tracking_config.write_to_rerun_rather_than_disk:
+                        rr.set_time_sequence("frame", target_frame)
+                        rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
+                        template_idx = len(self.logged_flow_tracks_inits[view])
+                        template_image_grid_annotation = (f'{RerunAnnotations.template_image_frontview_grid}/'
+                                                          f'{template_idx}')
+                        rr.log(template_image_grid_annotation, rr.Image(template))
+
+                not_logged_templates = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
+                if source_frame in not_logged_templates:
+                    self.logged_flow_tracks_inits[view].append(source_frame)
 
                 target_frame_image = target_frame_observation.observed_image.cpu()
                 target_frame_segment = target_frame_observation.observed_segmentation.cpu()
@@ -1969,7 +1970,7 @@ class WriteResults:
                 flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
                                                                          target_image_discrete,
                                                                          flow_observation_image_coords,
-                                                                         synthetic_flow_observation)
+                                                                         synthetic_flow_obs)
 
                 # Define output file paths
                 observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
