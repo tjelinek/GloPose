@@ -584,9 +584,8 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        if frame_i % 1 == 0 or frame_i == 1:
-            for camera in self.cameras:
-                self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
+        for camera in self.cameras:
+            self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
 
         if frame_i % 25 == 0 or frame_i == 1:
             self.visualize_optimized_values(keyframe_buffer=active_keyframes, new_flow_arcs=new_flow_arcs)
