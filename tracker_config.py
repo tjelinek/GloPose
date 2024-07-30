@@ -25,11 +25,11 @@ class TrackerConfig:
     dump_correspondences: bool = False
     save_3d_model: bool = False
     visualize_point_clouds_from_ransac: bool = False
-    analyze_ransac_matchings: bool = False
+    analyze_ransac_matchings: bool = True
     analyze_ransac_matching_errors: bool = False
     visualize_outliers_distribution: bool = False
 
-    analyze_ransac_matchings_frequency: int = 25
+    analyze_ransac_matchings_frequency: int = 5
     loss_landscape_visualization_frequency: int = 18
     training_print_status_frequency = 20
     mft_flow_kde_error_plot_frequency: int = 10
@@ -110,13 +110,17 @@ class TrackerConfig:
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'RAFT'  # 'RAFT' 'GMA'
-    long_flow_model: str = 'MFT_Synth'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
+    # long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
+    long_flow_model: str = 'MFT'
+    # long_flow_model: str = 'MFT_Synth'
     MFT_synth_add_noise: bool = False
     MFT_synth_noise_sigma: float = 0.3
     MFT_synth_noise_mu: float = 0.0
-    MFT_backbone_cfg: str = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
+    # MFT_backbone_cfg: str = 'MFTIQ_ROMA_bs3_bce_200k_kubric_binary_cfg'
+    MFT_backbone_cfg: str = 'MFT_RoMa_direct_cfg'
+    # MFT_backbone_cfg = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
 
-    matching_target_to_backview: bool = True
+    matching_target_to_backview: bool = False
 
     # Optimization
     allow_break_sgd_after = 30
@@ -172,5 +176,5 @@ class TrackerConfig:
     flow_sgd_n_samples: int = 100
 
     # Icosphere templates
-    icosphere_trust_region_degrees = 30
+    icosphere_trust_region_degrees = 45
     icosphere_add_inplane_rotatiosn = False
