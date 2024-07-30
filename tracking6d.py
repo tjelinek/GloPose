@@ -414,7 +414,6 @@ class Tracking6D:
         else:
             self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
 
-
         for frame_i in range(1, self.config.input_frames):
 
             self.data_graph.add_new_frame(frame_i)
