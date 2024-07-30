@@ -133,8 +133,7 @@ class MFTFlowProvider(FlowProvider):
             super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
             self.__dict__.update(kwargs)
 
-    @staticmethod
-    def get_flow_model(config_name=None):
+    def get_flow_model(self, config_name=None):
         MFTFlowProvider.add_to_path()
 
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
@@ -142,6 +141,7 @@ class MFTFlowProvider(FlowProvider):
 
         with temporary_change_directory("repositories/MFT_tracker"):
             default_config = config_module.get_config()
+            default_config.occlusion_threshold = self.tracker_config.occlusion_coef_threshold
             model = MFTTracker(default_config)
 
         return model
@@ -181,8 +181,7 @@ class MFTIQFlowProvider(FlowProvider):
             super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
             self.__dict__.update(kwargs)
 
-    @staticmethod
-    def get_flow_model(config_name=None):
+    def get_flow_model(self, config_name=None):
         MFTFlowProvider.add_to_path()
 
         from repositories.MFT_tracker.MFT.MFT import MFT as MFTTracker
@@ -190,6 +189,7 @@ class MFTIQFlowProvider(FlowProvider):
 
         with temporary_change_directory("repositories/MFT_tracker"):
             default_config = config_module.get_config()
+            default_config.occlusion_threshold = self.tracker_config.occlusion_coef_threshold
             model = default_config.tracker_class(default_config)  #
 
         return model
@@ -253,8 +253,7 @@ class MFTEnsembleFlowProvider(FlowProvider):
             super(MFTFlowProvider.AttrDict, self).__init__(*args, **kwargs)
             self.__dict__.update(kwargs)
 
-    @staticmethod
-    def get_flow_model(config_name=None):
+    def get_flow_model(self, config_name=None):
         MFTFlowProvider.add_to_path()
 
         from repositories.MFT_tracker.MFT.MFT_ensemble import MFTEnsemble as MFTTracker
@@ -262,6 +261,7 @@ class MFTEnsembleFlowProvider(FlowProvider):
 
         with temporary_change_directory("repositories/MFT_tracker"):
             default_config = config_module.get_config()
+            default_config.occlusion_threshold = self.tracker_config.occlusion_coef_threshold
             model = MFTTracker(default_config)
 
         return model
