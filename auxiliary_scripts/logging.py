@@ -1928,13 +1928,14 @@ class WriteResults:
                         rr.set_time_sequence("frame", target_frame)
                         rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
                         template_idx = len(self.logged_flow_tracks_inits[view])
-                        template_image_grid_annotation = (f'{RerunAnnotations.template_image_frontview_grid}/'
-                                                          f'{template_idx}')
-                        rr.log(template_image_grid_annotation, rr.Image(template))
 
-                not_logged_templates = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
-                if source_frame in not_logged_templates:
-                    self.logged_flow_tracks_inits[view].append(source_frame)
+                        not_logged_templates = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
+
+                        if source_frame in not_logged_templates:
+                            self.logged_flow_tracks_inits[view].append(source_frame)
+                            template_image_grid_annotation = (f'{RerunAnnotations.template_image_frontview_grid}/'
+                                                              f'{template_idx}')
+                            rr.log(template_image_grid_annotation, rr.Image(template))
 
                 target_frame_image = target_frame_observation.observed_image.cpu()
                 target_frame_segment = target_frame_observation.observed_segmentation.cpu()
