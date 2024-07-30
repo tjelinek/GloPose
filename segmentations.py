@@ -147,15 +147,12 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
         image = self.next_image(frame_i)
         image_np = image.squeeze().permute(1, 2, 0).numpy(force=True)
 
-        from time import time
-        start = time()
         self.predictor.set_image(image_np)
         gt_mask = super().next_segmentation(frame_i)
         prompts = torch.nonzero(gt_mask.squeeze()).numpy(force=True)
         point_labels = np.ones_like(prompts[:, 0])
         masks, _, _ = self.predictor.predict(prompts, point_labels, multimask_output=False)
         masks = torch.from_numpy(masks).cuda().to(torch.float32)
-        print(f"SAM inference took {time() - start} seconds")
 
         # masks = self.mask_generator.generate(image_np)
         return masks[None, None]
