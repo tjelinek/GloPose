@@ -165,7 +165,7 @@ class Tracking6D:
             self.tracker_backview = SyntheticDataGeneratingTracker(self.config, self.rendering_backview,
                                                                    self.gt_encoder, self.gt_texture, self.feat)
         else:
-            assert not config.matching_target_to_backview
+            assert not self.config.matching_target_to_backview
 
             self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
 
