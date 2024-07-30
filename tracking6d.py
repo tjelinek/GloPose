@@ -167,7 +167,17 @@ class Tracking6D:
         else:
             assert not self.config.matching_target_to_backview
 
-            self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
+            if self.config.segmentation_tracker == 'precomputed':
+                self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
+            elif config.segmentation_tracker == 'SAM':
+                self.tracker = PrecomputedTrackerSegmentAnything(self.config, self.feat, images_paths,
+                                                                 segmentation_paths)
+            elif config.segmentation_tracker == 'SAM2':
+                pass
+            elif config.segmentation_tracker == 'XMem':
+                self.tracker = PrecomputedTrackerXMem(self.config, self.feat, images_paths, segmentation_paths)
+            else:
+                raise ValueError('Unknown value of "segmentation_tracker"')
 
         self.initialize_optimizer_and_loss(ivertices)
 

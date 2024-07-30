@@ -107,7 +107,9 @@ class TrackerConfig:
     augment_gt_track: bool = False
     optimize_pose: bool = True
 
+    # Input Data
     generate_synthetic_observations_if_possible: bool = True
+    segmentation_tracker: str = 'SAM2'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'RAFT'  # 'RAFT' 'GMA'
