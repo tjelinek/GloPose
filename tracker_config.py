@@ -104,6 +104,7 @@ class TrackerConfig:
     texture_estimation: str = 'sgd'
 
     gt_track_path: str = None
+    augment_gt_track: bool = False
     optimize_pose: bool = True
 
     generate_synthetic_observations_if_possible: bool = True
