@@ -37,7 +37,8 @@ from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
-from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker
+from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker, \
+    PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem
 from tracker_config import TrackerConfig
 from utils import normalize_vertices, pinhole_intrinsics_from_tensor
 
