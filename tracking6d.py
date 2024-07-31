@@ -38,7 +38,7 @@ from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker, \
-    PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem
+    PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem, PrecomputedTrackerSegmentAnything2
 from tracker_config import TrackerConfig
 from utils import normalize_vertices, pinhole_intrinsics_from_tensor
 
@@ -173,7 +173,8 @@ class Tracking6D:
                 self.tracker = PrecomputedTrackerSegmentAnything(self.config, self.feat, images_paths,
                                                                  segmentation_paths)
             elif config.segmentation_tracker == 'SAM2':
-                pass
+                self.tracker = PrecomputedTrackerSegmentAnything2(self.config, self.feat, images_paths,
+                                                                  segmentation_paths)
             elif config.segmentation_tracker == 'XMem':
                 self.tracker = PrecomputedTrackerXMem(self.config, self.feat, images_paths, segmentation_paths)
             else:
