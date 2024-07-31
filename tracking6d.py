@@ -421,11 +421,6 @@ class Tracking6D:
             self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[:, frame_i]
             self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[:, :, frame_i]
 
-            if frame_i % 10 == 0:
-                print(f"Keyframe memory: {self.active_keyframes.get_memory_size() / (1024 ** 3)}GB")
-                gc.collect()
-                torch.cuda.empty_cache()
-
             next_tracker_frame = frame_i  # Index of a frame
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
