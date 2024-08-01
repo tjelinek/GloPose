@@ -7,7 +7,7 @@ from kornia import vec_like, eye_like
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, projection_from_KRt, \
     triangulate_points
 from nonmin_pose import C2P
-from pymagsac import optimizeEssentialMatrix
+# from pymagsac import optimizeEssentialMatrix
 
 
 def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, K1: torch.Tensor, K2: torch.Tensor,
