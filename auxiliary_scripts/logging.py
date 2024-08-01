@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import product
 
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Any
 
 import math
 
@@ -140,7 +140,6 @@ class WriteResults:
         self.logged_flow_tracks_inits: Dict[Cameras, List] = defaultdict(list)
 
         self.tracking_config: TrackerConfig = tracking_config
-        self.output_size: torch.Size = shape
         self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
         self.our_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
         self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
@@ -436,7 +435,8 @@ class WriteResults:
 
             plt.figure(figsize=(10, 8))
             plt.imshow(joint_losses.T,
-                       extent=[translations_space[0], translations_space[-1], rotations_space[-1], rotations_space[0]],
+                       extent=(float(translations_space[0]), float(translations_space[-1]),
+                               float(rotations_space[-1]), float(rotations_space[0])),
                        aspect='auto', cmap='hot', interpolation='none', vmin=min_val, vmax=max_val)
             cbar = plt.colorbar(label='Joint Loss')
             ticks = list(cbar.get_ticks())
@@ -465,7 +465,7 @@ class WriteResults:
                 iteration_translation = tracking6d.logged_sgd_translations[i][0, 0, -1, trans_axis_idx].detach().cpu()
                 iteration_rotation_quaternion = tracking6d.logged_sgd_quaternions[i].detach().cpu()
                 iteration_rotation_rad = quaternion_to_axis_angle(iteration_rotation_quaternion)
-                iteration_rotation_deg = torch.rad2deg(iteration_rotation_rad)[0, -1, rot_axis_idx]
+                iteration_rotation_deg = float(torch.rad2deg(iteration_rotation_rad)[0, -1, rot_axis_idx])
 
                 if i == 0:
                     plt.scatter(iteration_translation, iteration_rotation_deg, color='white', marker='x', label='Start')
@@ -571,7 +571,7 @@ class WriteResults:
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
     def write_tensor_into_bbox(self, image, bounding_box):
-        image_with_margins = torch.zeros(image.shape[:-2] + self.output_size).to(image.device)
+        image_with_margins = torch.zeros(image.shape[:-2] + self.image_width).to(image.device)
         image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = \
             image[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
         return image_with_margins
@@ -839,11 +839,8 @@ class WriteResults:
             dst_pts_pred_visible_yx_small_errors = arc_data.dst_pts_yx
             dst_pts_pred_visible_yx_gt_small_errors = arc_data.dst_pts_yx_gt
 
-            try:
-                inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
-                                                   arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
-            except:
-                breakpoint()
+            inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
+                                               arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
             correct_inliers = inliers_errors < correct_threshold
 
             fg_points_num = float(arc_data.observed_flow_segmentation.sum())
@@ -882,7 +879,8 @@ class WriteResults:
 
         if frame_i % 10 == 0:
             return
-        fig, axs = plt.subplots(2, 3, figsize=(20, 10))
+        fig_axs: Tuple[Any, Any] = plt.subplots(2, 3, figsize=(20, 10))
+        fig, axs = fig_axs
 
         axs[0, 0].set_title('Front View')
         axs[0, 1].set_title('Back View')
@@ -973,7 +971,7 @@ class WriteResults:
             fig.legend(handles, labels, loc='upper left')
 
             plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
-            plt.tight_layout(rect=[0.13, 0, 1, 1])
+            plt.tight_layout(rect=(0.13, 0, 1, 1))
 
         fig_path = self.ransac_path / 'ransac_stats.svg'
         self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats_old)
@@ -1016,6 +1014,7 @@ class WriteResults:
             flow_arc_source, flow_arc_target = new_flow_arc
 
             fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 12), dpi=600)
+            axs: Any = axs
 
             flow_source_label = self.tracking_config.gt_flow_source
             if flow_source_label == 'FlowNetwork':
@@ -1449,6 +1448,7 @@ class WriteResults:
         def plot_motion(ax, frame_indices_, data, gt_data, labels, title, ylabel):
             if ax is not None:
                 ax.set_xticks(ticks)
+                i = 0
                 for i, axis_label in enumerate(labels):
                     ax.plot(frame_indices_, data[:, i], label=f'{axis_label}', color=colors[i])
                     ax.plot(frame_indices_, gt_data[:, i], '--', label=f'GT {axis_label}', alpha=0.5, color=colors[i])
@@ -1637,6 +1637,7 @@ class WriteResults:
 
         if gt_object_mask is not None:
 
+            frame_iou = 0.
             ious = torch.zeros(gt_object_mask.shape[1])
             for frame_i in range(gt_object_mask.shape[1]):
                 frame_iou = 1 - iou_loss(predicted_mask[None, None, :, frame_i],
