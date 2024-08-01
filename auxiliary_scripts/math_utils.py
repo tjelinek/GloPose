@@ -34,6 +34,17 @@ def Rt_epipolar_cam_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
     return R_cam, t_cam
 
 
+def camera_pose_world_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
+    T_obj = Rt_to_matrix4x4(R_obj, t_obj)
+    T_cam_to_world = inverse_transformation(T_world_to_cam)
+
+    T_cam = compose_transformations(T_obj, T_cam_to_world)
+
+    R_cam, t_cam = matrix4x4_to_Rt(T_cam)
+
+    return R_cam, t_cam
+
+
 def qmult(q1, q0):  # q0, then q1, you get q3
     w0, x0, y0, z0 = q0[0]
     w1, x1, y1, z1 = q1[0]

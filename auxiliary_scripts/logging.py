@@ -41,7 +41,8 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
-from auxiliary_scripts.math_utils import quaternion_angular_difference, Rt_epipolar_cam_from_Rt_obj
+from auxiliary_scripts.math_utils import quaternion_angular_difference, Rt_epipolar_cam_from_Rt_obj, \
+    camera_pose_world_from_Rt_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -691,8 +692,8 @@ class WriteResults:
         translations = torch.from_numpy(translations)[..., None].cuda()
 
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4().repeat(len(all_frames_from_0), 1, 1)
-        R_cam_gt, t_cam_gt = Rt_epipolar_cam_from_Rt_obj(gt_rotations_matrix, gt_translations, T_world_to_cam)
-        R_cam, t_cam = Rt_epipolar_cam_from_Rt_obj(pred_rotations_matrix, translations, T_world_to_cam)
+        R_cam_gt, t_cam_gt = camera_pose_world_from_Rt_obj(gt_rotations_matrix, gt_translations, T_world_to_cam)
+        R_cam, t_cam = camera_pose_world_from_Rt_obj(pred_rotations_matrix, translations, T_world_to_cam)
         q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).flip(0).numpy(force=True)
         q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).flip(0).numpy(force=True)
 
