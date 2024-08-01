@@ -916,9 +916,10 @@ class WriteResults:
 
         previous_value = flow_tracks_inits[0]
         for i, value in enumerate(flow_tracks_inits):
+            order = self.logged_flow_tracks_inits[Cameras.FRONTVIEW].index(value)
             if value != previous_value or i == 0:
                 axs[1, 0].axvline(x=i, color='red', linestyle='--')
-                axs[1, 0].text(i, axs[1, 0].get_ylim()[0] - 20, f'Template {value}', rotation=-60,
+                axs[1, 0].text(i, axs[1, 0].get_ylim()[0] - 21, f'Template {order}', rotation=-60,
                                verticalalignment='top', horizontalalignment='center')
                 previous_value = value
 
