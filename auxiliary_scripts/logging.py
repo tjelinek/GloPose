@@ -683,33 +683,31 @@ class WriteResults:
                 )
             )
 
-        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph([frame_i])
+        all_frames_from_0 = range(1, frame_i+1)
+        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
         gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(gt_rotations))).cuda()
         pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(rotations))).cuda()
         gt_translations = torch.from_numpy(gt_translations)[..., None].cuda()
         translations = torch.from_numpy(translations)[..., None].cuda()
 
-        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
+        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4().repeat(len(all_frames_from_0), 1, 1)
         R_cam_gt, t_cam_gt = Rt_epipolar_cam_from_Rt_obj(gt_rotations_matrix, gt_translations, T_world_to_cam)
         R_cam, t_cam = Rt_epipolar_cam_from_Rt_obj(pred_rotations_matrix, translations, T_world_to_cam)
-        q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).squeeze().flip(0).numpy(force=True)
-        q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).squeeze().flip(0).numpy(force=True)
-
-        q_obj_xyzw = rotation_matrix_to_quaternion(pred_rotations_matrix).squeeze().flip(0).numpy(force=True)
-        q_obj_gt_xyzw = rotation_matrix_to_quaternion(gt_rotations_matrix).squeeze().flip(0).numpy(force=True)
+        q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).flip(0).numpy(force=True)
+        q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).flip(0).numpy(force=True)
 
         rr.set_time_sequence(RerunAnnotations.space_predicted_camera_path, frame_i)
         rr.set_time_sequence(RerunAnnotations.space_gt_camera_path, frame_i)
 
         rr.log(
             RerunAnnotations.space_predicted_camera_path,
-            rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
-                           rotation=rr.Quaternion(xyzw=q_obj_xyzw))
+            rr.Transform3D(translation=t_cam_gt[-1].squeeze().numpy(force=True),
+                           rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]))
         )
         rr.log(
             RerunAnnotations.space_gt_camera_path,
-            rr.Transform3D(translation=t_cam_gt.squeeze().numpy(force=True),
-                           rotation=rr.Quaternion(xyzw=q_obj_gt_xyzw))
+            rr.Transform3D(translation=t_cam_gt[-1].squeeze().numpy(force=True),
+                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]))
         )
 
         # rr.log(
@@ -1521,7 +1519,6 @@ class WriteResults:
             rotations.append(last_rotation)
             translations.append(last_translation)
 
-            frame_data = self.data_graph.get_frame_data(frame)
             gt_rotation = np.rad2deg(frame_data.gt_rot_axis_angle.squeeze().numpy(force=True))
             gt_translation = frame_data.gt_translation.squeeze().numpy(force=True)
             gt_rotations.append(gt_rotation)
