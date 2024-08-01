@@ -1,7 +1,7 @@
 import sys
 from abc import abstractmethod, ABC
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 import cv2
 import torch
@@ -68,7 +68,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
         return rendered_segment_discrete
 
-    def next(self, frame_id):
+    def next(self, frame_id, **kwargs):
         keyframes = [frame_id]
         flow_frames = [frame_id]
 
@@ -112,7 +112,7 @@ class PrecomputedTracker(BaseTracker, ABC):
                                           align_corners=False)[None]
         return image_downsampled
 
-    def next_segmentation(self, frame_i):
+    def next_segmentation(self, frame_i, **kwargs):
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_i])
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
@@ -121,7 +121,7 @@ class PrecomputedTracker(BaseTracker, ABC):
 
         return segmentation_resized
 
-    def next(self, frame_i):
+    def next(self, frame_i, **kwargs):
         image = self.next_image(frame_i)
         image_feat = self.feature_extractor(image).detach()
         segmentation = self.next_segmentation(frame_i)
@@ -132,7 +132,30 @@ class PrecomputedTracker(BaseTracker, ABC):
         return frame_observation
 
 
-class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
+class PrecomputedTrackerSegmentAnythingAbstract(PrecomputedTracker):
+
+    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+                 segmentations_paths: List[Path]):
+        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
+
+        self.predictor: Optional[SamPredictor] = None
+
+    def next_segmentation(self, frame_i, **kwargs):
+        image = self.next_image(frame_i)
+        image_np = image.squeeze().permute(1, 2, 0).numpy(force=True)
+
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            self.predictor.set_image(image_np)
+            gt_mask = super().next_segmentation(frame_i)
+            prompts = torch.nonzero(gt_mask.squeeze()).numpy(force=True)
+            point_labels = np.ones_like(prompts[:, 0])
+            masks, _, _ = self.predictor.predict(prompts, point_labels, multimask_output=False)
+            masks = torch.from_numpy(masks).cuda().to(torch.float32)
+
+        return masks[None, None]
+
+
+class PrecomputedTrackerSegmentAnything(PrecomputedTrackerSegmentAnythingAbstract):
 
     def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
                  segmentations_paths: List[Path]):
@@ -141,21 +164,22 @@ class PrecomputedTrackerSegmentAnything(PrecomputedTracker):
         weights_path = "/mnt/personal/jelint19/weights/SegmentAnything/sam_vit_h_4b8939.pth"
         sam = sam_model_registry["vit_h"](checkpoint=weights_path).cuda()
         self.predictor = SamPredictor(sam)
-        # self.mask_generator = SamAutomaticMaskGenerator(sam)
 
-    def next_segmentation(self, frame_i):
-        image = self.next_image(frame_i)
-        image_np = image.squeeze().permute(1, 2, 0).numpy(force=True)
 
-        self.predictor.set_image(image_np)
-        gt_mask = super().next_segmentation(frame_i)
-        prompts = torch.nonzero(gt_mask.squeeze()).numpy(force=True)
-        point_labels = np.ones_like(prompts[:, 0])
-        masks, _, _ = self.predictor.predict(prompts, point_labels, multimask_output=False)
-        masks = torch.from_numpy(masks).cuda().to(torch.float32)
+class PrecomputedTrackerSegmentAnything2(PrecomputedTrackerSegmentAnything):
 
-        # masks = self.mask_generator.generate(image_np)
-        return masks[None, None]
+    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+                 segmentations_paths: List[Path]):
+        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
+
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_hiera_large.pt")
+        model_cfg = Path("repositories/SAM2/sam2_configs/sam2_hiera_l.yaml")
+        model_cfg = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_configs/sam2_hiera_l.yaml")
+        breakpoint()
+        self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
 
 
 class PrecomputedTrackerXMem(PrecomputedTracker):
@@ -217,7 +241,6 @@ class PrecomputedTrackerXMem(PrecomputedTracker):
         msk = None
         labels = None
         if frame_i == 0:
-
             segmentation_init = super().next_segmentation(0)[0, 0]
             image_init = self.next_image(0).squeeze()
 
