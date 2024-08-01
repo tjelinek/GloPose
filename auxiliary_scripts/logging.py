@@ -287,19 +287,19 @@ class WriteResults:
                         ],
                         name='Epipolar'
                     ),
-                    rrb.Horizontal(
+                    rrb.Vertical(
                         contents=[
                             rrb.Spatial2DView(name="RANSAC Stats",
                                               origin=RerunAnnotations.ransac_stats_old),
-                            # rrb.Vertical(
-                            #     contents=[
-                            #         rrb.Spatial2DView(name="Template Front",
-                            #                           origin=RerunAnnotations.template_image_frontview),
-                            #         # rrb.Spatial2DView(name="Template Back",
-                            #         #                   origin=RerunAnnotations.template_image_backview)
-                            #     ],
-                            #     name='Templates'
-                            # )
+                            rrb.Grid(
+                                contents=[
+                                    rrb.Spatial2DView(name=f"Template {i}",
+                                                      origin=f'{RerunAnnotations.template_image_frontview_grid}/{i}')
+                                    for i in range(27)
+                                ],
+                                grid_columns=9,
+                                name='Templates'
+                            ),
                         ],
                         name='Epipolar (old)'
                     ),
@@ -913,6 +913,14 @@ class WriteResults:
 
         self.visualize_logged_metrics(rotation_ax=axs[1, 0],
                                       translation_ax=axs[1, 1], plot_losses=False)
+
+        previous_value = flow_tracks_inits[0]
+        for i, value in enumerate(flow_tracks_inits):
+            if value != previous_value or i == 0:
+                axs[1, 0].axvline(x=i, color='red', linestyle='--')
+                axs[1, 0].text(i, axs[1, 0].get_ylim()[0] - 20, f'Template {value}', rotation=-60,
+                               verticalalignment='top', horizontalalignment='center')
+                previous_value = value
 
         template_axes = {Cameras.FRONTVIEW: (0, 2), Cameras.BACKVIEW: (1, 2)}
         ransac_stats_axes = {Cameras.FRONTVIEW: (0, 0), Cameras.BACKVIEW: (0, 1)}
