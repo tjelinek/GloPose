@@ -724,15 +724,25 @@ class WriteResults:
                            rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]))
         )
 
-        strips_colors = [[255, 0, 0]] * gt_t_cam.shape[0]
-        rr.log(RerunAnnotations.space_gt_camera_track,
-               rr.LineStrips3D(strips=gt_t_cam,
-                               colors=strips_colors))
+        cmap_gt = plt.get_cmap('Greens')
+        cmap_pred = plt.get_cmap('Blues')
+        gradient = np.linspace(1., 0., self.tracking_config.input_frames)
+        colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
+        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
 
-        strips_colors = [[0, 255, 0]] * pred_t_cam.shape[0]
+        strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
+        strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
+        strips_radii = [0.01] * n_poses
+
+        rr.log(RerunAnnotations.space_gt_camera_track,
+               rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
+                               colors=colors_gt,
+                               radii=strips_radii))
+
         rr.log(RerunAnnotations.space_predicted_camera_track,
-               rr.LineStrips3D(strips=pred_t_cam,
-                               colors=strips_colors))
+               rr.LineStrips3D(strips=strips_pred,  # pred_t_cam
+                               colors=colors_pred,
+                               radii=strips_radii))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
             node_quaternion = Quaternion(icosphere_node.quaternion)
