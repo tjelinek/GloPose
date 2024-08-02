@@ -58,6 +58,7 @@ class RerunAnnotations:
     space_gt_camera_track: str = '/3d_space/gt_camera_track'
     space_predicted_camera_track: str = '/3d_space/predicted_camera_track'
     space_predicted_camera_keypoints: str = '/3d_space/predicted_camera_keypoints'
+    space_predicted_closest_keypoint: str = '/3d_space/predicted_closest_keypoint'
 
     template_image_frontview: str = '/observations/template_image_frontview'
 
@@ -739,6 +740,17 @@ class WriteResults:
                rr.LineStrips3D(strips=strips_pred,  # pred_t_cam
                                colors=colors_pred,
                                radii=strips_radii))
+
+        closest_node, _ = pose_icosphere.get_closest_reference(pred_obj_se3.quaternion.q[None, [-1]])
+
+        closest_node_Se3 = Se3(Quaternion(closest_node.quaternion), torch.zeros(1, 3).cuda())
+        closest_node_cam_se3 = camera_Se3_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
+
+        rr.log(RerunAnnotations.space_predicted_closest_keypoint,
+               rr.LineStrips3D(strips=[[pred_cam_se3.translation[[-1]].squeeze().numpy(force=True),
+                                        closest_node_cam_se3.translation.squeeze().numpy(force=True)]],
+                               colors=[[255, 0, 0]],
+                               radii=[0.025]))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
             node_quaternion = Quaternion(icosphere_node.quaternion)
