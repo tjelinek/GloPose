@@ -16,7 +16,7 @@ import numpy as np
 import seaborn as sns
 import torchvision
 from PIL import Image
-from kornia.geometry import normalize_quaternion
+from kornia.geometry import normalize_quaternion, Se3, Quaternion
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -41,8 +41,8 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index
-from auxiliary_scripts.math_utils import quaternion_angular_difference, Rt_epipolar_cam_from_Rt_obj, \
-    camera_pose_world_from_Rt_obj
+from auxiliary_scripts.math_utils import quaternion_angular_difference, camera_Rt_world_from_Rt_obj, \
+    camera_Se3_world_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -55,8 +55,11 @@ class RerunAnnotations:
     # Observations
     space_visualization: str = '/3d_space'
     space_gt_mesh: str = '/3d_space/gt_mesh'
-    space_gt_camera_path: str = '/3d_space/gt_camera'
-    space_predicted_camera_path: str = '/3d_space/predicted_object'
+    space_gt_camera_pose: str = '/3d_space/gt_camera_pose'
+    space_predicted_camera_pose: str = '/3d_space/predicted_camera_pose'
+    space_gt_camera_track: str = '/3d_space/gt_camera_track'
+    space_predicted_camera_track: str = '/3d_space/predicted_camera_track'
+    space_predicted_camera_keypoints: str = '/3d_space/predicted_camera_keypoints'
 
     template_image_frontview: str = '/observations/template_image_frontview'
 
@@ -603,7 +606,7 @@ class WriteResults:
             self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
                                       gt_translations)
 
-        self.visualize_3d_camera_space(frame_i)
+        self.visualize_3d_camera_space(frame_i, pose_icosphere)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
@@ -659,7 +662,7 @@ class WriteResults:
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
 
-    def visualize_3d_camera_space(self, frame_i):
+    def visualize_3d_camera_space(self, frame_i: int, pose_icosphere: PoseIcosphere):
         if self.tracking_config.gt_mesh_path is None or self.tracking_config.gt_texture_path is None:
             return
 
@@ -685,49 +688,67 @@ class WriteResults:
             )
 
         all_frames_from_0 = range(1, frame_i+1)
+
+        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
+        T_world_to_cam_se3 = Se3.from_matrix(T_world_to_cam)
+
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
         gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(gt_rotations))).cuda()
         pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(rotations))).cuda()
         gt_translations = torch.from_numpy(gt_translations)[..., None].cuda()
         translations = torch.from_numpy(translations)[..., None].cuda()
 
-        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4().repeat(len(all_frames_from_0), 1, 1)
-        R_cam_gt, t_cam_gt = camera_pose_world_from_Rt_obj(gt_rotations_matrix, gt_translations, T_world_to_cam)
-        R_cam, t_cam = camera_pose_world_from_Rt_obj(pred_rotations_matrix, translations, T_world_to_cam)
+        R_cam_gt, t_cam_gt = camera_Rt_world_from_Rt_obj(gt_rotations_matrix, gt_translations,
+                                                         T_world_to_cam.repeat(len(all_frames_from_0), 1, 1))
+        R_cam, t_cam = camera_Rt_world_from_Rt_obj(pred_rotations_matrix, translations,
+                                                   T_world_to_cam.repeat(len(all_frames_from_0), 1, 1))
         q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).flip(0).numpy(force=True)
         q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).flip(0).numpy(force=True)
 
-        rr.set_time_sequence(RerunAnnotations.space_predicted_camera_path, frame_i)
-        rr.set_time_sequence(RerunAnnotations.space_gt_camera_path, frame_i)
+        rr.set_time_sequence('frame', frame_i)
 
         rr.log(
-            RerunAnnotations.space_predicted_camera_path,
-            rr.Transform3D(translation=t_cam_gt[-1].squeeze().numpy(force=True),
+            RerunAnnotations.space_predicted_camera_pose,
+            rr.Transform3D(translation=t_cam[-1].squeeze().numpy(force=True),
                            rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]))
         )
         rr.log(
-            RerunAnnotations.space_gt_camera_path,
+            RerunAnnotations.space_gt_camera_pose,
             rr.Transform3D(translation=t_cam_gt[-1].squeeze().numpy(force=True),
                            rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]))
         )
 
-        # rr.log(
-        #     RerunAnnotations.space_predicted_camera_path,
-        #     rr.Pinhole(
-        #         resolution=[self.image_width, self.image_height],
-        #         image_from_camera=self.rendering.intrinsics,
-        #         camera_xyz=rr.ViewCoordinates.RDF,
-        #     ),
-        # )
+        strips_colors = [[255, 0, 0]]*t_cam_gt.shape[0]
+        rr.log(RerunAnnotations.space_gt_camera_track,
+               rr.LineStrips3D(strips=t_cam_gt.squeeze(-1).numpy(force=True),
+                               colors=strips_colors))
 
-        # rr.log(
-        #     RerunAnnotations.space_gt_camera_path,
-        #     rr.Pinhole(
-        #         resolution=[self.image_width, self.image_height],
-        #         image_from_camera=self.rendering.intrinsics,
-        #         camera_xyz=rr.ViewCoordinates.RDF,
-        #     ),
-        # )
+        strips_colors = [[0, 255, 0]] * t_cam.shape[0]
+        rr.log(RerunAnnotations.space_predicted_camera_track,
+               rr.LineStrips3D(strips=t_cam.squeeze(-1).numpy(force=True),
+                               colors=strips_colors))
+
+        for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
+            node_quaternion = Quaternion(icosphere_node.quaternion)
+
+            node_Se3 = Se3(node_quaternion, torch.zeros(1, 3).cuda())
+            node_cam_se3 = camera_Se3_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
+            node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
+
+            rr.log(
+                f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+                rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
+                               rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
+            )
+
+            rr.log(
+                f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+                rr.Pinhole(
+                    resolution=[self.image_width, self.image_height],
+                    focal_length=[float(self.rendering.intrinsics.focal_x), float(self.rendering.intrinsics.focal_y)],
+                    camera_xyz=rr.ViewCoordinates.RDF,
+                ),
+            )
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
