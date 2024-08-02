@@ -58,6 +58,7 @@ class RerunAnnotations:
     space_gt_camera_track: str = '/3d_space/gt_camera_track'
     space_predicted_camera_track: str = '/3d_space/predicted_camera_track'
     space_predicted_camera_keypoints: str = '/3d_space/predicted_camera_keypoints'
+    template_image_frontview_grid: str = '/3d_space/template_image_grid_frontview'
 
     template_image_frontview: str = '/observations/template_image_frontview'
 
@@ -66,8 +67,6 @@ class RerunAnnotations:
     observed_image_frontview: str = '/observations/observed_image_frontview'
 
     observed_image_segmentation_frontview: str = '/observations/observed_image_frontview/segment'
-
-    template_image_frontview_grid: str = '/observations/template_image_grid_frontview'
 
     observed_flow_frontview: str = '/observed_flow/observed_flow_frontview'
     observed_flow_occlusion_frontview: str = '/observed_flow/occlusion_frontview'
@@ -230,7 +229,7 @@ class WriteResults:
                             rrb.Grid(
                                 contents=[
                                     rrb.Spatial2DView(name=f"Template {i}",
-                                                      origin=f'{RerunAnnotations.template_image_frontview_grid}/{i}')
+                                                      origin=f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}')
                                     for i in range(27)
                                 ],
                                 grid_columns=9,
@@ -296,7 +295,7 @@ class WriteResults:
                             rrb.Grid(
                                 contents=[
                                     rrb.Spatial2DView(name=f"Template {i}",
-                                                      origin=f'{RerunAnnotations.template_image_frontview_grid}/{i}')
+                                                      origin=f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}')
                                     for i in range(27)
                                 ],
                                 grid_columns=9,
@@ -1975,7 +1974,7 @@ class WriteResults:
 
                         if source_frame in not_logged_templates:
                             self.logged_flow_tracks_inits[view].append(source_frame)
-                            template_image_grid_annotation = (f'{RerunAnnotations.template_image_frontview_grid}/'
+                            template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                               f'{template_idx}')
                             rr.log(template_image_grid_annotation, rr.Image(template))
 
