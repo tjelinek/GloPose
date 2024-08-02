@@ -758,7 +758,7 @@ class WriteResults:
                 rr.Pinhole(
                     resolution=[self.image_width, self.image_height],
                     focal_length=[float(self.rendering.intrinsics.focal_x), float(self.rendering.intrinsics.focal_y)],
-                    camera_xyz=rr.ViewCoordinates.RDF,
+                    camera_xyz=rr.ViewCoordinates.RUF,
                 ),
             )
 
