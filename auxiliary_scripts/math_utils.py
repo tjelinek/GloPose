@@ -86,15 +86,6 @@ def consecutive_quaternions_angular_difference(quaternion):
     return np.array(angs)
 
 
-def consecutive_quaternions_angular_difference2(quaternion):
-    angs = []
-    for qi in range(quaternion.shape[1] - 1):
-        ang = float(torch.acos(torch.dot(quaternion[0, qi], quaternion[0, qi + 1]) /
-                               (quaternion[0, qi].norm() * quaternion[0, qi].norm()))) * 180.0 / np.pi
-        angs.append(ang)
-    return np.array(angs)
-
-
 def get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q: torch.Tensor, T_world_to_cam: torch.Tensor,
                                                     in_plane_rotation_degrees: float):
     obj_rotation_q = Quaternion(obj_rotation_q)
