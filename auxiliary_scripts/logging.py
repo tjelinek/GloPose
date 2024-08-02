@@ -58,7 +58,6 @@ class RerunAnnotations:
     space_gt_camera_track: str = '/3d_space/gt_camera_track'
     space_predicted_camera_track: str = '/3d_space/predicted_camera_track'
     space_predicted_camera_keypoints: str = '/3d_space/predicted_camera_keypoints'
-    template_image_frontview_grid: str = '/3d_space/template_image_grid_frontview'
 
     template_image_frontview: str = '/observations/template_image_frontview'
 
