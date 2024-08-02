@@ -1,16 +1,21 @@
 import numpy as np
 import torch
 from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt, \
-    normalize_quaternion, Se3, Quaternion, quaternion_to_axis_angle
+    normalize_quaternion, Se3, Quaternion
 
 
 def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
-    T_cam_to_world = inverse_transformation(T_world_to_cam)
 
-    # T_o1_to_o2 = T_w_to_c0 @ T_cam @ (T_w_to_c0)^-1
-    T_obj = compose_transformations(compose_transformations(T_world_to_cam, T_cam), T_cam_to_world)
+    Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
+    Se3_cam = Se3.from_matrix(T_cam)
+    Se3_obj = Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam)
+    T_obj = Se3_obj.matrix()
 
     return T_obj
+
+
+def Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam):
+    return Se3_world_to_cam * Se3_cam * Se3_world_to_cam.inverse()
 
 
 def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
