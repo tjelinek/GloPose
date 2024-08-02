@@ -1,11 +1,9 @@
 import numpy as np
 import torch
-from kornia.geometry import inverse_transformation, Rt_to_matrix4x4, compose_transformations, matrix4x4_to_Rt, \
-    normalize_quaternion, Se3, Quaternion
+from kornia.geometry import Rt_to_matrix4x4, matrix4x4_to_Rt, normalize_quaternion, Se3, Quaternion
 
 
 def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
-
     Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
     Se3_cam = Se3.from_matrix(T_cam)
     Se3_obj = Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam)
@@ -14,7 +12,7 @@ def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
     return T_obj
 
 
-def Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam):
+def Se3_obj_from_epipolar_Se3_cam(Se3_cam: Se3, Se3_world_to_cam: Se3) -> Se3:
     return Se3_world_to_cam * Se3_cam * Se3_world_to_cam.inverse()
 
 
@@ -30,24 +28,52 @@ def Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam, T_world_to_cam):
 
 def Rt_epipolar_cam_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
     T_obj = Rt_to_matrix4x4(R_obj, t_obj)
-    T_cam_to_world = inverse_transformation(T_world_to_cam)
 
-    T_cam = compose_transformations(compose_transformations(T_cam_to_world, T_obj), T_world_to_cam)
+    T_cam = T_epipolar_cam_from_T_obj(T_obj, T_world_to_cam)
 
     R_cam, t_cam = matrix4x4_to_Rt(T_cam)
 
     return R_cam, t_cam
 
 
-def camera_pose_world_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
+def T_epipolar_cam_from_T_obj(T_obj, T_world_to_cam):
+    Se3_obj = Se3.from_matrix(T_obj)
+    Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
+
+    Se3_cam = Se3_epipolar_cam_from_Se3_obj(Se3_obj, Se3_world_to_cam)
+    T_cam = Se3_cam.matrix()
+
+    return T_cam
+
+
+def Se3_epipolar_cam_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> Se3:
+    return Se3_world_to_cam.inverse() * Se3_obj * Se3_world_to_cam
+
+
+def camera_Rt_world_from_Rt_obj(R_obj, t_obj, T_world_to_cam):
     T_obj = Rt_to_matrix4x4(R_obj, t_obj)
-    T_cam_to_world = inverse_transformation(T_world_to_cam)
 
-    T_cam = compose_transformations(T_obj, T_cam_to_world)
+    T_cam = camera_T_world_from_T_obj(T_obj, T_world_to_cam)
 
     R_cam, t_cam = matrix4x4_to_Rt(T_cam)
 
     return R_cam, t_cam
+
+
+def camera_T_world_from_T_obj(T_obj, T_world_to_cam):
+    Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
+    Se3_obj = Se3.from_matrix(T_obj)
+    Se3_cam = camera_Se3_world_from_Se3_obj(Se3_obj, Se3_world_to_cam)
+
+    T_cam = Se3_cam.matrix()
+
+    return T_cam
+
+
+def camera_Se3_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> Se3:
+    Se3_cam = Se3_obj * Se3_world_to_cam.inverse()
+
+    return Se3_cam
 
 
 def qmult(q1, q0):  # q0, then q1, you get q3
