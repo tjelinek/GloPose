@@ -688,44 +688,50 @@ class WriteResults:
             )
 
         all_frames_from_0 = range(1, frame_i+1)
+        n_poses = len(all_frames_from_0)
 
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
         T_world_to_cam_se3 = Se3.from_matrix(T_world_to_cam)
+        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam.repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
-        gt_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(gt_rotations))).cuda()
-        pred_rotations_matrix = axis_angle_to_rotation_matrix(torch.deg2rad(torch.from_numpy(rotations))).cuda()
-        gt_translations = torch.from_numpy(gt_translations)[..., None].cuda()
-        translations = torch.from_numpy(translations)[..., None].cuda()
+        gt_rotations_rad = torch.deg2rad(torch.from_numpy(gt_rotations)).cuda()
+        rotations_rad = torch.deg2rad(torch.from_numpy(rotations)).cuda()
+        gt_translations = torch.from_numpy(gt_translations).cuda()
+        translations = torch.from_numpy(translations).cuda()
 
-        R_cam_gt, t_cam_gt = camera_Rt_world_from_Rt_obj(gt_rotations_matrix, gt_translations,
-                                                         T_world_to_cam.repeat(len(all_frames_from_0), 1, 1))
-        R_cam, t_cam = camera_Rt_world_from_Rt_obj(pred_rotations_matrix, translations,
-                                                   T_world_to_cam.repeat(len(all_frames_from_0), 1, 1))
-        q_cam_xyzw = rotation_matrix_to_quaternion(R_cam).flip(0).numpy(force=True)
-        q_cam_gt_xyzw = rotation_matrix_to_quaternion(R_cam_gt).flip(0).numpy(force=True)
+        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
+        pred_obj_se3 = Se3(Quaternion.from_axis_angle(rotations_rad), translations)
+
+        gt_cam_se3 = camera_Se3_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
+        pred_cam_se3 = camera_Se3_world_from_Se3_obj(pred_obj_se3, T_world_to_cam_se3_batched)
+
+        q_cam_gt_xyzw = gt_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
+        q_cam_xyzw = pred_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
+        gt_t_cam = gt_cam_se3.translation.numpy(force=True)
+        pred_t_cam = pred_cam_se3.translation.numpy(force=True)
 
         rr.set_time_sequence('frame', frame_i)
 
         rr.log(
             RerunAnnotations.space_predicted_camera_pose,
-            rr.Transform3D(translation=t_cam[-1].squeeze().numpy(force=True),
+            rr.Transform3D(translation=pred_t_cam[-1],
                            rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]))
         )
         rr.log(
             RerunAnnotations.space_gt_camera_pose,
-            rr.Transform3D(translation=t_cam_gt[-1].squeeze().numpy(force=True),
+            rr.Transform3D(translation=gt_t_cam[-1],
                            rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]))
         )
 
-        strips_colors = [[255, 0, 0]]*t_cam_gt.shape[0]
+        strips_colors = [[255, 0, 0]] * gt_t_cam.shape[0]
         rr.log(RerunAnnotations.space_gt_camera_track,
-               rr.LineStrips3D(strips=t_cam_gt.squeeze(-1).numpy(force=True),
+               rr.LineStrips3D(strips=gt_t_cam,
                                colors=strips_colors))
 
-        strips_colors = [[0, 255, 0]] * t_cam.shape[0]
+        strips_colors = [[0, 255, 0]] * pred_t_cam.shape[0]
         rr.log(RerunAnnotations.space_predicted_camera_track,
-               rr.LineStrips3D(strips=t_cam.squeeze(-1).numpy(force=True),
+               rr.LineStrips3D(strips=pred_t_cam,
                                colors=strips_colors))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
