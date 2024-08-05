@@ -158,6 +158,9 @@ class TrackerConfig:
 
     ransac_use_dust3r: bool = False
 
+    ransac_sample_points: bool = True
+    ransac_sampled_points_number: int = 100
+
     ransac_feed_only_inlier_flow: bool = False
     ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
 

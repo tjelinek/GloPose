@@ -66,6 +66,10 @@ class EpipolarPoseEstimator:
             get_not_occluded_foreground_points(occlusions, segmentation, self.occlusion_threshold,
                                                self.segmentation_threshold))
 
+        if self.config.ransac_sample_points:
+            perm = torch.randperm(src_pts_yx.shape[0])
+            src_pts_yx = src_pts_yx[perm[:self.config.ransac_sampled_points_number]]
+
         _, gt_visible_fg_points_mask = (get_not_occluded_foreground_points(
             gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
             self.occlusion_threshold, self.segmentation_threshold))
