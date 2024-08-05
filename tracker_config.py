@@ -149,7 +149,7 @@ class TrackerConfig:
     ransac_refine_E_numerically: bool = False
 
     ransac_outlier_threshold: float = 0.01
-    ransac_min_iters: int = 1000
+    ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
 
     ransac_use_gt_occlusions_and_segmentation: bool = False
