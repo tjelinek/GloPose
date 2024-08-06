@@ -122,8 +122,8 @@ class RerunAnnotations:
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, rendering_backview,
-                 gt_encoder, deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras]):
+    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
+                 deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras]):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -133,7 +133,6 @@ class WriteResults:
         self.data_graph: DataGraph = data_graph
 
         self.rendering: RenderingKaolin = rendering
-        self.rendering_backview: RenderingKaolin = rendering_backview
         self.gt_encoder: Encoder = gt_encoder
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
@@ -339,8 +338,6 @@ class WriteResults:
             "image_height": self.rendering.height,
             "camera_translation": self.rendering.camera_trans[0].numpy(force=True),
             "camera_rotation_matrix": self.rendering.camera_rot.numpy(force=True),
-            "camera_translation_backview": self.rendering.camera_trans_backview[0].numpy(force=True),
-            "camera_rotation_backview": self.rendering.camera_rot_backview.numpy(force=True),
         }
 
         with h5py.File(self.correspondences_log_file, 'w') as f:
@@ -578,10 +575,9 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer,
-                      active_keyframes_backview: KeyframeBuffer, best_model, observations: FrameObservation,
-                      observations_backview: FrameObservation, gt_rotations, gt_translations,
-                      flow_tracks_inits: List[int], pose_icosphere: PoseIcosphere):
+    def write_results(self, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer, best_model,
+                      observations: FrameObservation, gt_rotations, gt_translations, flow_tracks_inits: List[int],
+                      pose_icosphere: PoseIcosphere):
 
         observed_segmentations = observations.observed_segmentation
 
@@ -600,8 +596,7 @@ class WriteResults:
                 self.visualize_outliers_distribution(new_flow_arc)
 
         if self.tracking_config.dump_correspondences:
-            self.dump_correspondences(active_keyframes, active_keyframes_backview, new_flow_arcs, gt_rotations,
-                                      gt_translations)
+            self.dump_correspondences(active_keyframes, new_flow_arcs, gt_rotations, gt_translations)
 
         self.visualize_3d_camera_space(frame_i, pose_icosphere)
 
@@ -1294,8 +1289,7 @@ class WriteResults:
                        verticalalignment='top', horizontalalignment='right',
                        bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
 
-    def dump_correspondences(self, keyframes: KeyframeBuffer, keyframes_backview: KeyframeBuffer, new_flow_arcs,
-                             gt_rotations, gt_translations):
+    def dump_correspondences(self, keyframes: KeyframeBuffer, new_flow_arcs, gt_rotations, gt_translations):
 
         with h5py.File(self.correspondences_log_file, 'a') as f:
 
@@ -1309,21 +1303,6 @@ class WriteResults:
                 dst_pts_xy_frontview, occlusion_score_frontview, src_pts_xy_frontview, gt_inliers_frontview = \
                     self.get_correspondences_from_observations(flow_observation_frontview, source_frame, target_frame)
 
-                if self.tracking_config.matching_target_to_backview:
-                    flow_observation_backview = keyframes_backview.get_flows_between_frames(source_frame, target_frame)
-                    flow_observation_backview.observed_flow = flow_unit_coords_to_image_coords(
-                        flow_observation_backview.observed_flow)
-
-                    dst_pts_xy_backview, occlusion_score_backview, src_pts_xy_backview, gt_inliers_backview = \
-                        self.get_correspondences_from_observations(flow_observation_backview, source_frame,
-                                                                   target_frame)
-
-                else:
-                    dst_pts_xy_backview = torch.zeros_like(dst_pts_xy_frontview)
-                    occlusion_score_backview = torch.zeros_like(occlusion_score_frontview)
-                    src_pts_xy_backview = torch.zeros_like(src_pts_xy_frontview)
-                    gt_inliers_backview = torch.zeros_like(gt_inliers_frontview)
-
                 frame_data = {
                     "flow_arc": flow_arc,
                     "gt_translation": gt_translations[0, 0, target_frame].numpy(force=True),
@@ -1332,10 +1311,6 @@ class WriteResults:
                     "target_points_xy_frontview": dst_pts_xy_frontview.numpy(force=True),
                     "gt_inliers_frontview": gt_inliers_frontview.numpy(force=True),
                     "frontview_matching_occlusion": occlusion_score_frontview.numpy(force=True),
-                    "source_points_xy_backview": src_pts_xy_backview.numpy(force=True),
-                    "target_points_xy_backview": dst_pts_xy_backview.numpy(force=True),
-                    "gt_inliers_backview": gt_inliers_backview.numpy(force=True),
-                    "backview_matching_occlusion": occlusion_score_backview.numpy(force=True),
                 }
 
                 if 'correspondences' not in f:

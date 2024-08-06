@@ -63,7 +63,6 @@ class Tracking6D:
 
         # Rendering and mesh related
         self.rendering: Optional[RenderingKaolin] = None
-        self.rendering_backview: Optional[RenderingKaolin] = None
         self.faces = None
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
         self.gt_texture = gt_texture
@@ -97,7 +96,6 @@ class Tracking6D:
         # Optical flow
         self.short_flow_model: Optional[FlowProvider] = None
         self.long_flow_provider: Optional[MFTFlowProvider] = None
-        self.long_flow_provider_backview: Optional[MFTFlowProvider] = None
 
         # Ground truth related
         self.gt_rotations: Optional[torch.Tensor] = gt_rotations
@@ -105,7 +103,6 @@ class Tracking6D:
 
         # Keyframes
         self.active_keyframes: Optional[KeyframeBuffer] = None
-        self.active_keyframes_backview: Optional[KeyframeBuffer] = None
 
         # Data graph
         self.data_graph: Optional[DataGraph] = None
@@ -161,8 +158,6 @@ class Tracking6D:
             self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture,
                                                           self.feat)
 
-            self.tracker_backview = SyntheticDataGeneratingTracker(self.config, self.rendering_backview,
-                                                                   self.gt_encoder, self.gt_texture, self.feat)
         else:
             assert not self.config.matching_target_to_backview
 
@@ -191,8 +186,7 @@ class Tracking6D:
         self.initialize_keyframes()
 
         self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.gt_rotations,
-                                                             self.gt_translations, self.rendering,
-                                                             self.rendering_backview, self.gt_encoder,
+                                                             self.gt_translations, self.rendering, self.gt_encoder,
                                                              self.cam_intrinsics)
 
         if self.config.verbose:
@@ -205,10 +199,6 @@ class Tracking6D:
         config_back_view = copy.deepcopy(self.config)
         config_back_view.camera_position = tuple(-el for el in config_back_view.camera_position)
 
-        self.rendering_backview = RenderingKaolin(self.config, self.faces,
-                                                  self.image_shape.width,
-                                                  self.image_shape.height).to(self.device)
-        self.rendering_backview.backview = True
 
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.image_shape.width,
@@ -340,7 +330,6 @@ class Tracking6D:
     def initialize_keyframes(self):
 
         self.active_keyframes = KeyframeBuffer()
-        self.active_keyframes_backview = KeyframeBuffer()
 
     def initialize_flow_model(self):
 
@@ -369,13 +358,6 @@ class Tracking6D:
                                                                                     faces=self.faces,
                                                                                     gt_encoder=self.gt_encoder
                                                                                     )
-            if self.config.matching_target_to_backview:
-                self.long_flow_provider_backview = (
-                    long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg,
-                                                                  config=self.config,
-                                                                  faces=self.faces,
-                                                                  gt_encoder=self.gt_encoder
-                                                                  ))
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
@@ -388,9 +370,9 @@ class Tracking6D:
 
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                           tracking_config=self.config, rendering=self.rendering,
-                                          rendering_backview=self.rendering_backview, gt_encoder=self.gt_encoder,
-                                          deep_encoder=self.encoder, rgb_encoder=self.rgb_encoder,
-                                          data_graph=self.data_graph, cameras=self.used_cameras)
+                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
+                                          rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
+                                          cameras=self.used_cameras)
 
         self.data_graph.add_new_frame(0)
 
@@ -399,12 +381,6 @@ class Tracking6D:
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
             template_frame_observation.send_to_device('cpu'))
-
-        if self.config.matching_target_to_backview:
-            template_frame_observation_from_back = self.tracker_backview.next(0)
-            self.active_keyframes_backview.add_new_keyframe_observation(template_frame_observation_from_back, 0)
-            self.data_graph.get_camera_specific_frame_data(0, Cameras.BACKVIEW).frame_observation = (
-                template_frame_observation_from_back.send_to_device('cpu'))
 
         initial_rotation = self.encoder.quaternion_offsets[0, [0]]
 
@@ -427,13 +403,6 @@ class Tracking6D:
                 new_frame_observation.send_to_device('cpu'))
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
 
-            if self.config.matching_target_to_backview:
-                # TODO for camera in self.cameras
-                new_frame_observation_from_back = self.tracker_backview.next(next_tracker_frame)
-                self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.BACKVIEW).frame_observation = (
-                    new_frame_observation_from_back.send_to_device('cpu'))
-                self.active_keyframes_backview.add_new_keyframe_observation(new_frame_observation_from_back, frame_i)
-
             start = time.time()
 
             b0 = (0, self.image_shape.height, 0, self.image_shape.width)
@@ -446,25 +415,12 @@ class Tracking6D:
                 self.active_keyframes.get_observations_for_all_keyframes(bounding_box=b0)
             all_flow_observations: FlowObservation = self.active_keyframes.get_flows_observations(bounding_box=b0)
 
-            all_frame_observations_backview = None
-
             flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
 
-            if self.config.matching_target_to_backview:
-                all_frame_observations_backview: FrameObservation = \
-                    (self.active_keyframes_backview.get_observations_for_all_keyframes(bounding_box=b0))
-                all_flow_observations_backview: FlowObservation = \
-                    (self.active_keyframes_backview.get_flows_observations(bounding_box=b0))
-
-                multi_camera_observations = MultiCameraObservation.from_kwargs(
-                    frontview=all_frame_observations, backview=all_frame_observations_backview)
-                multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
-                    frontview=all_flow_observations, backview=all_flow_observations_backview)
-            else:
-                multi_camera_observations = MultiCameraObservation.from_kwargs(
-                    frontview=all_frame_observations)
-                multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
-                    frontview=all_flow_observations)
+            multi_camera_observations = MultiCameraObservation.from_kwargs(
+                frontview=all_frame_observations)
+            multi_camera_flow_observations = MultiCameraObservation.from_kwargs(
+                frontview=all_flow_observations)
 
             self.apply(multi_camera_observations, multi_camera_flow_observations, self.active_keyframes.keyframes,
                        self.active_keyframes.flow_frames, flow_arcs, frame_index=frame_i)
@@ -486,11 +442,9 @@ class Tracking6D:
                 new_flow_arcs = [arc for arc in flow_arcs if arc[1] == frame_i]
 
                 self.write_results.write_results(frame_i=frame_i, tex=tex, new_flow_arcs=new_flow_arcs,
-                                                 active_keyframes=self.active_keyframes,
-                                                 active_keyframes_backview=self.active_keyframes_backview,
-                                                 best_model=self.best_model, observations=all_frame_observations,
-                                                 observations_backview=all_frame_observations_backview,
-                                                 gt_rotations=self.gt_rotations, gt_translations=self.gt_translations,
+                                                 active_keyframes=self.active_keyframes, best_model=self.best_model,
+                                                 observations=all_frame_observations, gt_rotations=self.gt_rotations,
+                                                 gt_translations=self.gt_translations,
                                                  flow_tracks_inits=self.flow_tracks_inits,
                                                  pose_icosphere=self.pose_icosphere)
 
@@ -524,7 +478,6 @@ class Tracking6D:
                 if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
 
                     self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
-                    self.active_keyframes_backview.remove_frames(self.flow_tracks_inits[:])
 
                     self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
 
@@ -542,14 +495,9 @@ class Tracking6D:
 
                 else:
                     self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
-                    self.active_keyframes_backview.remove_frames(self.flow_tracks_inits[:])
 
                     self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
                                                                        closest_node.keyframe_idx_observed)
-
-                    # TODO the backview code is now only a dummy code
-                    self.active_keyframes_backview.add_new_keyframe_observation(closest_node.observation,
-                                                                                closest_node.keyframe_idx_observed)
 
                     self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion.q
 
@@ -563,15 +511,10 @@ class Tracking6D:
 
                 self.active_keyframes.remove_frames(nodes_to_remove)
 
-                if self.config.matching_target_to_backview:
-                    self.active_keyframes_backview.remove_frames(nodes_to_remove)
                 print(f"Removed nodes {nodes_to_remove}")
 
             del all_frame_observations
             del all_flow_observations
-            if self.config.matching_target_to_backview:
-                del all_frame_observations_backview
-                del all_flow_observations_backview
 
         return self.best_model
 
@@ -589,13 +532,13 @@ class Tracking6D:
     @torch.no_grad()
     def add_new_flows(self, frame_i):
 
-        def process_flow_arc(flow_source_frame, flow_target_frame, mode=None, backview=False):
+        def process_flow_arc(flow_source_frame, flow_target_frame, mode=None):
             observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
-                                                                         mode=mode, backview=backview)
+                                                                         mode=mode)
 
             # Determine the appropriate renderer and keyframes based on the backview flag
-            renderer = self.rendering_backview if backview else self.rendering
-            active_keyframes = self.active_keyframes_backview if backview else self.active_keyframes
+            renderer = self.rendering
+            active_keyframes = self.active_keyframes
 
             # Render the flow
             synthetic_flow = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame, flow_target_frame)
@@ -619,7 +562,7 @@ class Tracking6D:
             active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
 
             # Update the edge data with synthetic flow results
-            camera = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
+            camera = Cameras.FRONTVIEW
             edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame, camera)
             edge_data.synthetic_flow_result = synthetic_flow_cpu
             edge_data.observed_flow = flow_observation.send_to_device('cpu')
@@ -646,12 +589,7 @@ class Tracking6D:
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
             process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
 
-            if self.config.matching_target_to_backview:
-                process_flow_arc(flow_source_frame, flow_target_frame, mode='long', backview=True)
-
-    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short', backview=False):
-
-        assert not backview or self.config.matching_target_to_backview  # Ensures long flow model is initialized
+    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
 
         occlusion = None
         uncertainty = None
@@ -663,8 +601,6 @@ class Tracking6D:
             encoder_result, enc_flow = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
 
             renderer = self.rendering
-            if backview:
-                renderer = self.rendering_backview
 
             observed_renderings = renderer.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
 
@@ -681,29 +617,14 @@ class Tracking6D:
             image_new_x255 = last_keyframe_observations.observed_image.float() * 255
             image_prev_x255 = last_flowframe_observations.observed_image.float() * 255
 
-            if self.config.matching_target_to_backview:
-                # TODO perform rather some iteration over self.cameras
-                last_keyframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                    flow_target_frame)
-                last_flowframe_observations_back = self.active_keyframes_backview.get_observations_for_keyframe(
-                    flow_source_frame)
-                image_new_x255_back = last_keyframe_observations_back.observed_image.float() * 255
-                image_prev_x255_back = last_flowframe_observations_back.observed_image.float() * 255
-
             if mode == 'long':
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
                         flow_target_frame == max(self.active_keyframes.keyframes))
 
-                if backview:
-                    template = image_prev_x255_back
-                    target = image_new_x255
+                template = image_prev_x255
+                target = image_new_x255
 
-                    flow_provider = self.long_flow_provider_backview
-                else:
-                    template = image_prev_x255
-                    target = image_new_x255
-
-                    flow_provider = self.long_flow_provider
+                flow_provider = self.long_flow_provider
 
                 if flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
                     flow_provider.init(template)
@@ -907,9 +828,8 @@ class Tracking6D:
         front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
         front_observations = observations.cameras_observations[Cameras.FRONTVIEW]
 
-        result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(front_flow_observations,
-                                                                               flow_arc_idx, flow_arc,
-                                                                               front_observations)
+        result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx,
+                                                                               flow_arc, front_observations)
         inlier_ratio_frontview, Se3_obj = result
 
         obj_rotation_offset_so3 = So3.from_wxyz(self.encoder.quaternion_offsets[:, flow_target])
@@ -924,36 +844,6 @@ class Tracking6D:
             f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
         print(
             f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
-
-        if self.config.matching_target_to_backview:
-            self.data_graph.get_edge_observations(flow_source, flow_target,
-                                                  Cameras.BACKVIEW).is_source_of_matching = True
-            self.data_graph.get_edge_observations(flow_source, flow_target,
-                                                  Cameras.FRONTVIEW).is_source_of_matching = False
-
-        if self.config.matching_target_to_backview:
-
-            back_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.BACKVIEW]
-
-            back_observations = observations.cameras_observations[Cameras.BACKVIEW]
-            result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(back_flow_observations,
-                                                                                   flow_arc_idx, flow_arc,
-                                                                                   back_observations,
-                                                                                   backview=True)
-
-            inlier_ratio_backview, Se3_obj_backview = result
-
-            if False and inlier_ratio_frontview < inlier_ratio_backview:
-                # self.encoder.translation_offsets[:, :, flow_target] = t_total_backview
-                # self.encoder.quaternion_offsets[:, flow_target] = qmult(self.encoder.quaternion_offsets[:, flow_target],
-                #                                                         q_total_backview[None])
-                self.encoder.quaternion_offsets[:, flow_target] = Se3_obj_backview.quaternion.data
-
-                self.data_graph.get_edge_observations(flow_source, flow_target,
-                                                      Cameras.BACKVIEW).is_source_of_matching = True
-                self.data_graph.get_edge_observations(flow_source, flow_target,
-                                                      Cameras.FRONTVIEW).is_source_of_matching = False
-                print(f"-----------------BACKVIEW MATCHING FRAME {flow_target}")
 
         stacked_flow_observation = flow_observations.stack()
         stacked_frame_observation = observations.stack()
@@ -1152,44 +1042,8 @@ class Tracking6D:
         inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
                                                        encoder_result_flow_frames, flow_arcs_indices_sorted,
                                                        self.image_shape.width, self.image_shape.height)
-        inference_result_backview = infer_normalized_renderings(self.rendering_backview, self.encoder.face_features,
-                                                                encoder_result, encoder_result_flow_frames,
-                                                                flow_arcs_indices_sorted, self.image_shape.width,
-                                                                self.image_shape.height)
 
         renders, rendered_silhouettes, rendered_flow_result = inference_result
-
-        if self.config.matching_target_to_backview:
-            renders_backview, rendered_silhouettes_backview, rendered_flow_result_backview = inference_result_backview
-
-            flow_rendering = FlowObservation(observed_flow=rendered_flow_result.theoretical_flow,
-                                             observed_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
-                                             observed_flow_occlusion=rendered_flow_result.rendered_flow_occlusion)
-
-            flow_rendering_back = FlowObservation(observed_flow=rendered_flow_result_backview.theoretical_flow,
-                                                  observed_flow_segmentation=rendered_flow_result_backview.
-                                                  rendered_flow_segmentation,
-                                                  observed_flow_occlusion=rendered_flow_result_backview.
-                                                  rendered_flow_occlusion)
-
-            multicam_observation = MultiCameraObservation.from_kwargs(frontview=flow_rendering,
-                                                                      backview=flow_rendering_back)
-            stacked_ren = multicam_observation.stack()
-
-            rendered_flow_result = RenderedFlowResult(theoretical_flow=stacked_ren.observed_flow,
-                                                      rendered_flow_segmentation=stacked_ren.observed_flow_segmentation,
-                                                      rendered_flow_occlusion=stacked_ren.observed_flow_occlusion)
-
-            frame_rendering = FrameObservation(observed_image=renders, observed_segmentation=rendered_silhouettes)
-            frame_rendering_back = FrameObservation(observed_image=renders_backview,
-                                                    observed_segmentation=rendered_silhouettes_backview)
-
-            multicam_rendering = MultiCameraObservation.from_kwargs(frontview=frame_rendering,
-                                                                    backview=frame_rendering_back)
-            stacked_frame_rendering = multicam_rendering.stack()
-
-            renders = stacked_frame_rendering.observed_image
-            rendered_silhouettes = stacked_frame_rendering.observed_segmentation
 
         if encoder_type == 'rgb':
             loss_function = self.rgb_loss_function

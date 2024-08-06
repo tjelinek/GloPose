@@ -24,15 +24,13 @@ from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_
 class EpipolarPoseEstimator:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, gt_rotations, gt_translations,
-                 rendering: RenderingKaolin, rendering_backview: RenderingKaolin, gt_encoder,
-                 camera_intrinsics: PinholeIntrinsics = None):
+                 rendering: RenderingKaolin, gt_encoder, camera_intrinsics: PinholeIntrinsics = None):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
         self.rendering: RenderingKaolin = rendering
-        self.rendering_backview: RenderingKaolin = rendering_backview
         self.gt_encoder: Encoder = gt_encoder
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
@@ -47,7 +45,7 @@ class EpipolarPoseEstimator:
             self.camera_intrinsics = camera_intrinsics
 
     def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
-                                         camera_observation: FrameObservation, backview=False) -> Tuple[float, Se3]:
+                                         camera_observation: FrameObservation) -> Tuple[float, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
@@ -56,7 +54,7 @@ class EpipolarPoseEstimator:
         flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
 
         gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords = (
-            self.get_occlusion_and_segmentation(backview, flow_arc, flow_observation_current_frame))
+            self.get_occlusion_and_segmentation(flow_arc, flow_observation_current_frame))
 
         flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
 
@@ -161,8 +159,7 @@ class EpipolarPoseEstimator:
         # max(1, x) avoids division by zero
         inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
-        camera1 = Cameras.BACKVIEW if backview else Cameras.FRONTVIEW
-        data = self.data_graph.get_edge_observations(*flow_arc, camera=camera1)
+        data = self.data_graph.get_edge_observations(*flow_arc, camera=(Cameras.FRONTVIEW))
         data.src_pts_yx = src_pts_yx.cpu()
         data.dst_pts_yx = dst_pts_yx.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
@@ -192,8 +189,8 @@ class EpipolarPoseEstimator:
 
         return inlier_ratio, Se3_obj
 
-    def get_occlusion_and_segmentation(self, backview, flow_arc, flow_observation_current_frame):
-        renderer: RenderingKaolin = self.rendering_backview if backview else self.rendering
+    def get_occlusion_and_segmentation(self, flow_arc, flow_observation_current_frame):
+        renderer: RenderingKaolin = self.rendering
         gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
 
         gt_rendering_result: RenderingResult = renderer.rendering_result_for_frame(self.gt_encoder, 0)
