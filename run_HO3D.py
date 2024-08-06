@@ -31,6 +31,9 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
+        if config.augment_gt_track:
+            exit()
+
         gt_texture_path = None
         gt_mesh_path = None
 
