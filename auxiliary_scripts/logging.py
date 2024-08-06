@@ -741,9 +741,9 @@ class WriteResults:
                                colors=colors_pred,
                                radii=strips_radii))
 
-        closest_node, _ = pose_icosphere.get_closest_reference(pred_obj_se3.quaternion.q[None, [-1]])
+        closest_node, _ = pose_icosphere.get_closest_reference(Quaternion(pred_obj_se3.quaternion.q[None, [-1]]))
 
-        closest_node_Se3 = Se3(Quaternion(closest_node.quaternion), torch.zeros(1, 3).cuda())
+        closest_node_Se3 = Se3(closest_node.quaternion, torch.zeros(1, 3).cuda())
         closest_node_cam_se3 = camera_Se3_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
 
         rr.log(RerunAnnotations.space_predicted_closest_keypoint,
@@ -753,9 +753,8 @@ class WriteResults:
                                radii=[0.025]))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
-            node_quaternion = Quaternion(icosphere_node.quaternion)
 
-            node_Se3 = Se3(node_quaternion, torch.zeros(1, 3).cuda())
+            node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
             node_cam_se3 = camera_Se3_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
             node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
 

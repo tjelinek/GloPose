@@ -9,7 +9,7 @@ import numpy as np
 import time
 import torch
 from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import So3
+from kornia.geometry import So3, Quaternion
 from kornia.geometry.conversions import quaternion_to_axis_angle
 from pathlib import Path
 
@@ -413,7 +413,7 @@ class Tracking6D:
             self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_rotation,
                                                  self.config.icosphere_trust_region_degrees, 0)
         else:
-            self.pose_icosphere.insert_new_reference(template_frame_observation, initial_rotation, 0)
+            self.pose_icosphere.insert_new_reference(template_frame_observation, Quaternion(initial_rotation), 0)
 
         for frame_i in range(1, self.config.input_frames):
 
@@ -513,7 +513,7 @@ class Tracking6D:
 
             print("Angles:", angles)
 
-            current_pose = self.encoder.quaternion_offsets[:, [frame_i]]
+            current_pose = Quaternion(self.encoder.quaternion_offsets[:, [frame_i]])
             closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
             print(
                 f">>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
@@ -536,8 +536,8 @@ class Tracking6D:
                                                              self.config.icosphere_trust_region_degrees, frame_i)
 
                     else:
-                        self.pose_icosphere.insert_new_reference(new_frame_observation,
-                                                                 self.encoder.quaternion_offsets[0, [frame_i]], frame_i)
+                        obj_rotation_q = Quaternion(self.encoder.quaternion_offsets[0, [frame_i]])
+                        self.pose_icosphere.insert_new_reference(new_frame_observation, obj_rotation_q, frame_i)
 
                     self.flow_tracks_inits.append(frame_i)
 
@@ -552,7 +552,7 @@ class Tracking6D:
                     self.active_keyframes_backview.add_new_keyframe_observation(closest_node.observation,
                                                                                 closest_node.keyframe_idx_observed)
 
-                    self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion
+                    self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion.q
 
                     self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
 
@@ -576,12 +576,13 @@ class Tracking6D:
 
         return self.best_model
 
-    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, obj_rotation_q, degree_delta,
-                                        frame_i):
+    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, obj_rotation_q,
+                                        degree_delta, frame_i):
         rotated_observations, degrees = generate_rotated_observations(frame_observation, 2 * degree_delta)
         for i, degree in enumerate(degrees):
-            q_obj_rotated_world = get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q, T_world_to_cam_4x4,
-                                                                                  degree)
+            q_obj_rotated_world = Quaternion(get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q,
+                                                                                             T_world_to_cam_4x4,
+                                                                                             degree))
 
             rotated_observation = rotated_observations[i]
             self.pose_icosphere.insert_new_reference(rotated_observation, q_obj_rotated_world, frame_i)

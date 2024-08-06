@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from kornia.geometry import Rt_to_matrix4x4, matrix4x4_to_Rt, normalize_quaternion, Se3, Quaternion
+from kornia.geometry import Rt_to_matrix4x4, matrix4x4_to_Rt, Se3, Quaternion, So3
 
 
 def T_obj_from_epipolar_T_cam(T_cam, T_world_to_cam):
@@ -90,30 +90,34 @@ def qdist(q1, q2):
     return 1 - (q1 * q2).sum() ** 2
 
 
-def qdifference(q1, q2):  # how to get from q1 to q2
-    q1conj = -q1
-    q1conj[0, 0] = q1[0, 0]
-    q1inv = q1conj / q1.norm()
-    diff = qmult(q2, q1inv)
-    return diff
+def quaternion_angular_difference(quaternions1: Quaternion, quaternions2: Quaternion):
+    so3_1 = So3(quaternions1)
+    so3_2 = So3(quaternions2)
+
+    so3_diff: So3 = so3_2 * so3_1.inverse()
+    angles = torch.rad2deg(2 * so3_diff.q.polar_angle.squeeze(-1))
+
+    return angles
 
 
-def quaternion_angular_difference(quaternions1, quaternions2):
-    angles = torch.zeros(quaternions1.shape[1])
+def quaternion_minimal_angular_difference(quaternions1: Quaternion, quaternions2: Quaternion):
+    # Because for rotations of 175 and 185 degrees, quaternion_angular_difference gives 350 rather than 10.
+    angles = quaternion_angular_difference(quaternions1, quaternions2)
 
-    for i in range(angles.shape[0]):
-        q_ = qdifference(quaternions1[:, i], quaternions2[:, i])
-        diff = normalize_quaternion(q_)
-        ang = float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi
-        angles[i] = ang
+    angles = torch.where(angles > 180., 360. - angles, angles)
+
     return angles
 
 
 def consecutive_quaternions_angular_difference(quaternion):
     angs = []
     for qi in range(quaternion.shape[1] - 1):
-        diff = normalize_quaternion(qdifference(quaternion[:, qi], quaternion[:, qi + 1]))
-        angs.append(float(2 * torch.atan2(diff[:, 1:].norm(), diff[:, 0])) * 180 / np.pi)
+        q1 = Quaternion(quaternion[:, qi])
+        q2 = Quaternion(quaternion[:, qi + 1])
+
+        angle = quaternion_angular_difference(q1, q2)
+        angs.append(float(angle))
+
     return np.array(angs)
 
 

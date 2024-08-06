@@ -1,15 +1,16 @@
 from typing import List, Tuple
 
-import torch
 from dataclasses import dataclass
 
-from auxiliary_scripts.math_utils import quaternion_angular_difference
+from kornia.geometry import Quaternion
+
+from auxiliary_scripts.math_utils import quaternion_minimal_angular_difference
 from data_structures.keyframe_buffer import FrameObservation
 
 
 @dataclass
 class IcosphereNode:
-    quaternion: torch.Tensor
+    quaternion: Quaternion
     observation: FrameObservation
     keyframe_idx_observed: int
 
@@ -19,9 +20,9 @@ class PoseIcosphere:
     def __init__(self):
         self.reference_poses: List[IcosphereNode] = []
 
-    def insert_new_reference(self, template_observation: FrameObservation, pose_quaternion: torch.Tensor,
+    def insert_new_reference(self, template_observation: FrameObservation, pose_quaternion: Quaternion,
                              keyframe_idx_observed: int):
-        pose_quat_shape = pose_quaternion.shape
+        pose_quat_shape = pose_quaternion.q.shape
         assert len(pose_quat_shape) == 2 and pose_quat_shape[1] == 4
 
         node = IcosphereNode(quaternion=pose_quaternion, observation=template_observation,
@@ -29,15 +30,15 @@ class PoseIcosphere:
 
         self.reference_poses.append(node)
 
-    def get_closest_reference(self, pose_quaternion) -> Tuple[IcosphereNode, float]:
+    def get_closest_reference(self, pose_quaternion: Quaternion) -> Tuple[IcosphereNode, float]:
         # Gives the closest reference template image, and angular difference to the closest template image
 
         min_angle = float('inf')
         min_index = -1
 
         for i, template in enumerate(self.reference_poses):
-            angle_between_poses = float(quaternion_angular_difference(pose_quaternion, template.quaternion[None]))
-
+            angle_between_poses = float(quaternion_minimal_angular_difference(pose_quaternion,
+                                                                              template.quaternion[None]))
             if angle_between_poses < min_angle:
                 min_angle = angle_between_poses
                 min_index = i
