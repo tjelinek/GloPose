@@ -5,6 +5,7 @@ from typing import Tuple, List, Dict, Union, TypeVar
 
 import numpy as np
 import torch
+import torchvision.transforms.functional as TF
 import networkx as nx
 
 from dataclasses import dataclass, field, replace
@@ -324,3 +325,27 @@ class KeyframeBuffer:
         self.G = kept_graph
 
         return deleted_buffer
+
+
+def generate_rotated_observations(observation: FrameObservation, degree: int):
+    if 360 % degree != 0:
+        raise ValueError("Degree must divide 360 evenly.")
+
+    num_rotations = 360 // degree
+    rotated_observations = []
+    degrees = []
+
+    for i in range(num_rotations):
+        rotation_degree = i * degree
+        degrees.append(rotation_degree)
+
+        # Rotate the image, features, and segmentation
+        rotated_image = TF.rotate(observation.observed_image[0, 0], rotation_degree)[None, None]
+        rotated_image_features = TF.rotate(observation.observed_image_features[0, 0], rotation_degree)[None, None]
+        rotated_segmentation = TF.rotate(observation.observed_segmentation[0, 0], rotation_degree)[None, None]
+
+        # Create a new FrameObservation with the rotated tensors
+        rotated_observation = FrameObservation(rotated_image, rotated_image_features, rotated_segmentation)
+        rotated_observations.append(rotated_observation)
+
+    return rotated_observations, degrees
