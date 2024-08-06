@@ -664,7 +664,8 @@ class WriteResults:
             return
 
         rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
-        if frame_i == 1 or True:
+        if (frame_i == 1 and self.tracking_config.gt_mesh_path is not None
+                and self.tracking_config.gt_texture_path is not None):
             gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
                                       self.tracking_config.texture_size)
             gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
