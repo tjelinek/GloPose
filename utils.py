@@ -111,12 +111,6 @@ def mesh_normalize(vertices):
     return vertices
 
 
-def comp_tran_diff(vect):
-    vdiff = (vect[1:] - vect[:-1]).abs()
-    vdiff[vdiff < 0.2] = 0
-    return torch.cat((0 * vdiff[:1], vdiff), 0).norm(dim=1)
-
-
 def normalize_vertices(vertices: torch.Tensor):
     vertices = vertices - vertices.mean(axis=0)
     max_abs_val = torch.max(torch.abs(vertices))

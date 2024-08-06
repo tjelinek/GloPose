@@ -86,10 +86,6 @@ def qmult(q1, q0):  # q0, then q1, you get q3
     return q3
 
 
-def qdist(q1, q2):
-    return 1 - (q1 * q2).sum() ** 2
-
-
 def quaternion_angular_difference(quaternions1: Quaternion, quaternions2: Quaternion):
     so3_1 = So3(quaternions1)
     so3_2 = So3(quaternions2)

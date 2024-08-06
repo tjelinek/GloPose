@@ -50,9 +50,6 @@ class FMOLoss(nn.Module):
             observed_flow_uncertainties (torch.Tensor): Flow values uncertainties in range [0, 1], where 1 indicated
                                                         being not certain about the true value.
             keyframes_encoder_result (EncoderResult): Encoder result for the current frame.
-            last_keyframes_encoder_result (EncoderResult): Encoder result for the previous frame.
-            return_end_point_errors (bool): Indicates whether to return concatenated end point errors for two
-                                            consecutive flow frames rather than the mean of the end point errors.
             custom_points_for_ransac (list): List of custom points for opt. flow loss computation
 
         Returns:
@@ -61,8 +58,6 @@ class FMOLoss(nn.Module):
         """
         vertices = keyframes_encoder_result.vertices
         texture_maps = keyframes_encoder_result.texture_maps
-        tdiff = keyframes_encoder_result.translation_difference
-        qdiff = keyframes_encoder_result.quaternion_difference
 
         losses = {}
         losses_all = {}
@@ -84,20 +79,6 @@ class FMOLoss(nn.Module):
                 losses["silh"] = losses["silh"] + temp_loss / denom
         if self.config.optimize_shape and self.config.loss_laplacian_weight > 0:
             losses["lap"] = self.config.loss_laplacian_weight * self.lapl_loss(vertices)
-
-        if self.config.loss_q_weight > 0:
-            if qdiff[qdiff > 0].shape[0] > 0:
-                losses["qdiff"] = qdiff[qdiff > 0][-1].mean()
-            else:
-                losses["qdiff"] = qdiff[-1].mean()
-            losses["qdiff"] = self.config.loss_q_weight * qdiff[-1]
-
-        if self.config.loss_t_weight > 0:
-            if tdiff[tdiff > 0].shape[0] > 0:
-                losses["tdiff"] = tdiff[tdiff > 0][-1].mean()
-            else:
-                losses["tdiff"] = tdiff[-1].mean()
-            losses["tdiff"] = self.config.loss_t_weight * tdiff[-1]
 
         if self.config.loss_dist_weight > 0:
             dists = (observed_silhouettes[:, :, 0] * rendered_images[:, :, 0, -1])

@@ -8,11 +8,11 @@ from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from pytorch3d.transforms import quaternion_multiply
 
-from utils import mesh_normalize, comp_tran_diff
-from auxiliary_scripts.math_utils import qmult, qdist
+from utils import mesh_normalize
+from auxiliary_scripts.math_utils import qmult
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
-                                             'lights', 'translation_difference', 'quaternion_difference'])
+                                             'lights'])
 
 
 class Encoder(nn.Module):
@@ -104,28 +104,12 @@ class Encoder(nn.Module):
         else:
             texture_map = nn.Sigmoid()(self.texture_map)
 
-        # Computes differences of consecutive translations and rotations
-        tdiff, qdiff = self.compute_tdiff_qdiff(opt_frames, quaternion[:, -1], quaternion, translation)
-
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
                                vertices=vertices,
                                texture_maps=texture_map,
-                               lights=self.lights,
-                               translation_difference=tdiff,
-                               quaternion_difference=qdiff)
+                               lights=self.lights)
         return result
-
-    @staticmethod
-    def compute_tdiff_qdiff(opt_frames, quaternion0, quaternion, translation):
-        weights = (torch.Tensor(opt_frames) - torch.Tensor(opt_frames[:1] + opt_frames[:-1])).to(translation.device)
-        # Temporal distance between consecutive items in opt_frames, i.e. weight grows linearly with distance
-        tdiff = weights * comp_tran_diff(translation[0, 0, opt_frames])
-        key_dists = []
-        for frmi in opt_frames[1:]:
-            key_dists.append(qdist(quaternion[:, frmi - 1], quaternion[:, frmi]))
-        qdiff = weights * (torch.stack([qdist(quaternion0, quaternion0)] + key_dists, 0).contiguous())
-        return tdiff, qdiff
 
     def set_encoder_poses(self, rotations: torch.Tensor, translations: torch.Tensor):
         rotation_quaternion = axis_angle_to_quaternion(rotations)
@@ -179,27 +163,16 @@ class Encoder(nn.Module):
         flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
         flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
 
-        keyframes_tdiff, keyframes_qdiff = self.compute_tdiff_qdiff(keyframes, optimized_quaternions[:, -1],
-                                                                    joined_encoder_result.quaternions,
-                                                                    joined_encoder_result.translations)
-        flow_frames_tdiff, flow_frames_qdiff = self.compute_tdiff_qdiff(flow_frames, optimized_quaternions[:, -1],
-                                                                        joined_encoder_result.quaternions,
-                                                                        joined_encoder_result.translations)
-
         encoder_result = EncoderResult(translations=keyframes_translations,
                                        quaternions=keyframes_quaternions,
                                        vertices=joined_encoder_result.vertices,
                                        texture_maps=joined_encoder_result.texture_maps,
-                                       lights=joined_encoder_result.lights,
-                                       translation_difference=keyframes_tdiff,
-                                       quaternion_difference=keyframes_qdiff)
+                                       lights=joined_encoder_result.lights)
 
         encoder_result_flow_frames = EncoderResult(translations=flow_frames_translations,
                                                    quaternions=flow_frames_quaternions,
                                                    vertices=joined_encoder_result.vertices,
                                                    texture_maps=joined_encoder_result.texture_maps,
-                                                   lights=joined_encoder_result.lights,
-                                                   translation_difference=flow_frames_tdiff,
-                                                   quaternion_difference=flow_frames_qdiff)
+                                                   lights=joined_encoder_result.lights)
 
         return encoder_result, encoder_result_flow_frames

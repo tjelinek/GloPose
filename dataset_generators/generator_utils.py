@@ -244,9 +244,7 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
                                                quaternions=composed_rotation_quaternion_tensor[None, None],
                                                vertices=vertices,
                                                texture_maps=None,
-                                               lights=None,
-                                               translation_difference=None,
-                                               quaternion_difference=None)
+                                               lights=None)
 
         if prev_encoder_result is None:
             prev_encoder_result = current_encoder_result
