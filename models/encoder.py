@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from kornia.geometry import normalize_quaternion
+from kornia.geometry import normalize_quaternion, So3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from pytorch3d.transforms import quaternion_multiply
@@ -134,13 +134,15 @@ class Encoder(nn.Module):
     def compute_next_offset(self, stepi):
         self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
         self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
-        self.initial_axis_angle[:, stepi] = self.initial_axis_angle[:, stepi - 1]
 
         self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
                                                 self.translation[:, :, stepi - 1].detach()
 
-        self.quaternion_offsets[:, stepi] = qmult(normalize_quaternion(self.quaternion_offsets[:, stepi - 1]),
-                                                  normalize_quaternion(self.quaternion[:, stepi - 1]).detach())
+        so3_offset = So3(Quaternion(normalize_quaternion(self.quaternion_offsets[:, stepi - 1])))
+        so3_optim = So3(Quaternion(normalize_quaternion(self.quaternion[:, stepi - 1]).detach()))
+        so3_new_offset = so3_offset * so3_optim
+
+        self.quaternion_offsets[:, stepi] = so3_new_offset.q.q
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames) -> Tuple[EncoderResult, EncoderResult]:
 
