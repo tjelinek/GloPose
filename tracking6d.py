@@ -470,37 +470,36 @@ class Tracking6D:
             print(
                 f">>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
 
-            if True:
-                if self.long_flow_provider is not None:
-                    self.long_flow_provider.need_to_init = True
+            if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
+                self.long_flow_provider.need_to_init = True
 
-                if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
+            if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
 
-                    self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
+                self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
 
-                    self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
+                self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
 
-                    if self.config.icosphere_add_inplane_rotatiosn:
-                        obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
+                if self.config.icosphere_add_inplane_rotatiosn:
+                    obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
 
-                        self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_rotation_q,
-                                                             self.config.icosphere_trust_region_degrees, frame_i)
-
-                    else:
-                        obj_rotation_q = Quaternion(self.encoder.quaternion_offsets[0, [frame_i]])
-                        self.pose_icosphere.insert_new_reference(new_frame_observation, obj_rotation_q, frame_i)
-
-                    self.flow_tracks_inits.append(frame_i)
+                    self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_rotation_q,
+                                                         self.config.icosphere_trust_region_degrees, frame_i)
 
                 else:
-                    self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
+                    obj_rotation_q = Quaternion(self.encoder.quaternion_offsets[0, [frame_i]])
+                    self.pose_icosphere.insert_new_reference(new_frame_observation, obj_rotation_q, frame_i)
 
-                    self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
-                                                                       closest_node.keyframe_idx_observed)
+                self.flow_tracks_inits.append(frame_i)
 
-                    self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion.q
+            else:
+                self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
 
-                    self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
+                self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
+                                                                   closest_node.keyframe_idx_observed)
+
+                self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion.q
+
+                self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
 
             if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
                 if self.config.max_keyframes <= 1:
