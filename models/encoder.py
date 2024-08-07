@@ -9,7 +9,6 @@ from kornia.geometry.quaternion import Quaternion
 from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize
-from auxiliary_scripts.math_utils import qmult
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights'])
@@ -25,19 +24,15 @@ class Encoder(nn.Module):
         translation_init[:, :, :, :] = torch.Tensor(self.config.tran_init)
 
         # Quaternion initialization
-        qinit = torch.zeros(1, config.input_frames, 4)
-        qinit[:, :, 0] = 1.0
-        init_angle = torch.Tensor(self.config.rot_init)
-        qinit[:, :, :] = axis_angle_to_quaternion(init_angle)
+        qinit = Quaternion.from_axis_angle(torch.Tensor(self.config.rot_init).repeat(config.input_frames, 1)).q[None]
 
         # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
         self.register_buffer('initial_quaternion', qinit.clone())
 
         # Offsets initialization
-        quaternion_offsets = torch.zeros(1, config.input_frames, 4)
-        quaternion_offsets[:, :, 0] = 1.0
-        self.register_buffer('quaternion_offsets', quaternion_offsets)
+        quaternion_offsets = Quaternion.identity(config.input_frames)
+        self.register_buffer('quaternion_offsets', quaternion_offsets.q[None])
 
         translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
         self.register_buffer('translation_offsets', translation_offsets)
