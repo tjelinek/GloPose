@@ -580,18 +580,17 @@ class Tracking6D:
         for flow_arc in short_flow_arcs:
             flow_source_frame, flow_target_frame = flow_arc
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-            process_flow_arc(flow_source_frame, flow_target_frame)
+            process_flow_arc(flow_source_frame, flow_target_frame, mode='short')
 
         if self.config.long_flow_model is not None:
             long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
-            flow_source_frame, flow_target_frame = long_flow_arc
-            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-            process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
+            if long_flow_arc not in short_flow_arcs:
+                flow_source_frame, flow_target_frame = long_flow_arc
+                self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+                process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
 
-        occlusion = None
-        uncertainty = None
         if self.config.gt_flow_source == 'GenerateSynthetic':
             keyframes = [flow_target_frame]
             flow_frames = [flow_source_frame]
@@ -607,6 +606,7 @@ class Tracking6D:
             observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
                                                      self.image_shape.width, self.image_shape.height)
             occlusion = observed_renderings.rendered_flow_occlusion.detach()
+            uncertainty = torch.zeros_like(occlusion)
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
@@ -626,13 +626,16 @@ class Tracking6D:
                 flow_provider = self.long_flow_provider
 
                 if flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
-                    flow_provider.init(template)
+                    flow_provider.init(template_image)
                     flow_provider.need_to_init = False
 
-                observed_flow, occlusion, uncertainty = flow_provider.next_flow(template, target)
+                observed_flow, occlusion, uncertainty = flow_provider.next_flow(template_image, target_image)
 
             elif mode == 'short':
-                observed_flow = self.short_flow_model.next_flow(image_prev_x255, image_new_x255)
+                if isinstance(self.short_flow_model, MFTFlowProvider):
+                    self.short_flow_model.init(template_image)
+                observed_flow, occlusion, uncertainty = self.short_flow_model.next_flow(template_image,
+                                                                                        target_image)
             else:
                 raise ValueError("Unknown mode")
 
@@ -640,11 +643,6 @@ class Tracking6D:
 
         else:
             raise ValueError("'gt_flow_source' must be either 'GenerateSynthetic' or 'FlowNetwork'")
-
-        if occlusion is None:
-            occlusion = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
-        if uncertainty is None:
-            uncertainty = torch.zeros(1, 1, 1, *observed_flow.shape[-2:]).to(observed_flow.device)
 
         return observed_flow, occlusion, uncertainty
 
