@@ -199,7 +199,6 @@ class Tracking6D:
         config_back_view = copy.deepcopy(self.config)
         config_back_view.camera_position = tuple(-el for el in config_back_view.camera_position)
 
-
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.image_shape.width,
                                self.image_shape.height, self.config.features_channels).to(self.device)
