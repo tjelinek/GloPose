@@ -844,8 +844,7 @@ class Tracking6D:
         self.encoder.quaternion_offsets[:, flow_long_jump_target] = new_obj_quaternion
         print(
             f"Frame {flow_long_jump_target} offset: "
-            f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_long_jump_target])).
-            numpy(force=True).round(2)}")
+            f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_long_jump_target])).numpy(force=True).round(2)}")
         print(
             f"Frame {flow_long_jump_target} qtotal: "
             f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
