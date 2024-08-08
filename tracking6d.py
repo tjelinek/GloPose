@@ -816,30 +816,35 @@ class Tracking6D:
                                            observations: MultiCameraObservation,
                                            flow_observations: MultiCameraObservation):
 
-        flow_arc = (self.flow_tracks_inits[-1], max(keyframes))
-        flow_arc_idx = flow_arcs.index(flow_arc)
+        flow_arc_long_jump = (self.flow_tracks_inits[-1], max(keyframes))
+        flow_arc_long_jump_idx = flow_arcs.index(flow_arc_long_jump)
 
-        flow_source, flow_target = flow_arc
+        flow_long_jump_source, flow_long_jump_target = flow_arc_long_jump
 
-        front_flow_observations: FlowObservation = flow_observations.cameras_observations[Cameras.FRONTVIEW]
-        front_observations = observations.cameras_observations[Cameras.FRONTVIEW]
+        flow_long_jump_observations: FlowObservation = (flow_observations.cameras_observations[Cameras.FRONTVIEW].
+                                                        filter_frames(flow_arc_long_jump_idx))
 
-        result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(front_flow_observations, flow_arc_idx,
-                                                                               flow_arc, front_observations)
+        result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_long_jump_observations,
+                                                                               flow_arc_long_jump)
+
         inlier_ratio_frontview, Se3_obj = result
 
-        obj_rotation_offset_so3 = So3.from_wxyz(self.encoder.quaternion_offsets[:, flow_target])
+        obj_rotation_offset_so3 = So3.from_wxyz(self.encoder.quaternion_offsets[:, flow_long_jump_target])
         new_obj_rotation_so3: So3 = obj_rotation_offset_so3 * Se3_obj.so3
 
         new_obj_quaternion = new_obj_rotation_so3.q.data
 
-        self.encoder.quaternion_offsets[:, flow_target] = new_obj_quaternion
+        self.encoder.quaternion_offsets[:, flow_long_jump_target] = new_obj_quaternion
         print(
-            f"Frame {flow_target} offset: {torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_target])).numpy(force=True).round(2)}")
+            f"Frame {flow_long_jump_target} offset: "
+            f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_long_jump_target])).
+            numpy(force=True).round(2)}")
         print(
-            f"Frame {flow_target} qtotal: {torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
+            f"Frame {flow_long_jump_target} qtotal: "
+            f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
         print(
-            f"Frame {flow_target} new_of: {torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
+            f"Frame {flow_long_jump_target} new_of: "
+            f"{torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
 
         stacked_flow_observation = flow_observations.stack()
         stacked_frame_observation = observations.stack()

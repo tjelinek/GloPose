@@ -9,8 +9,9 @@ from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
-from flow import flow_unit_coords_to_image_coords, get_correct_correspondences_mask, source_to_target_coords_world_coord_system
-from data_structures.keyframe_buffer import FrameObservation, FlowObservation
+from flow import (flow_unit_coords_to_image_coords, get_correct_correspondences_mask,
+                  source_to_target_coords_world_coord_system)
+from data_structures.keyframe_buffer import FlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
 from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, triangulate_points_from_Rt, \
@@ -44,19 +45,17 @@ class EpipolarPoseEstimator:
         else:
             self.camera_intrinsics = camera_intrinsics
 
-    def estimate_pose_using_optical_flow(self, flow_observations: FlowObservation, flow_arc_idx, flow_arc,
-                                         camera_observation: FrameObservation) -> Tuple[float, Se3]:
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) \
+            -> Tuple[float, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
         W_4x4 = self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
-        flow_observation_current_frame: FlowObservation = flow_observations.filter_frames([flow_arc_idx])
-
         gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords = (
-            self.get_occlusion_and_segmentation(flow_arc, flow_observation_current_frame))
+            self.get_occlusion_and_segmentation(flow_arc, flow_observation_long_jump))
 
-        flow = flow_observation_current_frame.cast_unit_coords_to_image_coords().observed_flow
+        flow = flow_observation_long_jump.cast_unit_coords_to_image_coords().observed_flow
 
         observed_segmentation_binary_mask = segmentation > float(self.segmentation_threshold)
 
@@ -159,7 +158,7 @@ class EpipolarPoseEstimator:
         # max(1, x) avoids division by zero
         inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
-        data = self.data_graph.get_edge_observations(*flow_arc, camera=(Cameras.FRONTVIEW))
+        data = self.data_graph.get_edge_observations(*flow_arc, camera=Cameras.FRONTVIEW)
         data.src_pts_yx = src_pts_yx.cpu()
         data.dst_pts_yx = dst_pts_yx.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
