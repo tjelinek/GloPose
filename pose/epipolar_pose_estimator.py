@@ -91,14 +91,13 @@ class EpipolarPoseEstimator:
         dst_pts_xy_gt_flow = tensor_index_to_coordinates_xy(dst_pts_yx_gt_flow)
 
         if self.config.ransac_inlier_filter == 'pnp_ransac':
-            point_map_xy = rendered_obj_cam0_coords[0, 0, [1, 0, 2]].permute(1, 0, 2)
-
+            point_map_xy = torch.Tensor()
             # observed_image_target = camera_observation.observed_image[:, 0]
             # depth_image = self.depth_anything.infer_depth_anything(observed_image_target)
 
             result = estimate_pose_using_PnP_solver(src_pts_xy, dst_pts_xy, K1, K2, point_map_xy)
-
             rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
+            raise NotImplementedError
         elif self.config.ransac_inlier_filter in ['magsac++', 'ransac', '8point', 'pygcransac']:
             result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.camera_intrinsics.width,
                                                  self.camera_intrinsics.height, self.config.ransac_inlier_filter,
