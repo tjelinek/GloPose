@@ -819,13 +819,20 @@ class Tracking6D:
         flow_arc_long_jump = (self.flow_tracks_inits[-1], max(keyframes))
         flow_arc_long_jump_idx = flow_arcs.index(flow_arc_long_jump)
 
+        flow_arc_short_jump = (max(keyframes) - 1, max(keyframes))
+        flow_arc_short_jump_idx = flow_arcs.index(flow_arc_short_jump)
+
         flow_long_jump_source, flow_long_jump_target = flow_arc_long_jump
 
         flow_long_jump_observations: FlowObservation = (flow_observations.cameras_observations[Cameras.FRONTVIEW].
                                                         filter_frames(flow_arc_long_jump_idx))
+        flow_short_jump_observations: FlowObservation = (flow_observations.cameras_observations[Cameras.FRONTVIEW].
+                                                         filter_frames(flow_arc_short_jump_idx))
 
         result = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_long_jump_observations,
-                                                                               flow_arc_long_jump)
+                                                                               flow_arc_long_jump,
+                                                                               flow_short_jump_observations,
+                                                                               flow_arc_short_jump)
 
         inlier_ratio_frontview, Se3_obj = result
 

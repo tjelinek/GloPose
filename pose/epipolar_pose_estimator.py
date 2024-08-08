@@ -45,7 +45,8 @@ class EpipolarPoseEstimator:
         else:
             self.camera_intrinsics = camera_intrinsics
 
-    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) \
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
+                                         low_short_jump_observations: FlowObservation, flow_arc_short_jump) \
             -> Tuple[float, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
@@ -113,12 +114,8 @@ class EpipolarPoseEstimator:
         else:
             raise ValueError("Unknown RANSAC method")
 
-        src_pts_yx_inliers = src_pts_yx[inlier_mask]
-        dst_pts_yx_inliers = dst_pts_yx[inlier_mask]
         src_pts_xy_inliers = src_pts_xy[inlier_mask]
         dst_pts_xy_inliers = dst_pts_xy[inlier_mask]
-        dst_pts_yx_gt_flow_inliers = dst_pts_yx_gt_flow[inlier_mask]
-        dst_pts_xy_gt_flow_inliers = dst_pts_xy_gt_flow[inlier_mask]
 
         if self.config.ransac_inlier_pose_method == '8point':
             result = estimate_pose_using_8pt_algorithm(src_pts_xy_inliers, dst_pts_xy_inliers, K1, K2)
