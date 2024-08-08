@@ -9,11 +9,10 @@ from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
-from flow import (flow_unit_coords_to_image_coords, get_correct_correspondences_mask,
-                  source_to_target_coords_world_coord_system)
-from data_structures.keyframe_buffer import FlowObservation
+from flow import get_correct_correspondences_mask, source_to_target_coords_world_coord_system
+from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
 from models.encoder import Encoder
-from models.rendering import RenderingKaolin, RenderedFlowResult, RenderingResult
+from models.rendering import RenderingKaolin, RenderingResult
 from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, triangulate_points_from_Rt, \
     estimate_pose_zaragoza, estimate_pose_using_8pt_algorithm
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
@@ -45,41 +44,43 @@ class EpipolarPoseEstimator:
         else:
             self.camera_intrinsics = camera_intrinsics
 
-    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
-                                         low_short_jump_observations: FlowObservation, flow_arc_short_jump) \
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc)\
             -> Tuple[float, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
         W_4x4 = self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
-        gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords = (
-            self.get_occlusion_and_segmentation(flow_arc, flow_observation_long_jump))
+        gt_flow_observation: SyntheticFlowObservation = self.rendering.render_flow_for_frame(self.gt_encoder, *flow_arc)
+
+        occlusion, segmentation = self.get_adjusted_occlusion_and_segmentation(flow_observation_long_jump)
+        gt_occlusion, gt_segmentation = self.get_adjusted_occlusion_and_segmentation(gt_flow_observation)
+
+        if self.config.ransac_use_gt_occlusions_and_segmentation:
+            occlusion, segmentation = gt_occlusion, gt_segmentation
 
         flow = flow_observation_long_jump.cast_unit_coords_to_image_coords().observed_flow
+        gt_flow = gt_flow_observation.cast_unit_coords_to_image_coords().observed_flow
 
         observed_segmentation_binary_mask = segmentation > float(self.segmentation_threshold)
 
         src_pts_yx, observed_visible_fg_points_mask = (
-            get_not_occluded_foreground_points(occlusions, segmentation, self.occlusion_threshold,
+            get_not_occluded_foreground_points(occlusion, segmentation, self.occlusion_threshold,
+                                               self.segmentation_threshold))
+        _, gt_visible_fg_points_mask = (
+            get_not_occluded_foreground_points(gt_occlusion, gt_segmentation, self.occlusion_threshold,
                                                self.segmentation_threshold))
 
         if self.config.ransac_sample_points:
             perm = torch.randperm(src_pts_yx.shape[0])
             src_pts_yx = src_pts_yx[perm[:self.config.ransac_sampled_points_number]]
 
-        _, gt_visible_fg_points_mask = (get_not_occluded_foreground_points(
-            gt_flow_observation.rendered_flow_occlusion, gt_flow_observation.rendered_flow_segmentation,
-            self.occlusion_threshold, self.segmentation_threshold))
-
         dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
-
-        gt_flow = flow_unit_coords_to_image_coords(gt_flow_observation.theoretical_flow)
         dst_pts_yx_gt_flow = source_to_target_coords_world_coord_system(src_pts_yx, gt_flow)
 
         confidences = None
         if self.config.ransac_confidences_from_occlusion:
-            confidences = 1 - occlusions[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
+            confidences = 1 - occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
 
         confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = self.augment_correspondences(src_pts_yx, dst_pts_yx,
                                                                                                dst_pts_yx_gt_flow,
@@ -88,7 +89,6 @@ class EpipolarPoseEstimator:
 
         src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
         dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
-        dst_pts_xy_gt_flow = tensor_index_to_coordinates_xy(dst_pts_yx_gt_flow)
 
         if self.config.ransac_inlier_filter == 'pnp_ransac':
             renderer: RenderingKaolin = self.rendering
@@ -186,33 +186,22 @@ class EpipolarPoseEstimator:
 
         return inlier_ratio, Se3_obj
 
-    def get_occlusion_and_segmentation(self, flow_arc, flow_observation_current_frame):
-        renderer: RenderingKaolin = self.rendering
-        gt_flow_observation: RenderedFlowResult = renderer.render_flow_for_frame(self.gt_encoder, *flow_arc)
-
-        gt_rendering_result: RenderingResult = renderer.rendering_result_for_frame(self.gt_encoder, 0)
-        rendered_obj_cam0_coords = gt_rendering_result.rendered_face_camera_coords
+    def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 
         if self.config.ransac_erode_segmentation:
-            eroded_gt_seg = erode_segment_mask2(5, gt_flow_observation.rendered_flow_segmentation[0])
             eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
 
             flow_observation_current_frame.observed_flow_segmentation = eroded_observed_seg[None]
-            gt_flow_observation = gt_flow_observation._replace(rendered_flow_segmentation=eroded_gt_seg[None])
 
         if self.config.ransac_dilate_occlusion:
-            dilated_gt_occ = dilate_mask(1, gt_flow_observation.rendered_flow_occlusion)
             dilated_observed_occ = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
 
-            gt_flow_observation = gt_flow_observation._replace(rendered_flow_occlusion=dilated_gt_occ)
             flow_observation_current_frame.observed_flow_occlusion = dilated_observed_occ
-        if self.config.ransac_use_gt_occlusions_and_segmentation:
-            occlusions = gt_flow_observation.rendered_flow_occlusion
-            segmentation = gt_flow_observation.rendered_flow_segmentation
-        else:
-            occlusions = flow_observation_current_frame.observed_flow_occlusion
-            segmentation = flow_observation_current_frame.observed_flow_segmentation
-        return gt_flow_observation, occlusions, segmentation, rendered_obj_cam0_coords
+
+        occlusions = flow_observation_current_frame.observed_flow_occlusion
+        segmentation = flow_observation_current_frame.observed_flow_segmentation
+
+        return occlusions, segmentation
 
     def augment_correspondences(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
         if self.config.ransac_feed_only_inlier_flow:
