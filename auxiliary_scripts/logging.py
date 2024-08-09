@@ -1534,9 +1534,9 @@ class WriteResults:
         gt_translations = []
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
-            last_quaternion = quaternion_to_axis_angle(frame_data.quaternions_during_optimization[-1])
-            last_rotation = np.rad2deg(last_quaternion[0, -1].numpy(force=True))
-            last_translation = frame_data.translations_during_optimization[-1][0, 0, -1].numpy(force=True)
+            last_quaternion = frame_data.predicted_object_se3_total.quaternion.q
+            last_rotation = torch.rad2deg(quaternion_to_axis_angle(last_quaternion)[0]).numpy(force=True)
+            last_translation = frame_data.predicted_object_se3_total.translation[0].numpy(force=True)
             rotations.append(last_rotation)
             translations.append(last_translation)
 

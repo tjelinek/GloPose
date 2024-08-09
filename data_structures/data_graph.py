@@ -18,6 +18,9 @@ class CommonFrameData:
     translations_during_optimization: List = field(default_factory=list)
     quaternions_during_optimization: List = field(default_factory=list)
 
+    predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
+    predicted_object_se3_short_jump: Se3 = Se3.identity(1, 'cuda')
+
     ransac_rot_obj_axis_angle: torch.Tensor = None
 
     frame_losses: Any = None
