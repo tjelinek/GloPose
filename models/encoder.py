@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from kornia.geometry import normalize_quaternion, So3
+from kornia.geometry import normalize_quaternion, So3, Se3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from pytorch3d.transforms import quaternion_multiply
@@ -122,8 +122,21 @@ class Encoder(nn.Module):
 
         return total_rotation_quaternion
 
+    def get_se3_at_frame_vectorized(self) -> Se3:
+
+        so3_initial = So3(Quaternion(self.initial_quaternion[0]))
+        so3_offset = So3(Quaternion(self.quaternion_offsets[0]))
+        so3_optimized = So3(Quaternion(normalize_quaternion(self.quaternion)[0]))
+
+        total_rotation = so3_initial * so3_offset * so3_optimized
+
+        translation_at_frame_vectorized = self.initial_translation + self.translation_offsets + self.translation
+
+        total_se3 = Se3(total_rotation, translation_at_frame_vectorized[0, 0])
+
+        return total_se3
+
     def get_total_translation_at_frame_vectorized(self):
-        # The formula is initial_translation * translation_offsets * translation
         return self.initial_translation + self.translation_offsets + self.translation
 
     def compute_next_offset(self, stepi):
