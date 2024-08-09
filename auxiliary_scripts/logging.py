@@ -30,7 +30,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
-from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
+from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh, load_mesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
@@ -39,7 +39,7 @@ from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from utils import coordinates_xy_to_tensor_index
+from utils import coordinates_xy_to_tensor_index, normalize_vertices
 from auxiliary_scripts.math_utils import quaternion_angular_difference, camera_Se3_world_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
@@ -667,6 +667,8 @@ class WriteResults:
 
             gt_mesh = load_mesh_using_trimesh(Path(self.tracking_config.gt_mesh_path))
 
+            normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
+
             vertex_texcoords = gt_mesh.visual.uv
             vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
@@ -676,7 +678,7 @@ class WriteResults:
                     indices=gt_mesh.faces,
                     albedo_texture=gt_texture_int,
                     vertex_texcoords=vertex_texcoords,
-                    vertex_positions=gt_mesh.vertices
+                    vertex_positions=normalized_vertices
                 )
             )
 
