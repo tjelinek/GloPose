@@ -7,6 +7,7 @@ import torch.nn as nn
 from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
+from data_structures.keyframe_buffer import SyntheticFlowObservation
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
@@ -349,14 +350,20 @@ class RenderingKaolin(nn.Module):
 
         return rendering_res
 
-    def render_flow_for_frame(self, encoder, flow_arc_source, flow_arc_target) -> RenderedFlowResult:
+    def render_flow_for_frame(self, encoder, flow_arc_source, flow_arc_target) -> SyntheticFlowObservation:
         keyframes = [flow_arc_source, flow_arc_target]
         flow_frames = [flow_arc_source, flow_arc_target]
         encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes,
                                                                                               flow_frames)
         rendered_flow_res = self.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
                                                           flow_arcs_indices=[(0, 1)])
-        return rendered_flow_res
+
+        synthetic_flow_cpu = SyntheticFlowObservation(
+            observed_flow=rendered_flow_res.theoretical_flow,
+            observed_flow_segmentation=rendered_flow_res.rendered_flow_segmentation,
+            observed_flow_occlusion=rendered_flow_res.rendered_flow_occlusion)
+
+        return synthetic_flow_cpu
 
     def camera_transformation_matrix_4x4(self):
         T_world_to_cam_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=self.camera_trans,
