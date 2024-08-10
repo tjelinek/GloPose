@@ -701,8 +701,8 @@ class Tracking6D:
                                              stacked_flow_observations, stacked_observations)
 
         if self.config.preinitialization_method is not None:
-            self.run_preinitializations(flow_arcs, flow_frames, flow_observations, frame_losses, keyframes,
-                                        observations, stacked_flow_observations, stacked_observations)
+            self.run_preinitializations(flow_arcs, flow_frames, keyframes,
+                                        stacked_flow_observations, stacked_observations)
 
             epoch += 1
             self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
@@ -792,17 +792,16 @@ class Tracking6D:
         self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
                                    loss_result.losses, encoder_result, frame_index)
 
-    def run_preinitializations(self, flow_arcs, flow_frames, flow_observations, frame_losses, keyframes, observations,
+    def run_preinitializations(self, flow_arcs, flow_frames, keyframes,
                                stacked_flow_observations, stacked_observations):
 
         print("Pre-initializing the objects position")
 
         if self.config.preinitialization_method == 'levenberg-marquardt':
-            infer_result = self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
-                                                               flow_frames, keyframes, flow_arcs)
+            self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
+                                                flow_frames, keyframes, flow_arcs)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            infer_result = self.essential_matrix_preinitialization(flow_arcs, keyframes, flow_frames, observations,
-                                                                   flow_observations)
+            self.essential_matrix_preinitialization(keyframes)
         else:
             raise ValueError("Unknown pre-init method.")
 
