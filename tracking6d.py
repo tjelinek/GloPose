@@ -488,13 +488,13 @@ class Tracking6D:
                 self.encoder.quaternion_offsets[frame_i + 1:] = self.encoder.quaternion_offsets[frame_i]
 
                 if self.config.icosphere_add_inplane_rotatiosn:
-                    obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
+                    obj_rotation_q = self.encoder.quaternion_offsets[[frame_i]]
 
                     self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_rotation_q,
                                                          self.config.icosphere_trust_region_degrees, frame_i)
 
                 else:
-                    obj_rotation_q = Quaternion(self.encoder.quaternion_offsets[0, [frame_i]])
+                    obj_rotation_q = Quaternion(self.encoder.quaternion_offsets[[frame_i]])
                     self.pose_icosphere.insert_new_reference(new_frame_observation, obj_rotation_q, frame_i)
 
                 self.flow_tracks_inits.append(frame_i)
