@@ -19,7 +19,6 @@ class CommonFrameData:
     quaternions_during_optimization: List = field(default_factory=list)
 
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
-    predicted_object_se3_short_jump: Se3 = Se3.identity(1, 'cuda')
 
     ransac_rot_obj_axis_angle: torch.Tensor = None
 
@@ -71,6 +70,8 @@ class CrossFrameData:
     dust3r_point_cloud_im2: torch.Tensor = None
 
     is_source_of_matching: bool = True
+
+    predicted_object_delta_se3: Se3 = Se3.identity(1, 'cuda')
 
 
 @dataclass
