@@ -331,7 +331,7 @@ class Tracking6D:
 
     def initialize_keyframes(self):
 
-        self.active_keyframes = KeyframeBuffer()
+        self.active_keyframes = KeyframeBuffer(storage_device='cpu')
 
     def initialize_flow_model(self):
 
