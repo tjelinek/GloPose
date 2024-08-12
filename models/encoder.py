@@ -122,15 +122,15 @@ class Encoder(nn.Module):
 
     def get_se3_at_frame_vectorized(self) -> Se3:
 
-        so3_initial = So3(Quaternion(self.initial_quaternion[0]))
-        so3_offset = So3(Quaternion(self.quaternion_offsets[0]))
-        so3_optimized = So3(Quaternion(normalize_quaternion(self.quaternion)[0]))
+        so3_initial = So3(Quaternion(self.initial_quaternion))
+        so3_offset = So3(Quaternion(self.quaternion_offsets))
+        so3_optimized = So3(Quaternion(normalize_quaternion(self.quaternion)))
 
         total_rotation = so3_initial * so3_offset * so3_optimized
 
         translation_at_frame_vectorized = self.initial_translation + self.translation_offsets + self.translation
 
-        total_se3 = Se3(total_rotation, translation_at_frame_vectorized[0, 0])
+        total_se3 = Se3(total_rotation, translation_at_frame_vectorized)
 
         return total_se3
 
