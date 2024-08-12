@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import numpy as np
 import torch
 from kaolin.render.camera import PinholeIntrinsics
@@ -44,8 +42,7 @@ class EpipolarPoseEstimator:
         else:
             self.camera_intrinsics = camera_intrinsics
 
-    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc)\
-            -> Tuple[float, Se3]:
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) -> Se3:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
@@ -143,7 +140,7 @@ class EpipolarPoseEstimator:
         Se3_cam = Se3(quat_cam, t_cam.squeeze()[None])
 
         R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
-        t_obj = t_obj[..., 0]  # Shape (1, 3, 1) -> (1, 3)
+        t_obj = t_obj[..., 0] * 0.  # Shape (1, 3, 1) -> (1, 3)
 
         quat_obj = Quaternion.from_matrix(R_obj)
         Se3_obj = Se3(quat_obj, t_obj)
@@ -184,7 +181,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return inlier_ratio, Se3_obj
+        return Se3_obj
 
     def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 
