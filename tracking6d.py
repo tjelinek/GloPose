@@ -888,14 +888,6 @@ class Tracking6D:
             f"Frame {flow_long_jump_target} new_of: "
             f"{torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
 
-        stacked_flow_observation = flow_observations.stack()
-        stacked_frame_observation = observations.stack()
-
-        inference_result = self.infer_model(stacked_frame_observation, stacked_flow_observation, keyframes, flow_frames,
-                                            flow_arcs, 'deep_features')
-
-        return inference_result
-
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs):
         loss_coefs_names = [
