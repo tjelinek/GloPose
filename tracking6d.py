@@ -484,8 +484,7 @@ class Tracking6D:
             if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
 
                 self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
-
-                self.encoder.quaternion_offsets[:, frame_i + 1:] = self.encoder.quaternion_offsets[:, [frame_i]]
+                self.encoder.quaternion_offsets[frame_i + 1:] = self.encoder.quaternion_offsets[frame_i]
 
                 if self.config.icosphere_add_inplane_rotatiosn:
                     obj_rotation_q = self.encoder.quaternion_offsets[0, [frame_i]]
