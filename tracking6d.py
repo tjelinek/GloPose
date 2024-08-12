@@ -804,9 +804,12 @@ class Tracking6D:
         else:
             raise ValueError("Unknown pre-init method.")
 
+        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
+                                        flow_arcs, 'deep_features')
+
         joint_loss = infer_result.loss_result.loss.mean()
         self.best_model["losses"] = infer_result.loss_result.losses_all
-        self.best_model["value"] = joint_loss
+        self.best_model["value"] = float(joint_loss)
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
     @torch.no_grad()
