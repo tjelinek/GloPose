@@ -4,8 +4,6 @@ from itertools import product
 
 from typing import Dict, Tuple, List, Any
 
-import math
-
 import h5py
 import torch
 import imageio
