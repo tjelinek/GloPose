@@ -542,14 +542,12 @@ class Tracking6D:
             synthetic_flow = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame, flow_target_frame)
 
             # Convert synthetic flow results to CPU
-            synthetic_flow_cpu = SyntheticFlowObservation(
-                observed_flow=synthetic_flow.theoretical_flow,
-                observed_flow_segmentation=synthetic_flow.rendered_flow_segmentation,
-                observed_flow_occlusion=synthetic_flow.rendered_flow_occlusion,
-            ).send_to_device('cpu')
+            synthetic_flow_cpu = synthetic_flow.send_to_device('cpu')
 
             # Get the observed segmentation for the flow source frame
-            segment = active_keyframes.get_observations_for_keyframe(flow_source_frame).observed_segmentation
+            frame_observation = (self.data_graph.get_camera_specific_frame_data(flow_source_frame).
+                                 frame_observation.send_to_device('cuda'))
+            segment = frame_observation.observed_segmentation
 
             flow_observation = FlowObservation(observed_flow=observed_flow,
                                                observed_flow_segmentation=segment,

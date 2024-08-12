@@ -82,6 +82,12 @@ class Observation:
 
         return new_observation
 
+    def cuda(self: ObservationType):
+        return self.send_to_device('cuda')
+
+    def cpu(self: ObservationType):
+        return self.send_to_device('cpu')
+
 
 @dataclass
 class FrameObservation(Observation):
@@ -167,14 +173,18 @@ class MultiCameraObservation:
             raise ValueError("Unknown observation type encountered.")
 
 
-@dataclass
 class KeyframeBuffer:
-    G: nx.DiGraph = field(default_factory=nx.DiGraph)
 
-    # Contains ordinals of a frame that we optimize for shape etc.
-    keyframes: list = field(default_factory=list)
-    # Contains ordinals of a frame that we may not optimize but serve as a keyframe source
-    flow_frames: list = field(default_factory=list)
+    def __init__(self, storage_device='cuda', output_device='cuda'):
+        self._storage_device = storage_device
+        self._output_device = output_device
+
+        self.G: nx.DiGraph = nx.DiGraph()
+
+        # Contains ordinals of a frame that we optimize for shape etc.
+        self.keyframes: list = []
+        # Contains ordinals of a frame that we may not optimize but serve as a keyframe source
+        self.flow_frames: list = []
 
     @staticmethod
     def merge(buffer1, buffer2):
@@ -223,7 +233,7 @@ class KeyframeBuffer:
 
     def add_new_keyframe_observation(self, frame_observation: FrameObservation, keyframe_index: int) -> None:
 
-        self.G.add_node(keyframe_index, observations=frame_observation)
+        self.G.add_node(keyframe_index, observations=frame_observation.send_to_device(self._storage_device))
         insort(self.keyframes, keyframe_index)
 
     def add_new_flow(self, observed_flow: torch.Tensor, observed_flows_segmentation: torch.Tensor,
@@ -245,11 +255,12 @@ class KeyframeBuffer:
 
         if source_frame not in self.flow_frames:
             insort(self.flow_frames, source_frame)
-        self.G.add_edge(source_frame, target_frame, flow_observations=flow_observation)
+        self.G.add_edge(source_frame, target_frame,
+                        flow_observations=flow_observation.send_to_device(self._storage_device))
 
     def get_flows_between_frames(self, source_frame: int, target_frame: int) -> FlowObservation:
 
-        return self.G.get_edge_data(source_frame, target_frame)['flow_observations']
+        return self.G.get_edge_data(source_frame, target_frame)['flow_observations'].send_to_device(self._output_device)
 
     def get_observations_for_all_keyframes(self, bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
         vertices = list(filter(lambda vertex: vertex[0] in self.keyframes, self.G.nodes(data=True)))
@@ -261,7 +272,7 @@ class KeyframeBuffer:
         if bounding_box is not None:
             concatenated_observations = concatenated_observations.trim_bounding_box(bounding_box)
 
-        return concatenated_observations
+        return concatenated_observations.send_to_device(self._output_device)
 
     def get_observations_for_keyframe(self, keyframe,
                                       bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
@@ -270,7 +281,7 @@ class KeyframeBuffer:
         if bounding_box is not None:
             observations = observations.trim_bounding_box(bounding_box)
 
-        return observations
+        return observations.send_to_device(self._output_device)
 
     def get_flows_observations(self, bounding_box=None):
         arcs = list(self.G.edges(data=True))
@@ -280,7 +291,8 @@ class KeyframeBuffer:
         concatenated_tensors = FlowObservation.concatenate(*flow_observations)
 
         if bounding_box is not None:
-            concatenated_tensors = concatenated_tensors.trim_bounding_box(bounding_box)
+            concatenated_tensors = (concatenated_tensors.trim_bounding_box(bounding_box).
+                                    send_to_device(self._output_device))
 
         return concatenated_tensors
 
@@ -301,6 +313,9 @@ class KeyframeBuffer:
         self.G.remove_nodes_from(frames_to_remove)
         self.keyframes = copy.deepcopy(remaining_keyframes)
         self.flow_frames = copy.deepcopy(remaining_flow_frames)
+
+    def remove_edges(self, edges_to_remove: List[Tuple[int, int]]):
+        self.G.remove_edges_from(edges_to_remove)
 
     def keep_selected_keyframes(self, keep_keyframes):
         not_keep_keyframes = ~ keep_keyframes
