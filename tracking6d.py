@@ -571,11 +571,7 @@ class Tracking6D:
             edge_data.synthetic_flow_result = synthetic_flow_cpu
             edge_data.observed_flow = flow_observation.send_to_device('cpu')
 
-        if self.config.add_flow_arcs_strategy == 'all-previous':
-            short_flow_arcs = {(flow_source, frame_i) for flow_source in
-                               set(self.active_keyframes.flow_frames) | set(self.active_keyframes.keyframes)
-                               if flow_source < frame_i}
-        elif self.config.add_flow_arcs_strategy == 'single-previous':
+        if self.config.add_flow_arcs_strategy == 'single-previous':
             short_flow_arcs = {(frame_i - 1, frame_i)}
         elif self.config.add_flow_arcs_strategy is None:
             short_flow_arcs = set()
@@ -615,18 +611,15 @@ class Tracking6D:
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
-            last_keyframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_target_frame)
-            last_flowframe_observations = self.active_keyframes.get_observations_for_keyframe(flow_source_frame)
+            source_frame_obs = self.data_graph.get_camera_specific_frame_data(flow_source_frame).frame_observation
+            target_frame_obs = self.data_graph.get_camera_specific_frame_data(flow_target_frame).frame_observation
 
-            image_new_x255 = last_keyframe_observations.observed_image.float() * 255
-            image_prev_x255 = last_flowframe_observations.observed_image.float() * 255
+            target_image = target_frame_obs.observed_image.float() * 255
+            template_image = source_frame_obs.observed_image.float() * 255
 
             if mode == 'long':
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
                         flow_target_frame == max(self.active_keyframes.keyframes))
-
-                template = image_prev_x255
-                target = image_new_x255
 
                 flow_provider = self.long_flow_provider
 
