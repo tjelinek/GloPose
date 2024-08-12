@@ -13,7 +13,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle
 from pathlib import Path
 
 from torch.optim import lr_scheduler
-from typing import Optional, NamedTuple, List, Callable
+from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
@@ -94,7 +94,7 @@ class Tracking6D:
         self.feature_extractor: Optional[S2DNet] = None
 
         # Optical flow
-        self.short_flow_model: Optional[FlowProvider] = None
+        self.short_flow_model: Optional[Union[FlowProvider, MFTFlowProvider]] = None
         self.long_flow_provider: Optional[MFTFlowProvider] = None
 
         # Ground truth related
@@ -337,7 +337,9 @@ class Tracking6D:
 
         short_flow_models = {
             'RAFT': RAFTFlowProvider,
-            'GMA': GMAFlowProvider
+            'GMA': GMAFlowProvider,
+            'MFT': MFTFlowProvider,
+            'MFT_Synth': MFTIQSyntheticFlowProvider,
         }
         long_flow_models = {
             'MFT': MFTFlowProvider,
@@ -348,7 +350,10 @@ class Tracking6D:
 
         # For short_flow_model
         if self.config.short_flow_model in short_flow_models:
-            self.short_flow_model = short_flow_models[self.config.short_flow_model](config=self.config)
+            self.short_flow_model = short_flow_models[self.config.short_flow_model](self.config.MFT_short_backbone_cfg,
+                                                                                    config=self.config,
+                                                                                    faces=self.faces,
+                                                                                    gt_encoder=self.gt_encoder)
         else:
             # Default case or raise an error if you don't want a default FlowProvider
             raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")

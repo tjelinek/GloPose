@@ -68,7 +68,10 @@ class RAFTFlowProvider(FlowProvider):
         # flow_low = padder.unpad(flow_low)[None]
         flow_up = padder.unpad(flow_up)[None]
 
-        return flow_up
+        occlusion = torch.zeros(1, 1, 1, *flow_up.shape[-2:]).to(flow_up.device)
+        uncertainty = torch.zeros(1, 1, 1, *flow_up.shape[-2:]).to(flow_up.device)
+
+        return flow_up, occlusion, uncertainty
 
 
 class GMAFlowProvider(FlowProvider):
