@@ -739,7 +739,7 @@ class WriteResults:
                                colors=colors_pred,
                                radii=strips_radii))
 
-        closest_node, _ = pose_icosphere.get_closest_reference(Quaternion(pred_obj_se3.quaternion.q[None, [-1]]))
+        closest_node, _ = pose_icosphere.get_closest_reference(Quaternion(pred_obj_se3.quaternion.q[[-1]]))
 
         closest_node_Se3 = Se3(closest_node.quaternion, torch.zeros(1, 3).cuda())
         closest_node_cam_se3 = camera_Se3_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
@@ -1770,22 +1770,22 @@ class WriteResults:
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
     def write_keyframe_rotations(self, detached_result, keyframes):
-        quaternions = detached_result.quaternions[0]  # Assuming shape is (1, N, 4)
+        quaternions = detached_result.quaternions  # Assuming shape is (1, N, 4)
         for k in range(quaternions.shape[0]):
             quaternions[k] = normalize_quaternion(quaternions[k])
         # Convert quaternions to Euler angles
         angles_rad = quaternion_to_axis_angle(quaternions)
         # Convert radians to degrees
-        angles_deg = angles_rad * 180.0 / math.pi
+        angles_deg = torch.rad2deg(angles_rad)
         rot_axes = ['X-axis: ', 'Y-axis: ', 'Z-axis: ']
         for k in range(angles_rad.shape[0]):
             rotations = [rot_axes[i] + str(round(float(angles_deg[k, i]), 3))
                          for i in range(3)]
             self.tracking_log.write(
                 f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
-        for k in range(detached_result.quaternions.shape[1]):
+        for k in range(detached_result.quaternions.shape[0]):
             self.tracking_log.write(
-                f"Keyframe {keyframes[k]} translation: str{detached_result.translations[0, 0, k]}\n")
+                f"Keyframe {keyframes[k]} translation: str{detached_result.translations[k]}\n")
         self.tracking_log.write('\n')
         self.tracking_log.flush()
 

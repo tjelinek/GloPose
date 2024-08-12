@@ -167,9 +167,9 @@ class EpipolarPoseEstimator:
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points_ransac.cpu()
 
-        gt_rot_axis_angle_obj = self.gt_rotations[:, flow_arc[1]]
+        gt_rot_axis_angle_obj = self.gt_rotations[[flow_arc[1]]]
         gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
-        gt_trans_obj = self.gt_translations[0, :, flow_arc[1]].unsqueeze(-1)
+        gt_trans_obj = self.gt_translations[[flow_arc[1]]].unsqueeze(-1)
 
         gt_R_cam, gt_trans_cam = Rt_epipolar_cam_from_Rt_obj(gt_R_obj, gt_trans_obj, W_4x4)
 

@@ -66,7 +66,7 @@ def main():
         else:
             write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
-        config.input_frames = gt_rotations.shape[1]
+        config.input_frames = gt_rotations.shape[0]
 
         run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 

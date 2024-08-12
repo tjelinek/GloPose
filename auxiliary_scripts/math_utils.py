@@ -107,9 +107,9 @@ def quaternion_minimal_angular_difference(quaternions1: Quaternion, quaternions2
 
 def consecutive_quaternions_angular_difference(quaternion):
     angs = []
-    for qi in range(quaternion.shape[1] - 1):
-        q1 = Quaternion(quaternion[:, qi])
-        q2 = Quaternion(quaternion[:, qi + 1])
+    for qi in range(quaternion.shape[0] - 1):
+        q1 = Quaternion(quaternion[[qi]])
+        q2 = Quaternion(quaternion[[qi + 1]])
 
         angle = quaternion_angular_difference(q1, q2)
         angs.append(float(angle))

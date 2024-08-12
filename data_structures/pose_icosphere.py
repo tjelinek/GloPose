@@ -37,8 +37,7 @@ class PoseIcosphere:
         min_index = -1
 
         for i, template in enumerate(self.reference_poses):
-            angle_between_poses = float(quaternion_minimal_angular_difference(pose_quaternion,
-                                                                              template.quaternion[None]))
+            angle_between_poses = float(quaternion_minimal_angular_difference(pose_quaternion, template.quaternion))
             if angle_between_poses < min_angle:
                 min_angle = angle_between_poses
                 min_index = i

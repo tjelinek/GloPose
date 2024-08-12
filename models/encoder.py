@@ -20,11 +20,10 @@ class Encoder(nn.Module):
         self.config = config
 
         # Translation initialization
-        translation_init = torch.zeros(1, 1, config.input_frames, 3)
-        translation_init[:, :, :, :] = torch.Tensor(self.config.tran_init)
+        translation_init = torch.Tensor(self.config.tran_init).repeat(config.input_frames, 1)
 
         # Quaternion initialization
-        qinit = Quaternion.from_axis_angle(torch.Tensor(self.config.rot_init).repeat(config.input_frames, 1)).q[None]
+        qinit = Quaternion.from_axis_angle(torch.Tensor(self.config.rot_init).repeat(config.input_frames, 1)).q
 
         # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
@@ -32,16 +31,15 @@ class Encoder(nn.Module):
 
         # Offsets initialization
         quaternion_offsets = Quaternion.identity(config.input_frames)
-        self.register_buffer('quaternion_offsets', quaternion_offsets.q[None])
+        self.register_buffer('quaternion_offsets', quaternion_offsets.q)
 
-        translation_offsets = torch.zeros(1, 1, config.input_frames, 3)
+        translation_offsets = torch.zeros(config.input_frames, 3)
         self.register_buffer('translation_offsets', translation_offsets)
 
-        self.translation = nn.Parameter(torch.zeros(translation_offsets.shape))
-        quat = torch.zeros(1, config.input_frames, 4)
-        quat[:, :, 0] = 1.0
+        self.translation = nn.Parameter(torch.zeros_like(translation_offsets))
+        quat = Quaternion.identity(config.input_frames)
 
-        self.quaternion = nn.Parameter(quat)
+        self.quaternion = nn.Parameter(quat.q)
 
         # Lights initialization
         if self.config.use_lights:
@@ -83,16 +81,16 @@ class Encoder(nn.Module):
 
         translation = self.get_total_translation_at_frame_vectorized()
         quaternion = self.get_total_rotation_at_frame_vectorized()
-        translation[:, :, 0] = translation[:, :, 0].detach()
-        quaternion[:, 0] = quaternion[:, 0].detach()
+        translation[0] = translation[0].detach()
+        quaternion[0] = quaternion[0].detach()
 
-        noopt = list(set(range(translation.shape[2])) - set(opt_frames))
+        noopt = list(set(range(self.config.input_frames)) - set(opt_frames))
 
-        translation[:, :, noopt] = translation[:, :, noopt].detach()
-        quaternion[:, noopt] = quaternion[:, noopt].detach()
+        translation[noopt] = translation[noopt].detach()
+        quaternion[noopt] = quaternion[noopt].detach()
 
-        quaternion = quaternion[:, :opt_frames[-1] + 1]
-        translation = translation[:, :, :opt_frames[-1] + 1]
+        quaternion = quaternion[:opt_frames[-1] + 1]
+        translation = translation[:opt_frames[-1] + 1]
 
         if self.config.features == 'deep':
             texture_map = self.texture_map
@@ -140,17 +138,16 @@ class Encoder(nn.Module):
         return self.initial_translation + self.translation_offsets + self.translation
 
     def compute_next_offset(self, stepi):
-        self.initial_translation[:, :, stepi] = self.initial_translation[:, :, stepi - 1]
-        self.initial_quaternion[:, stepi] = self.initial_quaternion[:, stepi - 1]
+        self.initial_translation[stepi] = self.initial_translation[stepi - 1]
+        self.initial_quaternion[stepi] = self.initial_quaternion[stepi - 1]
 
-        self.translation_offsets[:, :, stepi] = self.translation_offsets[:, :, stepi - 1] + \
-                                                self.translation[:, :, stepi - 1].detach()
+        self.translation_offsets[stepi] = self.translation_offsets[stepi - 1] + self.translation[stepi - 1].detach()
 
-        so3_offset = So3(Quaternion(normalize_quaternion(self.quaternion_offsets[:, stepi - 1])))
-        so3_optim = So3(Quaternion(normalize_quaternion(self.quaternion[:, stepi - 1]).detach()))
+        so3_offset = So3(Quaternion(normalize_quaternion(self.quaternion_offsets[stepi - 1])))
+        so3_optim = So3(Quaternion(normalize_quaternion(self.quaternion[stepi - 1]).detach()))
         so3_new_offset = so3_offset * so3_optim
 
-        self.quaternion_offsets[:, stepi] = so3_new_offset.q.q
+        self.quaternion_offsets[stepi] = so3_new_offset.q.q
 
     def frames_and_flow_frames_inference(self, keyframes, flow_frames) -> Tuple[EncoderResult, EncoderResult]:
 
@@ -165,13 +162,13 @@ class Encoder(nn.Module):
 
         joined_encoder_result: EncoderResult = self.forward(optimized_frames)
 
-        optimized_translations = joined_encoder_result.translations[:, :, joined_frames]
-        optimized_quaternions = joined_encoder_result.quaternions[:, joined_frames]
+        optimized_translations = joined_encoder_result.translations[joined_frames]
+        optimized_quaternions = joined_encoder_result.quaternions[joined_frames]
 
-        keyframes_translations = optimized_translations[:, :, frames_join_idx]
-        keyframes_quaternions = optimized_quaternions[:, frames_join_idx]
-        flow_frames_translations = optimized_translations[:, :, flow_frames_join_idx]
-        flow_frames_quaternions = optimized_quaternions[:, flow_frames_join_idx]
+        keyframes_translations = optimized_translations[frames_join_idx]
+        keyframes_quaternions = optimized_quaternions[frames_join_idx]
+        flow_frames_translations = optimized_translations[flow_frames_join_idx]
+        flow_frames_quaternions = optimized_quaternions[flow_frames_join_idx]
 
         encoder_result = EncoderResult(translations=keyframes_translations,
                                        quaternions=keyframes_quaternions,

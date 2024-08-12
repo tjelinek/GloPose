@@ -72,11 +72,11 @@ def main():
         files = np.array(
             glob.glob(os.path.join(dataset_folder, dataset, sequence, renderings_folder, '*.*')))
         files.sort()
-        config.input_frames = len(files)
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
+        config.input_frames = gt_rotations.shape[0]
         run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
 

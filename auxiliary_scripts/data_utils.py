@@ -68,8 +68,8 @@ def load_gt_annotations_file(file_path) -> Tuple[torch.Tensor, torch.Tensor]:
                          rotations_degrees]
 
     # Create tensors
-    rotations_tensor = torch.tensor(rotations_radians).unsqueeze(0).cuda()
-    translations_tensor = torch.tensor(translations).unsqueeze(0).unsqueeze(1).cuda()
+    rotations_tensor = torch.tensor(rotations_radians).cuda()
+    translations_tensor = torch.tensor(translations).cuda()
 
     return rotations_tensor, translations_tensor
 

@@ -14,14 +14,14 @@ def modify_rotations(gt_rotations, gt_translations, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    gt_rotations = gt_rotations.repeat(1, 2, 1)
-    gt_translations = gt_translations.repeat(1, 1, 2, 1)
+    gt_rotations = gt_rotations.repeat(2, 1)
+    gt_translations = gt_translations.repeat(2, 1)
 
     # Extract the number of rotations
-    _, N, _ = gt_rotations.shape
+    N, _ = gt_rotations.shape
 
     # Extract y-dimension rotations
-    y_rotations = gt_rotations[0, :, 1] * 1.8
+    y_rotations = gt_rotations[:, 1] * 1.8
 
     # Generate x-dimension rotations (twice as fast)
     x_rotations = y_rotations * 0.05 * torch.sin(y_rotations * 5)
@@ -32,6 +32,6 @@ def modify_rotations(gt_rotations, gt_translations, seed=42):
 
     # Combine the rotations into a new axis-angle tensor
     modified_rotations = torch.stack([x_rotations, y_rotations, z_rotations], dim=-1)
-    modified_rotations = modified_rotations.unsqueeze(0).cuda()  # Shape [1, N, 3]
+    modified_rotations = modified_rotations.cuda()  # Shape [N, 3]
 
     return modified_rotations, gt_translations

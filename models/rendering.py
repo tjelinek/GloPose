@@ -73,16 +73,15 @@ class RenderingKaolin(nn.Module):
 
     def forward(self, translation, quaternion, unit_vertices, face_features, texture_maps,
                 lights=None) -> RenderingResult:
-        batch_size = quaternion.shape[1]
+        batch_size = quaternion.shape[0]
 
-        translation_vector = translation[0, 0]
-        rotation_matrix = quaternion_to_rotation_matrix(quaternion)[0]
+        rotation_matrix = quaternion_to_rotation_matrix(quaternion)
 
         unit_vertices_batched = unit_vertices.repeat(batch_size, 1, 1)
         face_features_batched = face_features.repeat(batch_size, 1, 1, 1)
         texture_maps_batched = texture_maps.repeat(batch_size, 1, 1, 1)
 
-        dibr_result = self.render_mesh_with_dibr(face_features_batched, rotation_matrix, translation_vector,
+        dibr_result = self.render_mesh_with_dibr(face_features_batched, rotation_matrix, translation,
                                                  unit_vertices_batched)
 
         ren_features = kaolin.render.mesh.texture_mapping(dibr_result.ren_mesh_vertices_features,
@@ -383,21 +382,22 @@ class RenderingKaolin(nn.Module):
         indices_pose_1 = torch.tensor(indices_pose_1_list, dtype=torch.long).cuda()
         indices_pose_2 = torch.tensor(indices_pose_2_list, dtype=torch.long).cuda()
         # Batch gather translations
-        translation_vector_1_batch = torch.index_select(encoder_out_frame_1.translations, 2, indices_pose_1)[0, 0]
-        translation_vector_2_batch = torch.index_select(encoder_out_frame_2.translations, 2, indices_pose_2)[0, 0]
+        translation_vector_1_batch = torch.index_select(encoder_out_frame_1.translations, 0, indices_pose_1)
+        translation_vector_2_batch = torch.index_select(encoder_out_frame_2.translations, 0, indices_pose_2)
         # Batch convert quaternions to rotation matrices
-        quaternion_batch_1 = torch.index_select(encoder_out_frame_1.quaternions, 1, indices_pose_1)
-        quaternion_batch_2 = torch.index_select(encoder_out_frame_2.quaternions, 1, indices_pose_2)
+        quaternion_batch_1 = torch.index_select(encoder_out_frame_1.quaternions, 0, indices_pose_1)
+        quaternion_batch_2 = torch.index_select(encoder_out_frame_2.quaternions, 0, indices_pose_2)
 
-        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1).to(torch.float)[0]
-        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2).to(torch.float)[0]
+        rotation_matrix_1_batch = quaternion_to_rotation_matrix(quaternion_batch_1).to(torch.float)
+        rotation_matrix_2_batch = quaternion_to_rotation_matrix(quaternion_batch_2).to(torch.float)
 
         return rotation_matrix_1_batch, rotation_matrix_2_batch, translation_vector_1_batch, translation_vector_2_batch
 
     def render_mesh_with_dibr(self, face_features, rotation_matrix, translation_vector, unit_vertices) \
             -> MeshRenderResult:
         # Rotate and translate the vertices using the given rotation_matrix and translation_vector
-        vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, self.obj_center)
+        obj_center_batched = self.obj_center.repeat(rotation_matrix.shape[0], 1).unsqueeze(-1)
+        vertices = kaolin.render.camera.rotate_translate_points(unit_vertices, rotation_matrix, obj_center_batched)
 
         # Apply the translation to the vertices
         vertices = vertices + translation_vector.unsqueeze(1)

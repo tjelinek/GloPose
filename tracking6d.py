@@ -211,6 +211,8 @@ class Tracking6D:
 
         if not self.config.optimize_pose:
             if self.gt_rotations is not None and self.gt_translations is not None:
+                assert self.gt_rotations.shape == torch.Size(self.config.input_frames, 3)
+                assert self.gt_translations.shape == torch.Size(self.config.input_frames, 3)
                 self.encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
 
                 # Do not optimize the poses
@@ -237,6 +239,7 @@ class Tracking6D:
         self.all_parameters = set(list(self.encoder.parameters()))
         self.translational_params = {self.encoder.translation}
         self.rotational_params = {self.encoder.quaternion}
+        # self.rotational_params = {self.encoder.quaternion.q.q}
         self.positional_params = self.translational_params | self.rotational_params
         # rotational_params = [
         #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
@@ -381,7 +384,7 @@ class Tracking6D:
         self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
             template_frame_observation.send_to_device('cpu'))
 
-        initial_rotation = self.encoder.quaternion_offsets[0, [0]]
+        initial_rotation = self.encoder.quaternion_offsets[[0]]
 
         if self.config.icosphere_add_inplane_rotatiosn:
             self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_rotation,
@@ -392,8 +395,8 @@ class Tracking6D:
         for frame_i in range(1, self.config.input_frames):
 
             self.data_graph.add_new_frame(frame_i)
-            self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[:, frame_i]
-            self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[:, :, frame_i]
+            self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[frame_i]
+            self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[frame_i]
 
             next_tracker_frame = frame_i  # Index of a frame
 
@@ -465,7 +468,7 @@ class Tracking6D:
 
             print("Angles:", angles)
 
-            current_pose = Quaternion(self.encoder.quaternion_offsets[:, [frame_i]])
+            current_pose = Quaternion(self.encoder.quaternion_offsets[[frame_i]])
             closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
             print(
                 f">>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
@@ -497,7 +500,7 @@ class Tracking6D:
                 self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
                                                                    closest_node.keyframe_idx_observed)
 
-                self.encoder.quaternion_offsets[:, frame_i + 1:] = closest_node.quaternion.q
+                self.encoder.quaternion_offsets[frame_i + 1:] = closest_node.quaternion.q
 
                 self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
 
@@ -838,13 +841,13 @@ class Tracking6D:
 
         new_obj_quaternion = new_obj_rotation_so3.q.data
 
-        self.encoder.quaternion_offsets[:, flow_long_jump_target] = new_obj_quaternion
+        self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_short_jumps.quaternion.q
         print(
             f"Frame {flow_long_jump_target} offset: "
-            f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[:, flow_long_jump_target])).numpy(force=True).round(2)}")
+            f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[flow_long_jump_target])).numpy(force=True).round(2)}")
         print(
             f"Frame {flow_long_jump_target} qtotal: "
-            f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj.quaternion.data)).numpy(force=True).round(2)}")
+            f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_long_jump.quaternion.data)).numpy(force=True).round(2)}")
         print(
             f"Frame {flow_long_jump_target} new_of: "
             f"{torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
@@ -910,8 +913,8 @@ class Tracking6D:
             trans_quats = coefficients_list[epoch]
             trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 7, 7))
 
-            row_translation = trans_quats[None, :, :, :3]
-            row_quaternion = trans_quats[:, :, 3:]
+            row_translation = trans_quats[:, :3]
+            row_quaternion = trans_quats[:, 3:]
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
 
             inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
@@ -938,8 +941,8 @@ class Tracking6D:
                 self.best_model["losses"] = losses_all
                 self.best_model["value"] = joint_loss
 
-                self.encoder.translation_offsets[0, 0, keyframes, :] = encoder_result.translations[0, 0, :, :].detach()
-                self.encoder.quaternion_offsets[0, keyframes, :] = encoder_result.quaternions[0, :].detach()
+                self.encoder.translation_offsets[keyframes] = encoder_result.translations.detach()
+                self.encoder.quaternion_offsets[keyframes] = encoder_result.quaternions.detach()
 
                 self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
