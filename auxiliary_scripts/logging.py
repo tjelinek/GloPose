@@ -1697,9 +1697,9 @@ class WriteResults:
         fig.subplots_adjust(left=0.25, right=0.85, hspace=0.5)
 
         # Current rotation and translation values
-        translation_tensors = [t[0, 0, -1].detach().cpu() for t in logged_sgd_translations]
+        translation_tensors = [t[-1].detach().cpu() for t in logged_sgd_translations]
         rotation_tensors = [
-            torch.rad2deg(quaternion_to_axis_angle(q.detach().cpu()))[0, -1]
+            torch.rad2deg(quaternion_to_axis_angle(q.detach().cpu()))[-1]
             for q in logged_sgd_quaternions
         ]
 
