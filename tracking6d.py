@@ -392,7 +392,10 @@ class Tracking6D:
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
         self.data_graph.get_frame_data(0).gt_translation = self.gt_translations[0]
 
-        # TODO for camera in self.cameras
+        initial_predicted_quat = Quaternion.from_axis_angle(self.gt_rotations[[0]])
+        initial_predicted_Se3 = Se3(initial_predicted_quat, self.gt_translations[[0]])
+        self.data_graph.get_frame_data(0).predicted_object_se3_total = initial_predicted_Se3
+
         template_frame_observation = self.tracker.next(0)
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
