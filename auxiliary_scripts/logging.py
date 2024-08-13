@@ -750,6 +750,16 @@ class WriteResults:
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
 
+            if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits[Cameras.FRONTVIEW]:
+                template_idx = len(self.logged_flow_tracks_inits[Cameras.FRONTVIEW])
+
+                template = icosphere_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
+
+                self.logged_flow_tracks_inits[Cameras.FRONTVIEW].append(icosphere_node.keyframe_idx_observed)
+                template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
+                                                  f'{template_idx}')
+                rr.log(template_image_grid_annotation, rr.Image(template))
+
             node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
             node_cam_se3 = camera_Se3_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
             node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
@@ -1954,15 +1964,6 @@ class WriteResults:
                     if self.tracking_config.write_to_rerun_rather_than_disk:
                         rr.set_time_sequence("frame", target_frame)
                         rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
-                        template_idx = len(self.logged_flow_tracks_inits[view])
-
-                        not_logged_templates = set(flow_tracks_inits) - set(self.logged_flow_tracks_inits[view])
-
-                        if source_frame in not_logged_templates:
-                            self.logged_flow_tracks_inits[view].append(source_frame)
-                            template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
-                                                              f'{template_idx}')
-                            rr.log(template_image_grid_annotation, rr.Image(template))
 
                 target_frame_image = target_frame_observation.observed_image.cpu()
                 target_frame_segment = target_frame_observation.observed_segmentation.cpu()
