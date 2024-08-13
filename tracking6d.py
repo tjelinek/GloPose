@@ -389,6 +389,8 @@ class Tracking6D:
                                           cameras=self.used_cameras)
 
         self.data_graph.add_new_frame(0)
+        self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
+        self.data_graph.get_frame_data(0).gt_translation = self.gt_translations[0]
 
         # TODO for camera in self.cameras
         template_frame_observation = self.tracker.next(0)
