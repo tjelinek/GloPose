@@ -686,13 +686,7 @@ class Tracking6D:
         self.best_model["losses"] = None
         iters_without_change = 0
 
-        # rotation_quaternion = angle_axis_to_quaternion(self.gt_rotations, order=QuaternionCoeffOrder.WXYZ)
-        # self.encoder.quaternion_offsets = rotation_quaternion.clone()
-        # self.encoder.translation_offsets = self.gt_translations.clone()
-
-        no_improvements = 0
         epoch = 0
-        loss_improvement_threshold = 1e-4
 
         # First inference just to log the results
         with torch.no_grad():
