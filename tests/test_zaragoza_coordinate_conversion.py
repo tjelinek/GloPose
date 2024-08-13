@@ -7,6 +7,7 @@ from kornia.geometry import Quaternion, axis_angle_to_rotation_matrix, rotation_
 
 from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam
 from dataset_generators import scenarios
+from dataset_generators.track_augmentation import modify_rotations
 from flow import flow_unit_coords_to_image_coords, source_to_target_coords_world_coord_system
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
@@ -19,7 +20,7 @@ sequence_len = 2
 config = TrackerConfig()
 config.camera_up = (0, 1, 0)
 config.camera_position = (-6, 5.18, 10)
-config.input_frames = sequence_len
+config.input_frames = sequence_len * 2
 
 path = Path('./prototypes/sphere.obj')
 mesh = kaolin.io.obj.import_mesh(str(path), with_materials=True)
@@ -41,6 +42,12 @@ gt_translation = torch.from_numpy(np.asarray(scenario_t.translations)).cuda()[:s
 gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
+
+if config.augment_gt_track or True:
+    gt_rotation, gt_translation = modify_rotations(gt_rotation, gt_translation)
+
+config.rot_init = tuple(gt_rotation[0].numpy(force=True))
+config.tran_init = tuple(gt_translation[0].numpy(force=True))
 
 gt_encoder = Encoder(config, ivertices, iface_features, w, h, 3).cuda()
 gt_encoder.set_encoder_poses(gt_rotation, gt_translation)
