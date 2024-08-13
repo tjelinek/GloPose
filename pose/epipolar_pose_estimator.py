@@ -139,12 +139,6 @@ class EpipolarPoseEstimator:
         quat_cam = Quaternion.from_matrix(R_cam)
         Se3_cam = Se3(quat_cam, t_cam.squeeze()[None])
 
-        R_obj, t_obj = Rt_obj_from_epipolar_Rt_cam(R_cam, t_cam[None], W_4x4)
-        t_obj = t_obj[..., 0] * 0.  # Shape (1, 3, 1) -> (1, 3)
-
-        quat_obj = Quaternion.from_matrix(R_obj)
-        Se3_obj = Se3(quat_obj, t_obj)
-
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
         outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
         inlier_src_pts = src_pts_yx[common_inlier_indices]
@@ -181,7 +175,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return Se3_obj
+        return Se3_cam
 
     def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 

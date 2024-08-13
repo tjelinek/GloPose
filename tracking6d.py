@@ -8,7 +8,7 @@ import numpy as np
 import time
 import torch
 from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import So3, Quaternion, Se3
+from kornia.geometry import Quaternion, Se3
 from kornia.geometry.conversions import quaternion_to_axis_angle
 from pathlib import Path
 
@@ -24,7 +24,8 @@ from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import (consecutive_quaternions_angular_difference,
                                           get_object_pose_after_in_plane_rot_in_cam_space,
-                                          quaternion_minimal_angular_difference)
+                                          quaternion_minimal_angular_difference, Se3_epipolar_cam_from_Se3_obj,
+                                          Se3_obj_from_epipolar_Se3_cam)
 from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider,
                                              MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider)
 from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
@@ -833,17 +834,18 @@ class Tracking6D:
         flow_short_jump_observations: FlowObservation = (self.data_graph.get_edge_observations(*flow_arc_short_jump).
                                                          observed_flow).cuda()
 
-        Se3_obj_short_jump = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_short_jump_observations,
+        Se3_cam_short_jump = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_short_jump_observations,
                                                                                            flow_arc_short_jump)
 
-        Se3_obj_long_jump = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_long_jump_observations,
+        Se3_cam_long_jump = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_long_jump_observations,
                                                                                           flow_arc_long_jump)
 
-        unique_flow_tracks_inits = set(self.flow_tracks_inits)
-        last_long_jump = list(sorted(unique_flow_tracks_inits))[-1] if len(unique_flow_tracks_inits) > 1 else 0
-        last_long_jump_se3 = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
+        Se3_world_to_cam_1st_frame = Se3.from_matrix(self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1))
 
-        Se3_obj_chained_long_jump = last_long_jump_se3 * Se3_obj_long_jump
+        Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
+        Se3_cam_reference_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_reference_frame, Se3_world_to_cam_1st_frame)
+
+        Se3_world_to_cam_ref_frame = Se3_world_to_cam_1st_frame * Se3_cam_reference_frame
 
         # Se3_obj_chained_short_jumps = Se3.identity(batch_size=1, device='cuda')
         # for i in range(last_long_jump, frame_i-1):
