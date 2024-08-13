@@ -31,13 +31,13 @@ h = 564
 w = 300
 scenario = scenarios.generate_rotations_xyz(10.0)
 scenario_t = scenarios.generate_xyz_translation(36)
-gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[None, :sequence_len].cuda()# * 0
-gt_rotation[..., 0] *= 2.
+gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[:sequence_len].cuda()# * 0
+gt_rotation[..., 0] *= -2.
 gt_rotation[..., 1] *= 1.
-gt_rotation[..., 2] *= 0.5
+gt_rotation[..., 2] *= -0.5
 
 # gt_translation = torch.zeros(1, 1, sequence_len, 3).cuda()
-gt_translation = torch.from_numpy(np.asarray(scenario_t.translations)).cuda()[None, None, :sequence_len].to(torch.float32) * 0
+gt_translation = torch.from_numpy(np.asarray(scenario_t.translations)).cuda()[:sequence_len].to(torch.float32) * 0
 gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
@@ -49,15 +49,15 @@ rendering = RenderingKaolin(config, faces, w, h).cuda()
 W_4x4 = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
 flow_observation = rendering.render_flow_for_frame(gt_encoder, 0, 1)
-segmentation = erode_segment_mask2(7, flow_observation.rendered_flow_segmentation[0])[None]
+segmentation = erode_segment_mask2(7, flow_observation.observed_flow_segmentation[0])[None]
 
 src_pts_yx, observed_visible_fg_points_mask = (
-    get_not_occluded_foreground_points(flow_observation.rendered_flow_occlusion,
+    get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
                                        segmentation,
                                        config.occlusion_coef_threshold,
                                        config.segmentation_mask_threshold))
 
-flow = flow_unit_coords_to_image_coords(flow_observation.theoretical_flow)
+flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
 
 dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
 
