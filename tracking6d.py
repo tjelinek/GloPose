@@ -841,7 +841,7 @@ class Tracking6D:
 
         unique_flow_tracks_inits = set(self.flow_tracks_inits)
         last_long_jump = list(sorted(unique_flow_tracks_inits))[-1] if len(unique_flow_tracks_inits) > 1 else 0
-        last_long_jump_se3 = self.data_graph.get_frame_data(last_long_jump).predicted_object_se3_total
+        last_long_jump_se3 = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
 
         Se3_obj_chained_long_jump = last_long_jump_se3 * Se3_obj_long_jump
 
