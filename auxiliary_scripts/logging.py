@@ -680,7 +680,7 @@ class WriteResults:
                 )
             )
 
-        all_frames_from_0 = range(1, frame_i+1)
+        all_frames_from_0 = range(0, frame_i+1)
         n_poses = len(all_frames_from_0)
 
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
