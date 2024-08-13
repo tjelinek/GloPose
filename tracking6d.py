@@ -218,8 +218,8 @@ class Tracking6D:
 
         if not self.config.optimize_pose:
             if self.gt_rotations is not None and self.gt_translations is not None:
-                assert self.gt_rotations.shape == torch.Size(self.config.input_frames, 3)
-                assert self.gt_translations.shape == torch.Size(self.config.input_frames, 3)
+                assert self.gt_rotations.shape == torch.Size((self.config.input_frames, 3))
+                assert self.gt_translations.shape == torch.Size((self.config.input_frames, 3))
                 self.encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
 
                 # Do not optimize the poses
