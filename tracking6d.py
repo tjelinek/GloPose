@@ -99,6 +99,12 @@ class Tracking6D:
         self.long_flow_provider: Optional[MFTFlowProvider] = None
 
         # Ground truth related
+        assert torch.all(gt_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
+        assert torch.all(gt_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
+
+        config.rot_init = tuple(gt_rotations[0].numpy(force=True))
+        config.tran_init = tuple(gt_translations[0].numpy(force=True))
+
         self.gt_rotations: Optional[torch.Tensor] = gt_rotations
         self.gt_translations: Optional[torch.Tensor] = gt_translations
 
