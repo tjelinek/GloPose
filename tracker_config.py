@@ -58,8 +58,8 @@ class TrackerConfig:
     translation_learning_rate_coef: float = 1.0
 
     # Tracking settings
-    tran_init: Tuple[float] = (0., 0., 0.)
-    rot_init: Tuple[float] = (0, 0, 0)
+    tran_init: Tuple[float] = None  # (0., 0., 0.)
+    rot_init: Tuple[float] = None   # (0., 0., 0.)
     iterations: int = 100
     stop_value: float = 0.05
     rgb_iters: int = 10
