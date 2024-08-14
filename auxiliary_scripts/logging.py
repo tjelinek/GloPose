@@ -1400,9 +1400,6 @@ class WriteResults:
         ax_loss.legend(loc='upper left')
 
     def log_poses_into_rerun(self, frame_i: int):
-        frame_indices = sorted(self.data_graph.G.nodes)[1:]
-
-        # Rerun
         rr.set_time_sequence("frame", frame_i)
 
         data_graph_node = self.data_graph.get_frame_data(frame_i)
@@ -1420,27 +1417,31 @@ class WriteResults:
             rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}'), rr.Scalar(pred_obj_translation[axis]))
             rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}_gt'), rr.Scalar(gt_obj_translation[axis]))
 
-    def read_poses_from_datagraph(self, frame_indices):
+    def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rotations = []
         translations = []
         gt_rotations = []
         gt_translations = []
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
+
             last_quaternion = frame_data.predicted_object_se3_total.quaternion.q
-            last_rotation = torch.rad2deg(quaternion_to_axis_angle(last_quaternion)[0]).numpy(force=True)
-            last_translation = frame_data.predicted_object_se3_total.translation[0].numpy(force=True)
+            last_rotation = torch.rad2deg(quaternion_to_axis_angle(last_quaternion).squeeze())
+            last_translation = frame_data.predicted_object_se3_total.translation.squeeze()
+
             rotations.append(last_rotation)
             translations.append(last_translation)
 
-            gt_rotation = np.rad2deg(frame_data.gt_rot_axis_angle.squeeze().numpy(force=True))
-            gt_translation = frame_data.gt_translation.squeeze().numpy(force=True)
+            gt_rotation = torch.rad2deg(frame_data.gt_rot_axis_angle.squeeze())
+            gt_translation = frame_data.gt_translation.squeeze()
             gt_rotations.append(gt_rotation)
             gt_translations.append(gt_translation)
-        rotations = np.array(rotations)
-        translations = np.array(translations)
-        gt_rotations = ((np.array(gt_rotations) - 180) % 360) - 180
-        gt_translations = np.array(gt_translations)
+
+        rotations = torch.stack(rotations)
+        translations = torch.stack(translations)
+        gt_rotations = ((torch.stack(gt_rotations) - 180) % 360) - 180
+        gt_translations = torch.stack(gt_translations)
+
         return gt_rotations, gt_translations, rotations, translations
 
     @staticmethod
