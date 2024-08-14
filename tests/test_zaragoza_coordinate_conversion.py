@@ -44,7 +44,7 @@ gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
-source_frame = 0
+source_frame = 5
 target_frame = 10
 
 if config.augment_gt_track or True:
@@ -96,7 +96,7 @@ gt_encoder.set_encoder_poses(gt_rotation, gt_translation)
 
 rendering = RenderingKaolin(config, faces, w, h).cuda()
 
-###############################################################
+
 T_world_to_cam = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 Se3_world_to_cam_1st_frame = Se3.from_matrix(T_world_to_cam)
 
@@ -105,20 +105,20 @@ Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
 
 Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
 
-################################################################
+rot_cam_ref_to_last, t_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 
-rot_cam_ref_to_last, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
+# Convert predicted camera rotation to SE(3) object
+quat_cam = Quaternion.from_axis_angle(rot_cam_ref_to_last[None])
+Se3_cam_ref_to_last = Se3(quat_cam, t_cam_ref_to_last[None, ..., 0])
 
-R_cam = axis_angle_to_rotation_matrix(rot_cam_ref_to_last[None])
-quat_cam = Quaternion.from_matrix(R_cam)
-Se3_cam_ref_to_last = Se3(quat_cam, t_cam[None, ..., 0])
+Se3_obj_ref_to_last_pred = get_rot_obj_from_reference(Se3_world_to_cam_1st_frame, Se3_obj_gt[[source_frame]], Se3_cam_ref_to_last)
 
-Se3_obj = get_rot_obj_from_reference(Se3_world_to_cam_1st_frame, Se3_obj_gt[[source_frame]], Se3_cam_ref_to_last)
-
-rot_obj_ref_to_last = rotation_matrix_to_axis_angle(Se3_obj.quaternion.matrix()).squeeze()
-t_obj = Se3_obj.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
+rot_obj_ref_to_last_pred = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_pred.quaternion.matrix()).squeeze()
+t_obj_ref_to_last_pred = Se3_obj_ref_to_last_pred.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
 
 rot_obj_ref_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.matrix()).squeeze()
+
+
 
 print('----------------------------------------')
 # print(f'T_world_to_cam\n{T_world_to_cam}')
@@ -126,8 +126,8 @@ print('----------------------------------------')
 # print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
 print(f'Rot cam pred: {torch.rad2deg(rot_cam_ref_to_last).numpy(force=True).round(3)}')
 # print(f'Rot cam gt: {torch.rad2deg(rot_cam_gt).numpy(force=True).round(3)}')
-print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last_pred).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
-print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last).numpy(force=True).round(3)}')
-print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_1st_to_last).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_1st_to_last_gt).numpy(force=True).round(3)}')
 print('----------------------------------------')
