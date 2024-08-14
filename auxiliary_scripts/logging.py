@@ -86,7 +86,6 @@ class RerunAnnotations:
     matching_correspondences_inliers: str = '/epipolar/matching/correspondences_inliers'
     matching_correspondences_outliers: str = '/epipolar/matching/correspondences_outliers'
 
-    ransac_stats_old: str = '/epipolar/ransac_stats_img'
     ransac_stats_frontview: str = '/epipolar/ransac_stats_frontview'
     ransac_stats_frontview_visible: str = '/epipolar/ransac_stats_frontview/visible'
     ransac_stats_frontview_predicted_as_visible: str = '/epipolar/ransac_stats_frontview/predicted_as_visible'
@@ -284,22 +283,6 @@ class WriteResults:
                                                ),
                         ],
                         name='Epipolar'
-                    ),
-                    rrb.Vertical(
-                        contents=[
-                            rrb.Spatial2DView(name="RANSAC Stats",
-                                              origin=RerunAnnotations.ransac_stats_old),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.Spatial2DView(name=f"Template {i}",
-                                                      origin=f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}')
-                                    for i in range(27)
-                                ],
-                                grid_columns=9,
-                                name='Templates'
-                            ),
-                        ],
-                        name='Epipolar (old)'
                     ),
                 ],
                 name=f'Results - {self.tracking_config.sequence}'
@@ -603,8 +586,6 @@ class WriteResults:
                                           for it in encoder_result])
         if self.tracking_config.save_3d_model:
             self.save_3d_model(frame_i, tex, best_model, detached_result)
-
-        self.visualize_logged_metrics(plot_losses=False)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             self.log_poses_into_rerun(frame_i)
@@ -928,52 +909,6 @@ class WriteResults:
 
         if frame_i % 10 == 0:
             return
-        fig_axs: Tuple[Any, Any] = plt.subplots(2, 3, figsize=(20, 10))
-        fig, axs = fig_axs
-
-        axs[0, 0].set_title('Front View')
-        axs[0, 1].set_title('Back View')
-        axs[0, 2].set_title('Template Front')
-        axs[1, 2].set_title('Template Back')
-
-        for ax in [axs[0, 2], axs[1, 2]]:
-            ax.xaxis.set_visible(False)
-            ax.yaxis.set_visible(False)
-
-        for ax in [axs[0, 0], axs[0, 1]]:
-            step = 1 if frame_i < 30 else 5
-            x_ticks = np.arange(1, frame_i + 1, step)
-            x_labels = np.arange(1, frame_i + 1, step)
-
-            ax.set_xticks(x_ticks)
-            ax.set_xticklabels(x_labels)
-
-            ax.set_yticks(np.arange(0., 1.05, 0.1))
-            ax.set_ylim([0, 1.05])
-
-        colors = {'visible': 'darkgreen',
-                  'predicted_as_visible': 'lime',
-                  'correctly_predicted_flows': 'yellow',
-                  'ransac_predicted_inliers': 'navy',
-                  'correctly_predicted_inliers': 'blue',
-                  'model_obtained_from': None,  # Not plotted
-                  'ransac_inlier_ratio': 'deeppink',
-                  }
-
-        self.visualize_logged_metrics(rotation_ax=axs[1, 0],
-                                      translation_ax=axs[1, 1], plot_losses=False)
-
-        previous_value = flow_tracks_inits[0]
-        for i, value in enumerate(flow_tracks_inits):
-            order = self.logged_flow_tracks_inits[Cameras.FRONTVIEW].index(value)
-            if value != previous_value or i == 0:
-                axs[1, 0].axvline(x=i+1, color='red', linestyle='--')
-                axs[1, 0].text(i+1, axs[1, 0].get_ylim()[0], f'Template {order}', rotation=-60,
-                               verticalalignment='top', horizontalalignment='center')
-                previous_value = value
-
-        template_axes = {Cameras.FRONTVIEW: (0, 2), Cameras.BACKVIEW: (1, 2)}
-        ransac_stats_axes = {Cameras.FRONTVIEW: (0, 0), Cameras.BACKVIEW: (0, 1)}
 
         for camera in self.cameras:
             ransac_stats = self.measure_ransac_stats(frame_i, camera)
@@ -981,8 +916,6 @@ class WriteResults:
             ransac_stats.pop('mft_flow_gt_flow_difference')
 
             # We want each line to have its assigned color
-            assert sorted(colors.keys()) == sorted(ransac_stats.keys())
-
             for i, metric in enumerate(ransac_stats.keys()):
                 if metric == 'model_obtained_from':
                     continue
@@ -992,47 +925,6 @@ class WriteResults:
                 rr.set_time_sequence("frame", frame_i)
                 metric_val: float = ransac_stats[metric][-1]
                 rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
-
-            template_image_idx = flow_tracks_inits[-1]
-            template_image = self.data_graph.get_camera_specific_frame_data(template_image_idx,
-                                                                            camera).frame_observation.observed_image
-            template_image = template_image[0, 0].permute(1, 2, 0).numpy(force=True)
-            axs[template_axes[camera]].imshow(template_image, aspect='equal')
-
-            handles, labels = [], []
-
-            for i, metric in enumerate(ransac_stats.keys()):
-                xs = np.arange(1, frame_i + 1)
-
-                color = colors[metric]
-                if metric == 'model_obtained_from':
-                    continue
-                if metric == 'ransac_inlier_ratio':
-                    line, = axs[ransac_stats_axes[camera]].plot(xs, ransac_stats[metric], label=metric,
-                                                                linestyle='dashed', color=color)
-                else:
-                    line, = axs[ransac_stats_axes[camera]].plot(xs, ransac_stats[metric], label=metric, color=color)
-
-                if ransac_stats_axes[camera] == axs[0, 0]:
-                    handles.append(line)
-                    labels.append(metric)
-
-            if len(self.cameras) > 2:
-                ylim = axs[ransac_stats_axes[camera]].get_ylim()
-                for i, is_foreground in enumerate(ransac_stats['model_obtained_from']):
-                    if not is_foreground:
-                        axs[ransac_stats_axes[camera]].fill_betweenx(ylim, i + 0.5, i + 1.5, color='yellow', alpha=0.3)
-
-            axs[ransac_stats_axes[camera]].set_xlabel('Frame')
-            axs[ransac_stats_axes[camera]].set_ylabel('Percentage')
-
-            fig.legend(handles, labels, loc='upper left')
-
-            plt.subplots_adjust(right=0.8)  # Adjust the right margin to make space for the legend
-            plt.tight_layout(rect=(0.13, 0, 1, 1))
-
-        fig_path = self.ransac_path / 'ransac_stats.svg'
-        self.log_pyplot(frame_i, fig, fig_path, RerunAnnotations.ransac_stats_old)
 
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
@@ -1463,79 +1355,6 @@ class WriteResults:
             rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][axis]))
             rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'),
                    rr.Scalar(gt_translations[-1][axis]))
-
-    def visualize_logged_metrics(self, rotation_ax=None, translation_ax=None, plot_losses=True):
-
-        using_own_axes = False
-        fig = None
-        if rotation_ax is None and translation_ax is None:
-            using_own_axes = True
-            fig, axs = plt.subplots(2, 1, figsize=(12, 15))
-            fig.subplots_adjust(hspace=0.4)
-            rotation_ax, translation_ax = axs
-
-        frame_indices = sorted(self.data_graph.G.nodes)[1:]
-        losses = [self.data_graph.get_frame_data(frame).frame_losses for frame in frame_indices]
-
-        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(frame_indices)
-
-        # Plot Rotation
-        colors = ['yellow', 'green', 'blue']
-        ticks = list(frame_indices) if len(list(frame_indices)) < 30 else list(frame_indices)[::5]
-
-        def plot_motion(ax, frame_indices_, data, gt_data, labels, title, ylabel):
-            if ax is not None:
-                ax.set_xticks(ticks)
-                i = 0
-                for i, axis_label in enumerate(labels):
-                    ax.plot(frame_indices_, data[:, i], label=f'{axis_label}', color=colors[i])
-                    ax.plot(frame_indices_, gt_data[:, i], '--', label=f'GT {axis_label}', alpha=0.5, color=colors[i])
-                ax.set_title(title)
-                ax.set_xlabel('Frame Index')
-                ax.set_ylabel(ylabel)
-                if len(data[:, i]) > 36:
-                    ax.legend(loc='lower left', fontsize='small')
-                else:
-                    ax.legend(loc='upper left', fontsize='small')
-
-        flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
-            else self.tracking_config.long_flow_model
-
-        min_data = min(rotations.min(), gt_rotations.min())
-        max_data = max(gt_rotations.max(), gt_rotations.max())
-
-        yticks_frequency = 20 if (max_data - min_data) / 20 <= 20 else 30
-
-        lower_bound = yticks_frequency * np.floor(min_data / yticks_frequency)
-        upper_bound = yticks_frequency * np.ceil(max_data / yticks_frequency)
-
-        yticks = np.arange(lower_bound, upper_bound + yticks_frequency, yticks_frequency)
-        rotation_ax.set_yticks(yticks)
-
-        plot_motion(rotation_ax, frame_indices, rotations, gt_rotations,
-                    ['X-axis Rotation', 'Y-axis Rotation', 'Z-axis Rotation'],
-                    f'Rotation per Frame {flow_source_text}', 'Rotation')
-
-        plot_motion(translation_ax, frame_indices, translations, gt_translations,
-                    ['X-axis Translation', 'Y-axis Translation', 'Z-axis Translation'],
-                    f'Translation per Frame {flow_source_text}', 'Translation')
-
-        if plot_losses is True:
-            if rotation_ax is not None:
-                self.add_loss_plot(rotation_ax, losses, indices=frame_indices)
-            if translation_ax is not None:
-                self.add_loss_plot(translation_ax, losses, indices=frame_indices)
-
-        (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
-        fig_path = Path(self.write_folder) / Path('rotations_by_epoch') / f'pose_per_frame.svg'
-        if using_own_axes:
-            if fig is None:
-                raise ValueError("Variable 'fig' is None. This should not have happened as it is set if"
-                                 "no axes are provided and in this case, this code should not have been called.")
-
-            self.log_pyplot(max(frame_indices), fig, fig_path, RerunAnnotations.pose_per_frame)
-            plt.savefig(fig_path)
-            plt.close()
 
     def read_poses_from_datagraph(self, frame_indices):
         rotations = []
