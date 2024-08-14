@@ -356,10 +356,15 @@ class WriteResults:
                                getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}'),
                                getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}')]
 
-        # rr.log(RerunAnnotations.observed_image_segmentation_frontview,
-        #        rr.AnnotationContext([(1, "white", (255, 255, 255))]), timeless=True)
-        # rr.log(RerunAnnotations.template_image_segmentation_backview,
-        #        rr.AnnotationContext([(1, "white", (255, 255, 255))]), timeless=True)
+                for rerun_annotation in annotations:
+                    rr.log(rerun_annotation, rr.SeriesLine(color=c, name=rerun_annotation), timeless=True)
+
+            for axis, c in gt_axes_colors.items():
+                annotations = [getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}_gt'),
+                               getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}_gt'),
+                               getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}_gt')]
+                for rerun_annotation in annotations:
+                    rr.log(rerun_annotation, rr.SeriesLine(color=c, name=rerun_annotation), timeless=True)
 
         rr.send_blueprint(blueprint)
 
