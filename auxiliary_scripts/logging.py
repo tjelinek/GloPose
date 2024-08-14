@@ -1344,17 +1344,23 @@ class WriteResults:
     def log_poses_into_rerun(self, frame_i: int):
         frame_indices = sorted(self.data_graph.G.nodes)[1:]
 
-        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(frame_indices)
-
         # Rerun
         rr.set_time_sequence("frame", frame_i)
 
+        data_graph_node = self.data_graph.get_frame_data(frame_i)
+
+        gt_obj_rotation = torch.rad2deg(data_graph_node.gt_rot_axis_angle).cpu().squeeze()
+        pred_obj_quaternion = data_graph_node.predicted_object_se3_total.quaternion.q
+        pred_obj_rotation = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
+
+        gt_obj_translation = data_graph_node.gt_translation.cpu().squeeze()
+        pred_obj_translation = data_graph_node.predicted_object_se3_total.translation.cpu().squeeze()
+
         for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(rotations[-1][axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_rotations[-1][axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(translations[-1][axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'),
-                   rr.Scalar(gt_translations[-1][axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(pred_obj_rotation[axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_obj_rotation[axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(pred_obj_translation[axis]))
+            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'), rr.Scalar(gt_obj_translation[axis]))
 
     def read_poses_from_datagraph(self, frame_indices):
         rotations = []
