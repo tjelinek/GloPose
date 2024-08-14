@@ -97,21 +97,53 @@ class RerunAnnotations:
     ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
 
     # Pose
-    pose_rotation: str = '/pose/rotation'
-    pose_rotation_x: str = '/pose/rotation/x_axis'
-    pose_rotation_x_gt: str = '/pose/rotation/x_axis_gt'
-    pose_rotation_y: str = '/pose/rotation/y_axis'
-    pose_rotation_y_gt: str = '/pose/rotation/y_axis_gt'
-    pose_rotation_z: str = '/pose/rotation/z_axis'
-    pose_rotation_z_gt: str = '/pose/rotation/z_axis_gt'
+    obj_rot_1st_to_last: str = '/pose/rotation'
+    obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
+    obj_rot_1st_to_last_x_gt: str = '/pose/rotation/x_axis_gt'
+    obj_rot_1st_to_last_y: str = '/pose/rotation/y_axis'
+    obj_rot_1st_to_last_y_gt: str = '/pose/rotation/y_axis_gt'
+    obj_rot_1st_to_last_z: str = '/pose/rotation/z_axis'
+    obj_rot_1st_to_last_z_gt: str = '/pose/rotation/z_axis_gt'
 
-    pose_translation: str = '/pose/translation'
-    pose_translation_x: str = '/pose/translation/x_axis'
-    pose_translation_x_gt: str = '/pose/translation/x_axis_gt'
-    pose_translation_y: str = '/pose/translation/y_axis'
-    pose_translation_y_gt: str = '/pose/translation/y_axis_gt'
-    pose_translation_z: str = '/pose/translation/z_axis'
-    pose_translation_z_gt: str = '/pose/translation/z_axis_gt'
+    obj_tran_1st_to_last: str = '/pose/translation'
+    obj_tran_1st_to_last_x: str = '/pose/translation/x_axis'
+    obj_tran_1st_to_last_x_gt: str = '/pose/translation/x_axis_gt'
+    obj_tran_1st_to_last_y: str = '/pose/translation/y_axis'
+    obj_tran_1st_to_last_y_gt: str = '/pose/translation/y_axis_gt'
+    obj_tran_1st_to_last_z: str = '/pose/translation/z_axis'
+    obj_tran_1st_to_last_z_gt: str = '/pose/translation/z_axis_gt'
+
+    camera_rot_ref_to_last: str = '/pose/camera_rot_ref_to_last'
+    camera_rot_ref_to_last_x: str = '/pose/camera_rot_ref_to_last/x_axis'
+    camera_rot_ref_to_last_x_gt: str = '/pose/camera_rot_ref_to_last/x_axis_gt'
+    camera_rot_ref_to_last_y: str = '/pose/camera_rot_ref_to_last/y_axis'
+    camera_rot_ref_to_last_y_gt: str = '/pose/camera_rot_ref_to_last/y_axis_gt'
+    camera_rot_ref_to_last_z: str = '/pose/camera_rot_ref_to_last/z_axis'
+    camera_rot_ref_to_last_z_gt: str = '/pose/camera_rot_ref_to_last/z_axis_gt'
+
+    camera_tran_ref_to_last: str = '/pose/camera_tran_ref_to_last'
+    camera_tran_ref_to_last_x: str = '/pose/camera_tran_ref_to_last/x_axis'
+    camera_tran_ref_to_last_x_gt: str = '/pose/camera_tran_ref_to_last/x_axis_gt'
+    camera_tran_ref_to_last_y: str = '/pose/camera_tran_ref_to_last/y_axis'
+    camera_tran_ref_to_last_y_gt: str = '/pose/camera_tran_ref_to_last/y_axis_gt'
+    camera_tran_ref_to_last_z: str = '/pose/camera_tran_ref_to_last/z_axis'
+    camera_tran_ref_to_last_z_gt: str = '/pose/camera_tran_ref_to_last/z_axis_gt'
+
+    obj_rot_ref_to_last: str = '/pose/obj_rot_ref_to_last'
+    obj_rot_ref_to_last_x: str = '/pose/obj_rot_ref_to_last/x_axis'
+    obj_rot_ref_to_last_x_gt: str = '/pose/obj_rot_ref_to_last/x_axis_gt'
+    obj_rot_ref_to_last_y: str = '/pose/obj_rot_ref_to_last/y_axis'
+    obj_rot_ref_to_last_y_gt: str = '/pose/obj_rot_ref_to_last/y_axis_gt'
+    obj_rot_ref_to_last_z: str = '/pose/obj_rot_ref_to_last/z_axis'
+    obj_rot_ref_to_last_z_gt: str = '/pose/obj_rot_ref_to_last/z_axis_gt'
+
+    obj_tran_ref_to_last: str = '/pose/obj_tran_ref_to_last'
+    obj_tran_ref_to_last_x: str = '/pose/obj_tran_ref_to_last/x_axis'
+    obj_tran_ref_to_last_x_gt: str = '/pose/obj_tran_ref_to_last/x_axis_gt'
+    obj_tran_ref_to_last_y: str = '/pose/obj_tran_ref_to_last/y_axis'
+    obj_tran_ref_to_last_y_gt: str = '/pose/obj_tran_ref_to_last/y_axis_gt'
+    obj_tran_ref_to_last_z: str = '/pose/obj_tran_ref_to_last/z_axis'
+    obj_tran_ref_to_last_z_gt: str = '/pose/obj_tran_ref_to_last/z_axis_gt'
 
     # Pose
     pose_per_frame: str = '/pose/pose_per_frame'
@@ -276,30 +308,53 @@ class WriteResults:
                                                origin=RerunAnnotations.ransac_stats_backview
                                                ),
                             rrb.TimeSeriesView(name="Pose - Rotation",
-                                               origin=RerunAnnotations.pose_rotation
+                                               origin=RerunAnnotations.obj_rot_1st_to_last
                                                ),
                             rrb.TimeSeriesView(name="Pose - Translation",
-                                               origin=RerunAnnotations.pose_translation
+                                               origin=RerunAnnotations.obj_tran_1st_to_last
                                                ),
                         ],
                         name='Epipolar'
+                    ),
+                    rrb.Grid(
+                        contents=[
+                            rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
+                                               origin=RerunAnnotations.camera_rot_ref_to_last
+                                               ),
+                            rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
+                                               origin=RerunAnnotations.camera_tran_ref_to_last
+                                               ),
+                            rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
+                                               origin=RerunAnnotations.obj_rot_ref_to_last
+                                               ),
+                            rrb.TimeSeriesView(name="Object Translation Ref -> Last",
+                                               origin=RerunAnnotations.obj_tran_ref_to_last
+                                               ),
+                        ],
+                        name='Pose'
                     ),
                 ],
                 name=f'Results - {self.tracking_config.sequence}'
             )
         )
-        rr.log(RerunAnnotations.pose_rotation_x,
-               rr.SeriesLine(color=(0, 127, 0), name=RerunAnnotations.pose_rotation_x), timeless=True)
-        rr.log(RerunAnnotations.pose_rotation_y,
-               rr.SeriesLine(color=(0, 51, 102), name=RerunAnnotations.pose_rotation_y), timeless=True)
-        rr.log(RerunAnnotations.pose_rotation_z,
-               rr.SeriesLine(color=(102, 0, 102), name=RerunAnnotations.pose_rotation_z), timeless=True)
-        rr.log(RerunAnnotations.pose_rotation_x_gt,
-               rr.SeriesLine(color=(0, 255, 0), name=RerunAnnotations.pose_rotation_x_gt), timeless=True)
-        rr.log(RerunAnnotations.pose_rotation_y_gt,
-               rr.SeriesLine(color=(102, 178, 255), name=RerunAnnotations.pose_rotation_y_gt), timeless=True)
-        rr.log(RerunAnnotations.pose_rotation_z_gt,
-               rr.SeriesLine(color=(255, 155, 255), name=RerunAnnotations.pose_rotation_z_gt), timeless=True)
+
+        axes_colors = {
+            'x': (0, 127, 0),
+            'y': (0, 51, 102),
+            'z': (102, 0, 102),
+        }
+
+        gt_axes_colors = {
+            'x': (0, 255, 0),
+            'y': (102, 178, 255),
+            'z': (255, 155, 255),
+        }
+
+        for movement_type in ['rot', 'tran']:
+            for axis, c in axes_colors.items():
+                annotations = [getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}'),
+                               getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}'),
+                               getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}')]
 
         # rr.log(RerunAnnotations.observed_image_segmentation_frontview,
         #        rr.AnnotationContext([(1, "white", (255, 255, 255))]), timeless=True)
@@ -1355,10 +1410,10 @@ class WriteResults:
         pred_obj_translation = data_graph_node.predicted_object_se3_total.translation.cpu().squeeze()
 
         for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}'), rr.Scalar(pred_obj_rotation[axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_rotation_{axis_label}_gt'), rr.Scalar(gt_obj_rotation[axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}'), rr.Scalar(pred_obj_translation[axis]))
-            rr.log(getattr(RerunAnnotations, f'pose_translation_{axis_label}_gt'), rr.Scalar(gt_obj_translation[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'), rr.Scalar(pred_obj_rotation[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}_gt'), rr.Scalar(gt_obj_rotation[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}'), rr.Scalar(pred_obj_translation[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}_gt'), rr.Scalar(gt_obj_translation[axis]))
 
     def read_poses_from_datagraph(self, frame_indices):
         rotations = []
