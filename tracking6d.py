@@ -776,7 +776,6 @@ class Tracking6D:
                                             flow_arcs, 'deep_features')
         encoder_result, loss_result, renders, rendered_flow_result = infer_result
 
-        data_graph_frame_data = self.data_graph.get_camera_specific_frame_data(frame_index)
         data_graph_common_frame_data = self.data_graph.get_frame_data(frame_index)
 
         data_graph_common_frame_data.frame_losses = frame_losses
@@ -784,8 +783,6 @@ class Tracking6D:
 
         self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
                                          stacked_flow_observations, stacked_observations)
-
-        replace(data_graph_frame_data, renders=renders, per_pixel_flow_error=loss_result.per_pixel_flow_loss)
 
     def infer_model_and_log_results(self, flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
                                     stacked_flow_observations, stacked_observations):

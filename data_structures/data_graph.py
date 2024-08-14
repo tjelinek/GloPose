@@ -30,8 +30,6 @@ class CommonFrameData:
 class CameraSpecificFrameData:
 
     frame_observation: FrameObservation = None
-    renders: Any = None
-    per_pixel_flow_error: Any = None
 
     gt_pose_cam: Se3 = None
     predicted_pose_cam: Se3 = None
