@@ -633,17 +633,16 @@ class Tracking6D:
                 assert (flow_source_frame == self.flow_tracks_inits[-1] and
                         flow_target_frame == max(self.active_keyframes.keyframes))
 
-                flow_provider = self.long_flow_provider
+                if self.long_flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
+                    self.long_flow_provider.init(template_image)
+                    self.long_flow_provider.need_to_init = False
 
-                if flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
-                    flow_provider.init(template_image)
-                    flow_provider.need_to_init = False
-
-                observed_flow, occlusion, uncertainty = flow_provider.next_flow(template_image, target_image)
+                observed_flow, occlusion, uncertainty = self.long_flow_provider.next_flow(template_image, target_image)
 
             elif mode == 'short':
                 if isinstance(self.short_flow_model, MFTFlowProvider):
                     self.short_flow_model.init(template_image)
+                    self.short_flow_model.need_to_init = False
                 observed_flow, occlusion, uncertainty = self.short_flow_model.next_flow(template_image,
                                                                                         target_image)
             else:
