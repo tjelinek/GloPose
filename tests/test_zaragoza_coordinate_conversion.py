@@ -70,6 +70,24 @@ def get_rot_obj_from_reference(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_
     return Se3_obj_ref_to_last_
 
 
+def predict_camera_pose_using_zaragoza(source_frame_, target_frame_, config_, rendering_):
+    flow_observation = rendering_.render_flow_for_frame(gt_encoder, source_frame_, target_frame_)
+    segmentation = erode_segment_mask2(7, flow_observation.observed_flow_segmentation[0])[None]
+    src_pts_yx, observed_visible_fg_points_mask = (
+        get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
+                                           segmentation,
+                                           config_.occlusion_coef_threshold,
+                                           config_.segmentation_mask_threshold))
+    flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
+    dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
+    src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
+    dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
+    K1 = rendering_.camera_intrinsics
+    rot_cam_, t_cam_ = estimate_pose_zaragoza(src_pts_xy, dst_pts_xy, K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
+
+    return rot_cam_, t_cam_
+
+
 quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
 Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
 
@@ -83,25 +101,7 @@ gt_encoder.set_encoder_poses(gt_rotation, gt_translation)
 
 rendering = RenderingKaolin(config, faces, w, h).cuda()
 
-flow_observation = rendering.render_flow_for_frame(gt_encoder, source_frame, target_frame)
-segmentation = erode_segment_mask2(7, flow_observation.observed_flow_segmentation[0])[None]
-
-src_pts_yx, observed_visible_fg_points_mask = (
-    get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
-                                       segmentation,
-                                       config.occlusion_coef_threshold,
-                                       config.segmentation_mask_threshold))
-
-flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
-
-dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
-
-src_pts_xy = tensor_index_to_coordinates_xy(src_pts_yx)
-dst_pts_xy = tensor_index_to_coordinates_xy(dst_pts_yx)
-
-K1 = rendering.camera_intrinsics
-
-rot_cam, t_cam = estimate_pose_zaragoza(src_pts_xy, dst_pts_xy, K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
+rot_cam, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 
 T_world_to_cam = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 Se3_world_to_cam_1st_frame = Se3.from_matrix(T_world_to_cam)
