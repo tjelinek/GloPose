@@ -44,8 +44,8 @@ gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
-source_frame = 10
-target_frame = 20
+source_frame = 0
+target_frame = 10
 
 if config.augment_gt_track or True:
     gt_rotation, gt_translation = modify_rotations(gt_rotation, gt_translation)
@@ -88,11 +88,6 @@ def predict_camera_pose_using_zaragoza(source_frame_, target_frame_, config_, re
     return rot_cam_, t_cam_
 
 
-quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
-Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
-
-Se3_delta_obj_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
-
 config.rot_init = tuple(gt_rotation[0].numpy(force=True))
 config.tran_init = tuple(gt_translation[0].numpy(force=True))
 
@@ -101,10 +96,18 @@ gt_encoder.set_encoder_poses(gt_rotation, gt_translation)
 
 rendering = RenderingKaolin(config, faces, w, h).cuda()
 
-rot_cam, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
-
+###############################################################
 T_world_to_cam = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 Se3_world_to_cam_1st_frame = Se3.from_matrix(T_world_to_cam)
+
+quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
+Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
+
+Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
+
+################################################################
+
+rot_cam, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 
 R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 quat_cam = Quaternion.from_matrix(R_cam)
@@ -115,7 +118,7 @@ Se3_obj = get_rot_obj_from_reference(Se3_world_to_cam_1st_frame, Se3_obj_gt[[sou
 rot_obj = rotation_matrix_to_axis_angle(Se3_obj.quaternion.matrix()).squeeze()
 t_obj = Se3_obj.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
 
-gt_obj_rot_delta = rotation_matrix_to_axis_angle(Se3_delta_obj_gt.quaternion.matrix()).squeeze()
+gt_obj_rot_delta = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.matrix()).squeeze()
 
 print('----------------------------------------')
 print(f'T_world_to_cam\n{T_world_to_cam}')
