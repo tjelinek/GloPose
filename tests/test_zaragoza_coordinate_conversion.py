@@ -65,7 +65,7 @@ def get_rot_obj_from_reference(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_
 
     Se3_world_to_cam_ref_frame_ = get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_, Se3_obj_1st_to_ref_)
 
-    Se3_obj_ref_to_last_ = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last_, Se3_world_to_cam_ref_frame_)
+    Se3_obj_ref_to_last_ = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last_, Se3_world_to_cam_1st_frame_)
 
     return Se3_obj_ref_to_last_
 
@@ -107,24 +107,27 @@ Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]]
 
 ################################################################
 
-rot_cam, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
+rot_cam_ref_to_last, t_cam = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 
-R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
+R_cam = axis_angle_to_rotation_matrix(rot_cam_ref_to_last[None])
 quat_cam = Quaternion.from_matrix(R_cam)
 Se3_cam_ref_to_last = Se3(quat_cam, t_cam[None, ..., 0])
 
 Se3_obj = get_rot_obj_from_reference(Se3_world_to_cam_1st_frame, Se3_obj_gt[[source_frame]], Se3_cam_ref_to_last)
 
-rot_obj = rotation_matrix_to_axis_angle(Se3_obj.quaternion.matrix()).squeeze()
+rot_obj_ref_to_last = rotation_matrix_to_axis_angle(Se3_obj.quaternion.matrix()).squeeze()
 t_obj = Se3_obj.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
 
-gt_obj_rot_delta = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.matrix()).squeeze()
+rot_obj_ref_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.matrix()).squeeze()
 
 print('----------------------------------------')
-print(f'T_world_to_cam\n{T_world_to_cam}')
-print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
-print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
-print(f'Rot cam: {torch.rad2deg(rot_cam).numpy(force=True).round(3)}')
-print(f'Rot obj pred: {torch.rad2deg(rot_obj).numpy(force=True).round(3)}')
-print(f'Rot obj   gt: {torch.rad2deg(gt_obj_rot_delta).numpy(force=True).round(3)}')
+# print(f'T_world_to_cam\n{T_world_to_cam}')
+# print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
+# print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
+print(f'Rot cam pred: {torch.rad2deg(rot_cam_ref_to_last).numpy(force=True).round(3)}')
+# print(f'Rot cam gt: {torch.rad2deg(rot_cam_gt).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last).numpy(force=True).round(3)}')
+print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
 print('----------------------------------------')
