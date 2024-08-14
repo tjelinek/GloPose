@@ -113,21 +113,21 @@ class RerunAnnotations:
     obj_tran_1st_to_last_z: str = '/pose/translation/z_axis'
     obj_tran_1st_to_last_z_gt: str = '/pose/translation/z_axis_gt'
 
-    camera_rot_ref_to_last: str = '/pose/camera_rot_ref_to_last'
-    camera_rot_ref_to_last_x: str = '/pose/camera_rot_ref_to_last/x_axis'
-    camera_rot_ref_to_last_x_gt: str = '/pose/camera_rot_ref_to_last/x_axis_gt'
-    camera_rot_ref_to_last_y: str = '/pose/camera_rot_ref_to_last/y_axis'
-    camera_rot_ref_to_last_y_gt: str = '/pose/camera_rot_ref_to_last/y_axis_gt'
-    camera_rot_ref_to_last_z: str = '/pose/camera_rot_ref_to_last/z_axis'
-    camera_rot_ref_to_last_z_gt: str = '/pose/camera_rot_ref_to_last/z_axis_gt'
+    cam_rot_ref_to_last: str = '/pose/cam_rot_ref_to_last'
+    cam_rot_ref_to_last_x: str = '/pose/cam_rot_ref_to_last/x_axis'
+    cam_rot_ref_to_last_x_gt: str = '/pose/cam_rot_ref_to_last/x_axis_gt'
+    cam_rot_ref_to_last_y: str = '/pose/cam_rot_ref_to_last/y_axis'
+    cam_rot_ref_to_last_y_gt: str = '/pose/cam_rot_ref_to_last/y_axis_gt'
+    cam_rot_ref_to_last_z: str = '/pose/cam_rot_ref_to_last/z_axis'
+    cam_rot_ref_to_last_z_gt: str = '/pose/cam_rot_ref_to_last/z_axis_gt'
 
-    camera_tran_ref_to_last: str = '/pose/camera_tran_ref_to_last'
-    camera_tran_ref_to_last_x: str = '/pose/camera_tran_ref_to_last/x_axis'
-    camera_tran_ref_to_last_x_gt: str = '/pose/camera_tran_ref_to_last/x_axis_gt'
-    camera_tran_ref_to_last_y: str = '/pose/camera_tran_ref_to_last/y_axis'
-    camera_tran_ref_to_last_y_gt: str = '/pose/camera_tran_ref_to_last/y_axis_gt'
-    camera_tran_ref_to_last_z: str = '/pose/camera_tran_ref_to_last/z_axis'
-    camera_tran_ref_to_last_z_gt: str = '/pose/camera_tran_ref_to_last/z_axis_gt'
+    cam_tran_ref_to_last: str = '/pose/cam_tran_ref_to_last'
+    cam_tran_ref_to_last_x: str = '/pose/cam_tran_ref_to_last/x_axis'
+    cam_tran_ref_to_last_x_gt: str = '/pose/cam_tran_ref_to_last/x_axis_gt'
+    cam_tran_ref_to_last_y: str = '/pose/cam_tran_ref_to_last/y_axis'
+    cam_tran_ref_to_last_y_gt: str = '/pose/cam_tran_ref_to_last/y_axis_gt'
+    cam_tran_ref_to_last_z: str = '/pose/cam_tran_ref_to_last/z_axis'
+    cam_tran_ref_to_last_z_gt: str = '/pose/cam_tran_ref_to_last/z_axis_gt'
 
     obj_rot_ref_to_last: str = '/pose/obj_rot_ref_to_last'
     obj_rot_ref_to_last_x: str = '/pose/obj_rot_ref_to_last/x_axis'
@@ -319,10 +319,10 @@ class WriteResults:
                     rrb.Grid(
                         contents=[
                             rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
-                                               origin=RerunAnnotations.camera_rot_ref_to_last
+                                               origin=RerunAnnotations.cam_rot_ref_to_last
                                                ),
                             rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
-                                               origin=RerunAnnotations.camera_tran_ref_to_last
+                                               origin=RerunAnnotations.cam_tran_ref_to_last
                                                ),
                             rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
                                                origin=RerunAnnotations.obj_rot_ref_to_last
