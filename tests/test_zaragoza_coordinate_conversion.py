@@ -52,6 +52,24 @@ if config.augment_gt_track or True:
     gt_rotation = gt_rotation[:sequence_len]
     gt_translation = gt_translation[:sequence_len]
 
+
+def get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3) -> Se3:
+    Se3_cam_1st_to_ref_ = Se3_epipolar_cam_from_Se3_obj(Se3_obj_1st_to_ref_, Se3_world_to_cam_1st_frame_)
+    Se3_world_to_cam_ref_frame_ = Se3_world_to_cam_1st_frame_ * Se3_cam_1st_to_ref_
+
+    return Se3_world_to_cam_ref_frame_
+
+
+def get_rot_obj_from_reference(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3, Se3_cam_ref_to_last_: Se3) \
+        -> Se3:
+
+    Se3_world_to_cam_ref_frame_ = get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_, Se3_obj_1st_to_ref_)
+
+    Se3_obj_ref_to_last_ = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last_, Se3_world_to_cam_ref_frame_)
+
+    return Se3_obj_ref_to_last_
+
+
 quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
 Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
 
@@ -88,16 +106,11 @@ rot_cam, t_cam = estimate_pose_zaragoza(src_pts_xy, dst_pts_xy, K1[0, 0], K1[1, 
 T_world_to_cam = rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 Se3_world_to_cam_1st_frame = Se3.from_matrix(T_world_to_cam)
 
-Se3_cam_1st_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_gt[[source_frame]], Se3_world_to_cam_1st_frame)
-Se3_world_to_cam_ref_frame = Se3_world_to_cam_1st_frame * Se3_cam_1st_frame
-
-Se3_delta_cam_gt = Se3_epipolar_cam_from_Se3_obj(Se3_delta_obj_gt, Se3_world_to_cam_ref_frame)
-
 R_cam = axis_angle_to_rotation_matrix(rot_cam[None])
 quat_cam = Quaternion.from_matrix(R_cam)
-Se3_cam = Se3(quat_cam, t_cam[None, ..., 0])
+Se3_cam_ref_to_last = Se3(quat_cam, t_cam[None, ..., 0])
 
-Se3_obj = Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam_1st_frame)
+Se3_obj = get_rot_obj_from_reference(Se3_world_to_cam_1st_frame, Se3_obj_gt[[source_frame]], Se3_cam_ref_to_last)
 
 rot_obj = rotation_matrix_to_axis_angle(Se3_obj.quaternion.matrix()).squeeze()
 t_obj = Se3_obj.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
