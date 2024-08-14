@@ -1403,19 +1403,35 @@ class WriteResults:
         rr.set_time_sequence("frame", frame_i)
 
         data_graph_node = self.data_graph.get_frame_data(frame_i)
+        camera_specific_graph_node = self.data_graph.get_camera_specific_frame_data(frame_i)
 
-        gt_obj_rotation = torch.rad2deg(data_graph_node.gt_rot_axis_angle).cpu().squeeze()
         pred_obj_quaternion = data_graph_node.predicted_object_se3_total.quaternion.q
-        pred_obj_rotation = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
+        obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
+        obj_rot_1st_to_last_gt = torch.rad2deg(data_graph_node.gt_rot_axis_angle).cpu().squeeze()
 
-        gt_obj_translation = data_graph_node.gt_translation.cpu().squeeze()
-        pred_obj_translation = data_graph_node.predicted_object_se3_total.translation.cpu().squeeze()
+        obj_tran_1st_to_last = data_graph_node.predicted_object_se3_total.translation.cpu().squeeze()
+        obj_tran_1st_to_last_gt = data_graph_node.gt_translation.cpu().squeeze()
 
-        for axis, axis_label in zip(range(3), ['x', 'y', 'z']):
-            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'), rr.Scalar(pred_obj_rotation[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}_gt'), rr.Scalar(gt_obj_rotation[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}'), rr.Scalar(pred_obj_translation[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}_gt'), rr.Scalar(gt_obj_translation[axis]))
+        pred_obj_quat_ref_to_last = camera_specific_graph_node.predicted_obj_delta_se3.quaternion.q
+        pred_cam_quat_ref_to_last = camera_specific_graph_node.predicted_cam_delta_se3.quaternion.q
+
+        pred_obj_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quat_ref_to_last)).cpu().squeeze()
+        pred_cam_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_cam_quat_ref_to_last)).cpu().squeeze()
+
+        for axis, axis_label in enumerate(['x', 'y', 'z']):
+            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'),
+                   rr.Scalar(obj_rot_1st_to_last[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}_gt'),
+                   rr.Scalar(obj_rot_1st_to_last_gt[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}'),
+                   rr.Scalar(obj_tran_1st_to_last[axis]))
+            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}_gt'),
+                   rr.Scalar(obj_tran_1st_to_last_gt[axis]))
+
+            rr.log(getattr(RerunAnnotations, f'obj_rot_ref_to_last_{axis_label}'),
+                   rr.Scalar(pred_obj_rot_ref_to_last[axis]))
+            rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}'),
+                   rr.Scalar(pred_cam_rot_ref_to_last[axis]))
 
     def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rotations = []

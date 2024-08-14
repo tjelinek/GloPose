@@ -878,12 +878,17 @@ class Tracking6D:
         self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
 
         datagraph_node = self.data_graph.get_frame_data(frame_i)
+        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
+
         datagraph_short_edge = self.data_graph.get_edge_observations(*flow_arc_short_jump)
         datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
 
         datagraph_node.predicted_object_se3_total = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_target]]
         datagraph_short_edge.predicted_cam_delta_se3 = Se3_cam_short_jump
         datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
+
+        datagraph_camera_node.predicted_obj_delta_se3 = Se3_obj_long_jump
+        datagraph_camera_node.predicted_cam_delta_se3 = Se3_cam_long_jump
 
         print(
             f"Frame {flow_long_jump_target} offset: "
@@ -893,8 +898,7 @@ class Tracking6D:
             f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_long_jump.quaternion.data)).numpy(force=True).round(2)}")
         print(
             f"Frame {flow_long_jump_target} new_of: "
-            f"{torch.rad2deg(quaternion_to_axis_angle(new_obj_quaternion)).numpy(force=True).round(2)}")
-
+            f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q)).numpy(force=True).round(2)}")
     def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
                                        flow_frames, keyframes, flow_arcs):
         loss_coefs_names = [
