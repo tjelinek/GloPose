@@ -669,10 +669,8 @@ class WriteResults:
         T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam.repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
-        gt_rotations_rad = torch.deg2rad(torch.from_numpy(gt_rotations)).cuda()
-        rotations_rad = torch.deg2rad(torch.from_numpy(rotations)).cuda()
-        gt_translations = torch.from_numpy(gt_translations).cuda()
-        translations = torch.from_numpy(translations).cuda()
+        gt_rotations_rad = torch.deg2rad(gt_rotations)
+        rotations_rad = torch.deg2rad(rotations)
 
         gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
         pred_obj_se3 = Se3(Quaternion.from_axis_angle(rotations_rad), translations)
