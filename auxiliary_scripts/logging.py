@@ -702,9 +702,8 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i+1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
-        T_world_to_cam_se3 = Se3.from_matrix(T_world_to_cam)
-        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam.repeat(n_poses, 1, 1))
+        T_world_to_cam_se3 = self.rendering.camera_transformation_matrix_Se3()
+        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
         gt_rotations_rad = torch.deg2rad(gt_rotations)
