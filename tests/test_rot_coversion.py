@@ -36,6 +36,13 @@ for camera_up_idx in range(3):
 
     Se3_obj_gt = Se3(Quaternion.from_axis_angle(gt_rotation), gt_translation)
 
+    if True:  # Really rough test
+        jump = 3
+        matrices = []
+        for i, j in zip(range(-jump, sequence_len - jump), range(0, sequence_len)):
+            matrices.append((Se3_obj_gt[[min(0, i - jump)]].inverse() * Se3_obj_gt[[j]]).matrix())
+        Se3_obj_gt = Se3.from_matrix(torch.cat(matrices, dim=0))
+
     camera_up = torch.tensor([0, 0, 0]).to(torch.float).unsqueeze(0)
     camera_up[:, camera_up_idx] = 1
     camera_translation = torch.tensor([4.0, -2.0, 5.0]).to(torch.float).unsqueeze(0)
@@ -51,11 +58,11 @@ for camera_up_idx in range(3):
     obj_R = axis_angle_to_rotation_matrix(gt_rotation)
 
     Se3_cam = Se3_epipolar_cam_from_Se3_obj(Se3_obj_gt, Se3_world_to_cam)
-    t_cam = Se3_cam.translation.squeeze(-1)
+    t_cam = Se3_cam.translation
     r_cam = rotation_matrix_to_axis_angle(Se3_cam.quaternion.matrix())
 
     Se3_obj_prime = Se3_obj_from_epipolar_Se3_cam(Se3_cam, Se3_world_to_cam)
-    t_obj_prime = Se3_obj_prime.translation.squeeze(-1)
+    t_obj_prime = Se3_obj_prime.translation
     r_obj_prime = rotation_matrix_to_axis_angle(Se3_obj_prime.quaternion.matrix())
 
 
