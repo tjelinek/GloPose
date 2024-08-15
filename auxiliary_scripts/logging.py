@@ -723,7 +723,7 @@ class WriteResults:
             normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
 
             vertex_texcoords = gt_mesh.visual.uv
-            vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
+            # vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
             initial_object_t = gt_obj_se3[0].translation.numpy(force=True)
             initial_object_quat = gt_obj_se3.quaternion.q[0, [1, 2, 3, 0]].numpy(force=True)
@@ -756,12 +756,14 @@ class WriteResults:
         rr.log(
             RerunAnnotations.space_predicted_camera_pose,
             rr.Transform3D(translation=pred_t_cam[-1],
-                           rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]))
+                           rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]),
+                           )
         )
         rr.log(
             RerunAnnotations.space_gt_camera_pose,
             rr.Transform3D(translation=gt_t_cam[-1],
-                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]))
+                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]),
+                           )
         )
 
         cmap_gt = plt.get_cmap('Greens')

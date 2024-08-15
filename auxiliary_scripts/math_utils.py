@@ -71,7 +71,7 @@ def camera_T_world_from_T_obj(T_obj, T_world_to_cam):
 
 
 def camera_Se3_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> Se3:
-    Se3_cam = Se3_obj.inverse() * Se3_world_to_cam.inverse()
+    Se3_cam = Se3_world_to_cam * Se3_epipolar_cam_from_Se3_obj(Se3_obj, Se3_world_to_cam)
 
     return Se3_cam
 
@@ -83,7 +83,7 @@ def get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st
     return Se3_world_to_cam_ref_frame_
 
 
-def get_rot_obj_from_reference(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3, Se3_cam_ref_to_last_: Se3) \
+def Se3_obj_from_reference_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3, Se3_cam_ref_to_last_: Se3) \
         -> Se3:
 
     Se3_world_to_cam_ref_frame_ = get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_, Se3_obj_1st_to_ref_)
