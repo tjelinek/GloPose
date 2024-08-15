@@ -698,28 +698,6 @@ class WriteResults:
             return
 
         rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
-        if (frame_i == 1 and self.tracking_config.gt_mesh_path is not None
-                and self.tracking_config.gt_texture_path is not None):
-            gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
-                                      self.tracking_config.texture_size)
-            gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
-
-            gt_mesh = load_mesh_using_trimesh(Path(self.tracking_config.gt_mesh_path))
-
-            normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
-
-            vertex_texcoords = gt_mesh.visual.uv
-            vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
-
-            rr.log(
-                RerunAnnotations.space_gt_mesh,
-                rr.Mesh3D(
-                    indices=gt_mesh.faces,
-                    albedo_texture=gt_texture_int,
-                    vertex_texcoords=vertex_texcoords,
-                    vertex_positions=normalized_vertices
-                )
-            )
 
         all_frames_from_0 = range(0, frame_i+1)
         n_poses = len(all_frames_from_0)
@@ -734,6 +712,37 @@ class WriteResults:
 
         gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
         pred_obj_se3 = Se3(Quaternion.from_axis_angle(rotations_rad), translations)
+
+        if (frame_i == 1 and self.tracking_config.gt_mesh_path is not None
+                and self.tracking_config.gt_texture_path is not None):
+            gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
+                                      self.tracking_config.texture_size)
+            gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
+
+            gt_mesh = load_mesh_using_trimesh(Path(self.tracking_config.gt_mesh_path))
+
+            normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
+
+            vertex_texcoords = gt_mesh.visual.uv
+            vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
+
+            initial_object_t = gt_obj_se3[0].translation.numpy(force=True)
+            initial_object_quat = gt_obj_se3.quaternion.q[0, [1, 2, 3, 0]].numpy(force=True)
+            # rr.log(
+            #     RerunAnnotations.space_gt_mesh,
+            #     rr.Transform3D(translation=initial_object_t,
+            #                    rotation=rr.Quaternion(xyzw=initial_object_quat))
+            # )
+
+            rr.log(
+                RerunAnnotations.space_gt_mesh,
+                rr.Mesh3D(
+                    indices=gt_mesh.faces,
+                    albedo_texture=gt_texture_int,
+                    vertex_texcoords=vertex_texcoords,
+                    vertex_positions=normalized_vertices
+                )
+            )
 
         gt_cam_se3 = camera_Se3_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
         pred_cam_se3 = camera_Se3_world_from_Se3_obj(pred_obj_se3, T_world_to_cam_se3_batched)
@@ -1455,7 +1464,7 @@ class WriteResults:
 
         rotations = torch.stack(rotations)
         translations = torch.stack(translations)
-        gt_rotations = ((torch.stack(gt_rotations) - 180) % 360) - 180
+        gt_rotations = torch.stack(gt_rotations)
         gt_translations = torch.stack(gt_translations)
 
         return gt_rotations, gt_translations, rotations, translations
