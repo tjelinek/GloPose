@@ -5,6 +5,7 @@ import kaolin
 import torch
 import torch.nn as nn
 from kaolin.render.camera import PinholeIntrinsics
+from kornia.geometry import Se3
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
 from data_structures.keyframe_buffer import SyntheticFlowObservation
@@ -372,6 +373,9 @@ class RenderingKaolin(nn.Module):
         T_world_to_cam_4x4 = homogenize_3x4_transformation_matrix(T_world_to_cam_4x3.permute(0, 2, 1))
 
         return T_world_to_cam_4x4
+
+    def camera_transformation_matrix_Se3(self):
+        return Se3.from_matrix(self.camera_transformation_matrix_4x4())
 
     @staticmethod
     def rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
