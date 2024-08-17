@@ -69,7 +69,10 @@ def predict_camera_pose_using_zaragoza(source_frame_, target_frame_, config_, re
     K1 = rendering_.camera_intrinsics
     rot_cam_, t_cam_ = estimate_pose_zaragoza(src_pts_xy, dst_pts_xy, K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2])
 
-    return rot_cam_, t_cam_
+    quat_cam_ = Quaternion.from_axis_angle(rot_cam_[None])
+    Se3_cam_ = Se3(quat_cam_, t_cam_[None, ..., 0])
+
+    return Se3_cam_
 
 
 config.rot_init = tuple(gt_rotation[0].numpy(force=True))
@@ -99,11 +102,8 @@ Se3_obj_ref_to_last_gt2 = compose_transformations(inverse_transformation(Se3_obj
 print(Se3_obj_ref_to_last_gt.matrix())
 print(Se3_obj_ref_to_last_gt2)
 
-rot_cam_ref_to_last, t_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
-
-# Convert predicted camera rotation to SE(3) object
-quat_cam = Quaternion.from_axis_angle(rot_cam_ref_to_last[None])
-Se3_cam_ref_to_last = Se3(quat_cam, t_cam_ref_to_last[None, ..., 0])
+Se3_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
+Se3_cam_first_to_ref = predict_camera_pose_using_zaragoza(0, source_frame, config, rendering)
 
 
 def get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3) -> Se3:
