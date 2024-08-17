@@ -21,7 +21,8 @@ from utils import normalize_vertices, get_not_occluded_foreground_points, erode_
 sequence_len = 30
 config = TrackerConfig()
 config.camera_up = (0, 1, 0)
-config.camera_position = (0, 0, 5)
+# config.camera_position = (0, 0, 5)
+config.camera_position = (-6, 5.18, 10)
 config.input_frames = sequence_len
 
 path = Path('./prototypes/sphere.obj')
@@ -47,7 +48,7 @@ gt_translation[..., 2] *= 0.5
 
 first_frame = 0
 source_frame = 10
-target_frame = 11
+target_frame = 15
 
 if config.augment_gt_track or True:
     gt_rotation, gt_translation = modify_rotations(gt_rotation, gt_translation)
@@ -107,7 +108,7 @@ camera_pose_ref_check = camera_Se3_world_from_Se3_obj(Se3_obj_gt[[source_frame]]
 
 def get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3) -> Se3:
     Se3_cam_1st_to_ref_ = Se3_epipolar_cam_from_Se3_obj(Se3_obj_1st_to_ref_, Se3_world_to_cam_1st_frame_)
-    Se3_world_to_cam_ref_frame_ = (Se3_world_to_cam_1st_frame_.inverse() * Se3_cam_1st_to_ref_).inverse()
+    Se3_world_to_cam_ref_frame_ = (Se3_world_to_cam_1st_frame_ * Se3_obj_1st_to_ref_).inverse()  # Todo unsure about this
 
     return Se3_world_to_cam_ref_frame_
 
