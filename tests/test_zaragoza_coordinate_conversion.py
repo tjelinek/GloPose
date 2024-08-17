@@ -136,12 +136,11 @@ Se3_obj_1st_to_last_gt = Se3_obj_gt[[target_frame]]
 rot_obj_1st_to_last_pred = rotation_matrix_to_axis_angle(Se3_obj_1st_to_last_pred.quaternion.matrix()).squeeze()
 rot_obj_1st_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_1st_to_last_gt.quaternion.matrix()).squeeze()
 
-
 print('----------------------------------------')
 # print(f'T_world_to_cam\n{T_world_to_cam}')
 # print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
 # print(f'T obj  : {t_obj.squeeze().numpy(force=True).round(3)}')
-print(f'Rot cam pred: {torch.rad2deg(rot_cam_ref_to_last).numpy(force=True).round(3)}')
+# print(f'Rot cam pred: {torch.rad2deg(rot_cam_ref_to_last).numpy(force=True).round(3)}')
 # print(f'Rot cam gt: {torch.rad2deg(rot_cam_gt).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last_pred).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last  gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
