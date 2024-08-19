@@ -77,20 +77,18 @@ def camera_Se3_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> Se3:
 
 
 def get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3) -> Se3:
-    Se3_cam_1st_to_ref_ = Se3_epipolar_cam_from_Se3_obj(Se3_obj_1st_to_ref_, Se3_world_to_cam_1st_frame_)
-    Se3_world_to_cam_ref_frame_ = Se3_world_to_cam_1st_frame_ * Se3_cam_1st_to_ref_
+    Se3_world_to_cam_ref_frame_ = (Se3_world_to_cam_1st_frame_ * Se3_obj_1st_to_ref_).inverse()
 
     return Se3_world_to_cam_ref_frame_
 
 
 def Se3_obj_from_reference_frame(Se3_world_to_cam_1st_frame_: Se3, Se3_obj_1st_to_ref_: Se3, Se3_cam_ref_to_last_: Se3) \
         -> Se3:
-
     Se3_world_to_cam_ref_frame_ = get_camera_transform_for_frame(Se3_world_to_cam_1st_frame_, Se3_obj_1st_to_ref_)
-
     Se3_obj_ref_to_last_ = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last_, Se3_world_to_cam_ref_frame_)
 
     return Se3_obj_ref_to_last_
+
 
 def qmult(q1, q0):  # q0, then q1, you get q3
     w0, x0, y0, z0 = q0[0]
