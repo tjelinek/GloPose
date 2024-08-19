@@ -71,7 +71,7 @@ def camera_T_world_from_T_obj(T_obj, T_world_to_cam):
 
 
 def camera_Se3_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> Se3:
-    Se3_cam = Se3_world_to_cam * Se3_epipolar_cam_from_Se3_obj(Se3_obj, Se3_world_to_cam)
+    Se3_cam = Se3_obj * Se3_world_to_cam
 
     return Se3_cam
 
