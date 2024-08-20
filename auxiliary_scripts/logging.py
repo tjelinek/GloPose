@@ -38,7 +38,7 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index, normalize_vertices
-from auxiliary_scripts.math_utils import quaternion_angular_difference, camera_Se3_world_from_Se3_obj
+from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -723,15 +723,7 @@ class WriteResults:
             normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
 
             vertex_texcoords = gt_mesh.visual.uv
-            # vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
-
-            initial_object_t = gt_obj_se3[0].translation.numpy(force=True)
-            initial_object_quat = gt_obj_se3.quaternion.q[0, [1, 2, 3, 0]].numpy(force=True)
-            # rr.log(
-            #     RerunAnnotations.space_gt_mesh,
-            #     rr.Transform3D(translation=initial_object_t,
-            #                    rotation=rr.Quaternion(xyzw=initial_object_quat))
-            # )
+            vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
 
             rr.log(
                 RerunAnnotations.space_gt_mesh,
@@ -743,8 +735,8 @@ class WriteResults:
                 )
             )
 
-        gt_cam_se3 = camera_Se3_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
-        pred_cam_se3 = camera_Se3_world_from_Se3_obj(pred_obj_se3, T_world_to_cam_se3_batched)
+        gt_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
+        pred_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(pred_obj_se3, T_world_to_cam_se3_batched)
 
         q_cam_gt_xyzw = gt_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
         q_cam_xyzw = pred_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
@@ -789,7 +781,7 @@ class WriteResults:
         closest_node, _ = pose_icosphere.get_closest_reference(Quaternion(pred_obj_se3.quaternion.q[[-1]]))
 
         closest_node_Se3 = Se3(closest_node.quaternion, torch.zeros(1, 3).cuda())
-        closest_node_cam_se3 = camera_Se3_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
+        closest_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
 
         rr.log(RerunAnnotations.space_predicted_closest_keypoint,
                rr.LineStrips3D(strips=[[pred_cam_se3.translation[[-1]].squeeze().numpy(force=True),
@@ -810,7 +802,7 @@ class WriteResults:
                 rr.log(template_image_grid_annotation, rr.Image(template))
 
             node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
-            node_cam_se3 = camera_Se3_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
+            node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
             node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
 
             rr.log(
@@ -824,7 +816,7 @@ class WriteResults:
                 rr.Pinhole(
                     resolution=[self.image_width, self.image_height],
                     focal_length=[float(self.rendering.intrinsics.focal_x), float(self.rendering.intrinsics.focal_y)],
-                    camera_xyz=rr.ViewCoordinates.RUF,
+                    camera_xyz=rr.ViewCoordinates.RUB,
                 ),
             )
 

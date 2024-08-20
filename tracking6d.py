@@ -833,14 +833,10 @@ class Tracking6D:
         Se3_cam_long_jump = self.epipolar_pose_estimator.estimate_pose_using_optical_flow(flow_long_jump_observations,
                                                                                           flow_arc_long_jump)
 
-        Se3_world_to_cam_1st_frame = Se3.from_matrix(self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1))
-
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
-        Se3_cam_1st_frame_to_ref_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_reference_frame,
-                                                                       Se3_world_to_cam_1st_frame)
 
-        Se3_world_to_cam_ref_frame = Se3_world_to_cam_1st_frame * Se3_cam_1st_frame_to_ref_frame
-        Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam_ref_frame)
+        Se3_world_to_cam_1st_frame = self.rendering.camera_transformation_matrix_Se3()
+        Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam_1st_frame)
 
         Se3_obj_chained_long_jump = Se3_obj_reference_frame * Se3_obj_long_jump
 
