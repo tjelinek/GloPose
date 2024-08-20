@@ -838,7 +838,7 @@ class Tracking6D:
         Se3_world_to_cam_1st_frame = self.rendering.camera_transformation_matrix_Se3()
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam_1st_frame)
 
-        Se3_obj_chained_long_jump = Se3_obj_reference_frame * Se3_obj_long_jump
+        Se3_obj_chained_long_jump = Se3_obj_long_jump * Se3_obj_reference_frame
 
         # Se3_cam_chained_short_jumps = Se3.identity(batch_size=1, device='cuda')
         # for i in range(flow_long_jump_source, frame_i-1):
