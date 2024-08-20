@@ -83,7 +83,7 @@ gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
 first_frame = 0
-source_frame = 4
+source_frame = 6
 target_frame = 9
 
 # gt_rotation[target_frame] = torch.deg2rad(torch.Tensor([0., 30., 30.]).cuda())
@@ -134,7 +134,7 @@ translation_ref_to_last_gt = gt_translation[[target_frame]] - gt_translation[[so
 
 Se3_obj_ref_to_last_gt_prime = Se3(quat_ref_to_last_gt, translation_ref_to_last_gt)
 
-Se3_obj_ref_to_last_gt = Se3_obj_gt[[source_frame]].inverse() * Se3_obj_gt[[target_frame]]
+Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
 
 Se3_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 Se3_cam_first_to_ref = predict_camera_pose_using_zaragoza(0, source_frame, config, rendering)
