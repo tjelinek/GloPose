@@ -5,10 +5,8 @@ import numpy as np
 import torch
 from kornia.geometry import (Quaternion, rotation_matrix_to_axis_angle, Se3)
 
-from auxiliary_scripts.math_utils import (camera_Se3_world_from_Se3_obj, Se3_obj_from_reference_frame,
-                                          Se3_obj_from_epipolar_Se3_cam)
+from auxiliary_scripts.math_utils import (Se3_last_cam_to_world_from_Se3_obj, Se3_obj_from_epipolar_Se3_cam)
 from dataset_generators import scenarios
-from dataset_generators.track_augmentation import modify_rotations
 from flow import flow_unit_coords_to_image_coords, source_to_target_coords_world_coord_system
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
@@ -31,6 +29,44 @@ ivertices = normalize_vertices(mesh.vertices).numpy()
 faces = mesh.faces.numpy()
 iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 
+
+def modify_rotations(gt_rotations, gt_translations, seed=42):
+    """
+    Modify the given rotations in axis-angle representation.
+
+    :param gt_rotations: Tensor of shape [1, N, 3] representing axis-angle rotations
+    :param gt_translations: Tensor of shape [1, 1, N, 3] representing axis-angle rotations
+    :param seed: Random seed for reproducibility
+    :return: Modified rotations in axis-angle representation
+    """
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    gt_rotations = gt_rotations.repeat(2, 1)
+    gt_translations = gt_translations.repeat(2, 1)
+
+    # Extract the number of rotations
+    N, _ = gt_rotations.shape
+
+    # Extract y-dimension rotations
+    y_rotations = torch.tensor(np.cumsum(np.deg2rad(np.random.uniform(-8, -4, N))).astype(np.float32)).cuda()
+
+    # Generate x-dimension rotations (twice as fast)
+    # x_rotations = y_rotations * 0.05 * torch.sin(y_rotations * 5)
+    teeth = torch.deg2rad(torch.Tensor([5.])).repeat(N).cuda() * torch.Tensor([1., -1.]).repeat(N // 2).cuda()
+    teeth[0] = 0
+    x_rotations = torch.tensor(np.cumsum(np.deg2rad(np.random.uniform(-3, 6, N))).astype(np.float32)).cuda()
+
+    # Generate z-dimension rotations with random walk
+    z_rotations = torch.tensor(np.cumsum(np.deg2rad(np.random.uniform(-4, 2, N))).astype(np.float32)).cuda()
+    # z_rotations = torch.tensor(z_rotations).cuda()
+
+    # Combine the rotations into a new axis-angle tensor
+    modified_rotations = torch.stack([x_rotations, y_rotations, z_rotations], dim=-1)
+    modified_rotations = modified_rotations.cuda()  # Shape [N, 3]
+
+    return modified_rotations, gt_translations
+
 h = 564
 w = 300
 scenario = scenarios.generate_rotations_xyz(5.0)
@@ -47,12 +83,12 @@ gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
 first_frame = 0
-source_frame = 2
-target_frame = 5
+source_frame = 4
+target_frame = 9
 
 # gt_rotation[target_frame] = torch.deg2rad(torch.Tensor([0., 30., 30.]).cuda())
 
-if config.augment_gt_track or False:
+if config.augment_gt_track or True:
     gt_rotation, gt_translation = modify_rotations(gt_rotation, gt_translation)
     gt_rotation = gt_rotation[:sequence_len]
     gt_translation = gt_translation[:sequence_len]
@@ -104,10 +140,9 @@ Se3_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_fr
 Se3_cam_first_to_ref = predict_camera_pose_using_zaragoza(0, source_frame, config, rendering)
 Se3_cam_first_to_last = predict_camera_pose_using_zaragoza(0, target_frame, config, rendering)
 
-Se3_cam_ref_to_last_gt_unsure = camera_Se3_world_from_Se3_obj(Se3_obj_ref_to_last_gt, Se3_world_to_cam_1st_frame)
+Se3_cam_ref_to_last_gt_unsure = Se3_last_cam_to_world_from_Se3_obj(Se3_obj_ref_to_last_gt, Se3_world_to_cam_1st_frame)
 
-Se3_obj_ref_to_last_pred = Se3_obj_from_reference_frame(Se3_world_to_cam_1st_frame, Se3_obj_gt[[source_frame]],
-                                                        Se3_cam_ref_to_last)
+Se3_obj_ref_to_last_pred = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last, Se3_world_to_cam_1st_frame)
 
 rot_obj_ref_to_last_pred = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_pred.quaternion.matrix()).squeeze()
 t_obj_ref_to_last_pred = Se3_obj_ref_to_last_pred.translation.data.squeeze(-1)  # Shape (1, 3, 1) -> (1, 3)
@@ -122,7 +157,8 @@ rot_obj_1st_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_1st_to_last_gt.qu
 
 # TODO It is not clear why do I need to perform inverse but is works
 # Se3_obj_first_to_last_base = Se3_obj_from_epipolar_Se3_cam(Se3_cam_first_to_last, Se3_world_to_cam_1st_frame.inverse())
-Se3_obj_first_to_last_base = Se3_world_to_cam_1st_frame * Se3_cam_first_to_last * Se3_world_to_cam_1st_frame.inverse()
+# Se3_obj_first_to_last_base = Se3_world_to_cam_1st_frame * Se3_cam_first_to_last * Se3_world_to_cam_1st_frame.inverse()
+Se3_obj_first_to_last_base = Se3_world_to_cam_1st_frame.inverse() * Se3_cam_first_to_last * Se3_world_to_cam_1st_frame
 rot_obj_first_to_last_base = rotation_matrix_to_axis_angle(Se3_obj_first_to_last_base.quaternion.matrix()).squeeze()
 
 print('----------------------------------------')
