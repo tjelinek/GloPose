@@ -57,9 +57,12 @@ def main():
 
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
-        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_z(5).rotations, axis=0))
-        gt_rotations = torch.from_numpy(gt_rotations_np).unsqueeze(0).cuda().to(torch.float32)
-        gt_translations = torch.zeros_like(gt_rotations).unsqueeze(0)
+        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
+        gt_rotations = torch.from_numpy(gt_rotations_np).cuda().to(torch.float32)
+        gt_translations = torch.zeros_like(gt_rotations)
+
+        if config.augment_gt_track:
+            gt_rotations, gt_translations = modify_rotations(gt_rotations, gt_translations)
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
