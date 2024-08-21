@@ -1,4 +1,4 @@
-from configs.config_deep import TrackerConfig
+from configs.tracking.config_deep import TrackerConfig
 
 
 def get_config() -> TrackerConfig:
