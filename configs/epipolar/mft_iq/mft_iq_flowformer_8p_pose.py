@@ -1,4 +1,4 @@
-from configs.epipolar.config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_8point import TrackerConfig
+from configs.epipolar.ransacs.config_deep_with_flow_gt_esmatrix_frontview_backview_flownet_8point import TrackerConfig
 
 
 def get_config() -> TrackerConfig:
