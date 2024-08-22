@@ -1,7 +1,7 @@
 from dataclasses import dataclass, asdict, field
 
 import torch
-from kornia.geometry.conversions import axis_angle_to_quaternion
+from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle, quaternion_from_euler
 from typing import List
 
 import numpy as np
@@ -109,7 +109,7 @@ def generate_rotations_xyz(step=10.0) -> MovementScenario:
     return MovementScenario(rotations=rotations)
 
 
-def random_walk_on_a_sphere(n_steps=100, mean_x_step=5, mean_y_step=5, mean_z_step=5) -> MovementScenario:
+def random_walk_on_a_sphere(n_steps=200, mean_x_step=5, mean_y_step=5, mean_z_step=5) -> MovementScenario:
     rotations = torch.zeros((n_steps, 3))
 
     steps_thresholds = torch.tensor([0.5, 0.25, 0.75])
@@ -125,6 +125,10 @@ def random_walk_on_a_sphere(n_steps=100, mean_x_step=5, mean_y_step=5, mean_z_st
         steps *= directions.float()
 
         rotations[step] = rotations[step - 1] + steps
+
+    rotations = rotations.deg2rad_()
+    rotations = quaternion_to_axis_angle(torch.stack(quaternion_from_euler(rotations[:, 0], rotations[:, 1], rotations[:, 2]), dim=-1))
+    rotations.rad2deg_()
 
     return MovementScenario(rotations=rotations)
 
