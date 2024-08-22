@@ -1411,11 +1411,11 @@ class WriteResults:
         data_graph_node = self.data_graph.get_frame_data(frame_i)
         camera_specific_graph_node = self.data_graph.get_camera_specific_frame_data(frame_i)
 
-        pred_obj_quaternion = data_graph_node.predicted_object_se3_total.quaternion.q
+        pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
         obj_rot_1st_to_last_gt = torch.rad2deg(data_graph_node.gt_rot_axis_angle).cpu().squeeze()
 
-        obj_tran_1st_to_last = data_graph_node.predicted_object_se3_total.translation.cpu().squeeze()
+        obj_tran_1st_to_last = data_graph_node.predicted_object_se3_long_jump.translation.cpu().squeeze()
         obj_tran_1st_to_last_gt = data_graph_node.gt_translation.cpu().squeeze()
 
         pred_obj_quat_ref_to_last = camera_specific_graph_node.predicted_obj_delta_se3.quaternion.q
@@ -1449,9 +1449,9 @@ class WriteResults:
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
 
-            last_quaternion = frame_data.predicted_object_se3_total.quaternion.q
+            last_quaternion = frame_data.predicted_object_se3_long_jump.quaternion.q
             last_rotation = torch.rad2deg(quaternion_to_axis_angle(last_quaternion).squeeze())
-            last_translation = frame_data.predicted_object_se3_total.translation.squeeze()
+            last_translation = frame_data.predicted_object_se3_long_jump.translation.squeeze()
 
             rotations.append(last_rotation)
             translations.append(last_translation)

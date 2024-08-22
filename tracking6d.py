@@ -389,7 +389,7 @@ class Tracking6D:
 
         initial_predicted_quat = Quaternion.from_axis_angle(self.gt_rotations[[0]])
         initial_predicted_Se3 = Se3(initial_predicted_quat, self.gt_translations[[0]])
-        self.data_graph.get_frame_data(0).predicted_object_se3_total = initial_predicted_Se3
+        self.data_graph.get_frame_data(0).predicted_object_se3_long_jump = initial_predicted_Se3
 
         template_frame_observation = self.tracker.next(0)
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
@@ -838,6 +838,10 @@ class Tracking6D:
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam_frame)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam_frame)
 
+        # Erase the translation - not needed at the moment
+        Se3_obj_long_jump = Se3(Se3_obj_long_jump.quaternion, torch.zeros(1, 3).cuda())
+        Se3_obj_short_jump = Se3(Se3_obj_short_jump.quaternion, torch.zeros(1, 3).cuda())
+
         Se3_obj_chained_long_jump = Se3_obj_long_jump * Se3_obj_reference_frame
 
         # gt_deltas_se3 = [Se3(Quaternion.from_axis_angle(self.data_graph.get_frame_data(i + 1).gt_rot_axis_angle[None]),
@@ -868,40 +872,36 @@ class Tracking6D:
         Se3_obj_chained_short_jumps = np.prod(list(products))
 
         short_long_chain_ang_diff = quaternion_minimal_angular_difference(Se3_obj_chained_long_jump.quaternion,
-                                                                          Se3_obj_chained_short_jumps.quaternion)
+                                                                          Se3_obj_chained_short_jumps.quaternion).item()
 
         print(f'-----------------------------------Long, short chain diff: {short_long_chain_ang_diff}')
-        # if short_long_chain_ang_diff > 1 and frame_i - 1 > 5:  # and len(range(flow_long_jump_source, frame_i-1)) > 5:
-        #     print(f'-----------------------------------Last long jump axis-angle '
-        #           f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_reference_frame.quaternion.q))}')
-        #     print(f'-----------------------------------Chained long jump axis-angle '
-        #           f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q))}')
-        #     print(f'-----------------------------------Chained short jumps axis-angle '
-        #           f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_short_jumps.quaternion.q))}')
-        #
-        #     prev_node_idx = frame_i - 1
-        #     prev_node_observation = self.data_graph.get_camera_specific_frame_data(prev_node_idx).frame_observation
-        #     prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_total.quaternion
-        #     self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
+        if short_long_chain_ang_diff > 1 and frame_i - 1 > 1 and False:
+            print(f'-----------------------------------Last long jump axis-angle '
+                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_reference_frame.quaternion.q))}')
+            print(f'-----------------------------------Chained long jump axis-angle '
+                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q))}')
+            print(f'-----------------------------------Chained short jumps axis-angle '
+                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_short_jumps.quaternion.q))}')
 
             prev_node_idx = frame_i - 1
             prev_node_observation = self.data_graph.get_camera_specific_frame_data(prev_node_idx).frame_observation
-            prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_total.quaternion
+            prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_long_jump.quaternion
+            self.flow_tracks_inits[frame_i] = prev_node_idx
             self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
 
         self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_short_jumps.quaternion.q
 
         datagraph_node = self.data_graph.get_frame_data(frame_i)
-        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
+        datagraph_node.predicted_object_se3_long_jump = Se3_obj_chained_long_jump
+        datagraph_node.predicted_object_se3_short_jump = Se3_obj_chained_short_jumps
+        datagraph_node.predicted_obj_long_short_chain_diff = short_long_chain_ang_diff
 
         datagraph_short_edge = self.data_graph.get_edge_observations(*flow_arc_short_jump)
         datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
-
-        datagraph_node.predicted_object_se3_total = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_target]]
-        # datagraph_node.predicted_object_se3_total = Se3_obj_chained_long_jump
         datagraph_short_edge.predicted_object_delta_se3 = Se3_cam_short_jump
         datagraph_long_edge.predicted_object_delta_se3 = Se3_cam_long_jump
 
+        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
         datagraph_camera_node.predicted_obj_delta_se3 = Se3_obj_long_jump
         datagraph_camera_node.predicted_cam_delta_se3 = Se3_cam_long_jump
 
