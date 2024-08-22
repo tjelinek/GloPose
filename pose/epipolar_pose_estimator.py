@@ -6,7 +6,6 @@ from kornia.geometry import axis_angle_to_rotation_matrix, Se3, Quaternion
 from auxiliary_scripts.cameras import Cameras
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
-from auxiliary_scripts.math_utils import Rt_obj_from_epipolar_Rt_cam, Rt_epipolar_cam_from_Rt_obj
 from flow import get_correct_correspondences_mask, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
 from models.encoder import Encoder
@@ -45,8 +44,6 @@ class EpipolarPoseEstimator:
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) -> Se3:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
-
-        W_4x4 = self.rendering.camera_transformation_matrix_4x4().permute(0, 2, 1)
 
         gt_flow_observation: SyntheticFlowObservation = self.rendering.render_flow_for_frame(self.gt_encoder, *flow_arc)
 
@@ -158,20 +155,20 @@ class EpipolarPoseEstimator:
         data.ransac_outliers = outlier_src_pts.cpu()
         data.ransac_triangulated_points = triangulated_points_ransac.cpu()
 
-        gt_rot_axis_angle_obj = self.gt_rotations[[flow_arc[1]]]
-        gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
-        gt_trans_obj = self.gt_translations[[flow_arc[1]]].unsqueeze(-1)
+        # gt_rot_axis_angle_obj = self.gt_rotations[[flow_arc[1]]]
+        # gt_R_obj = axis_angle_to_rotation_matrix(gt_rot_axis_angle_obj)
+        # gt_trans_obj = self.gt_translations[[flow_arc[1]]].unsqueeze(-1)
 
-        gt_R_cam, gt_trans_cam = Rt_epipolar_cam_from_Rt_obj(gt_R_obj, gt_trans_obj, W_4x4)
+        # gt_R_cam, gt_trans_cam = Rt_epipolar_cam_from_Rt_obj(gt_R_obj, gt_trans_obj, W_4x4)
 
-        ransac_triangulated_points_gt_Rt = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
-                                                                      dst_pts_yx[None], K1[None], K2[None])
-        ransac_triangulated_points_gt_Rt_gt_flow = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
-                                                                              dst_pts_yx_gt_flow[None], K1[None],
-                                                                              K2[None])
-
-        data.ransac_triangulated_points_gt_Rt = ransac_triangulated_points_gt_Rt.cpu()
-        data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow.cpu()
+        # ransac_triangulated_points_gt_Rt = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
+        #                                                               dst_pts_yx[None], K1[None], K2[None])
+        # ransac_triangulated_points_gt_Rt_gt_flow = triangulate_points_from_Rt(gt_R_cam, gt_trans_cam, src_pts_yx[None],
+        #                                                                       dst_pts_yx_gt_flow[None], K1[None],
+        #                                                                       K2[None])
+        #
+        # data.ransac_triangulated_points_gt_Rt = ransac_triangulated_points_gt_Rt.cpu()
+        # data.ransac_triangulated_points_gt_Rt_gt_flow = ransac_triangulated_points_gt_Rt_gt_flow.cpu()
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
