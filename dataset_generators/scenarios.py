@@ -109,7 +109,9 @@ def generate_rotations_xyz(step=10.0) -> MovementScenario:
     return MovementScenario(rotations=rotations)
 
 
-def random_walk_on_a_sphere(n_steps=200, mean_x_step=5, mean_y_step=5, mean_z_step=5) -> MovementScenario:
+def random_walk_on_a_sphere(n_steps=200, seed=42) -> MovementScenario:
+    torch.manual_seed(seed)
+
     rotations = torch.zeros((n_steps, 3))
 
     steps_thresholds = torch.tensor([0.5, 0.25, 0.75])
