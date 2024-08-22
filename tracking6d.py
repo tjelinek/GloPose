@@ -877,6 +877,7 @@ class Tracking6D:
         datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
 
         datagraph_node.predicted_object_se3_total = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_target]]
+        # datagraph_node.predicted_object_se3_total = Se3_obj_chained_long_jump
         datagraph_short_edge.predicted_object_delta_se3 = Se3_cam_short_jump
         datagraph_long_edge.predicted_object_delta_se3 = Se3_cam_long_jump
 

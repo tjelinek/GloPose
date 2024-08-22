@@ -51,14 +51,12 @@ def main():
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
         # config.gt_track_path = gt_tracking_path
-        config.tran_init = 0
-        config.rot_init = [0, 0, 0]
         config.sequence = sequence
 
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
-        gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
-        gt_rotations = torch.from_numpy(gt_rotations_np).cuda().to(torch.float32)
+        # gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
+        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
         gt_translations = torch.zeros_like(gt_rotations)
 
         if config.augment_gt_track:

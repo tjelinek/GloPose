@@ -8,48 +8,42 @@ import numpy as np
 
 
 def default_initial_rotation():
-    return np.array([0., 0., 0.])
+    return torch.Tensor([0., 0., 0.])
 
 
 def default_initial_translation():
-    return np.array([0., 0., 0.])
+    return torch.Tensor([0., 0., 0.])
 
 
 @dataclass
 class MovementScenario:
     steps: int = 0
-    initial_rotation: np.ndarray = field(default_factory=default_initial_rotation)
-    initial_translation: np.ndarray = field(default_factory=default_initial_translation)
-    rotations: List[np.ndarray] = None
-    translations: List[np.ndarray] = None
+    initial_rotation: torch.Tensor = field(default_factory=default_initial_rotation)
+    initial_translation: torch.Tensor = field(default_factory=default_initial_translation)
+    rotations: torch.Tensor = None
+    translations: torch.Tensor = None
 
     def __post_init__(self):
         if self.rotations is None and self.translations is None:
-            self.rotations = [np.array([0.0, 0.0, 0.0])]
-            self.translations = [np.array([0.0, 0.0, 0.0])]
+            self.rotations = torch.zeros(1, 3)
+            self.translations = torch.zeros(1, 3)
 
         elif self.rotations is None:
-            self.rotations = [np.array([0.0, 0.0, 0.0])] * len(self.translations)
+            self.rotations = torch.zeros(len(self.translations), 3)
 
         elif self.translations is None:
-            self.translations = [np.array([0.0, 0.0, 0.0])] * len(self.rotations)
+            assert self.rotations is not None
+            self.translations = torch.zeros(len(self.rotations), 3)
 
         self.steps = len(self.translations)
 
     @property
-    def rotation_quaternions(self) -> List[np.ndarray]:
-        quaternions = []
-
-        for rot_deg in self.rotations:
-            rotations_radians = np.deg2rad(rot_deg)
-            rotation_quaternion = axis_angle_to_quaternion(torch.from_numpy(rotations_radians)).numpy()
-            quaternions.append(rotation_quaternion)
-
-        return quaternions
+    def rotation_quaternions(self) -> torch.Tensor:
+        return axis_angle_to_quaternion(self.rotation_axis_angles)
 
     @property
-    def rotation_axis_angles(self) -> np.ndarray:
-        return np.deg2rad(np.asarray(self.rotations))
+    def rotation_axis_angles(self) -> torch.Tensor:
+        return torch.deg2rad(self.rotations)
 
     def get_dict(self):
         scenario_dict = asdict(self)
@@ -59,126 +53,115 @@ class MovementScenario:
         return scenario_dict
 
 
-def get_full_rotation(step):
-    eps = 1e-10
-    return np.arange(0.0, 1 * 360.0 + eps, step)
+def get_full_rotation(step=10.0):
+    return torch.arange(0., 360. + 1e-10, step)
 
 
 def generate_zero_rotations(steps=72) -> MovementScenario:
-    rotations_x = np.zeros(steps)
-    rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.zeros((steps, 3))
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_x(step=10.0) -> MovementScenario:
     rotations_x = get_full_rotation(step)
-    rotations_y = np.zeros(rotations_x.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([rotations_x, torch.zeros_like(rotations_x), torch.zeros_like(rotations_x)], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_y(step=10.0) -> MovementScenario:
     rotations_y = get_full_rotation(step)
-    rotations_x = np.zeros(rotations_y.shape)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([torch.zeros_like(rotations_y), rotations_y, torch.zeros_like(rotations_y)], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_z(step=10.0) -> MovementScenario:
     rotations_z = get_full_rotation(step)
-    rotations_x = np.zeros(rotations_z.shape)
-    rotations_y = np.zeros(rotations_x.shape)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([torch.zeros_like(rotations_z), torch.zeros_like(rotations_z), rotations_z], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_xy(step=10.0) -> MovementScenario:
     rotations_x = get_full_rotation(step)
     rotations_y = get_full_rotation(step)
-    rotations_z = np.zeros(rotations_x.shape)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([rotations_x, rotations_y, torch.zeros_like(rotations_x)], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_xz(step=10.0) -> MovementScenario:
     rotations_x = get_full_rotation(step)
-    rotations_y = np.zeros(rotations_x.shape)
     rotations_z = get_full_rotation(step)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([rotations_x, torch.zeros_like(rotations_x), rotations_z], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_yz(step=10.0) -> MovementScenario:
-    rotations_x = np.zeros(get_full_rotation(step).shape)
     rotations_y = get_full_rotation(step)
     rotations_z = get_full_rotation(step)
-
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+    rotations = torch.stack([torch.zeros_like(rotations_y), rotations_y, rotations_z], dim=1)
+    return MovementScenario(rotations=rotations)
 
 
 def generate_rotations_xyz(step=10.0) -> MovementScenario:
     rotations_x = get_full_rotation(step)
     rotations_y = get_full_rotation(step)
     rotations_z = get_full_rotation(step)
+    rotations = torch.stack([rotations_x, rotations_y, rotations_z], dim=1)
+    return MovementScenario(rotations=rotations)
 
-    scenario = MovementScenario(
-        rotations=[np.array([x, y, z]) for x, y, z in zip(rotations_x, rotations_y, rotations_z)])
-    return scenario
+
+def random_walk_on_a_sphere(n_steps=100, mean_x_step=5, mean_y_step=5, mean_z_step=5) -> MovementScenario:
+    rotations = torch.zeros((n_steps, 3))
+
+    steps_thresholds = torch.tensor([0.5, 0.25, 0.75])
+
+    steps_per_ax_low = torch.tensor([0, -5, 10])
+    steps_per_ax_high = torch.tensor([5, 10, 15])
+
+    for step in range(1, n_steps):
+        directions = torch.rand(3) > steps_thresholds
+        steps = torch.stack(
+            [torch.tensor([torch.FloatTensor(1).uniform_(low, high).item()]) for low, high in zip(steps_per_ax_low, steps_per_ax_high)]
+        ).view(-1)
+        steps *= directions.float()
+
+        rotations[step] = rotations[step - 1] + steps
+
+    return MovementScenario(rotations=rotations)
+
+
+def steps_to_periodic_linspace(steps):
+    return torch.linspace(0, 2 * torch.pi, steps + 1)[:-1]
 
 
 def generate_sinusoidal_translations(steps=72) -> MovementScenario:
     step = steps_to_periodic_linspace(steps)
-    x = np.linspace(0, (steps - 1) * step, steps)
-    translations_x = np.sin(x) * 0.5
-    translations_y = np.zeros(translations_x.shape)
-    translations_z = np.zeros(translations_x.shape)
+    x = torch.linspace(0, (steps - 1) * step.item(), steps)
+    translations_x = torch.sin(x) * 0.5
+    translations_y = torch.zeros_like(translations_x)
+    translations_z = torch.zeros_like(translations_x)
 
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    result = MovementScenario(translations=[np.array([x, y, z]) for x, y, z in result_tuples])
-    return result
+    translations = torch.stack([translations_x, translations_y, translations_z], dim=1)
+    return MovementScenario(translations=translations)
 
 
 def generate_circular_translation(steps=72) -> MovementScenario:
     x = steps_to_periodic_linspace(steps)
-    translations_x = np.cos(x) * 0.5
-    translations_y = np.sin(x) * 0.5
-    translations_z = np.zeros(translations_x.shape)
+    translations_x = torch.cos(x) * 0.5
+    translations_y = torch.sin(x) * 0.5
+    translations_z = torch.zeros_like(translations_x)
 
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    translations = [np.array([x, y, z]) for x, y, z in result_tuples]
-    initial_translation = np.array([0.0, 0.0, 0.0])
-    result = MovementScenario(translations=translations, initial_translation=initial_translation)
-    return result
+    translations = torch.stack([translations_x, translations_y, translations_z], dim=1)
+    initial_translation = torch.tensor([0.0, 0.0, 0.0])
+    return MovementScenario(translations=translations, initial_translation=initial_translation)
 
 
 def generate_translation(steps: int, axes: List[str]) -> MovementScenario:
-    translations = np.zeros((steps, 3))
+    translations = torch.zeros((steps, 3))
     for axis in axes:
         axis_index = {'x': 0, 'y': 1, 'z': 2}[axis]
-        translations[:, axis_index] = np.arange(steps)
+        translations[:, axis_index] = torch.arange(steps)
 
-    translations_list = [translations[i] for i in range(steps)]
-    initial_translation = np.array([0.0, 0.0, 0.0])
-    result = MovementScenario(translations=translations_list, initial_translation=initial_translation)
-    return result
+    return MovementScenario(translations=translations, initial_translation=torch.tensor([0.0, 0.0, 0.0]))
 
 
 # Specific functions for common cases
@@ -204,28 +187,21 @@ def generate_xyz_translation(steps: int) -> MovementScenario:
 
 def generate_in_depth_translations(steps=72) -> MovementScenario:
     x = steps_to_periodic_linspace(steps)
-    translations_y = np.zeros(x.shape)
-    translations_x = np.sin(x) * 1
-    translations_z = np.cos(x) * 4
+    translations_x = torch.sin(x) * 1
+    translations_y = torch.zeros_like(translations_x)
+    translations_z = torch.cos(x) * 4
 
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    translations = [np.array([x, y, z]) for x, y, z in result_tuples]
-    initial_translation = np.array([0.0, 0.0, -4.0])
-    result = MovementScenario(translations=translations, initial_translation=initial_translation)
-    return result
+    translations = torch.stack([translations_x, translations_y, translations_z], dim=1)
+    initial_translation = torch.tensor([0.0, 0.0, -4.0])
+    return MovementScenario(translations=translations, initial_translation=initial_translation)
 
 
 def generate_translation_that_is_off(steps=72) -> MovementScenario:
     step = steps_to_periodic_linspace(steps)
-    x = np.linspace(0, (steps - 1) * step, steps) * 0
-    translations_x = np.cos(x)
-    translations_y = np.sin(x)
-    translations_z = np.zeros(translations_x.shape)
+    x = torch.linspace(0, (steps - 1) * step.item(), steps) * 0
+    translations_x = torch.cos(x)
+    translations_y = torch.sin(x)
+    translations_z = torch.zeros_like(translations_x)
 
-    result_tuples = list(zip(translations_x, translations_y, translations_z))
-    result = MovementScenario(translations=[np.array([x, y, z]) for x, y, z in result_tuples])
-    return result
-
-
-def steps_to_periodic_linspace(steps):
-    return np.linspace(0, 2 * np.pi, steps + 1)[:-1]
+    translations = torch.stack([translations_x, translations_y, translations_z], dim=1)
+    return MovementScenario(translations=translations)
