@@ -23,13 +23,13 @@ def get_config() -> TrackerConfig:
 
     cfg.ransac_refine_E_numerically = False
 
-    cfg.ransac_sample_points = False
+    cfg.ransac_sample_points = True
     cfg.ransac_sampled_points_number = 100
-
-    cfg.augment_gt_track = True
 
     cfg.ransac_inlier_filter = 'pygcransac'
     cfg.long_flow_model = 'MFT'
     cfg.MFT_backbone_cfg = 'MFT_RoMa_direct_cfg'
+
+    cfg.gt_flow_source = 'GenerateSynthetic'
 
     return cfg

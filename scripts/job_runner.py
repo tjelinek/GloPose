@@ -149,8 +149,14 @@ def main():
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_099_epe_leq_1',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975',
         # 'epipolar/mft_iq/mft_iq_roma_direct_ransac_8p_pose_occl_0975_epe_leq_1',
-        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose'
-        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track'
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_gt_flow',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose',
+        # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_gt_flow',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track_correspondence_sampling',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track_correspondence_sampling_gt_flow',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track',
+        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_augment_gt_track_gt_flow',
         # 'base_config'
     ]
 
@@ -192,7 +198,6 @@ def main():
             'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
         ],
         Datasets.HANDAL: [
-            '004002',
             '004002',
             '005010',
             '005004',

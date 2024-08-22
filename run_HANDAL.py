@@ -28,7 +28,7 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-        if config.augment_gt_track:
+        if config.augment_gt_track or config.gt_flow_source == 'GenerateSynthetic':
             exit()
 
         gt_texture_path = None
@@ -103,11 +103,11 @@ def main():
 
         config.input_frames = len(gt_images_list)
 
-        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[None]).cuda().to(torch.float32)
-        translations_array = torch.from_numpy(np.array(filtered_gt_translations)[None, None]).cuda().to(torch.float32)
+        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).cuda().to(torch.float32)
+        translations_array = torch.from_numpy(np.array(filtered_gt_translations)).cuda().to(torch.float32)
 
-        config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
-        config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
+        # config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
+        # config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
