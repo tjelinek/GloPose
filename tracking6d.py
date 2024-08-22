@@ -846,8 +846,8 @@ class Tracking6D:
         #                      torch.zeros(1, 3).cuda()).inverse()
         #                  for i in range(flow_long_jump_source, frame_i - 1)]
         #
-        # pred_short_deltas_se3 = [self.data_graph.get_edge_observations(i, i + 1).predicted_object_delta_se3
-        #                          for i in range(flow_long_jump_source, frame_i - 1)]
+        pred_short_deltas_se3 = [self.data_graph.get_edge_observations(i, i + 1).predicted_object_delta_se3
+                                 for i in range(flow_long_jump_source, frame_i - 1)]
 
         products = reversed([Se3_obj_reference_frame] +
                             pred_short_deltas_se3 +
