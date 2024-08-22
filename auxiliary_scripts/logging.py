@@ -97,6 +97,7 @@ class RerunAnnotations:
     ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
 
     # Pose
+    long_short_chain_diff: str = 'pose/rotation/long_short_chain_angular_diff'
     obj_rot_1st_to_last: str = '/pose/rotation'
     obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
     obj_rot_1st_to_last_x_gt: str = '/pose/rotation/x_axis_gt'
@@ -312,6 +313,9 @@ class WriteResults:
                                                ),
                             rrb.TimeSeriesView(name="Pose - Translation",
                                                origin=RerunAnnotations.obj_tran_1st_to_last
+                                               ),
+                            rrb.TimeSeriesView(name="Long and Short Chain Difference",
+                                               origin=RerunAnnotations.long_short_chain_diff
                                                ),
                         ],
                         name='Epipolar'
@@ -1419,6 +1423,8 @@ class WriteResults:
 
         pred_obj_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quat_ref_to_last)).cpu().squeeze()
         pred_cam_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_cam_quat_ref_to_last)).cpu().squeeze()
+
+        rr.log(RerunAnnotations.long_short_chain_diff, rr.Scalar(data_graph_node.predicted_obj_long_short_chain_diff))
 
         for axis, axis_label in enumerate(['x', 'y', 'z']):
             rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'),

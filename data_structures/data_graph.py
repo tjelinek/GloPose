@@ -20,6 +20,8 @@ class CommonFrameData:
 
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
 
+    predicted_obj_long_short_chain_diff: float = 0.0
+
     ransac_rot_obj_axis_angle: torch.Tensor = None
 
     frame_losses: Any = None
@@ -33,6 +35,9 @@ class CameraSpecificFrameData:
 
     gt_pose_cam: Se3 = None
     predicted_pose_cam: Se3 = None
+
+    predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
+    predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
