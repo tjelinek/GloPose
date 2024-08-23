@@ -28,7 +28,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
-from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh, load_mesh
+from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from auxiliary_scripts.visualizations import visualize_optical_flow_errors
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
@@ -1904,10 +1904,10 @@ class WriteResults:
                                                gt_silhouettes_prev=[target_frame_segment_squeezed],
                                                flow_occlusion_masks=[observed_flow_uncertainties_0_1_range]))
 
-                flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
-                                                                         target_image_discrete,
-                                                                         flow_observation_image_coords,
-                                                                         synthetic_flow_obs)
+                # flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
+                #                                                          target_image_discrete,
+                #                                                          flow_observation_image_coords,
+                #                                                          synthetic_flow_obs)
 
                 # Define output file paths
                 observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
