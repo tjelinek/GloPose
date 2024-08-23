@@ -97,7 +97,18 @@ class RerunAnnotations:
     ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
 
     # Pose
-    long_short_chain_diff: str = 'pose/rotation/long_short_chain_angular_diff'
+    long_short_chain_diff: str = 'pose/chaining/long_short_chain_angular_diff'
+    chained_pose_polar: str = 'pose/chaining/polar_angle'
+    chained_pose_long_flow_polar: str = 'pose/chaining/polar_angle/long_flow'
+    chained_pose_short_flow_polar: str = 'pose/chaining/polar_angle/short_flow'
+    chained_pose_long_flow: str = 'pose/chaining/long_flow'
+    chained_pose_long_flow_x: str = 'pose/chaining/long_flow/x_axis'
+    chained_pose_long_flow_y: str = 'pose/chaining/long_flow/y_axis'
+    chained_pose_long_flow_z: str = 'pose/chaining/long_flow/z_axis'
+    chained_pose_short_flow: str = 'pose/chaining/short_flow'
+    chained_pose_short_flow_x: str = 'pose/chaining/short_flow/x_axis'
+    chained_pose_short_flow_y: str = 'pose/chaining/short_flow/y_axis'
+    chained_pose_short_flow_z: str = 'pose/chaining/short_flow/z_axis'
     obj_rot_1st_to_last: str = '/pose/rotation'
     obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
     obj_rot_1st_to_last_x_gt: str = '/pose/rotation/x_axis_gt'
@@ -300,40 +311,62 @@ class WriteResults:
                         ],
                         name='Matching'
                     ),
-                    rrb.Grid(
+                    rrb.Tabs(
                         contents=[
-                            rrb.TimeSeriesView(name="RANSAC - Frontview",
-                                               origin=RerunAnnotations.ransac_stats_frontview
-                                               ),
-                            rrb.TimeSeriesView(name="RANSAC - Backview",
-                                               origin=RerunAnnotations.ransac_stats_backview
-                                               ),
-                            rrb.TimeSeriesView(name="Pose - Rotation",
-                                               origin=RerunAnnotations.obj_rot_1st_to_last
-                                               ),
-                            rrb.TimeSeriesView(name="Pose - Translation",
-                                               origin=RerunAnnotations.obj_tran_1st_to_last
-                                               ),
-                            rrb.TimeSeriesView(name="Long and Short Chain Difference",
-                                               origin=RerunAnnotations.long_short_chain_diff
-                                               ),
-                        ],
-                        name='Epipolar'
-                    ),
-                    rrb.Grid(
-                        contents=[
-                            rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
-                                               origin=RerunAnnotations.cam_rot_ref_to_last
-                                               ),
-                            rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
-                                               origin=RerunAnnotations.cam_tran_ref_to_last
-                                               ),
-                            rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
-                                               origin=RerunAnnotations.obj_rot_ref_to_last
-                                               ),
-                            rrb.TimeSeriesView(name="Object Translation Ref -> Last",
-                                               origin=RerunAnnotations.obj_tran_ref_to_last
-                                               ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.TimeSeriesView(name="RANSAC - Frontview",
+                                                       origin=RerunAnnotations.ransac_stats_frontview
+                                                       ),
+                                    rrb.TimeSeriesView(name="RANSAC - Backview",
+                                                       origin=RerunAnnotations.ransac_stats_backview
+                                                       ),
+                                    rrb.TimeSeriesView(name="Pose - Rotation",
+                                                       origin=RerunAnnotations.obj_rot_1st_to_last
+                                                       ),
+                                    rrb.TimeSeriesView(name="Pose - Translation",
+                                                       origin=RerunAnnotations.obj_tran_1st_to_last
+                                                       ),
+                                ],
+                                grid_columns=2,
+                                name='Epipolar'
+                            ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.TimeSeriesView(name="Chained Pose Long Flow",
+                                                       origin=RerunAnnotations.chained_pose_long_flow
+                                                       ),
+                                    rrb.TimeSeriesView(name="Chained Pose Short Flow",
+                                                       origin=RerunAnnotations.chained_pose_short_flow
+                                                       ),
+                                    rrb.TimeSeriesView(name="Chained Pose Polar Angles",
+                                                       origin=RerunAnnotations.chained_pose_polar
+                                                       ),
+                                    rrb.TimeSeriesView(name="Long and Short Chain Difference",
+                                                       origin=RerunAnnotations.long_short_chain_diff
+                                                       ),
+                                ],
+                                grid_columns=2,
+                                name='Flow Chaining'
+                            ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
+                                                       origin=RerunAnnotations.cam_rot_ref_to_last
+                                                       ),
+                                    rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
+                                                       origin=RerunAnnotations.cam_tran_ref_to_last
+                                                       ),
+                                    rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
+                                                       origin=RerunAnnotations.obj_rot_ref_to_last
+                                                       ),
+                                    rrb.TimeSeriesView(name="Object Translation Ref -> Last",
+                                                       origin=RerunAnnotations.obj_tran_ref_to_last
+                                                       ),
+                                ],
+                                grid_columns=2,
+                                name='Pose'
+                            ),
                         ],
                         name='Pose'
                     ),
@@ -1426,6 +1459,16 @@ class WriteResults:
 
         rr.log(RerunAnnotations.long_short_chain_diff, rr.Scalar(data_graph_node.predicted_obj_long_short_chain_diff))
 
+        long_jump_chain_pose_q = data_graph_node.predicted_object_se3_long_jump.quaternion
+        short_jumps_chain_pose_q = data_graph_node.predicted_object_se3_short_jump.quaternion
+        long_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle(long_jump_chain_pose_q.q)).cpu().squeeze()
+        short_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle
+                                                    (short_jumps_chain_pose_q.q)).cpu().squeeze()
+        rr.log(RerunAnnotations.chained_pose_long_flow_polar,
+               rr.Scalar(torch.rad2deg(long_jump_chain_pose_q.polar_angle * 2).item()))
+        rr.log(RerunAnnotations.chained_pose_short_flow_polar,
+               rr.Scalar(torch.rad2deg(short_jumps_chain_pose_q.polar_angle * 2).item()))
+
         for axis, axis_label in enumerate(['x', 'y', 'z']):
             rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'),
                    rr.Scalar(obj_rot_1st_to_last[axis]))
@@ -1440,6 +1483,11 @@ class WriteResults:
                    rr.Scalar(pred_obj_rot_ref_to_last[axis]))
             rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}'),
                    rr.Scalar(pred_cam_rot_ref_to_last[axis]))
+
+            rr.log(getattr(RerunAnnotations, f'chained_pose_long_flow_{axis_label}'),
+                   rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
+            rr.log(getattr(RerunAnnotations, f'chained_pose_short_flow_{axis_label}'),
+                   rr.Scalar(short_jumps_pose_axis_angle[axis].item()))
 
     def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rotations = []
