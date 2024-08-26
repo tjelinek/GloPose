@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import torch
 from kaolin.render.camera import PinholeIntrinsics
@@ -21,13 +23,14 @@ from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_
 class EpipolarPoseEstimator:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, gt_rotations, gt_translations,
-                 rendering: RenderingKaolin, gt_encoder, camera_intrinsics: PinholeIntrinsics = None):
+                 rendering: RenderingKaolin, gt_encoder, encoder, camera_intrinsics: PinholeIntrinsics = None):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.gt_rotations = gt_rotations
         self.gt_translations = gt_translations
         self.rendering: RenderingKaolin = rendering
+        self.encoder: Encoder = encoder
         self.gt_encoder: Encoder = gt_encoder
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
@@ -41,7 +44,8 @@ class EpipolarPoseEstimator:
         else:
             self.camera_intrinsics = camera_intrinsics
 
-    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) -> Se3:
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) -> \
+            Tuple[Se3, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
@@ -109,6 +113,10 @@ class EpipolarPoseEstimator:
         else:
             raise ValueError("Unknown RANSAC method")
 
+        Se3_cam_RANSAC = None
+        if rot_cam_ransac is not None:
+            Se3_cam_RANSAC = Se3(Quaternion.from_axis_angle(rot_cam_ransac[None]), torch.zeros(1, 3).cuda())
+
         src_pts_xy_inliers = src_pts_xy[inlier_mask]
         dst_pts_xy_inliers = dst_pts_xy[inlier_mask]
 
@@ -172,7 +180,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
 
-        return Se3_cam
+        return Se3_cam, Se3_cam_RANSAC
 
     def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 
