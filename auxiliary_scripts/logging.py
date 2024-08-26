@@ -457,7 +457,8 @@ class WriteResults:
                 ))
 
             for rerun_annotation, color in annotations:
-                rr.log(rerun_annotation, rr.SeriesLine(color=color, name=rerun_annotation), timeless=True)
+                rr.log(rerun_annotation, rr.SeriesLine(color=color,
+                                                       name=rerun_annotation.split('/')[-1]), timeless=True)
 
         for template_annotation in self.template_fields:
             rr.log(template_annotation,
