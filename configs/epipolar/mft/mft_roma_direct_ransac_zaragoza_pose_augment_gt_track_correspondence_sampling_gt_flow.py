@@ -25,7 +25,7 @@ def get_config() -> TrackerConfig:
 
     cfg.augment_gt_track = True
 
-    cfg.ransac_sample_points = False
+    cfg.ransac_sample_points = True
     cfg.ransac_sampled_points_number = 100
 
     cfg.ransac_inlier_filter = 'pygcransac'

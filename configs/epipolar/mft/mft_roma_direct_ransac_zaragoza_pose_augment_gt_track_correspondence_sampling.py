@@ -23,7 +23,7 @@ def get_config() -> TrackerConfig:
 
     cfg.ransac_refine_E_numerically = False
 
-    cfg.ransac_sample_points = False
+    cfg.ransac_sample_points = True
     cfg.ransac_sampled_points_number = 100
 
     cfg.augment_gt_track = True
