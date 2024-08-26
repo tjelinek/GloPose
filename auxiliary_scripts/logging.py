@@ -464,7 +464,7 @@ class WriteResults:
             rr.log(template_annotation,
                        rr.SeriesPoint(
                            color=[255, 0, 0],
-                           name="template",
+                           name="new template",
                            marker="circle",
                            marker_size=4,
                        ),
@@ -904,6 +904,9 @@ class WriteResults:
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
                 rr.log(template_image_grid_annotation, rr.Image(template))
+
+                for template_annotation in self.template_fields:
+                    rr.log(template_annotation, rr.Scalar(0.0))
 
             node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
             node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
@@ -1512,11 +1515,6 @@ class WriteResults:
 
         short_jump_source = camera_specific_graph_node.short_jump_source
         long_jump_source = camera_specific_graph_node.long_jump_source
-
-        if short_jump_source == long_jump_source:
-            rr.set_time_sequence("frame", long_jump_source)
-            for template_annotation in self.template_fields:
-                rr.log(template_annotation, rr.Scalar(0.0))
 
         rr.set_time_sequence("frame", frame_i)
         datagraph_short_edge = self.data_graph.get_edge_observations(short_jump_source, frame_i)
