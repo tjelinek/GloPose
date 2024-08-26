@@ -37,8 +37,8 @@ class CameraSpecificFrameData:
     gt_pose_cam: Se3 = None
     predicted_pose_cam: Se3 = None
 
-    predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
-    predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
+    long_jump_source: int = None
+    short_jump_source: int = None
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
@@ -75,7 +75,10 @@ class CrossFrameData:
 
     is_source_of_matching: bool = True
 
-    predicted_object_delta_se3: Se3 = Se3.identity(1, 'cuda')
+    predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
+    predicted_obj_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
+    predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
+    predicted_cam_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
 
 
 @dataclass

@@ -98,17 +98,34 @@ class RerunAnnotations:
 
     # Pose
     long_short_chain_diff: str = 'pose/chaining/long_short_chain_angular_diff'
+    long_short_chain_diff_template: str = 'pose/chaining/template'
     chained_pose_polar: str = 'pose/chaining/polar_angle'
+    chained_pose_polar_template: str = 'pose/chaining/polar_angle/template'
     chained_pose_long_flow_polar: str = 'pose/chaining/polar_angle/long_flow'
     chained_pose_short_flow_polar: str = 'pose/chaining/polar_angle/short_flow'
+
     chained_pose_long_flow: str = 'pose/chaining/long_flow'
+    chained_pose_long_flow_template: str = 'pose/chaining/long_flow/template'
     chained_pose_long_flow_x: str = 'pose/chaining/long_flow/x_axis'
     chained_pose_long_flow_y: str = 'pose/chaining/long_flow/y_axis'
     chained_pose_long_flow_z: str = 'pose/chaining/long_flow/z_axis'
+
     chained_pose_short_flow: str = 'pose/chaining/short_flow'
+    chained_pose_short_flow_template: str = 'pose/chaining/short_flow/template'
     chained_pose_short_flow_x: str = 'pose/chaining/short_flow/x_axis'
     chained_pose_short_flow_y: str = 'pose/chaining/short_flow/y_axis'
     chained_pose_short_flow_z: str = 'pose/chaining/short_flow/z_axis'
+
+    cam_delta_short_flow: str = 'pose/cam/short_flow/'
+    cam_delta_short_flow_template = 'pose/cam/short_flow/template'
+    cam_delta_short_flow_zaragoza: str = 'pose/cam/short_flow/cam_pose_delta_zaragoza'
+    cam_delta_short_flow_RANSAC: str = 'pose/cam/short_flow/cam_pose_delta_RANSAC'
+
+    cam_delta_long_flow: str = 'pose/cam/long_flow/'
+    cam_delta_long_flow_template = 'pose/cam/long_flow/template'
+    cam_delta_long_flow_zaragoza: str = 'pose/cam/long_flow/cam_pose_delta_zaragoza'
+    cam_delta_long_flow_RANSAC: str = 'pose/cam/long_flow/cam_pose_delta_RANSAC'
+
     obj_rot_1st_to_last: str = '/pose/rotation'
     obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
     obj_rot_1st_to_last_x_gt: str = '/pose/rotation/x_axis_gt'
@@ -126,6 +143,7 @@ class RerunAnnotations:
     obj_tran_1st_to_last_z_gt: str = '/pose/translation/z_axis_gt'
 
     cam_rot_ref_to_last: str = '/pose/cam_rot_ref_to_last'
+    cam_rot_ref_to_last_template: str = '/pose/cam_rot_ref_to_last/template'
     cam_rot_ref_to_last_x: str = '/pose/cam_rot_ref_to_last/x_axis'
     cam_rot_ref_to_last_x_gt: str = '/pose/cam_rot_ref_to_last/x_axis_gt'
     cam_rot_ref_to_last_y: str = '/pose/cam_rot_ref_to_last/y_axis'
@@ -142,6 +160,7 @@ class RerunAnnotations:
     cam_tran_ref_to_last_z_gt: str = '/pose/cam_tran_ref_to_last/z_axis_gt'
 
     obj_rot_ref_to_last: str = '/pose/obj_rot_ref_to_last'
+    obj_rot_ref_to_last_template: str = '/pose/obj_rot_ref_to_last/template'
     obj_rot_ref_to_last_x: str = '/pose/obj_rot_ref_to_last/x_axis'
     obj_rot_ref_to_last_x_gt: str = '/pose/obj_rot_ref_to_last/x_axis_gt'
     obj_rot_ref_to_last_y: str = '/pose/obj_rot_ref_to_last/y_axis'
@@ -198,6 +217,8 @@ class WriteResults:
 
         self.init_directories()
 
+        self.template_fields: List[str] = []
+
         self.rerun_init()
 
         self.metrics_writer = csv.writer(self.metrics_log)
@@ -226,6 +247,17 @@ class WriteResults:
         rr.init(f'{self.tracking_config.sequence}-{self.tracking_config.experiment_name}')
         rr.save(
             self.rerun_log_path / f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
+
+        self.template_fields = {
+            RerunAnnotations.chained_pose_polar_template,
+            RerunAnnotations.chained_pose_long_flow_template,
+            RerunAnnotations.cam_delta_short_flow_template,
+            RerunAnnotations.long_short_chain_diff_template,
+            RerunAnnotations.cam_rot_ref_to_last_template,
+            RerunAnnotations.chained_pose_short_flow_template,
+            RerunAnnotations.obj_rot_ref_to_last_template,
+            RerunAnnotations.cam_delta_long_flow_template,
+        }
 
         blueprint = rrb.Blueprint(
             rrb.Tabs(
@@ -351,6 +383,18 @@ class WriteResults:
                             ),
                             rrb.Grid(
                                 contents=[
+                                    rrb.TimeSeriesView(name="Cam Delta Short Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_short_flow
+                                                       ),
+                                    rrb.TimeSeriesView(name="Cam Delta Long Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_long_flow
+                                                       ),
+                                ],
+                                grid_columns=1,
+                                name='RANSAC pose vs Zaragoza pose'
+                            ),
+                            rrb.Grid(
+                                contents=[
                                     rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
                                                        origin=RerunAnnotations.cam_rot_ref_to_last
                                                        ),
@@ -387,21 +431,43 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
-        for movement_type in ['rot', 'tran']:
-            for axis, c in axes_colors.items():
-                annotations = [getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}'),
-                               getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}'),
-                               getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}')]
+        annotations = set()
+        for axis, c in axes_colors.items():
+            for movement_type in ['rot', 'tran']:
+                annotations |= set(map(
+                    lambda annotation: (annotation, c),
+                    [
+                        getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}'),
+                        getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}'),
+                        getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}'),
+                        getattr(RerunAnnotations, f'chained_pose_long_flow_{axis}'),
+                        getattr(RerunAnnotations, f'chained_pose_short_flow_{axis}'),
+                    ]
+                ))
 
-                for rerun_annotation in annotations:
-                    rr.log(rerun_annotation, rr.SeriesLine(color=c, name=rerun_annotation), timeless=True)
+        for axis, c in gt_axes_colors.items():
+            for movement_type in ['rot', 'tran']:
+                annotations |= set(map(
+                    lambda annotation: (annotation, c),
+                    [
+                        getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}_gt'),
+                        getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}_gt'),
+                        getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}_gt'),
+                    ]
+                ))
 
-            for axis, c in gt_axes_colors.items():
-                annotations = [getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}_gt'),
-                               getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}_gt'),
-                               getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}_gt')]
-                for rerun_annotation in annotations:
-                    rr.log(rerun_annotation, rr.SeriesLine(color=c, name=rerun_annotation), timeless=True)
+            for rerun_annotation, color in annotations:
+                rr.log(rerun_annotation, rr.SeriesLine(color=color, name=rerun_annotation), timeless=True)
+
+        for template_annotation in self.template_fields:
+            rr.log(template_annotation,
+                       rr.SeriesPoint(
+                           color=[255, 0, 0],
+                           name="template",
+                           marker="circle",
+                           marker_size=4,
+                       ),
+                   timeless=True)
 
         rr.send_blueprint(blueprint)
 
@@ -1439,10 +1505,21 @@ class WriteResults:
         ax_loss.legend(loc='upper left')
 
     def log_poses_into_rerun(self, frame_i: int):
-        rr.set_time_sequence("frame", frame_i)
 
         data_graph_node = self.data_graph.get_frame_data(frame_i)
         camera_specific_graph_node = self.data_graph.get_camera_specific_frame_data(frame_i)
+
+        short_jump_source = camera_specific_graph_node.short_jump_source
+        long_jump_source = camera_specific_graph_node.long_jump_source
+
+        if short_jump_source == long_jump_source:
+            rr.set_time_sequence("frame", long_jump_source)
+            for template_annotation in self.template_fields:
+                rr.log(template_annotation, rr.Scalar(0.0))
+
+        rr.set_time_sequence("frame", frame_i)
+        datagraph_short_edge = self.data_graph.get_edge_observations(short_jump_source, frame_i)
+        datagraph_long_edge = self.data_graph.get_edge_observations(long_jump_source, frame_i)
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
@@ -1451,11 +1528,24 @@ class WriteResults:
         obj_tran_1st_to_last = data_graph_node.predicted_object_se3_long_jump.translation.cpu().squeeze()
         obj_tran_1st_to_last_gt = data_graph_node.gt_translation.cpu().squeeze()
 
-        pred_obj_quat_ref_to_last = camera_specific_graph_node.predicted_obj_delta_se3.quaternion.q
-        pred_cam_quat_ref_to_last = camera_specific_graph_node.predicted_cam_delta_se3.quaternion.q
+        pred_obj_quat_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3.quaternion
+        pred_cam_quat_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3.quaternion
 
-        pred_obj_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quat_ref_to_last)).cpu().squeeze()
-        pred_cam_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_cam_quat_ref_to_last)).cpu().squeeze()
+        pred_cam_RANSAC_quat_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac.quaternion
+        pred_cam_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3.quaternion
+        pred_cam_RANSAC_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3_ransac.quaternion
+
+        rr.log(RerunAnnotations.cam_delta_long_flow_zaragoza,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_quat_ref_to_last.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_long_flow_RANSAC,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_ref_to_last.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_short_flow_zaragoza,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_quat_prev_to_last.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_short_flow_RANSAC,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_prev_to_last.polar_angle).cpu()))
+
+        pred_obj_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quat_ref_to_last.q)).cpu().squeeze()
+        pred_cam_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_cam_quat_ref_to_last.q)).cpu().squeeze()
 
         rr.log(RerunAnnotations.long_short_chain_diff, rr.Scalar(data_graph_node.predicted_obj_long_short_chain_diff))
 

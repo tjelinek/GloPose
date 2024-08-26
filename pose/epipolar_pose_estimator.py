@@ -58,6 +58,7 @@ class EpipolarPoseEstimator:
         flow_arc_short_jump = (frame_i - 1, frame_i)
 
         flow_long_jump_source, flow_long_jump_target = flow_arc_long_jump
+        flow_short_jump_source, flow_short_jump_target = flow_arc_short_jump
 
         flow_long_jump_observations: FlowObservation = (self.data_graph.get_edge_observations(*flow_arc_long_jump).
                                                         observed_flow).cuda()
@@ -90,7 +91,7 @@ class EpipolarPoseEstimator:
         #                      torch.zeros(1, 3).cuda()).inverse()
         #                  for i in range(flow_long_jump_source, frame_i - 1)]
 
-        pred_short_deltas_se3 = [self.data_graph.get_edge_observations(i, i + 1).predicted_object_delta_se3
+        pred_short_deltas_se3 = [self.data_graph.get_edge_observations(i, i + 1).predicted_obj_delta_se3
                                  for i in range(flow_long_jump_source, frame_i - 1)]
 
         products = reversed([Se3_obj_reference_frame] +
@@ -142,12 +143,18 @@ class EpipolarPoseEstimator:
 
         datagraph_short_edge = self.data_graph.get_edge_observations(*flow_arc_short_jump)
         datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
-        datagraph_short_edge.predicted_object_delta_se3 = Se3_cam_short_jump
-        datagraph_long_edge.predicted_object_delta_se3 = Se3_cam_long_jump
+
+        datagraph_short_edge.predicted_obj_delta_se3 = Se3_cam_short_jump
+        datagraph_short_edge.predicted_cam_delta_se3 = Se3_cam_short_jump
+        datagraph_short_edge.predicted_cam_delta_se3_ransac = Se3_cam_short_jump_RANSAC
+
+        datagraph_long_edge.predicted_obj_delta_se3 = Se3_cam_long_jump
+        datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
+        datagraph_long_edge.predicted_cam_delta_se3_ransac = Se3_cam_long_jump_RANSAC
 
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
-        datagraph_camera_node.predicted_obj_delta_se3 = Se3_obj_long_jump
-        datagraph_camera_node.predicted_cam_delta_se3 = Se3_cam_long_jump
+        datagraph_camera_node.long_jump_source = flow_long_jump_source
+        datagraph_camera_node.short_jump_source = flow_short_jump_source
 
         # print(
         #     f"Frame {flow_long_jump_target} offset: "
