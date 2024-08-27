@@ -1,7 +1,8 @@
 import copy
 from bisect import insort
 from copy import deepcopy
-from typing import Tuple, List, Dict, Union, TypeVar
+from typing import Tuple, List, Dict, Union, TypeVar, get_origin
+from itertools import chain
 
 import numpy as np
 import torch
@@ -48,15 +49,33 @@ class Observation:
         observation_type = type(observations[0])
         concatenated_observations = observation_type()
 
+        concatenated_length = None
+
         for attr_name, attr_type in observation_type.__annotations__.items():
             check_for_none = (getattr(observation, attr_name) is None for observation in observations)
             if any(check_for_none):
                 assert all(check_for_none)
-            elif not issubclass(attr_type, torch.Tensor):
-                continue
             else:
-                concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations], dim=1)
-                setattr(concatenated_observations, attr_name, concatenated_attr)
+                if issubclass(attr_type, torch.Tensor):
+                    concatenated_attr = torch.cat([getattr(observation, attr_name) for observation in observations],
+                                                  dim=1)
+
+                    attr_length = concatenated_attr.shape[1]
+
+                    setattr(concatenated_observations, attr_name, concatenated_attr)
+                elif get_origin(attr_type) is list:
+                    concatenated_list = list(chain.from_iterable([getattr(observation, attr_name)
+                                                                  for observation in observations]))
+                    setattr(concatenated_observations, attr_name, concatenated_list)
+
+                    attr_length = len(concatenated_list)
+                else:
+                    attr_length = None
+
+                if concatenated_length is None:
+                    concatenated_length = attr_length
+                elif attr_length is not None:
+                    assert concatenated_length == attr_length
 
         return concatenated_observations
 
@@ -66,8 +85,11 @@ class Observation:
 
         for attr_name, attr_type in self.__annotations__.items():
             value = getattr(self, attr_name)
-            if value is not None and issubclass(attr_type, torch.Tensor):
-                setattr(new_observation, attr_name, value[:, frames_indices, :])
+            if value is not None:
+                if issubclass(attr_type, torch.Tensor):
+                    setattr(new_observation, attr_name, value[:, frames_indices, :])
+                elif get_origin(attr_type) is list:
+                    setattr(new_observation, attr_name, [value[idx] for idx in frames_indices])
 
         return new_observation
 
@@ -102,6 +124,8 @@ class BaseFlowObservation(Observation):
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
     coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+    flow_source_frames: list[int] = field(default_factory=list)
+    flow_target_frames: list[int] = field(default_factory=list)
 
     def cast_unit_coords_to_image_coords(self):
         if self.coordinate_system != 'unit':
@@ -130,6 +154,8 @@ class FlowObservation(BaseFlowObservation):
     observed_flow_occlusion: torch.Tensor = None
     observed_flow_uncertainty: torch.Tensor = None
     coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+    flow_source_frames: list[int] = field(default_factory=list)
+    flow_target_frames: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -139,6 +165,8 @@ class SyntheticFlowObservation(BaseFlowObservation):
     observed_flow_segmentation: torch.Tensor = None
     observed_flow_occlusion: torch.Tensor = None
     coordinate_system: str = 'unit'  # Either 'unit' or 'image'
+    flow_source_frames: list[int] = field(default_factory=list)
+    flow_target_frames: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -243,7 +271,9 @@ class KeyframeBuffer:
         flow_observation = FlowObservation(observed_flow=observed_flow,
                                            observed_flow_segmentation=observed_flows_segmentation,
                                            observed_flow_uncertainty=observed_flows_uncertainty,
-                                           observed_flow_occlusion=observed_flows_occlusion)
+                                           observed_flow_occlusion=observed_flows_occlusion,
+                                           flow_source_frames=[source_frame],
+                                           flow_target_frames=[target_frame])
 
         self.add_new_flow_observation(flow_observation, source_frame, target_frame)
 
@@ -255,6 +285,9 @@ class KeyframeBuffer:
 
         if source_frame not in self.flow_frames:
             insort(self.flow_frames, source_frame)
+
+        assert len(flow_observation.flow_source_frames) != 0 and len(flow_observation.flow_target_frames) != 0
+
         self.G.add_edge(source_frame, target_frame,
                         flow_observations=flow_observation.send_to_device(self._storage_device))
 

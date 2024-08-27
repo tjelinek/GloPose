@@ -361,7 +361,10 @@ class RenderingKaolin(nn.Module):
         synthetic_flow_cpu = SyntheticFlowObservation(
             observed_flow=rendered_flow_res.theoretical_flow,
             observed_flow_segmentation=rendered_flow_res.rendered_flow_segmentation,
-            observed_flow_occlusion=rendered_flow_res.rendered_flow_occlusion)
+            observed_flow_occlusion=rendered_flow_res.rendered_flow_occlusion,
+            flow_source_frames=[flow_arc_source],
+            flow_target_frames=[flow_arc_target],
+        )
 
         return synthetic_flow_cpu
 

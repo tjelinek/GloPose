@@ -564,7 +564,9 @@ class Tracking6D:
             flow_observation = FlowObservation(observed_flow=observed_flow,
                                                observed_flow_segmentation=segment,
                                                observed_flow_uncertainty=uncertainties,
-                                               observed_flow_occlusion=occlusions)
+                                               observed_flow_occlusion=occlusions,
+                                               flow_source_frames=[flow_source_frame],
+                                               flow_target_frames=[flow_target_frame])
 
             # Add new flow to active keyframes
             active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
