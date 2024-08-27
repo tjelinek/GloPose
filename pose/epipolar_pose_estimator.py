@@ -121,7 +121,7 @@ class EpipolarPoseEstimator:
                                                                           Se3_obj_chained_short_jumps.quaternion).item()
 
         print(f'-----------------------------------Long, short chain diff: {short_long_chain_ang_diff}')
-        if short_long_chain_ang_diff > 5:
+        if short_long_chain_ang_diff > 2:
             print(f'-----------------------------------Last long jump axis-angle '
                   f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_reference_frame.quaternion.q))}')
             print(f'-----------------------------------Chained long jump axis-angle '
