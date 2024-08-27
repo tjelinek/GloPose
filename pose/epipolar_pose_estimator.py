@@ -144,11 +144,11 @@ class EpipolarPoseEstimator:
         datagraph_short_edge = self.data_graph.get_edge_observations(*flow_arc_short_jump)
         datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
 
-        datagraph_short_edge.predicted_obj_delta_se3 = Se3_cam_short_jump
+        datagraph_short_edge.predicted_obj_delta_se3 = Se3_obj_short_jump
         datagraph_short_edge.predicted_cam_delta_se3 = Se3_cam_short_jump
         datagraph_short_edge.predicted_cam_delta_se3_ransac = Se3_cam_short_jump_RANSAC
 
-        datagraph_long_edge.predicted_obj_delta_se3 = Se3_cam_long_jump
+        datagraph_long_edge.predicted_obj_delta_se3 = Se3_obj_long_jump
         datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
         datagraph_long_edge.predicted_cam_delta_se3_ransac = Se3_cam_long_jump_RANSAC
 
