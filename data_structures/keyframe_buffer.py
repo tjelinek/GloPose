@@ -9,7 +9,7 @@ import torch
 import torchvision.transforms.functional as TF
 import networkx as nx
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, replace, is_dataclass
 
 from auxiliary_scripts.cameras import Cameras
 from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
@@ -95,14 +95,20 @@ class Observation:
 
     def send_to_device(self: ObservationType, device: str) -> ObservationType:
 
-        new_observation = type(self)()
+        if not is_dataclass(self):
+            raise ValueError("send_to_device should only be used with dataclass instances")
+
+        new_fields = {}
 
         for attr_name, attr_type in self.__annotations__.items():
-            value: torch.Tensor = getattr(self, attr_name)
-            if value is not None and issubclass(attr_type, torch.Tensor):
-                setattr(new_observation, attr_name, value.to(device))
+            value = getattr(self, attr_name)
+            # Check if the attribute type is torch.Tensor
+            if value is not None and isinstance(value, torch.Tensor):
+                new_fields[attr_name] = value.to(device)
             else:
-                setattr(new_observation, attr_name, value)  # If not tensor, copy as is
+                new_fields[attr_name] = value
+
+        new_observation = replace(self, **new_fields)
 
         return new_observation
 
