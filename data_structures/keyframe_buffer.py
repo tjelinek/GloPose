@@ -1,7 +1,7 @@
 import copy
 from bisect import insort
 from copy import deepcopy
-from typing import Tuple, List, Dict, Union, TypeVar, get_origin
+from typing import Tuple, List, Dict, Union, TypeVar, get_origin, get_args
 from itertools import chain
 
 import numpy as np
@@ -101,6 +101,8 @@ class Observation:
             value: torch.Tensor = getattr(self, attr_name)
             if value is not None and issubclass(attr_type, torch.Tensor):
                 setattr(new_observation, attr_name, value.to(device))
+            else:
+                setattr(new_observation, attr_name, value)  # If not tensor, copy as is
 
         return new_observation
 
