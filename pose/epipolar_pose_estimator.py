@@ -169,15 +169,6 @@ class EpipolarPoseEstimator:
         datagraph_camera_node.long_jump_source = flow_long_jump_source
         datagraph_camera_node.short_jump_source = flow_short_jump_source
 
-        # print(
-        #     f"Frame {flow_long_jump_target} offset: "
-        #     f"{torch.rad2deg(quaternion_to_axis_angle(self.encoder.quaternion_offsets[flow_long_jump_target])).numpy(force=True).round(2)}")
-        # print(
-        #     f"Frame {flow_long_jump_target} qtotal: "
-        #     f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_long_jump.quaternion.data)).numpy(force=True).round(2)}")
-        # print(
-        #     f"Frame {flow_long_jump_target} new_of: "
-        #     f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q)).numpy(force=True).round(2)}")
 
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
                                          chained_flow_verification=None) -> Tuple[Se3, Se3]:
