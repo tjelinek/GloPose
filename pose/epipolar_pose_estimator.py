@@ -306,7 +306,7 @@ class EpipolarPoseEstimator:
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
         data.remaining_pts_after_filtering = remaining_ratio
-        data.dst_pts_yx_chained = dst_pts_yx_chained_flow.cpu()
+        data.dst_pts_yx_chained = dst_pts_yx_chained_flow.cpu() if dst_pts_yx_chained_flow is not None else None
 
         return Se3_cam, Se3_cam_RANSAC
 
