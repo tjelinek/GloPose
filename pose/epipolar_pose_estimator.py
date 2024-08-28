@@ -10,7 +10,7 @@ from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaterni
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
 from data_structures.pose_icosphere import PoseIcosphere
-from flow import get_correct_correspondences_mask, source_to_target_coords_world_coord_system
+from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderingResult
@@ -344,7 +344,7 @@ class EpipolarPoseEstimator:
         return confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx
 
     def filter_outlier_flow(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
-        ok_pts_indices = get_correct_correspondences_mask(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
+        ok_pts_indices = get_correct_correspondence_mask_world_system(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
                                                           self.config.ransac_feed_only_inlier_flow_epe_threshold)
         dst_pts_yx = dst_pts_yx[ok_pts_indices]
         src_pts_yx = src_pts_yx[ok_pts_indices]

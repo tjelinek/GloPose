@@ -223,7 +223,14 @@ def source_coords_to_target_coords_np(source_coords: np.ndarray, flow: np.ndarra
 
 
 def get_correct_correspondences_mask(gt_flow, src_pts_yx, dst_pts_yx, epe_threshold):
-    dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx, gt_flow)
+    dst_pts_yx_gt_flow = source_coords_to_target_coords(src_pts_yx, gt_flow)  # TODO this is wrong
+    dst_pts_epe = torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, dim=1)
+    ok_pts_indices = torch.nonzero(dst_pts_epe < float(epe_threshold)).squeeze(-1)
+    return ok_pts_indices
+
+
+def get_correct_correspondence_mask_world_system(gt_flow, src_pts_yx, dst_pts_yx, epe_threshold):
+    dst_pts_yx_gt_flow = source_to_target_coords_world_coord_system(src_pts_yx, gt_flow)  # TODO this is wrong
     dst_pts_epe = torch.linalg.norm(dst_pts_yx - dst_pts_yx_gt_flow, dim=1)
     ok_pts_indices = torch.nonzero(dst_pts_epe < float(epe_threshold)).squeeze(-1)
     return ok_pts_indices
