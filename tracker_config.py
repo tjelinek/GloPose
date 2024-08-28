@@ -171,6 +171,11 @@ class TrackerConfig:
     ransac_feed_gt_flow_add_gaussian_noise_sigma: float = 2.5
     ransac_feed_gt_flow_add_gaussian_noise_mean: float = 0.5
 
+    long_short_flow_chaining_pose_level_verification: bool = True
+    long_short_flow_chaining_pose_level_threshold: float = 2.0
+    long_short_flow_chaining_pixel_level_verification: bool = True
+    long_short_flow_chaining_pixel_level_threshold: float = 1.0
+
     ransac_distant_pixels_sampling: bool = False
     ransac_distant_pixels_sample_size: int = 1000
 

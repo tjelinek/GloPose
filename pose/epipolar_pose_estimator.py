@@ -69,16 +69,21 @@ class EpipolarPoseEstimator:
                             for i in range(flow_long_jump_source, frame_i - 1)]
 
         pred_short_deltas_se3: List[Se3] = [data.predicted_obj_delta_se3 for data in short_jumps_data]
-        flows: List[FlowObservation] = ([data.observed_flow for data in short_jumps_data] +
-                                        [flow_short_jump_observations])
 
-        chained_flows = FlowObservation.chain(*flows)
+        if self.config.long_short_flow_chaining_pixel_level_verification:
+            short_jumps_flows_ref_to_current: List[FlowObservation] = \
+                [data.observed_flow for data in short_jumps_data] + [flow_short_jump_observations]
+
+            chained_short_jumps_flows_ref_to_current = FlowObservation.chain(*short_jumps_flows_ref_to_current)
+        else:
+            chained_short_jumps_flows_ref_to_current = None
 
         Se3_cam_short_jump, Se3_cam_short_jump_RANSAC = (
             self.estimate_pose_using_optical_flow(flow_short_jump_observations, flow_arc_short_jump))
 
         Se3_cam_long_jump, Se3_cam_long_jump_RANSAC = (
-            self.estimate_pose_using_optical_flow(flow_long_jump_observations, flow_arc_long_jump, chained_flows))
+            self.estimate_pose_using_optical_flow(flow_long_jump_observations, flow_arc_long_jump,
+                                                  chained_short_jumps_flows_ref_to_current))
 
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
@@ -127,7 +132,8 @@ class EpipolarPoseEstimator:
                                                                           Se3_obj_chained_short_jumps.quaternion).item()
 
         print(f'-----------------------------------Long, short chain diff: {short_long_chain_ang_diff}')
-        if short_long_chain_ang_diff > 2:
+        if short_long_chain_ang_diff > self.config.long_short_flow_chaining_pose_level_threshold \
+                and self.config.long_short_flow_chaining_pose_level_verification:
             print(f'-----------------------------------Last long jump axis-angle '
                   f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_reference_frame.quaternion.q))}')
             print(f'-----------------------------------Chained long jump axis-angle '
@@ -203,7 +209,10 @@ class EpipolarPoseEstimator:
             chained_flow_image_coords = chained_flow_verification.cast_unit_coords_to_image_coords().observed_flow
             dst_pts_yx_chained_flow = source_to_target_coords_world_coord_system(src_pts_yx, chained_flow_image_coords)
             dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
-            ok_pts_indices = get_correct_correspondence_mask_world_system(chained_flow_image_coords, src_pts_yx, dst_pts_yx, 1.0)
+            ok_pts_indices = (
+                get_correct_correspondence_mask_world_system(chained_flow_image_coords, src_pts_yx, dst_pts_yx,
+                                                             self.config.long_short_flow_chaining_pixel_level_threshold)
+            )
 
             src_pts_yx = src_pts_yx[ok_pts_indices]
 
@@ -350,8 +359,9 @@ class EpipolarPoseEstimator:
         return confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx
 
     def filter_outlier_flow(self, src_pts_yx, dst_pts_yx, dst_pts_yx_gt_flow, confidences, gt_flow_image_coord):
-        ok_pts_indices = get_correct_correspondence_mask_world_system(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
-                                                          self.config.ransac_feed_only_inlier_flow_epe_threshold)
+        ok_pts_indices = (
+            get_correct_correspondence_mask_world_system(gt_flow_image_coord, src_pts_yx, dst_pts_yx,
+                                                         self.config.ransac_feed_only_inlier_flow_epe_threshold))
         dst_pts_yx = dst_pts_yx[ok_pts_indices]
         src_pts_yx = src_pts_yx[ok_pts_indices]
         dst_pts_yx_gt_flow = dst_pts_yx_gt_flow[ok_pts_indices]
