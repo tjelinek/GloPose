@@ -313,18 +313,16 @@ class EpipolarPoseEstimator:
 
     def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 
-        if self.config.ransac_erode_segmentation:
-            eroded_observed_seg = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])
-
-            flow_observation_current_frame.observed_flow_segmentation = eroded_observed_seg[None]
-
-        if self.config.ransac_dilate_occlusion:
-            dilated_observed_occ = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
-
-            flow_observation_current_frame.observed_flow_occlusion = dilated_observed_occ
-
-        occlusions = flow_observation_current_frame.observed_flow_occlusion
         segmentation = flow_observation_current_frame.observed_flow_segmentation
+        occlusions = flow_observation_current_frame.observed_flow_occlusion
+
+        # Apply erosion if the config flag is set
+        if self.config.ransac_erode_segmentation:
+            segmentation = erode_segment_mask2(5, flow_observation_current_frame.observed_flow_segmentation[0])[None]
+
+        # Apply dilation if the config flag is set
+        if self.config.ransac_dilate_occlusion:
+            occlusions = dilate_mask(1, flow_observation_current_frame.observed_flow_occlusion)
 
         return occlusions, segmentation
 
