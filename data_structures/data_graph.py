@@ -29,6 +29,8 @@ class CommonFrameData:
     frame_losses: Any = None
     encoder_result: EncoderResult = None
 
+    pose_estimation_time: float = None
+
 
 @dataclass
 class CameraSpecificFrameData:
