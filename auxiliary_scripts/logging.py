@@ -883,7 +883,7 @@ class WriteResults:
         template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
 
         rr.log(RerunAnnotations.space_predicted_closest_keypoint,
-               rr.LineStrips3D(strips=[[gt_t_cam[[-1]],
+               rr.LineStrips3D(strips=[[pred_t_cam[-1],
                                         template_node_cam_se3.translation.squeeze().numpy(force=True)]],
                                colors=[[255, 0, 0]],
                                radii=[0.025]))
