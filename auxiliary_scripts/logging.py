@@ -316,12 +316,6 @@ class WriteResults:
                     ),
                     rrb.Grid(
                         contents=[
-                            rrb.Spatial2DView(name="Rendered Flow Occlusion", origin="/rendered_flow/occlusion")
-                        ],
-                        name='Output After Optimization'
-                    ),
-                    rrb.Grid(
-                        contents=[
                             rrb.Spatial3DView(name="Triangulated Point Cloud MFT Flow, GT, Rt",
                                               origin=RerunAnnotations.triangulated_points_gt_Rt_mft_flow),
                             rrb.Spatial3DView(name="Triangulated Point Cloud GT Flow, GT, Rt",
