@@ -208,7 +208,7 @@ class EpipolarPoseEstimator:
             src_pts_yx = src_pts_yx[ok_pts_indices]
 
         remained_after_filtering = src_pts_yx.shape[0]
-        remaining_ratio = remained_after_filtering / original_points_selected.shape[0]
+        remaining_ratio = remained_after_filtering / original_points_selected
 
         if self.config.ransac_sample_points:
             perm = torch.randperm(src_pts_yx.shape[0])
