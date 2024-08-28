@@ -94,15 +94,14 @@ class RerunAnnotations:
     ransac_stats_frontview_correctly_predicted_inliers: str = '/epipolar/ransac_stats_frontview/correctly_predicted_inliers'
     ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
 
-    ransac_stats_backview: str = '/epipolar/ransac_stats_backview'
-
     # Pose
-    long_short_chain_diff: str = 'pose/chaining/long_short_chain_angular_diff'
+    long_short_chain_remaining_pts: str = 'pose/chaining/remaining_pts/remaining_percent'
     long_short_chain_diff_template: str = 'pose/chaining/template'
     chained_pose_polar: str = 'pose/chaining/polar_angle'
     chained_pose_polar_template: str = 'pose/chaining/polar_angle/template'
     chained_pose_long_flow_polar: str = 'pose/chaining/polar_angle/long_flow'
     chained_pose_short_flow_polar: str = 'pose/chaining/polar_angle/short_flow'
+    long_short_chain_diff: str = 'pose/chaining/polar_angle/difference'
 
     chained_pose_long_flow: str = 'pose/chaining/long_flow'
     chained_pose_long_flow_template: str = 'pose/chaining/long_flow/template'
@@ -328,13 +327,16 @@ class WriteResults:
                         grid_columns=2,
                         name='Point Clouds'
                     ),
-                    rrb.Horizontal(
-                        contents=[
-                            rrb.Spatial2DView(name="RANSAC Inliers Visualization",
-                                              origin=RerunAnnotations.matching_correspondences_inliers),
-                            rrb.Spatial2DView(name="RANSAC Outliers Visualizations",
-                                              origin=RerunAnnotations.matching_correspondences_outliers),
-                        ],
+                    rrb.Tabs(
+                        rrb.Horizontal(
+                            contents=[
+                                rrb.Spatial2DView(name="RANSAC Inliers Visualization",
+                                                  origin=RerunAnnotations.matching_correspondences_inliers),
+                                rrb.Spatial2DView(name="RANSAC Outliers Visualizations",
+                                                  origin=RerunAnnotations.matching_correspondences_outliers),
+                            ],
+                            name='Matching - Long Jumps'
+                        ),
                         name='Matching'
                     ),
                     rrb.Tabs(
@@ -344,15 +346,12 @@ class WriteResults:
                                     rrb.TimeSeriesView(name="RANSAC - Frontview",
                                                        origin=RerunAnnotations.ransac_stats_frontview
                                                        ),
-                                    rrb.TimeSeriesView(name="RANSAC - Backview",
-                                                       origin=RerunAnnotations.ransac_stats_backview
-                                                       ),
                                     rrb.TimeSeriesView(name="Pose - Rotation",
                                                        origin=RerunAnnotations.obj_rot_1st_to_last
                                                        ),
-                                    rrb.TimeSeriesView(name="Pose - Translation",
-                                                       origin=RerunAnnotations.obj_tran_1st_to_last
-                                                       ),
+                                    # rrb.TimeSeriesView(name="Pose - Translation",
+                                    #                    origin=RerunAnnotations.obj_tran_1st_to_last
+                                    #                    ),
                                 ],
                                 grid_columns=2,
                                 name='Epipolar'
@@ -368,8 +367,8 @@ class WriteResults:
                                     rrb.TimeSeriesView(name="Chained Pose Polar Angles",
                                                        origin=RerunAnnotations.chained_pose_polar
                                                        ),
-                                    rrb.TimeSeriesView(name="Long and Short Chain Difference",
-                                                       origin=RerunAnnotations.long_short_chain_diff
+                                    rrb.TimeSeriesView(name="Short Flow Chaining Filtering - % Remaining in Long Jump",
+                                                       origin=RerunAnnotations.long_short_chain_remaining_pts
                                                        ),
                                 ],
                                 grid_columns=2,
@@ -1513,6 +1512,9 @@ class WriteResults:
         rr.set_time_sequence("frame", frame_i)
         datagraph_short_edge = self.data_graph.get_edge_observations(short_jump_source, frame_i)
         datagraph_long_edge = self.data_graph.get_edge_observations(long_jump_source, frame_i)
+
+        rr.log(RerunAnnotations.long_short_chain_remaining_pts,
+               rr.Scalar(datagraph_long_edge.remaining_pts_after_filtering))
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
