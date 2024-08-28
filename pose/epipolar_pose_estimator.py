@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 import torch
@@ -65,11 +65,20 @@ class EpipolarPoseEstimator:
         flow_short_jump_observations: FlowObservation = (self.data_graph.get_edge_observations(*flow_arc_short_jump).
                                                          observed_flow).cuda()
 
+        short_jumps_data = [self.data_graph.get_edge_observations(i, i + 1)
+                            for i in range(flow_long_jump_source, frame_i - 1)]
+
+        pred_short_deltas_se3: List[Se3] = [data.predicted_obj_delta_se3 for data in short_jumps_data]
+        flows: List[FlowObservation] = ([data.observed_flow for data in short_jumps_data] +
+                                        [flow_short_jump_observations])
+
+        chained_flows = FlowObservation.chain(*flows)
+
         Se3_cam_short_jump, Se3_cam_short_jump_RANSAC = (
             self.estimate_pose_using_optical_flow(flow_short_jump_observations, flow_arc_short_jump))
 
         Se3_cam_long_jump, Se3_cam_long_jump_RANSAC = (
-            self.estimate_pose_using_optical_flow(flow_long_jump_observations, flow_arc_long_jump))
+            self.estimate_pose_using_optical_flow(flow_long_jump_observations, flow_arc_long_jump, chained_flows))
 
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
@@ -90,9 +99,6 @@ class EpipolarPoseEstimator:
         #                  Se3(Quaternion.from_axis_angle(self.data_graph.get_frame_data(i).gt_rot_axis_angle[None]),
         #                      torch.zeros(1, 3).cuda()).inverse()
         #                  for i in range(flow_long_jump_source, frame_i - 1)]
-
-        pred_short_deltas_se3 = [self.data_graph.get_edge_observations(i, i + 1).predicted_obj_delta_se3
-                                 for i in range(flow_long_jump_source, frame_i - 1)]
 
         products = reversed([Se3_obj_reference_frame] +
                             pred_short_deltas_se3 +
@@ -166,8 +172,8 @@ class EpipolarPoseEstimator:
         #     f"Frame {flow_long_jump_target} new_of: "
         #     f"{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q)).numpy(force=True).round(2)}")
 
-    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc) -> \
-            Tuple[Se3, Se3]:
+    def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
+                                         chained_flow_verification=None) -> Tuple[Se3, Se3]:
 
         K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
 
@@ -190,6 +196,19 @@ class EpipolarPoseEstimator:
         _, gt_visible_fg_points_mask = (
             get_not_occluded_foreground_points(gt_occlusion, gt_segmentation, self.occlusion_threshold,
                                                self.segmentation_threshold))
+
+        original_points_selected = src_pts_yx.shape[0]
+        dst_pts_yx_chained_flow = None
+        if chained_flow_verification is not None:
+            chained_flow_image_coords = chained_flow_verification.cast_unit_coords_to_image_coords().observed_flow
+            dst_pts_yx_chained_flow = source_to_target_coords_world_coord_system(src_pts_yx, chained_flow_image_coords)
+            dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
+            ok_pts_indices = get_correct_correspondence_mask_world_system(chained_flow_image_coords, src_pts_yx, dst_pts_yx, 1.0)
+
+            src_pts_yx = src_pts_yx[ok_pts_indices]
+
+        remained_after_filtering = src_pts_yx.shape[0]
+        remaining_ratio = remained_after_filtering / original_points_selected.shape[0]
 
         if self.config.ransac_sample_points:
             perm = torch.randperm(src_pts_yx.shape[0])
@@ -286,6 +305,8 @@ class EpipolarPoseEstimator:
         data.ransac_triangulated_points = triangulated_points_ransac.cpu()
         data.ransac_inliers_mask = inlier_mask.cpu()
         data.ransac_inlier_ratio = inlier_ratio
+        data.remaining_pts_after_filtering = remaining_ratio
+        data.dst_pts_yx_chained = dst_pts_yx_chained_flow.cpu()
 
         return Se3_cam, Se3_cam_RANSAC
 
