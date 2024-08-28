@@ -95,36 +95,37 @@ class RerunAnnotations:
     ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
 
     # Pose
-    pose_estimation_time: str = 'pose/timing/pose_estimation_time'
-    long_short_chain_remaining_pts: str = 'pose/chaining/remaining_pts/remaining_percent'
-    long_short_chain_diff_template: str = 'pose/chaining/template'
-    chained_pose_polar: str = 'pose/chaining/polar_angle'
-    chained_pose_polar_template: str = 'pose/chaining/polar_angle/template'
-    chained_pose_long_flow_polar: str = 'pose/chaining/polar_angle/long_flow'
-    chained_pose_short_flow_polar: str = 'pose/chaining/polar_angle/short_flow'
-    long_short_chain_diff: str = 'pose/chaining/polar_angle/difference'
+    pose_estimation_timing: str = '/pose/timing/'
+    pose_estimation_time: str = '/pose/timing/pose_estimation_time'
+    long_short_chain_remaining_pts: str = '/pose/chaining/remaining_pts/remaining_percent'
+    long_short_chain_diff_template: str = '/pose/chaining/template'
+    chained_pose_polar: str = '/pose/chaining/polar_angle'
+    chained_pose_polar_template: str = '/pose/chaining/polar_angle/template'
+    chained_pose_long_flow_polar: str = '/pose/chaining/polar_angle/long_flow'
+    chained_pose_short_flow_polar: str = '/pose/chaining/polar_angle/short_flow'
+    long_short_chain_diff: str = '/pose/chaining/polar_angle/difference'
 
-    chained_pose_long_flow: str = 'pose/chaining/long_flow'
-    chained_pose_long_flow_template: str = 'pose/chaining/long_flow/template'
-    chained_pose_long_flow_x: str = 'pose/chaining/long_flow/x_axis'
-    chained_pose_long_flow_y: str = 'pose/chaining/long_flow/y_axis'
-    chained_pose_long_flow_z: str = 'pose/chaining/long_flow/z_axis'
+    chained_pose_long_flow: str = '/pose/chaining/long_flow'
+    chained_pose_long_flow_template: str = '/pose/chaining/long_flow/template'
+    chained_pose_long_flow_x: str = '/pose/chaining/long_flow/x_axis'
+    chained_pose_long_flow_y: str = '/pose/chaining/long_flow/y_axis'
+    chained_pose_long_flow_z: str = '/pose/chaining/long_flow/z_axis'
 
-    chained_pose_short_flow: str = 'pose/chaining/short_flow'
-    chained_pose_short_flow_template: str = 'pose/chaining/short_flow/template'
-    chained_pose_short_flow_x: str = 'pose/chaining/short_flow/x_axis'
-    chained_pose_short_flow_y: str = 'pose/chaining/short_flow/y_axis'
-    chained_pose_short_flow_z: str = 'pose/chaining/short_flow/z_axis'
+    chained_pose_short_flow: str = '/pose/chaining/short_flow'
+    chained_pose_short_flow_template: str = '/pose/chaining/short_flow/template'
+    chained_pose_short_flow_x: str = '/pose/chaining/short_flow/x_axis'
+    chained_pose_short_flow_y: str = '/pose/chaining/short_flow/y_axis'
+    chained_pose_short_flow_z: str = '/pose/chaining/short_flow/z_axis'
 
-    cam_delta_short_flow: str = 'pose/cam/short_flow/'
-    cam_delta_short_flow_template = 'pose/cam/short_flow/template'
-    cam_delta_short_flow_zaragoza: str = 'pose/cam/short_flow/cam_pose_delta_zaragoza'
-    cam_delta_short_flow_RANSAC: str = 'pose/cam/short_flow/cam_pose_delta_RANSAC'
+    cam_delta_short_flow: str = '/pose/cam/short_flow/'
+    cam_delta_short_flow_template = '/pose/cam/short_flow/template'
+    cam_delta_short_flow_zaragoza: str = '/pose/cam/short_flow/cam_pose_delta_zaragoza'
+    cam_delta_short_flow_RANSAC: str = '/pose/cam/short_flow/cam_pose_delta_RANSAC'
 
-    cam_delta_long_flow: str = 'pose/cam/long_flow/'
-    cam_delta_long_flow_template = 'pose/cam/long_flow/template'
-    cam_delta_long_flow_zaragoza: str = 'pose/cam/long_flow/cam_pose_delta_zaragoza'
-    cam_delta_long_flow_RANSAC: str = 'pose/cam/long_flow/cam_pose_delta_RANSAC'
+    cam_delta_long_flow: str = '/pose/cam/long_flow/'
+    cam_delta_long_flow_template = '/pose/cam/long_flow/template'
+    cam_delta_long_flow_zaragoza: str = '/pose/cam/long_flow/cam_pose_delta_zaragoza'
+    cam_delta_long_flow_RANSAC: str = '/pose/cam/long_flow/cam_pose_delta_RANSAC'
 
     obj_rot_1st_to_last: str = '/pose/rotation'
     obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
@@ -316,8 +317,8 @@ class WriteResults:
                     ),
                     rrb.Grid(
                         contents=[
-                            rrb.Spatial3DView(name="Pose Estimation (w.o. flow computation)",
-                                              origin=RerunAnnotations.pose_estimation_time),
+                            rrb.TimeSeriesView(name="Pose Estimation (w.o. flow computation)",
+                                               origin=RerunAnnotations.pose_estimation_timing),
                         ],
                         grid_columns=2,
                         name='Timings'
