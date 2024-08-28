@@ -875,14 +875,16 @@ class WriteResults:
                                colors=colors_pred,
                                radii=strips_radii))
 
-        closest_node, _ = pose_icosphere.get_closest_reference(Quaternion(pred_obj_se3.quaternion.q[[-1]]))
+        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        template_frame_idx = datagraph_camera_node.long_jump_source
+        datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
-        closest_node_Se3 = Se3(closest_node.quaternion, torch.zeros(1, 3).cuda())
-        closest_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(closest_node_Se3, T_world_to_cam_se3)
+        template_node_Se3 = datagraph_template_node.predicted_object_se3_total
+        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
 
         rr.log(RerunAnnotations.space_predicted_closest_keypoint,
                rr.LineStrips3D(strips=[[pred_cam_se3.translation[[-1]].squeeze().numpy(force=True),
-                                        closest_node_cam_se3.translation.squeeze().numpy(force=True)]],
+                                        template_node_cam_se3.translation.squeeze().numpy(force=True)]],
                                colors=[[255, 0, 0]],
                                radii=[0.025]))
 

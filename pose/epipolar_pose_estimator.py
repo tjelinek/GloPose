@@ -151,6 +151,7 @@ class EpipolarPoseEstimator:
         datagraph_node = self.data_graph.get_frame_data(frame_i)
         datagraph_node.predicted_object_se3_long_jump = Se3_obj_chained_long_jump
         datagraph_node.predicted_object_se3_short_jump = Se3_obj_chained_short_jumps
+        datagraph_node.predicted_object_se3_total = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
         datagraph_node.predicted_obj_long_short_chain_diff = short_long_chain_ang_diff
 
         datagraph_short_edge = self.data_graph.get_edge_observations(*flow_arc_short_jump)
