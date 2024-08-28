@@ -95,6 +95,7 @@ class RerunAnnotations:
     ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
 
     # Pose
+    pose_estimation_time: str = 'pose/timing/pose_estimation_time'
     long_short_chain_remaining_pts: str = 'pose/chaining/remaining_pts/remaining_percent'
     long_short_chain_diff_template: str = 'pose/chaining/template'
     chained_pose_polar: str = 'pose/chaining/polar_angle'
@@ -312,6 +313,14 @@ class WriteResults:
                     rrb.Spatial3DView(
                         origin=RerunAnnotations.space_visualization,
                         name='3D Space',
+                    ),
+                    rrb.Grid(
+                        contents=[
+                            rrb.Spatial3DView(name="Pose Estimation (w.o. flow computation)",
+                                              origin=RerunAnnotations.pose_estimation_time),
+                        ],
+                        grid_columns=2,
+                        name='Timings'
                     ),
                     rrb.Grid(
                         contents=[
@@ -1517,6 +1526,7 @@ class WriteResults:
 
         rr.log(RerunAnnotations.long_short_chain_remaining_pts,
                rr.Scalar(datagraph_long_edge.remaining_pts_after_filtering))
+        rr.log(RerunAnnotations.pose_estimation_time, rr.Scalar(data_graph_node.pose_estimation_time))
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()

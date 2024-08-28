@@ -1,4 +1,5 @@
 from typing import Tuple, List
+from time import time
 
 import numpy as np
 import torch
@@ -51,6 +52,7 @@ class EpipolarPoseEstimator:
     @torch.no_grad()
     def essential_matrix_preinitialization(self, keyframes, flow_tracks_inits):
 
+        start_time = time()
         frame_i = max(keyframes)
 
         flow_arc_long_jump = (flow_tracks_inits[-1], frame_i)
@@ -148,7 +150,9 @@ class EpipolarPoseEstimator:
 
         self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
 
+        duration = time() - start_time
         datagraph_node = self.data_graph.get_frame_data(frame_i)
+        datagraph_node.pose_estimation_time = duration
         datagraph_node.predicted_object_se3_long_jump = Se3_obj_chained_long_jump
         datagraph_node.predicted_object_se3_short_jump = Se3_obj_chained_short_jumps
         datagraph_node.predicted_object_se3_total = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
