@@ -26,9 +26,15 @@ def filter_inliers_using_ransac(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tens
         correspondences = np.ascontiguousarray(np.concatenate([src_pts_xy_np, dst_pts_xy_np], axis=1))
 
         if confidences is not None:
-            confidences_np = torch.numpy(confidences)
+            confidences_np = confidences.numpy(force=True)
+            ordering = confidences_np.argsort()[::-1]
+
+            confidences_np = confidences_np[ordering]
+            correspondences = correspondences[ordering]
+
+            # sampler = 1 is PROSAC
             E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
-                                                     confidences_np, threshold=0.1, min_iters=10000)
+                                                     confidences_np, threshold=0.1, min_iters=1000, sampler=1)
         else:
             E, mask = pygcransac.findEssentialMatrix(correspondences, K1_np, K2_np, height, width, height, width,
                                                      ransac_confidence, threshold=0.1, min_iters=10000)

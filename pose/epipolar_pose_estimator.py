@@ -146,7 +146,7 @@ class EpipolarPoseEstimator:
             prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_long_jump.quaternion
             self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
 
-        self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_short_jumps.quaternion.q
+        self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
 
         datagraph_node = self.data_graph.get_frame_data(frame_i)
         datagraph_node.predicted_object_se3_long_jump = Se3_obj_chained_long_jump
@@ -179,6 +179,7 @@ class EpipolarPoseEstimator:
 
         occlusion, segmentation = self.get_adjusted_occlusion_and_segmentation(flow_observation_long_jump)
         gt_occlusion, gt_segmentation = self.get_adjusted_occlusion_and_segmentation(gt_flow_observation)
+        uncertainty = flow_observation_long_jump.observed_flow_uncertainty
 
         if self.config.ransac_use_gt_occlusions_and_segmentation:
             occlusion, segmentation = gt_occlusion, gt_segmentation
@@ -220,7 +221,7 @@ class EpipolarPoseEstimator:
 
         confidences = None
         if self.config.ransac_confidences_from_occlusion:
-            confidences = 1 - occlusion[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
+            confidences = 1 - uncertainty[0, 0, 0, src_pts_yx[:, 0].to(torch.long), src_pts_yx[:, 1].to(torch.long)]
 
         confidences, dst_pts_yx, dst_pts_yx_gt_flow, src_pts_yx = self.augment_correspondences(src_pts_yx, dst_pts_yx,
                                                                                                dst_pts_yx_gt_flow,
