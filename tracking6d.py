@@ -451,12 +451,9 @@ class Tracking6D:
                 tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
 
             if self.config.write_results:
-                new_flow_arcs = [arc for arc in flow_arcs if arc[1] == frame_i]
 
-                self.write_results.write_results(frame_i=frame_i, tex=tex, new_flow_arcs=new_flow_arcs,
-                                                 active_keyframes=self.active_keyframes, best_model=self.best_model,
-                                                 observations=all_frame_observations, gt_rotations=self.gt_rotations,
-                                                 gt_translations=self.gt_translations,
+                self.write_results.write_results(frame_i=frame_i, tex=tex, active_keyframes=self.active_keyframes,
+                                                 best_model=self.best_model, observations=all_frame_observations,
                                                  flow_tracks_inits=self.flow_tracks_inits,
                                                  pose_icosphere=self.pose_icosphere)
 

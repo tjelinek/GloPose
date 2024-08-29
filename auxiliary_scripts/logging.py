@@ -723,28 +723,23 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, frame_i, tex, new_flow_arcs, active_keyframes: KeyframeBuffer, best_model,
-                      observations: FrameObservation, gt_rotations, gt_translations, flow_tracks_inits: List[int],
+    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer, best_model,
+                      observations: FrameObservation, flow_tracks_inits: List[int],
                       pose_icosphere: PoseIcosphere):
 
         observed_segmentations = observations.observed_segmentation
 
         for camera in self.cameras:
-            self.visualize_observed_data(active_keyframes, frame_i, new_flow_arcs, flow_tracks_inits, camera)
-
-        if frame_i % 25 == 0 or frame_i == 1:
-            self.visualize_optimized_values(keyframe_buffer=active_keyframes, new_flow_arcs=new_flow_arcs)
+            self.visualize_observed_data(active_keyframes, frame_i, camera)
 
             if not self.tracking_config.write_to_rerun_rather_than_disk:
-                self.visualize_flow_with_matching(new_flow_arcs)
+                self.visualize_flow_with_matching(frame_i)
             self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
-            for new_flow_arc in new_flow_arcs:
-                self.visualize_outliers_distribution(new_flow_arc)
-
-        if self.tracking_config.dump_correspondences:
-            self.dump_correspondences(active_keyframes, new_flow_arcs, gt_rotations, gt_translations)
+            datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+            new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
+            self.visualize_outliers_distribution(new_flow_arc)
 
         self.visualize_3d_camera_space(frame_i, pose_icosphere)
 
@@ -756,7 +751,7 @@ class WriteResults:
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             self.log_poses_into_rerun(frame_i)
-            self.visualize_flow_with_matching_rerun(new_flow_arcs)
+            self.visualize_flow_with_matching_rerun(frame_i)
 
         if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
             if self.tracking_config.analyze_ransac_matching_errors:
@@ -1126,11 +1121,15 @@ class WriteResults:
         plt.savefig(self.ransac_path / f'inliers_errors_frame_{frame}.svg')
         plt.close()
 
-    def visualize_flow_with_matching(self, new_flow_arcs):
+    def visualize_flow_with_matching(self, frame_i):
         if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
             return
 
         dpi = 600
+
+        datagraph_frontview_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        new_flow_arcs = [(datagraph_frontview_data.long_jump_source, frame_i)]
+
         for new_flow_arc in new_flow_arcs:
 
             flow_arc_source, flow_arc_target = new_flow_arc
@@ -1218,11 +1217,12 @@ class WriteResults:
             self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences_inliers,
                             dpi=dpi, bbox_inches='tight')
 
-    def visualize_flow_with_matching_rerun(self, new_flow_arcs):
+    def visualize_flow_with_matching_rerun(self, frame_i):
         if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
             return
 
-        new_flow_arc = new_flow_arcs[-1]
+        datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
         rr.set_time_sequence('frame', flow_arc_target)
@@ -1867,98 +1867,7 @@ class WriteResults:
         encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_optimized_values(self, keyframe_buffer: KeyframeBuffer, new_flow_arcs: List[Tuple[int, int]]):
-        for flow_arc_idx, flow_arc in enumerate(new_flow_arcs):
-
-            source_frame = flow_arc[0]
-            target_frame = flow_arc[1]
-
-            # Get optical flow frames
-            keyframes = [source_frame, target_frame]
-            flow_frames = [source_frame, target_frame]
-
-            # Compute estimated shape
-            encoder_result, encoder_result_flow_frames = self.deep_encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                            flow_frames)
-
-            # Get texture map
-            tex_rgb = nn.Sigmoid()(self.rgb_encoder.texture_map)
-
-            # Render keyframe images
-            rendering_result = self.rendering.forward(encoder_result.translations, encoder_result.quaternions,
-                                                      encoder_result.vertices, self.deep_encoder.face_features, tex_rgb,
-                                                      encoder_result.lights)
-
-            rendering_rgb = rendering_result.rendered_image
-
-            rendered_flow_result = self.rendering.compute_theoretical_flow(encoder_result, encoder_result_flow_frames,
-                                                                           flow_arcs_indices=[(0, 1)])
-
-            # rendered_keyframe_images = self.write_tensor_into_bbox(rendering_rgb, bounding_box)
-
-            # Extract current and previous rendered images
-            source_rendered_image_rgb = rendering_rgb[0, -2]
-            target_rendered_image_rgb = rendering_rgb[0, -1]
-
-            theoretical_flow_path = self.optimized_values_path / Path(
-                f"predicted_flow_{source_frame}_{target_frame}.png")
-            flow_difference_path = self.optimized_values_path / Path(
-                f"flow_difference_{source_frame}_{target_frame}.png")
-            rendering_path = self.optimized_values_path / Path(f"rendering_{target_frame}.png")
-            occlusion_path = self.optimized_values_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
-
-            rendered_occlusion_squeezed = rendered_flow_result.rendered_flow_occlusion.squeeze()
-            flow_occlusion_image = self.visualize_1D_feature_map_using_overlay(source_rendered_image_rgb.squeeze(),
-                                                                               rendered_occlusion_squeezed, alpha=0.8)
-
-            # Save rendered images
-            if flow_arc_idx == 0:
-                target_rendered_image = (target_rendered_image_rgb * 255).permute(1, 2, 0).to(torch.uint8)
-                self.log_image(target_frame, target_rendered_image, rendering_path, "/optimized_values/rendering")
-
-            # Adjust (0, 1) range to pixel range
-            theoretical_flow = rendered_flow_result.theoretical_flow[:, [-1]]
-            theoretical_flow = flow_unit_coords_to_image_coords(theoretical_flow).squeeze().detach().clone().cpu()
-
-            # Adjust (0, 1) range to pixel range
-            observed_flow = keyframe_buffer.get_flows_between_frames(source_frame, target_frame).observed_flow
-            observed_flow = flow_unit_coords_to_image_coords(observed_flow)
-            observed_flow = observed_flow.squeeze().detach().clone().cpu()
-
-            observed_flow_np = observed_flow.permute(1, 2, 0).numpy()
-            theoretical_flow_np = theoretical_flow.permute(1, 2, 0).numpy()
-
-            target_frame_observation = keyframe_buffer.get_observations_for_keyframe(target_frame)
-            source_frame_observation = keyframe_buffer.get_observations_for_keyframe(source_frame)
-
-            target_image_segmentation = target_frame_observation.observed_segmentation[
-                0, 0, 0].detach().clone().cpu()
-            source_image_segmentation = source_frame_observation.observed_segmentation[
-                0, 0, 0].detach().clone().cpu()
-
-            rendered_flow_occlusion_mask = rendered_flow_result.rendered_flow_occlusion[
-                0, 0, 0].detach().clone().cpu()
-
-            # Visualize flow and flow difference
-            flow_illustration = visualize_flow_with_images([source_rendered_image_rgb],
-                                                           target_rendered_image_rgb, observed_flows=None,
-                                                           gt_flows=theoretical_flow_np,
-                                                           gt_silhouette_current=target_image_segmentation,
-                                                           gt_silhouettes_prev=[source_image_segmentation],
-                                                           flow_occlusion_masks=[rendered_flow_occlusion_mask])
-
-            flow_difference_illustration = compare_flows_with_images([source_rendered_image_rgb],
-                                                                     target_rendered_image_rgb,
-                                                                     [observed_flow_np], theoretical_flow_np,
-                                                                     gt_silhouette_current=target_image_segmentation,
-                                                                     gt_silhouette_prev=[source_image_segmentation])
-
-            # Save flow illustrations
-            self.log_image(target_frame, flow_occlusion_image, occlusion_path,
-                           RerunAnnotations.observed_flow_occlusion_frontview)
-
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, new_flow_arcs,
-                                flow_tracks_inits: List[int], view=Cameras.FRONTVIEW):
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, view=Cameras.FRONTVIEW):
 
         view_name = view.value
 
@@ -1987,6 +1896,9 @@ class WriteResults:
 
         # Visualize new flow arcs
         if view == Cameras.FRONTVIEW:
+            data_graph_camera = self.data_graph.get_camera_specific_frame_data(frame_i, view)
+            new_flow_arcs = [(data_graph_camera.long_jump_source, frame_i)]
+
             for new_flow_arcs in sorted(new_flow_arcs):
                 source_frame = new_flow_arcs[0]
                 target_frame = new_flow_arcs[1]
