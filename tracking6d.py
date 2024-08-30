@@ -35,7 +35,7 @@ from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker, \
     PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem, PrecomputedTrackerSegmentAnything2
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, pinhole_intrinsics_from_tensor
+from utils import normalize_vertices, homogenize_3x3_camera_intrinsics
 
 
 class InferenceResult(NamedTuple):
@@ -183,7 +183,7 @@ class Tracking6D:
         self.initialize_keyframes()
 
         if self.config.camera_intrinsics is None:
-            camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)
+            camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None]
         else:
             camera_intrinsics = torch.from_numpy(self.config.camera_intrinsics).cuda()
         if self.config.camera_extrinsics is None:
