@@ -475,10 +475,8 @@ class Tracking6D:
 
             print("Angles:", angles)
 
-            current_pose = Quaternion(self.encoder.quaternion_offsets[[frame_i]])
+            current_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i - 1]].quaternion
             closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
-            print(
-                f">>>>>>>>>>>>>>>>>>>>Angular dist {angular_dist}, closest frame: {closest_node.keyframe_idx_observed}")
 
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
