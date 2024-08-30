@@ -14,7 +14,7 @@ import numpy as np
 import seaborn as sns
 import torchvision
 from PIL import Image
-from kornia.geometry import normalize_quaternion, Se3, Quaternion
+from kornia.geometry import normalize_quaternion, Se3, Quaternion, PinholeCamera
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -183,12 +183,14 @@ class RerunAnnotations:
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras]):
+                 deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras],
+                 pinhole_params):
 
         self.image_height = shape.height
         self.image_width = shape.width
 
         self.cameras: List[Cameras] = cameras
+        self.pinhole_params: Dict[Cameras, PinholeCamera] = pinhole_params
 
         self.data_graph: DataGraph = data_graph
 
@@ -795,15 +797,13 @@ class WriteResults:
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
 
     def visualize_3d_camera_space(self, frame_i: int, pose_icosphere: PoseIcosphere):
-        if self.tracking_config.gt_mesh_path is None or self.tracking_config.gt_texture_path is None:
-            return
 
         rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
 
         all_frames_from_0 = range(0, frame_i+1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3 = self.rendering.camera_transformation_matrix_Se3()
+        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
         T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
@@ -923,7 +923,8 @@ class WriteResults:
                 f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
                 rr.Pinhole(
                     resolution=[self.image_width, self.image_height],
-                    focal_length=[float(self.rendering.intrinsics.focal_x), float(self.rendering.intrinsics.focal_y)],
+                    focal_length=[float(self.pinhole_params[Cameras.FRONTVIEW].fx.item()),
+                                  float(self.pinhole_params[Cameras.FRONTVIEW].fy.item())],
                     camera_xyz=rr.ViewCoordinates.RUB,
                 ),
             )

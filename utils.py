@@ -188,6 +188,13 @@ def homogenize_3x4_transformation_matrix(T_3x4):
     return T_4x4
 
 
+def homogenize_3x3_camera_intrinsics(T_3x3):
+    T_4x4 = torch.eye(4, dtype=T_3x3.dtype).to(T_3x3.device).expand(*T_3x3.shape[:-2], 4, 4)
+    T_4x4[..., :3, :3] = T_3x3
+
+    return T_4x4
+
+
 def pad_to_multiple(image, multiple):
     height, width = image.shape[-2:]
     pad_h = multiple - (height % multiple)
@@ -203,21 +210,6 @@ def unpad_image(image, pad_h, pad_w):
     if pad_w > 0:
         image = image[:, :, :-pad_w]
     return image
-
-
-def pinhole_intrinsics_from_tensor(intrinsics: torch.Tensor, width: int, height: int) -> PinholeIntrinsics:
-    """
-    intrinsics: Shape [3, 3]
-    """
-
-    fx = intrinsics[0, 0]
-    fy = intrinsics[1, 1]
-    x0 = intrinsics[0, 2]
-    y0 = intrinsics[1, 2]
-    intrinsics_kaolin_format = torch.stack([x0, y0, fx, fy], dim=0)
-    pinhole_intrinsics = PinholeIntrinsics(width, height, intrinsics_kaolin_format)
-
-    return pinhole_intrinsics
 
 
 def pinhole_intrinsics_to_tensor(intrinsics: PinholeIntrinsics) -> torch.Tensor:

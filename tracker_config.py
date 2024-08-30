@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Tuple
 
+import numpy as np
+
 
 @dataclass
 class TrackerConfig:
@@ -60,6 +62,8 @@ class TrackerConfig:
     # Tracking settings
     tran_init: Tuple[float] = None  # (0., 0., 0.)
     rot_init: Tuple[float] = None   # (0., 0., 0.)
+    camera_intrinsics: np.ndarray = None
+    camera_extrinsics: np.ndarray = None
     iterations: int = 100
     stop_value: float = 0.05
     rgb_iters: int = 10

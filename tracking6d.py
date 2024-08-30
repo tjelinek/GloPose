@@ -5,12 +5,11 @@ import kaolin
 import numpy as np
 import time
 import torch
-from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import Quaternion, Se3
+from kornia.geometry import Quaternion, Se3, PinholeCamera
 from pathlib import Path
 
 from torch.optim import lr_scheduler
-from typing import Optional, NamedTuple, List, Callable, Union
+from typing import Optional, NamedTuple, List, Callable, Union, Dict
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
@@ -49,8 +48,7 @@ class InferenceResult(NamedTuple):
 class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
-                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
-                 cam_intrinsics: torch.Tensor = None):
+                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -64,9 +62,6 @@ class Tracking6D:
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
         self.gt_texture = gt_texture
         self.gt_texture_features = None
-
-        # External camera
-        self.cam_intrinsics: Optional[PinholeIntrinsics] = None
 
         # Features
         self.feat: Optional[Callable] = None
@@ -110,6 +105,12 @@ class Tracking6D:
         # Data graph
         self.data_graph: Optional[DataGraph] = None
 
+        # Cameras
+        self.used_cameras = [Cameras.FRONTVIEW]
+        if config.matching_target_to_backview:
+            self.used_cameras.append(Cameras.BACKVIEW)
+        self.pinhole_params: Dict[Cameras, Optional[PinholeCamera]] = {cam: None for cam in self.used_cameras}
+
         # Flow tracks
         self.flow_tracks_inits = [0]
         self.pose_icosphere: Optional[PoseIcosphere] = PoseIcosphere()
@@ -139,10 +140,6 @@ class Tracking6D:
         else:
             self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
 
-        if cam_intrinsics is not None:
-            self.cam_intrinsics = pinhole_intrinsics_from_tensor(cam_intrinsics, self.image_shape.width,
-                                                                 self.image_shape.height)
-
         torch.backends.cudnn.benchmark = True
         self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
@@ -150,9 +147,6 @@ class Tracking6D:
         if self.config.gt_flow_source != 'GenerateSynthetic':  # This provides a significant speed-up for debugging
             self.initialize_flow_model()
 
-        self.used_cameras = [Cameras.FRONTVIEW]
-        if self.config.matching_target_to_backview:
-            self.used_cameras.append(Cameras.BACKVIEW)
         self.data_graph = DataGraph(used_cameras=self.used_cameras)
 
         if self.config.generate_synthetic_observations_if_possible:
@@ -188,9 +182,24 @@ class Tracking6D:
                            "encoder": copy.deepcopy(self.encoder.state_dict())}
         self.initialize_keyframes()
 
-        self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.gt_rotations,
-                                                             self.gt_translations, self.rendering, self.gt_encoder,
-                                                             self.encoder, self.pose_icosphere, self.cam_intrinsics)
+        if self.config.camera_intrinsics is None:
+            camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)
+        else:
+            camera_intrinsics = torch.from_numpy(self.config.camera_intrinsics).cuda()
+        if self.config.camera_extrinsics is None:
+            camera_extrinsics = self.rendering.camera_transformation_matrix_Se3().matrix()
+        else:
+            camera_extrinsics = torch.from_numpy(self.config.camera_extrinsics).cuda()
+
+        orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
+        orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()
+        self.pinhole_params[Cameras.FRONTVIEW] = PinholeCamera(camera_intrinsics, camera_extrinsics,
+                                                               orig_image_width, orig_image_height)
+        self.pinhole_params[Cameras.FRONTVIEW].scale_(self.config.image_downsample)
+
+        self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.rendering,
+                                                             self.gt_encoder, self.encoder, self.pose_icosphere,
+                                                             self.pinhole_params[Cameras.FRONTVIEW])
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
@@ -379,7 +388,7 @@ class Tracking6D:
                                           tracking_config=self.config, rendering=self.rendering,
                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
                                           rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
-                                          cameras=self.used_cameras)
+                                          cameras=self.used_cameras, pinhole_params=self.pinhole_params)
 
         self.data_graph.add_new_frame(0)
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]

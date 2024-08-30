@@ -3,8 +3,7 @@ from time import time
 
 import numpy as np
 import torch
-from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle
+from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle, PinholeCamera
 
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference
@@ -15,39 +14,33 @@ from flow import get_correct_correspondence_mask_world_system, source_to_target_
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin, RenderingResult
-from pose.essential_matrix_pose_estimation import filter_inliers_using_ransac, triangulate_points_from_Rt, \
-    estimate_pose_zaragoza, estimate_pose_using_8pt_algorithm
+from pose.essential_matrix_pose_estimation import (filter_inliers_using_ransac, estimate_pose_zaragoza,
+                                                   estimate_pose_using_8pt_algorithm)
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, pinhole_intrinsics_from_tensor, \
-    tensor_index_to_coordinates_xy, pinhole_intrinsics_to_tensor
+from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 
 
 class EpipolarPoseEstimator:
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, gt_rotations, gt_translations,
-                 rendering: RenderingKaolin, gt_encoder, encoder, pose_icosphere,
-                 camera_intrinsics: PinholeIntrinsics = None):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, rendering: RenderingKaolin, gt_encoder, encoder,
+                 pose_icosphere, camera: PinholeCamera):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
-        self.gt_rotations = gt_rotations
-        self.gt_translations = gt_translations
         self.rendering: RenderingKaolin = rendering
         self.encoder: Encoder = encoder
         self.gt_encoder: Encoder = gt_encoder
         self.pose_icosphere: PoseIcosphere = pose_icosphere
         self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
+        self.image_width: int = int(camera.width.item())
+        self.image_height: int = int(camera.height.item())
+
         self.occlusion_threshold = self.config.occlusion_coef_threshold
         self.segmentation_threshold = self.config.segmentation_mask_threshold
 
-        if camera_intrinsics is None:
-            self.camera_intrinsics = pinhole_intrinsics_from_tensor(self.rendering.camera_intrinsics,
-                                                                    self.rendering.width,
-                                                                    self.rendering.height)
-        else:
-            self.camera_intrinsics = camera_intrinsics
+        self.camera = camera
 
     @torch.no_grad()
     def essential_matrix_preinitialization(self, keyframes, flow_tracks_inits):
@@ -91,9 +84,9 @@ class EpipolarPoseEstimator:
         # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
         #                               self.gt_translations[[flow_long_jump_source]])
 
-        Se3_world_to_cam_frame = self.rendering.camera_transformation_matrix_Se3()
-        Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam_frame)
-        Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam_frame)
+        Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
+        Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
+        Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
 
         # Erase the translation - not needed at the moment
         Se3_obj_long_jump = Se3(Se3_obj_long_jump.quaternion, torch.zeros(1, 3).cuda())
@@ -176,9 +169,10 @@ class EpipolarPoseEstimator:
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
                                          chained_flow_verification=None) -> Tuple[Se3, Se3]:
 
-        K1 = K2 = pinhole_intrinsics_to_tensor(self.camera_intrinsics).cuda()
+        K1 = K2 = self.camera.intrinsics[0, :3, :3].to(dtype=torch.float32)
 
-        gt_flow_observation: SyntheticFlowObservation = self.rendering.render_flow_for_frame(self.gt_encoder, *flow_arc)
+        datagraph_edge_data = self.data_graph.get_edge_observations(flow_arc[0], flow_arc[1], Cameras.FRONTVIEW)
+        gt_flow_observation: SyntheticFlowObservation = datagraph_edge_data.synthetic_flow_result.cuda()
 
         occlusion, segmentation = self.get_adjusted_occlusion_and_segmentation(flow_observation_long_jump)
         gt_occlusion, gt_segmentation = self.get_adjusted_occlusion_and_segmentation(gt_flow_observation)
@@ -245,8 +239,8 @@ class EpipolarPoseEstimator:
             result = estimate_pose_using_PnP_solver(src_pts_xy, dst_pts_xy, K1, K2, point_map_xy)
             rot_cam_ransac, t_cam_ransac, inlier_mask, triangulated_points_ransac = result
         elif self.config.ransac_inlier_filter in ['magsac++', 'ransac', '8point', 'pygcransac']:
-            result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.camera_intrinsics.width,
-                                                 self.camera_intrinsics.height, self.config.ransac_inlier_filter,
+            result = filter_inliers_using_ransac(src_pts_xy, dst_pts_xy, K1, K2, self.image_width,
+                                                 self.image_height, self.config.ransac_inlier_filter,
                                                  self.config.ransac_confidence, confidences,
                                                  ransac_refine_E_numerically=self.config.ransac_refine_E_numerically)
 
@@ -272,11 +266,8 @@ class EpipolarPoseEstimator:
 
         elif self.config.ransac_inlier_pose_method == 'zaragoza':
             # raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
-            r_cam, t_cam = estimate_pose_zaragoza(src_pts_xy_inliers, dst_pts_xy_inliers,
-                                                  self.camera_intrinsics.focal_x.cuda(),
-                                                  self.camera_intrinsics.focal_y.cuda(),
-                                                  self.camera_intrinsics.x0.cuda(),
-                                                  self.camera_intrinsics.y0.cuda())
+            r_cam, t_cam = estimate_pose_zaragoza(src_pts_xy_inliers, dst_pts_xy_inliers, self.camera.fx[0],
+                                                  self.camera.fy[0], self.camera.cx[0],  self.camera.cy[0])
         elif self.config.ransac_inlier_pose_method is None:
             if self.config.ransac_inlier_filter is None:
                 raise ValueError("At least one of 'ransac_inlier_filter' or 'ransac_inlier_filter' must not be None.")
