@@ -20,7 +20,6 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import ConnectionPatch, Patch
-from torch import nn
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
@@ -868,7 +867,9 @@ class WriteResults:
 
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
         strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
-        strips_radii = [0.01] * n_poses
+
+        strips_radii_factor = torch.max(gt_translations.norm(dim=1)) / 5.
+        strips_radii = [0.01 * strips_radii_factor] * n_poses
 
         rr.log(RerunAnnotations.space_gt_camera_track,
                rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
@@ -891,7 +892,7 @@ class WriteResults:
                rr.LineStrips3D(strips=[[pred_t_cam[-1],
                                         template_node_cam_se3.translation.squeeze().numpy(force=True)]],
                                colors=[[255, 0, 0]],
-                               radii=[0.025]))
+                               radii=[0.025 * strips_radii_factor]))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
 
