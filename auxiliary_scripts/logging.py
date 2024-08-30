@@ -362,7 +362,7 @@ class WriteResults:
                                     #                    origin=RerunAnnotations.obj_tran_1st_to_last
                                     #                    ),
                                 ],
-                                grid_columns=2,
+                                grid_columns=1,
                                 name='Epipolar'
                             ),
                             rrb.Grid(
