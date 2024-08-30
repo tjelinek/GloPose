@@ -4,7 +4,7 @@ from time import time
 import numpy as np
 import torch
 from kaolin.render.camera import PinholeIntrinsics
-from kornia.geometry import axis_angle_to_rotation_matrix, Se3, Quaternion, quaternion_to_axis_angle
+from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle
 
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference
@@ -285,9 +285,7 @@ class EpipolarPoseEstimator:
         else:
             raise ValueError("Unknown inlier pose method")
 
-        R_cam = axis_angle_to_rotation_matrix(r_cam[None])
-
-        quat_cam = Quaternion.from_matrix(R_cam)
+        quat_cam = Quaternion.from_axis_angle(r_cam[None])
         Se3_cam = Se3(quat_cam, t_cam.squeeze()[None])
 
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
