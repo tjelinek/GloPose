@@ -385,12 +385,14 @@ class EpipolarPoseEstimator:
     def relative_scale_recovery(Se3_i: Se3, Se3_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) -> Tuple[Se3, Se3]:
 
         # Extract rotation and translation components from the Se3 objects
-        R_rho_i = Se3_i_to_q.r.matrix().squeeze()
-        R_rho_j = Se3_j_to_q.r.matrix().squeeze()
-        t_rho_i = Se3_i_to_q.translation.squeeze()
-        t_rho_j = Se3_j_to_q.translation.squeeze()
-        t_i = Se3_i.translation.squeeze()
-        t_j = Se3_j.translation.squeeze()
+        R_rho_i = Se3_i.r.matrix().squeeze()
+        R_rho_j = Se3_j.r.matrix().squeeze()
+        t_rho_i = Se3_i.translation.squeeze()
+        t_rho_j = Se3_j.translation.squeeze()
+        R_i = Se3_i_to_q.r.matrix().squeeze()
+        R_j = Se3_j_to_q.r.matrix().squeeze()
+        t_i = Se3_i_to_q.translation.squeeze()
+        t_j = Se3_j_to_q.translation.squeeze()
 
         # A=[R_rho_i^T * t_i, −R_rho_j^T * t_j]
         A = torch.stack([R_rho_i @ t_i, -R_rho_j @ t_j], dim=-1)
