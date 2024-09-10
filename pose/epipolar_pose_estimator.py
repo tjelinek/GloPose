@@ -382,14 +382,14 @@ class EpipolarPoseEstimator:
         return dst_pts_yx
 
     @staticmethod
-    def relative_scale_recovery(Se3_world_to_i: Se3, Se3_j_world_to_i: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) \
+    def relative_scale_recovery(Se3_world_to_i: Se3, Se3_world_to_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) \
             -> Tuple[Se3, Se3]:
 
         # Extract rotation and translation components from the Se3 objects
         R_rho_i = Se3_world_to_i.r.matrix().squeeze()
-        R_rho_j = Se3_j_world_to_i.r.matrix().squeeze()
+        R_rho_j = Se3_world_to_j.r.matrix().squeeze()
         t_rho_i = Se3_world_to_i.translation.squeeze()
-        t_rho_j = Se3_j_world_to_i.translation.squeeze()
+        t_rho_j = Se3_world_to_j.translation.squeeze()
         R_i = Se3_i_to_q.r.matrix().squeeze()
         R_j = Se3_j_to_q.r.matrix().squeeze()
         t_i = Se3_i_to_q.translation.squeeze()
