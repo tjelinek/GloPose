@@ -6,7 +6,8 @@ import torch
 from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle, PinholeCamera
 
 from auxiliary_scripts.cameras import Cameras
-from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference
+from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
+    Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
 from data_structures.pose_icosphere import PoseIcosphere
@@ -80,11 +81,19 @@ class EpipolarPoseEstimator:
             self.estimate_pose_using_optical_flow(flow_long_jump_observations, flow_arc_long_jump,
                                                   chained_short_jumps_flows_ref_to_current))
 
+        Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
+        Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
+
+        Se3_cam_reference_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_reference_frame, Se3_world_to_cam)
+        Se3_cam_short_jump_ref_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_short_jump_ref_frame, Se3_world_to_cam)
         # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
         #                               self.gt_translations[[flow_long_jump_source]])
 
-        Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
+        Se3_cam_long_jump, Se3_cam_short_jump = self.relative_scale_recovery(Se3_cam_reference_frame,
+                                                                             Se3_cam_short_jump_ref_frame,
+                                                                             Se3_cam_long_jump, Se3_cam_short_jump)
+
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
 
@@ -267,7 +276,7 @@ class EpipolarPoseEstimator:
         elif self.config.ransac_inlier_pose_method == 'zaragoza':
             # raise NotImplementedError('The intrinsics are wrong and return row of matrix rather than a correct value')
             r_cam, t_cam = estimate_pose_zaragoza(src_pts_xy_inliers, dst_pts_xy_inliers, self.camera.fx[0],
-                                                  self.camera.fy[0], self.camera.cx[0],  self.camera.cy[0])
+                                                  self.camera.fy[0], self.camera.cx[0], self.camera.cy[0])
         elif self.config.ransac_inlier_pose_method is None:
             if self.config.ransac_inlier_filter is None:
                 raise ValueError("At least one of 'ransac_inlier_filter' or 'ransac_inlier_filter' must not be None.")
@@ -371,3 +380,31 @@ class EpipolarPoseEstimator:
         dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_for_replacing
 
         return dst_pts_yx
+
+    @staticmethod
+    def relative_scale_recovery(Se3_i: Se3, Se3_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) -> Tuple[Se3, Se3]:
+
+        # Extract rotation and translation components from the Se3 objects
+        R_rho_i = Se3_i_to_q.r.matrix().squeeze()
+        R_rho_j = Se3_j_to_q.r.matrix().squeeze()
+        t_rho_i = Se3_i_to_q.translation.squeeze()
+        t_rho_j = Se3_j_to_q.translation.squeeze()
+        t_i = Se3_i.translation.squeeze()
+        t_j = Se3_j.translation.squeeze()
+
+        # A=[R_rho_i^T * t_i, −R_rho_j^T * t_j]
+        A = torch.stack([R_rho_i @ t_i, -R_rho_j @ t_j], dim=-1)
+
+        # delta_c = c_i - c_j
+        delta_c = t_rho_i - t_rho_j
+
+        # Solve A * λ = delta_c, where λ = [λ_i, λ_j]
+        # Since torch.linalg.lstsq returns a result object, we extract the solution.
+        result = torch.linalg.lstsq(A, delta_c)
+        Lambda = result.solution
+
+        Se3_i_to_q = Se3(Se3_i_to_q.quaternion, Se3_i_to_q.t * Lambda[0])
+        Se3_j_to_q = Se3(Se3_j_to_q.quaternion, Se3_j_to_q.t * Lambda[1])
+
+        return Se3_i_to_q, Se3_j_to_q
+
