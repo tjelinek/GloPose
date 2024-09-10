@@ -462,7 +462,7 @@ class WriteResults:
 
             for rerun_annotation, color in annotations:
                 rr.log(rerun_annotation, rr.SeriesLine(color=color,
-                                                       name=rerun_annotation.split('/')[-1]), timeless=True)
+                                                       name=rerun_annotation.split('/')[-1]), static=True)
 
         for template_annotation in self.template_fields:
             rr.log(template_annotation,
@@ -472,7 +472,7 @@ class WriteResults:
                            marker="circle",
                            marker_size=4,
                        ),
-                   timeless=True)
+                   static=True)
 
         rr.send_blueprint(blueprint)
 
@@ -829,7 +829,7 @@ class WriteResults:
             rr.log(
                 RerunAnnotations.space_gt_mesh,
                 rr.Mesh3D(
-                    indices=gt_mesh.faces,
+                    triangle_indices=gt_mesh.faces,
                     albedo_texture=gt_texture_int,
                     vertex_texcoords=vertex_texcoords,
                     vertex_positions=normalized_vertices
@@ -868,7 +868,7 @@ class WriteResults:
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
         strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
 
-        strips_radii_factor = torch.max(gt_translations.norm(dim=1)) / 5.
+        strips_radii_factor = (max(torch.max(gt_translations.norm(dim=1)).item(), 5.) / 5.)
         strips_radii = [0.01 * strips_radii_factor] * n_poses
 
         rr.log(RerunAnnotations.space_gt_camera_track,
