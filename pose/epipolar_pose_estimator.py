@@ -97,10 +97,6 @@ class EpipolarPoseEstimator:
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
 
-        # Erase the translation - not needed at the moment
-        Se3_obj_long_jump = Se3(Se3_obj_long_jump.quaternion, torch.zeros(1, 3).cuda())
-        Se3_obj_short_jump = Se3(Se3_obj_short_jump.quaternion, torch.zeros(1, 3).cuda())
-
         Se3_obj_chained_long_jump = Se3_obj_long_jump * Se3_obj_reference_frame
 
         # gt_deltas_se3 = [Se3(Quaternion.from_axis_angle(self.data_graph.get_frame_data(i + 1).gt_rot_axis_angle[None]),
@@ -264,7 +260,7 @@ class EpipolarPoseEstimator:
 
         Se3_cam_RANSAC = None
         if rot_cam_ransac is not None:
-            Se3_cam_RANSAC = Se3(Quaternion.from_axis_angle(rot_cam_ransac[None]), torch.zeros(1, 3).cuda())
+            Se3_cam_RANSAC = Se3(Quaternion.from_axis_angle(rot_cam_ransac[None]), t_cam_ransac)
 
         src_pts_xy_inliers = src_pts_xy[inlier_mask]
         dst_pts_xy_inliers = dst_pts_xy[inlier_mask]
