@@ -909,25 +909,25 @@ class WriteResults:
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
 
-            node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
-            node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
-            node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
+                node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
+                node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
+                node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
 
-            rr.log(
-                f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
-                rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
-                               rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
-            )
+                rr.log(
+                    f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+                    rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
+                                   rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
+                )
 
-            rr.log(
-                f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
-                rr.Pinhole(
-                    resolution=[self.image_width, self.image_height],
-                    focal_length=[float(self.pinhole_params[Cameras.FRONTVIEW].fx.item()),
-                                  float(self.pinhole_params[Cameras.FRONTVIEW].fy.item())],
-                    camera_xyz=rr.ViewCoordinates.RUB,
-                ),
-            )
+                rr.log(
+                    f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+                    rr.Pinhole(
+                        resolution=[self.image_width, self.image_height],
+                        focal_length=[float(self.pinhole_params[Cameras.FRONTVIEW].fx.item()),
+                                      float(self.pinhole_params[Cameras.FRONTVIEW].fy.item())],
+                        camera_xyz=rr.ViewCoordinates.RUB,
+                    ),
+                )
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
