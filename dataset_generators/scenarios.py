@@ -140,8 +140,7 @@ def steps_to_periodic_linspace(steps):
 
 
 def generate_sinusoidal_translations(steps=72) -> MovementScenario:
-    step = steps_to_periodic_linspace(steps)
-    x = torch.linspace(0, (steps - 1) * step.item(), steps)
+    x = steps_to_periodic_linspace(steps)
     translations_x = torch.sin(x) * 0.5
     translations_y = torch.zeros_like(translations_x)
     translations_z = torch.zeros_like(translations_x)
