@@ -391,6 +391,11 @@ class EpipolarPoseEstimator:
         t_i = Se3_i_to_q.translation.squeeze()
         t_j = Se3_j_to_q.translation.squeeze()
 
+        print("t_rho_i:", t_rho_i)
+        print("t_rho_j:", t_rho_j)
+        print("t_i:", t_i)
+        print("t_j:", t_j)
+
         # A=[R_rho_i^T * t_i, −R_rho_j^T * t_j]
         A = torch.stack([R_rho_i @ t_i, -R_rho_j @ t_j], dim=-1)
         # A = torch.stack([R_rho_i.transpose(1, 0) @ R_i @ t_i, -R_rho_j.transpose(0, 1) @ R_j @ t_j], dim=-1)
@@ -405,6 +410,9 @@ class EpipolarPoseEstimator:
 
         Se3_i_to_q = Se3(Se3_i_to_q.quaternion, Se3_i_to_q.t * Lambda[0])
         Se3_j_to_q = Se3(Se3_j_to_q.quaternion, Se3_j_to_q.t * Lambda[1])
+        print("Lambda:", Lambda)
+        print("t_i rescaled:", Se3_i_to_q.translation.squeeze())
+        print("t_j rescaled:", Se3_j_to_q.translation.squeeze())
 
         return Se3_i_to_q, Se3_j_to_q
 
