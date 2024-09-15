@@ -360,11 +360,11 @@ class WriteResults:
                                     rrb.TimeSeriesView(name="Pose - Rotation",
                                                        origin=RerunAnnotations.obj_rot_1st_to_last
                                                        ),
-                                    # rrb.TimeSeriesView(name="Pose - Translation",
-                                    #                    origin=RerunAnnotations.obj_tran_1st_to_last
-                                    #                    ),
+                                    rrb.TimeSeriesView(name="Pose - Translation",
+                                                       origin=RerunAnnotations.obj_tran_1st_to_last
+                                                       ),
                                 ],
-                                grid_columns=1,
+                                grid_columns=2,
                                 name='Epipolar'
                             ),
                             rrb.Grid(
