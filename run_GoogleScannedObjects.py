@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from dataset_generators import scenarios
+from dataset_generators.track_augmentation import modify_rotations
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from auxiliary_scripts.data_utils import load_mesh, load_texture
@@ -21,21 +22,22 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
-            'Twinlab_Nitric_Fuel',
+            # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
+            # 'Twinlab_Nitric_Fuel',
             'Squirrel',
-            'STACKING_BEAR',
-            'Schleich_Allosaurus',
-            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
-            'SCHOOL_BUS',
+            # 'STACKING_BEAR',
+            # 'Schleich_Allosaurus',
+            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            # 'SCHOOL_BUS',
             'Sootheze_Cold_Therapy_Elephant',
-            'TOP_TEN_HI',
+            # 'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ]
 
     for sequence in sequences:
         config = load_config(args.config)
 
+        # config.camera_position = (3.14, -5.0, -2.81)
         config.camera_position = (0, -5.0, 0)
         config.camera_up = (0, 0, 1)
 
@@ -55,9 +57,9 @@ def main():
 
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
-        # gt_rotations_np = np.deg2rad(np.stack(scenarios.generate_rotations_xyz(5).rotations, axis=0))
+        # gt_rotations = torch.deg2rad(scenarios.generate_rotations_z(5).rotations).cuda().to(torch.float32)
         gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
-        gt_translations = torch.zeros_like(gt_rotations)
+        gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
         if config.augment_gt_track:
             gt_rotations, gt_translations = modify_rotations(gt_rotations, gt_translations)
