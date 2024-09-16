@@ -87,8 +87,6 @@ class EpipolarPoseEstimator:
 
         Se3_cam_reference_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_reference_frame, Se3_world_to_cam)
         Se3_cam_short_jump_ref_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_short_jump_ref_frame, Se3_world_to_cam)
-        # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
-        #                               self.gt_translations[[flow_long_jump_source]])
 
         if flow_arc_long_jump != flow_arc_short_jump:
             Se3_cam_long_jump, Se3_cam_short_jump = self.relative_scale_recovery(Se3_cam_reference_frame,
@@ -100,31 +98,11 @@ class EpipolarPoseEstimator:
 
         Se3_obj_chained_long_jump = Se3_obj_long_jump * Se3_obj_reference_frame
 
-        # gt_deltas_se3 = [Se3(Quaternion.from_axis_angle(self.data_graph.get_frame_data(i + 1).gt_rot_axis_angle[None]),
-        #                      torch.zeros(1, 3).cuda()) *
-        #                  Se3(Quaternion.from_axis_angle(self.data_graph.get_frame_data(i).gt_rot_axis_angle[None]),
-        #                      torch.zeros(1, 3).cuda()).inverse()
-        #                  for i in range(flow_long_jump_source, frame_i - 1)]
-
         products = reversed([Se3_obj_reference_frame] +
                             pred_short_deltas_se3 +
                             [Se3_obj_short_jump])
 
-        # products_pred = reversed([Se3_obj_reference_frame] +
-        #                          pred_short_deltas_se3 +
-        #                          [Se3_obj_short_jump])
 
-        # gt_delta_long_jump = (Se3(Quaternion.from_axis_angle(
-        #     self.data_graph.get_frame_data(flow_long_jump_source).gt_rot_axis_angle[None]),
-        #                           torch.zeros(1, 3).cuda()).inverse() *
-        #                       Se3(Quaternion.from_axis_angle(
-        #                           self.data_graph.get_frame_data(flow_long_jump_target).gt_rot_axis_angle[None]),
-        #                           torch.zeros(1, 3).cuda()))
-
-        # products = ([
-        #     gt_delta_long_jump,
-        #     Se3_obj_reference_frame
-        # ])
 
         Se3_obj_chained_short_jumps = np.prod(list(products))
         # Se3_obj_chained_short_jumps_pred = np.prod(list(products_pred))
