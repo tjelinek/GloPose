@@ -868,7 +868,7 @@ class WriteResults:
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
         strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
 
-        strips_radii_factor = (max(torch.max(gt_translations.norm(dim=1)).item(), 5.) / 5.)
+        strips_radii_factor = (max(torch.max(torch.cat([translations, gt_translations]).norm(dim=1)).item(), 5.) / 5.)
         strips_radii = [0.01 * strips_radii_factor] * n_poses
 
         rr.log(RerunAnnotations.space_gt_camera_track,
