@@ -102,10 +102,9 @@ class EpipolarPoseEstimator:
                             pred_short_deltas_se3 +
                             [Se3_obj_short_jump])
 
-
+        # Se3_obj_chained_long_jump = self.get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target)
 
         Se3_obj_chained_short_jumps = np.prod(list(products))
-        # Se3_obj_chained_short_jumps_pred = np.prod(list(products_pred))
 
         short_long_chain_ang_diff = quaternion_minimal_angular_difference(Se3_obj_chained_long_jump.quaternion,
                                                                           Se3_obj_chained_short_jumps.quaternion).item()
@@ -149,6 +148,20 @@ class EpipolarPoseEstimator:
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
         datagraph_camera_node.long_jump_source = flow_long_jump_source
         datagraph_camera_node.short_jump_source = flow_short_jump_source
+
+    def get_relative_gt_rotation(self, flow_long_jump_source, flow_long_jump_target):
+        ref_frame_rotation = Quaternion.from_axis_angle(
+            self.data_graph.get_frame_data(flow_long_jump_source).gt_rot_axis_angle[None])
+        ref_frame_translation = self.data_graph.get_frame_data(flow_long_jump_source).gt_translation[None]
+        target_frame_rotation = Quaternion.from_axis_angle(
+            self.data_graph.get_frame_data(flow_long_jump_target).gt_rot_axis_angle[None])
+        target_frame_translation = self.data_graph.get_frame_data(flow_long_jump_source).gt_translation[None]
+        # Create SE3 objects for the reference and target frames
+        Se3_obj_ref_frame_gt = Se3(ref_frame_rotation, ref_frame_translation)
+        Se3_obj_target_frame_gt = Se3(target_frame_rotation, target_frame_translation)
+        # Calculate the chained SE3 transformation
+        Se3_obj_chained_long_jump = Se3_obj_target_frame_gt * Se3_obj_ref_frame_gt.inverse()
+        return Se3_obj_chained_long_jump
 
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
                                          chained_flow_verification=None) -> Tuple[Se3, Se3]:
