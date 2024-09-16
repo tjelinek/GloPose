@@ -88,20 +88,14 @@ Se3_world_to_cam_1st_frame = rendering.camera_transformation_matrix_Se3()
 
 quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
 Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
-
 axis_angle_ref_to_last_gt = gt_rotation[[target_frame]] - gt_rotation[[source_frame]]
 quat_ref_to_last_gt = Quaternion.from_axis_angle(axis_angle_ref_to_last_gt)
 translation_ref_to_last_gt = gt_translation[[target_frame]] - gt_translation[[source_frame]]
-
-Se3_obj_ref_to_last_gt_prime = Se3(quat_ref_to_last_gt, translation_ref_to_last_gt)
-
 Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
 
 Se3_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 Se3_cam_first_to_ref = predict_camera_pose_using_zaragoza(0, source_frame, config, rendering)
 Se3_cam_first_to_last = predict_camera_pose_using_zaragoza(0, target_frame, config, rendering)
-
-Se3_cam_ref_to_last_gt_unsure = Se3_last_cam_to_world_from_Se3_obj(Se3_obj_ref_to_last_gt, Se3_world_to_cam_1st_frame)
 
 Se3_obj_ref_to_last_pred = Se3_obj_from_epipolar_Se3_cam(Se3_cam_ref_to_last, Se3_world_to_cam_1st_frame)
 
