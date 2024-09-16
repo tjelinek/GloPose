@@ -90,9 +90,10 @@ class EpipolarPoseEstimator:
         # Se3_obj_reference_frame = Se3(Quaternion.from_axis_angle(self.gt_rotations[[flow_long_jump_source]]),
         #                               self.gt_translations[[flow_long_jump_source]])
 
-        Se3_cam_long_jump, Se3_cam_short_jump = self.relative_scale_recovery(Se3_cam_reference_frame,
-                                                                             Se3_cam_short_jump_ref_frame,
-                                                                             Se3_cam_long_jump, Se3_cam_short_jump)
+        if flow_arc_long_jump != flow_arc_short_jump:
+            Se3_cam_long_jump, Se3_cam_short_jump = self.relative_scale_recovery(Se3_cam_reference_frame,
+                                                                                 Se3_cam_short_jump_ref_frame,
+                                                                                 Se3_cam_long_jump, Se3_cam_short_jump)
 
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
