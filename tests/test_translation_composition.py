@@ -121,11 +121,8 @@ Se3_obj_first_to_last_base = Se3_obj_from_epipolar_Se3_cam(Se3_cam_first_to_last
 rot_obj_first_to_last_base = rotation_matrix_to_axis_angle(Se3_obj_first_to_last_base.quaternion.matrix()).squeeze()
 
 print('----------------------------------------')
-# print(f'T_world_to_cam\n{T_world_to_cam}')
-# print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
 print(f'T obj  : {Se3_obj_first_to_last_base.translation.squeeze().numpy(force=True).round(3)}')
 print(f'Rot cam pred: {torch.rad2deg(rotation_matrix_to_axis_angle(Se3_cam_first_to_last.quaternion.matrix())).numpy(force=True).round(3)}')
-# print(f'Rot cam gt: {torch.rad2deg(rot_cam_gt).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last_pred).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last   gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
 print(f'Rot obj 1st to last pred: {torch.rad2deg(rot_obj_1st_to_last_pred).numpy(force=True).round(3)}')
