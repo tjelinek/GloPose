@@ -909,7 +909,7 @@ class WriteResults:
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
 
-                node_Se3 = Se3(icosphere_node.quaternion, torch.zeros(1, 3).cuda())
+                node_Se3 = Se3(icosphere_node.quaternion, icosphere_node.translation)
                 node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
                 node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
 
