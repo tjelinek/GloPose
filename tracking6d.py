@@ -462,7 +462,7 @@ class Tracking6D:
             if self.config.write_results:
 
                 self.write_results.write_results(frame_i=frame_i, tex=tex, active_keyframes=self.active_keyframes,
-                                                 best_model=self.best_model, observations=all_frame_observations,
+                                                 observations=all_frame_observations,
                                                  flow_tracks_inits=self.flow_tracks_inits,
                                                  pose_icosphere=self.pose_icosphere)
 

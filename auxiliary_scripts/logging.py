@@ -724,7 +724,7 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer, best_model,
+    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer,
                       observations: FrameObservation, flow_tracks_inits: List[int],
                       pose_icosphere: PoseIcosphere):
 
@@ -747,8 +747,6 @@ class WriteResults:
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
                                           for it in encoder_result])
-        if self.tracking_config.save_3d_model:
-            self.save_3d_model(frame_i, tex, best_model, detached_result)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             self.log_poses_into_rerun(frame_i)
@@ -953,7 +951,7 @@ class WriteResults:
             file.write("f {}/{} {}/{} {}/{}\n".format(fc[0], ti, fc[1], ti + 1, fc[2], ti + 2))
         file.close()
 
-    def save_3d_model(self, frame_i, tex, best_model, detached_result):
+    def save_3d_model(self, frame_i, tex, faces: torch.Tensor, detached_result):
 
         mesh_i_th_path = self.exported_mesh_path / f'mesh_{frame_i}.obj'
         tex_path = self.exported_mesh_path / 'tex_deep.png'
@@ -961,7 +959,7 @@ class WriteResults:
         model_path = self.exported_mesh_path / 'model.mtl'
         model_i_th_path = self.exported_mesh_path / f"model_{frame_i}.mtl"
 
-        self.write_obj_mesh(detached_result.vertices[0].numpy(force=True), best_model["faces"],
+        self.write_obj_mesh(detached_result.vertices[0].numpy(force=True), faces,
                             self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path,
                             str(model_i_th_path.name))
 
