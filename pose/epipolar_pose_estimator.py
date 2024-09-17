@@ -150,16 +150,17 @@ class EpipolarPoseEstimator:
         datagraph_camera_node.short_jump_source = flow_short_jump_source
 
     def get_relative_gt_rotation(self, flow_long_jump_source, flow_long_jump_target):
-        ref_frame_rotation = Quaternion.from_axis_angle(
-            self.data_graph.get_frame_data(flow_long_jump_source).gt_rot_axis_angle[None])
-        ref_frame_translation = self.data_graph.get_frame_data(flow_long_jump_source).gt_translation[None]
-        target_frame_rotation = Quaternion.from_axis_angle(
-            self.data_graph.get_frame_data(flow_long_jump_target).gt_rot_axis_angle[None])
-        target_frame_translation = self.data_graph.get_frame_data(flow_long_jump_source).gt_translation[None]
-        # Create SE3 objects for the reference and target frames
-        Se3_obj_ref_frame_gt = Se3(ref_frame_rotation, ref_frame_translation)
-        Se3_obj_target_frame_gt = Se3(target_frame_rotation, target_frame_translation)
-        # Calculate the chained SE3 transformation
+        ref_data = self.data_graph.get_frame_data(flow_long_jump_source)
+        target_data = self.data_graph.get_frame_data(flow_long_jump_target)
+
+        ref_rot = Quaternion.from_axis_angle(ref_data.gt_rot_axis_angle[None])
+        ref_trans = ref_data.gt_translation[None]
+        target_rot = Quaternion.from_axis_angle(target_data.gt_rot_axis_angle[None])
+        target_trans = target_data.gt_translation[None]
+
+        Se3_obj_ref_frame_gt = Se3(ref_rot, ref_trans)
+        Se3_obj_target_frame_gt = Se3(target_rot, target_trans)
+
         Se3_obj_chained_long_jump = Se3_obj_target_frame_gt * Se3_obj_ref_frame_gt.inverse()
         return Se3_obj_chained_long_jump
 
