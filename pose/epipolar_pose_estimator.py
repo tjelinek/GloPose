@@ -125,6 +125,7 @@ class EpipolarPoseEstimator:
             self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
 
         self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
+        self.encoder.translation_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.translation
 
         duration = time() - start_time
         datagraph_node = self.data_graph.get_frame_data(frame_i)
