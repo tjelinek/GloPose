@@ -65,13 +65,7 @@ class TrackerConfig:
     camera_intrinsics: np.ndarray = None
     camera_extrinsics: np.ndarray = None
     iterations: int = 100
-    stop_value: float = 0.05
     rgb_iters: int = 10
-    project_coin: bool = False
-    connect_frames: bool = False
-    accumulate: bool = False
-    mot_opt_all: bool = True
-    motion_only_last: bool = True
 
     # Loss function coefficients
     loss_laplacian_weight: float = 1000.0
