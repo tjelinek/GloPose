@@ -185,5 +185,6 @@ class TrackerConfig:
     flow_sgd_n_samples: int = 100
 
     # Icosphere templates
-    icosphere_trust_region_degrees = 45
+    icosphere_use_gt_long_jumps: bool = False
+    icosphere_trust_region_degrees = 30
     icosphere_add_inplane_rotatiosn = False

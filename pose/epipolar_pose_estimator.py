@@ -102,7 +102,9 @@ class EpipolarPoseEstimator:
                             pred_short_deltas_se3 +
                             [Se3_obj_short_jump])
 
-        # Se3_obj_chained_long_jump = self.get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target)
+        if self.config.icosphere_use_gt_long_jumps:
+            Se3_obj_long_jump_gt = self.get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target)
+            Se3_obj_chained_long_jump = Se3_obj_long_jump_gt * Se3_obj_reference_frame
 
         Se3_obj_chained_short_jumps = np.prod(list(products))
 
