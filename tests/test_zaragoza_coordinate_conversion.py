@@ -33,14 +33,14 @@ iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
 h = 564
 w = 300
 scenario = scenarios.generate_rotations_xyz(5.0)
-scenario_t = scenarios.generate_xyz_translation(36)
-gt_rotation = torch.from_numpy(scenario.rotation_axis_angles)[:sequence_len].cuda()  # * 0
+scenario_t = scenarios.generate_xyz_translation(scenario.rotations.shape[0])
+gt_rotation = scenario.rotation_axis_angles[:sequence_len].cuda()  # * 0
 gt_rotation[..., 0] *= -2.
 gt_rotation[..., 1] *= 1.
 gt_rotation[..., 2] *= -0.5
 
 # gt_translation = torch.zeros(1, 1, sequence_len, 3).cuda()
-gt_translation = torch.from_numpy(np.asarray(scenario_t.translations)).cuda()[:sequence_len].to(torch.float32) * 0
+gt_translation = scenario_t.translations.cuda()[:sequence_len].to(torch.float32)
 gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
