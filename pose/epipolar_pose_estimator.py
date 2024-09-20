@@ -392,9 +392,11 @@ class EpipolarPoseEstimator:
         print("t_i:", t_i)
         print("t_j:", t_j)
 
-        # A=[R_rho_i^T * t_i, −R_rho_j^T * t_j]
+        print("Transformation via long jump:", R_rho_i @ t_i + t_rho_i)
+        print("Transformation via short jump:", R_rho_j @ t_j + t_rho_j)
+
         A = torch.stack([R_rho_i @ t_i, -R_rho_j @ t_j], dim=-1)
-        # A = torch.stack([R_rho_i.transpose(1, 0) @ R_i @ t_i, -R_rho_j.transpose(0, 1) @ R_j @ t_j], dim=-1)
+        # A = torch.stack([R_rho_i.transpose(0, 1) @ R_i @ t_i, -R_rho_j.transpose(0, 1) @ R_j @ t_j], dim=-1)
 
         # delta_c = c_i - c_j
         delta_c = t_rho_i - t_rho_j
