@@ -164,7 +164,7 @@ class EpipolarPoseEstimator:
         Se3_obj_ref_frame_gt = Se3(ref_rot, ref_trans)
         Se3_obj_target_frame_gt = Se3(target_rot, target_trans)
 
-        Se3_obj_chained_long_jump = Se3_obj_ref_frame_gt.inverse() * Se3_obj_target_frame_gt
+        Se3_obj_chained_long_jump = Se3_obj_target_frame_gt * Se3_obj_ref_frame_gt.inverse()
         return Se3_obj_chained_long_jump
 
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
