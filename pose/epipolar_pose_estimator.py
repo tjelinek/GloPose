@@ -82,6 +82,8 @@ class EpipolarPoseEstimator:
                                                   chained_short_jumps_flows_ref_to_current))
 
         Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
+        Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
+        Se3_cam_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
 
@@ -372,6 +374,27 @@ class EpipolarPoseEstimator:
         dst_pts_yx[indices_to_be_replaced] = dst_pts_yx_gt_for_replacing
 
         return dst_pts_yx
+
+    @staticmethod
+    def recover_scale(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam):
+        Se3_obj1_to_obj2_unscaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam)
+
+        R_w2c = Se3_world_to_cam.quaternion.matrix()
+        R_o = Se3_obj1_to_obj2_unscaled.quaternion.matrix()
+        R_c = Se3_cam1_to_cam2_unscaled.quaternion.matrix()
+
+        t_w2c = Se3_world_to_cam.translation.unsqueeze(-1)
+        t_o = Se3_obj1_to_obj2_unscaled.translation.unsqueeze(-1)
+        t_c = Se3_cam1_to_cam2_unscaled.translation.unsqueeze(-1)
+
+        left_side = R_w2c @ t_c - t_o
+        right_side = R_o @ t_w2c - t_w2c
+
+        scale = ((right_side.mT @ left_side) / torch.linalg.vector_norm(left_side)).squeeze()
+
+        Se3_cam1_to_cam2_scaled = Se3(Quaternion.from_matrix(R_c), t_c.squeeze(-1) * scale)
+
+        return Se3_cam1_to_cam2_scaled
 
     @staticmethod
     def relative_scale_recovery(Se3_world_to_i: Se3, Se3_world_to_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) \
