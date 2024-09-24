@@ -378,6 +378,24 @@ class EpipolarPoseEstimator:
         return Se3_cam1_to_cam2_scaled
 
     @staticmethod
+    def recover_scale_with_rays(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam, Se3_cam1_to_cam2_gt):
+
+        Se3_world_to_cam2 = Se3_cam1_to_cam2_unscaled * Se3_world_to_cam
+        ray_direction_cam1 = Se3_world_to_cam.translation
+        ray_direction_cam2 = Se3_world_to_cam2.translation
+
+        ray_direction_cam1_magnitude = torch.linalg.norm(ray_direction_cam1)
+        ray_direction_cam2_magnitude = torch.linalg.norm(ray_direction_cam2)
+
+        magnitude_ratio = ray_direction_cam1_magnitude / ray_direction_cam2_magnitude
+        scaled_translation = Se3_cam1_to_cam2_unscaled.translation * magnitude_ratio
+        ray_direction_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, scaled_translation)
+
+        Se3_cam1_to_cam2_scaled = ray_direction_cam2_scaled * Se3_world_to_cam.inverse()
+
+        return Se3_cam1_to_cam2_scaled
+
+    @staticmethod
     def relative_scale_recovery(Se3_world_to_i: Se3, Se3_world_to_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) \
             -> Tuple[Se3, Se3]:
 
