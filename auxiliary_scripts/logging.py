@@ -29,7 +29,7 @@ from pytorch3d.io import save_ply
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
-from auxiliary_scripts.visualizations import visualize_optical_flow_errors
+from data_structures.datagraph_utils import get_relative_gt_rotation
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
 from models.loss import iou_loss, FMOLoss
@@ -37,7 +37,8 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
 from utils import coordinates_xy_to_tensor_index, normalize_vertices
-from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj
+from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj, \
+    Se3_epipolar_cam_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, compare_flows_with_images, flow_unit_coords_to_image_coords, \
@@ -152,6 +153,7 @@ class RerunAnnotations:
     cam_rot_ref_to_last_z_gt: str = '/pose/cam_rot_ref_to_last/z_axis_gt'
 
     cam_tran_ref_to_last: str = '/pose/cam_tran_ref_to_last'
+    cam_tran_ref_to_last_template: str = '/pose/cam_tran_ref_to_last/template'
     cam_tran_ref_to_last_x: str = '/pose/cam_tran_ref_to_last/x_axis'
     cam_tran_ref_to_last_x_gt: str = '/pose/cam_tran_ref_to_last/x_axis_gt'
     cam_tran_ref_to_last_y: str = '/pose/cam_tran_ref_to_last/y_axis'
@@ -169,6 +171,7 @@ class RerunAnnotations:
     obj_rot_ref_to_last_z_gt: str = '/pose/obj_rot_ref_to_last/z_axis_gt'
 
     obj_tran_ref_to_last: str = '/pose/obj_tran_ref_to_last'
+    obj_tran_ref_to_last_template: str = '/pose/obj_tran_ref_to_last/template'
     obj_tran_ref_to_last_x: str = '/pose/obj_tran_ref_to_last/x_axis'
     obj_tran_ref_to_last_x_gt: str = '/pose/obj_tran_ref_to_last/x_axis_gt'
     obj_tran_ref_to_last_y: str = '/pose/obj_tran_ref_to_last/y_axis'
@@ -256,8 +259,10 @@ class WriteResults:
             RerunAnnotations.cam_delta_short_flow_template,
             RerunAnnotations.long_short_chain_diff_template,
             RerunAnnotations.cam_rot_ref_to_last_template,
+            RerunAnnotations.cam_tran_ref_to_last_template,
             RerunAnnotations.chained_pose_short_flow_template,
             RerunAnnotations.obj_rot_ref_to_last_template,
+            RerunAnnotations.obj_tran_ref_to_last_template,
             RerunAnnotations.cam_delta_long_flow_template,
         }
 
@@ -1536,15 +1541,20 @@ class WriteResults:
         obj_tran_1st_to_last = data_graph_node.predicted_object_se3_long_jump.translation.cpu().squeeze()
         obj_tran_1st_to_last_gt = data_graph_node.gt_translation.cpu().squeeze()
 
-        pred_obj_quat_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3.quaternion
-        pred_cam_quat_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3.quaternion
+        pred_obj_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3
+        pred_cam_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3
+
+        gt_obj_ref_to_last = get_relative_gt_rotation(long_jump_source, frame_i, self.data_graph)
+
+        Se3_world_to_cam = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
+        gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
 
         pred_cam_RANSAC_quat_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac.quaternion
         pred_cam_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3.quaternion
         pred_cam_RANSAC_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3_ransac.quaternion
 
         rr.log(RerunAnnotations.cam_delta_long_flow_zaragoza,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_quat_ref_to_last.polar_angle).cpu()))
+               rr.Scalar(torch.rad2deg(2 * pred_cam_ref_to_last.quaternion.polar_angle).cpu()))
         rr.log(RerunAnnotations.cam_delta_long_flow_RANSAC,
                rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_ref_to_last.polar_angle).cpu()))
         rr.log(RerunAnnotations.cam_delta_short_flow_zaragoza,
@@ -1552,8 +1562,10 @@ class WriteResults:
         rr.log(RerunAnnotations.cam_delta_short_flow_RANSAC,
                rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_prev_to_last.polar_angle).cpu()))
 
-        pred_obj_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quat_ref_to_last.q)).cpu().squeeze()
-        pred_cam_rot_ref_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_cam_quat_ref_to_last.q)).cpu().squeeze()
+        pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
+        pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
+        gt_obj_rot_ref_to_last = quaternion_to_axis_angle(gt_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
+        gt_cam_rot_ref_to_last = quaternion_to_axis_angle(gt_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
 
         rr.log(RerunAnnotations.long_short_chain_diff, rr.Scalar(data_graph_node.predicted_obj_long_short_chain_diff))
 
@@ -1581,6 +1593,21 @@ class WriteResults:
                    rr.Scalar(pred_obj_rot_ref_to_last[axis]))
             rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}'),
                    rr.Scalar(pred_cam_rot_ref_to_last[axis]))
+
+            rr.log(getattr(RerunAnnotations, f'obj_rot_ref_to_last_{axis_label}_gt'),
+                   rr.Scalar(gt_obj_rot_ref_to_last[axis]))
+            rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}_gt'),
+                   rr.Scalar(gt_cam_rot_ref_to_last[axis]))
+
+            rr.log(getattr(RerunAnnotations, f'obj_tran_ref_to_last_{axis_label}'),
+                   rr.Scalar(pred_obj_ref_to_last.translation[0, axis].item()))
+            rr.log(getattr(RerunAnnotations, f'cam_tran_ref_to_last_{axis_label}'),
+                   rr.Scalar(pred_cam_ref_to_last.translation[0, axis].item()))
+
+            rr.log(getattr(RerunAnnotations, f'obj_tran_ref_to_last_{axis_label}_gt'),
+                   rr.Scalar(gt_obj_ref_to_last.translation[0, axis].item()))
+            rr.log(getattr(RerunAnnotations, f'cam_tran_ref_to_last_{axis_label}_gt'),
+                   rr.Scalar(gt_cam_ref_to_last.translation[0, axis].item()))
 
             rr.log(getattr(RerunAnnotations, f'chained_pose_long_flow_{axis_label}'),
                    rr.Scalar(long_jumps_pose_axis_angle[axis].item()))

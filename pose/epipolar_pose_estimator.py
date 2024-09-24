@@ -10,6 +10,7 @@ from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaterni
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
+from data_structures.datagraph_utils import get_relative_gt_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
