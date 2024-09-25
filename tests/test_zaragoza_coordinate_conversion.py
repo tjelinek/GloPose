@@ -3,7 +3,7 @@ from pathlib import Path
 import kaolin
 import numpy as np
 import torch
-from kornia.geometry import (Quaternion, rotation_matrix_to_axis_angle, Se3)
+from kornia.geometry import (Quaternion, rotation_matrix_to_axis_angle, Se3, quaternion_to_axis_angle)
 
 from auxiliary_scripts.math_utils import (Se3_last_cam_to_world_from_Se3_obj, Se3_obj_from_epipolar_Se3_cam)
 from dataset_generators import scenarios
@@ -19,9 +19,9 @@ from utils import normalize_vertices, get_not_occluded_foreground_points, erode_
 sequence_len = 30
 config = TrackerConfig()
 config.camera_up = (0, 1, 0)
-# config.camera_position = (0, 0, 5)
+config.camera_position = (0, 0, 5)
 # config.camera_position = (10, 0, 0)
-config.camera_position = (-6, 5.18, 10)
+# config.camera_position = (-6, 5.18, 10)
 config.input_frames = sequence_len
 
 path = Path('./prototypes/sphere.obj')
@@ -40,14 +40,14 @@ gt_rotation[..., 1] *= 1.
 gt_rotation[..., 2] *= -0.5
 
 # gt_translation = torch.zeros(1, 1, sequence_len, 3).cuda()
-gt_translation = scenario_t.translations.cuda()[:sequence_len].to(torch.float32)
+gt_translation = scenario_t.translations.cuda()[:sequence_len].to(torch.float32) / 5.
 gt_translation[..., 0] *= 2.
 gt_translation[..., 1] *= 1.
 gt_translation[..., 2] *= 0.5
 
 first_frame = 0
-source_frame = 6
-target_frame = 11
+source_frame = 0
+target_frame = 2
 
 if config.augment_gt_track or True:
     gt_rotation, gt_translation = modify_rotations(gt_rotation, gt_translation)
@@ -88,10 +88,11 @@ Se3_world_to_cam_1st_frame = rendering.camera_transformation_matrix_Se3()
 
 quat_obj_gt = Quaternion.from_axis_angle(gt_rotation.to(torch.float32))
 Se3_obj_gt = Se3(quat_obj_gt, gt_translation)
-axis_angle_ref_to_last_gt = gt_rotation[[target_frame]] - gt_rotation[[source_frame]]
-quat_ref_to_last_gt = Quaternion.from_axis_angle(axis_angle_ref_to_last_gt)
-translation_ref_to_last_gt = gt_translation[[target_frame]] - gt_translation[[source_frame]]
+
 Se3_obj_ref_to_last_gt = Se3_obj_gt[[target_frame]] * Se3_obj_gt[[source_frame]].inverse()
+
+axis_angle_ref_to_last_gt = quaternion_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.q).rad2deg()
+translation_ref_to_last_gt = Se3_obj_ref_to_last_gt.translation
 
 Se3_cam_ref_to_last = predict_camera_pose_using_zaragoza(source_frame, target_frame, config, rendering)
 Se3_cam_first_to_ref = predict_camera_pose_using_zaragoza(0, source_frame, config, rendering)
@@ -104,27 +105,27 @@ t_obj_ref_to_last_pred = Se3_obj_ref_to_last_pred.translation.data.squeeze(-1)  
 
 rot_obj_ref_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_ref_to_last_gt.quaternion.matrix()).squeeze()
 
-Se3_obj_1st_to_last_pred = Se3_obj_gt[[source_frame]] * Se3_obj_ref_to_last_pred
+Se3_obj_1st_to_last_pred = Se3_obj_ref_to_last_pred * Se3_obj_gt[[source_frame]]
 Se3_obj_1st_to_last_gt = Se3_obj_gt[[target_frame]]
 
 rot_obj_1st_to_last_pred = rotation_matrix_to_axis_angle(Se3_obj_1st_to_last_pred.quaternion.matrix()).squeeze()
 rot_obj_1st_to_last_gt = rotation_matrix_to_axis_angle(Se3_obj_1st_to_last_gt.quaternion.matrix()).squeeze()
 
-# TODO It is not clear why do I need to perform inverse but is works
-Se3_obj_first_to_last_base = Se3_obj_from_epipolar_Se3_cam(Se3_cam_first_to_last, Se3_world_to_cam_1st_frame)
-rot_obj_first_to_last_base = rotation_matrix_to_axis_angle(Se3_obj_first_to_last_base.quaternion.matrix()).squeeze()
-
 print('----------------------------------------')
 # print(f'T_world_to_cam\n{T_world_to_cam}')
 # print(f'T cam  : {t_cam.squeeze().numpy(force=True).round(3)}')
-print(f'T obj  : {Se3_obj_first_to_last_base.translation.squeeze().numpy(force=True).round(3)}')
-print(f'Rot cam pred: {torch.rad2deg(rotation_matrix_to_axis_angle(Se3_cam_first_to_last.quaternion.matrix())).numpy(force=True).round(3)}')
+# print(f'T obj  : {Se3_obj_first_to_last_base.translation.squeeze().numpy(force=True).round(3)}')
+# print(f'Rot cam pred: {torch.rad2deg(rotation_matrix_to_axis_angle(Se3_cam_first_to_last.quaternion.matrix())).numpy(force=True).round(3)}')
 # print(f'Rot cam gt: {torch.rad2deg(rot_cam_gt).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last pred: {torch.rad2deg(rot_obj_ref_to_last_pred).numpy(force=True).round(3)}')
 print(f'Rot obj ref to last   gt: {torch.rad2deg(rot_obj_ref_to_last_gt).numpy(force=True).round(3)}')
 print(f'Rot obj 1st to last pred: {torch.rad2deg(rot_obj_1st_to_last_pred).numpy(force=True).round(3)}')
 print(f'Rot obj 1st to last   gt: {torch.rad2deg(rot_obj_1st_to_last_gt).numpy(force=True).round(3)}')
-print(f'Rot obj 1st to last base: {torch.rad2deg(rot_obj_first_to_last_base).numpy(force=True).round(3)}')
 print('----------------------------------------')
+
+print(f'T obj ref to last pred: {Se3_obj_ref_to_last_pred.translation.numpy(force=True).round(3)}')
+print(f'T obj ref to last   gt: {Se3_obj_ref_to_last_gt.translation.numpy(force=True).round(3)}')
+print(f'T obj 1st to last pred: {Se3_obj_1st_to_last_pred.translation.numpy(force=True).round(3)}')
+print(f'T obj 1st to last   gt: {Se3_obj_1st_to_last_gt.translation.numpy(force=True).round(3)}')
 
 breakpoint()
