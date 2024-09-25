@@ -117,15 +117,25 @@ class RerunAnnotations:
     chained_pose_short_flow_y: str = '/pose/chaining/short_flow/y_axis'
     chained_pose_short_flow_z: str = '/pose/chaining/short_flow/z_axis'
 
-    cam_delta_short_flow: str = '/pose/cam/short_flow/'
-    cam_delta_short_flow_template = '/pose/cam/short_flow/template'
-    cam_delta_short_flow_zaragoza: str = '/pose/cam/short_flow/cam_pose_delta_zaragoza'
-    cam_delta_short_flow_RANSAC: str = '/pose/cam/short_flow/cam_pose_delta_RANSAC'
+    cam_delta_r_short_flow: str = '/pose/cam/rot/short_flow/'
+    cam_delta_r_short_flow_template = '/pose/cam/rot/short_flow/template'
+    cam_delta_r_short_flow_zaragoza: str = '/pose/cam/rot/short_flow/cam_pose_delta_zaragoza'
+    cam_delta_r_short_flow_RANSAC: str = '/pose/cam/rot/short_flow/cam_pose_delta_RANSAC'
 
-    cam_delta_long_flow: str = '/pose/cam/long_flow/'
-    cam_delta_long_flow_template = '/pose/cam/long_flow/template'
-    cam_delta_long_flow_zaragoza: str = '/pose/cam/long_flow/cam_pose_delta_zaragoza'
-    cam_delta_long_flow_RANSAC: str = '/pose/cam/long_flow/cam_pose_delta_RANSAC'
+    cam_delta_t_short_flow: str = '/pose/cam/tran/short_flow/'
+    cam_delta_t_short_flow_template = '/pose/cam/tran/short_flow/template'
+    cam_delta_t_short_flow_zaragoza: str = '/pose/cam/tran/short_flow/cam_pose_delta_zaragoza'
+    cam_delta_t_short_flow_RANSAC: str = '/pose/cam/tran/short_flow/cam_pose_delta_RANSAC'
+
+    cam_delta_r_long_flow: str = '/pose/cam/rot/long_flow/'
+    cam_delta_r_long_flow_template = '/pose/cam/rot/long_flow/template'
+    cam_delta_r_long_flow_zaragoza: str = '/pose/cam/rot/long_flow/cam_pose_delta_zaragoza'
+    cam_delta_r_long_flow_RANSAC: str = '/pose/cam/rot/long_flow/cam_pose_delta_RANSAC'
+
+    cam_delta_t_long_flow: str = '/pose/cam/tran/long_flow/'
+    cam_delta_t_long_flow_template = '/pose/cam/tran/long_flow/template'
+    cam_delta_t_long_flow_zaragoza: str = '/pose/cam/tran/long_flow/cam_pose_delta_zaragoza'
+    cam_delta_t_long_flow_RANSAC: str = '/pose/cam/tran/long_flow/cam_pose_delta_RANSAC'
 
     obj_rot_1st_to_last: str = '/pose/rotation'
     obj_rot_1st_to_last_x: str = '/pose/rotation/x_axis'
@@ -256,14 +266,19 @@ class WriteResults:
         self.template_fields = {
             RerunAnnotations.chained_pose_polar_template,
             RerunAnnotations.chained_pose_long_flow_template,
-            RerunAnnotations.cam_delta_short_flow_template,
+            RerunAnnotations.chained_pose_short_flow_template,
+
+            RerunAnnotations.cam_delta_r_short_flow_template,
+            RerunAnnotations.cam_delta_t_short_flow_template,
+            RerunAnnotations.cam_delta_r_long_flow_template,
+            RerunAnnotations.cam_delta_t_long_flow_template,
+
             RerunAnnotations.long_short_chain_diff_template,
+
             RerunAnnotations.cam_rot_ref_to_last_template,
             RerunAnnotations.cam_tran_ref_to_last_template,
-            RerunAnnotations.chained_pose_short_flow_template,
             RerunAnnotations.obj_rot_ref_to_last_template,
             RerunAnnotations.obj_tran_ref_to_last_template,
-            RerunAnnotations.cam_delta_long_flow_template,
         }
 
         blueprint = rrb.Blueprint(
@@ -392,14 +407,20 @@ class WriteResults:
                             ),
                             rrb.Grid(
                                 contents=[
-                                    rrb.TimeSeriesView(name="Cam Delta Short Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_short_flow
+                                    rrb.TimeSeriesView(name="Cam Rot Delta Short Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_r_short_flow
                                                        ),
-                                    rrb.TimeSeriesView(name="Cam Delta Long Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_long_flow
+                                    rrb.TimeSeriesView(name="Cam Rot Delta Long Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_r_long_flow
+                                                       ),
+                                    rrb.TimeSeriesView(name="Cam Tran Delta Short Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_t_short_flow
+                                                       ),
+                                    rrb.TimeSeriesView(name="Cam Tran Delta Long Flow Zaragoza vs RANSAC",
+                                                       origin=RerunAnnotations.cam_delta_t_long_flow
                                                        ),
                                 ],
-                                grid_columns=1,
+                                grid_columns=2,
                                 name='RANSAC pose vs Zaragoza pose'
                             ),
                             rrb.Grid(
@@ -1549,18 +1570,27 @@ class WriteResults:
         Se3_world_to_cam = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
 
-        pred_cam_RANSAC_quat_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac.quaternion
-        pred_cam_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3.quaternion
-        pred_cam_RANSAC_quat_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3_ransac.quaternion
+        pred_cam_RANSAC_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac
+        pred_cam_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3
+        pred_cam_RANSAC_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3_ransac
 
-        rr.log(RerunAnnotations.cam_delta_long_flow_zaragoza,
+        rr.log(RerunAnnotations.cam_delta_r_long_flow_zaragoza,
                rr.Scalar(torch.rad2deg(2 * pred_cam_ref_to_last.quaternion.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_long_flow_RANSAC,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_ref_to_last.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_short_flow_zaragoza,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_quat_prev_to_last.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_short_flow_RANSAC,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_quat_prev_to_last.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_r_long_flow_RANSAC,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_ref_to_last.quaternion.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_r_short_flow_zaragoza,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_prev_to_last.quaternion.polar_angle).cpu()))
+        rr.log(RerunAnnotations.cam_delta_r_short_flow_RANSAC,
+               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_prev_to_last.quaternion.polar_angle).cpu()))
+
+        rr.log(RerunAnnotations.cam_delta_t_long_flow_zaragoza,
+               rr.Scalar(pred_cam_ref_to_last.translation.squeeze().numpy(force=True)))
+        rr.log(RerunAnnotations.cam_delta_t_long_flow_RANSAC,
+               rr.Scalar(pred_cam_RANSAC_ref_to_last.translation.squeeze().numpy(force=True)))
+        rr.log(RerunAnnotations.cam_delta_t_short_flow_zaragoza,
+               rr.Scalar(pred_cam_prev_to_last.translation.squeeze().numpy(force=True)))
+        rr.log(RerunAnnotations.cam_delta_t_short_flow_RANSAC,
+               rr.Scalar(pred_cam_RANSAC_prev_to_last.translation.squeeze().numpy(force=True)))
 
         pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
