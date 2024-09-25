@@ -244,7 +244,7 @@ class EpipolarPoseEstimator:
 
         Se3_cam_RANSAC = None
         if rot_cam_ransac is not None:
-            Se3_cam_RANSAC = Se3(Quaternion.from_axis_angle(rot_cam_ransac[None]), t_cam_ransac)
+            Se3_cam_RANSAC = Se3(Quaternion.from_axis_angle(rot_cam_ransac[None]), t_cam_ransac.T)
 
         src_pts_xy_inliers = src_pts_xy[inlier_mask]
         dst_pts_xy_inliers = dst_pts_xy[inlier_mask]
