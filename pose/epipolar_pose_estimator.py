@@ -362,16 +362,16 @@ class EpipolarPoseEstimator:
         return dst_pts_yx
 
     @staticmethod
-    def recover_scale(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam, Se3_cam1_to_cam2_gt):
+    def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3, Se3_cam1_to_cam2_gt: Se3):
 
         d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
-        phi = Se3_cam1_to_cam2_unscaled.quaternion.polar_angle * 2
-        d_world_to_cam_unscaled = torch.sqrt(d_cam1_to_cam2_unscaled / (1 - torch.cos(phi)))
+        d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
+        Se3_obj1_to_obj2_unscaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam)
+        phi = Se3_obj1_to_obj2_unscaled.quaternion.polar_angle * 2
 
-        d_world_to_cam = torch.linalg.vector_norm(Se3_world_to_cam.translation)
+        scale_factor = d_cam1_to_cam2_unscaled / (d_world_to_cam1_scaled * torch.sqrt(1 - torch.cos(phi)))
 
-        scale_factor = d_world_to_cam / d_world_to_cam_unscaled * d_cam1_to_cam2_unscaled
-        cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
+        cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation / scale_factor
 
         Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
 
