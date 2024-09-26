@@ -5,7 +5,7 @@ import pygcransac
 import torch
 from kornia import vec_like, eye_like
 from kornia.geometry import rotation_matrix_to_axis_angle, motion_from_essential_choose_solution, projection_from_KRt, \
-    triangulate_points
+    triangulate_points, Rt_to_matrix4x4, inverse_transformation, matrix4x4_to_Rt
 from nonmin_pose import C2P
 # from pymagsac import optimizeEssentialMatrix
 
@@ -196,9 +196,13 @@ def estimate_pose_zaragoza(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, f
 
     solution = solver(src_pts_xy_bearings_np, dst_pts_xy_bearings_np)
 
-    R_cam = torch.from_numpy(solution["R01"]).to(torch.float32).cuda()
-    t_cam = torch.from_numpy(solution["t01"]).to(torch.float32).cuda()
+    R_cam_10 = torch.from_numpy(solution["R01"]).to(torch.float32).cuda().unsqueeze(0)
+    t_cam_10 = torch.from_numpy(solution["t01"]).to(torch.float32).cuda().unsqueeze(0)
 
-    r_cam = -rotation_matrix_to_axis_angle(R_cam)  # Clockwise->anti-clockwise rotation convention
+    T_10 = Rt_to_matrix4x4(R_cam_10, t_cam_10)
+    T_01 = inverse_transformation(T_10)
 
-    return r_cam, t_cam
+    R_cam_01, t_cam_01 = matrix4x4_to_Rt(T_01)
+    r_cam_01 = rotation_matrix_to_axis_angle(R_cam_01)
+
+    return r_cam_01, t_cam_01

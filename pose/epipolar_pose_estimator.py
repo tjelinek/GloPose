@@ -260,13 +260,12 @@ class EpipolarPoseEstimator:
         elif self.config.ransac_inlier_pose_method is None:
             if self.config.ransac_inlier_filter is None:
                 raise ValueError("At least one of 'ransac_inlier_filter' or 'ransac_inlier_filter' must not be None.")
-            r_cam = rot_cam_ransac
-            t_cam = t_cam_ransac
+            r_cam = rot_cam_ransac[None]
+            t_cam = t_cam_ransac[None]
         else:
             raise ValueError("Unknown inlier pose method")
-
-        quat_cam = Quaternion.from_axis_angle(r_cam[None])
-        Se3_cam = Se3(quat_cam, t_cam.squeeze()[None])
+        quat_cam = Quaternion.from_axis_angle(r_cam)
+        Se3_cam = Se3(quat_cam, t_cam.squeeze(-1))
 
         common_inlier_indices = torch.nonzero(inlier_mask, as_tuple=True)
         outlier_indices = torch.nonzero(~inlier_mask, as_tuple=True)
