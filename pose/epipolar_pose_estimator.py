@@ -88,14 +88,6 @@ class EpipolarPoseEstimator:
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
 
-        Se3_cam_reference_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_reference_frame, Se3_world_to_cam)
-        Se3_cam_short_jump_ref_frame = Se3_epipolar_cam_from_Se3_obj(Se3_obj_short_jump_ref_frame, Se3_world_to_cam)
-
-        if flow_arc_long_jump != flow_arc_short_jump:
-            Se3_cam_long_jump, Se3_cam_short_jump = self.relative_scale_recovery(Se3_cam_reference_frame,
-                                                                                 Se3_cam_short_jump_ref_frame,
-                                                                                 Se3_cam_long_jump, Se3_cam_short_jump)
-
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
 
@@ -396,45 +388,3 @@ class EpipolarPoseEstimator:
         Se3_cam1_to_cam2_scaled = Se3_world_to_cam.inverse() * Se3_world_to_cam2_scaled
 
         return Se3_cam1_to_cam2_scaled
-
-    @staticmethod
-    def relative_scale_recovery(Se3_world_to_i: Se3, Se3_world_to_j: Se3, Se3_i_to_q: Se3, Se3_j_to_q: Se3) \
-            -> Tuple[Se3, Se3]:
-
-        # Extract rotation and translation components from the Se3 objects
-        R_rho_i = Se3_world_to_i.r.matrix().squeeze()
-        R_rho_j = Se3_world_to_j.r.matrix().squeeze()
-        t_rho_i = Se3_world_to_i.translation.squeeze()
-        t_rho_j = Se3_world_to_j.translation.squeeze()
-        R_i = Se3_i_to_q.r.matrix().squeeze()
-        R_j = Se3_j_to_q.r.matrix().squeeze()
-        t_i = Se3_i_to_q.translation.squeeze()
-        t_j = Se3_j_to_q.translation.squeeze()
-
-        print("t_rho_i:", t_rho_i)
-        print("t_rho_j:", t_rho_j)
-        print("t_i:", t_i)
-        print("t_j:", t_j)
-
-        print("Transformation via long jump:", R_rho_i @ t_i + t_rho_i)
-        print("Transformation via short jump:", R_rho_j @ t_j + t_rho_j)
-
-        A = torch.stack([R_rho_i @ t_i, -R_rho_j @ t_j], dim=-1)
-        # A = torch.stack([R_rho_i.transpose(0, 1) @ R_i @ t_i, -R_rho_j.transpose(0, 1) @ R_j @ t_j], dim=-1)
-
-        # delta_c = c_i - c_j
-        delta_c = t_rho_i - t_rho_j
-
-        # Solve A * λ = delta_c, where λ = [λ_i, λ_j]
-        # Since torch.linalg.lstsq returns a result object, we extract the solution.
-        result = torch.linalg.lstsq(A, delta_c)
-        Lambda = result.solution
-
-        Se3_i_to_q = Se3(Se3_i_to_q.quaternion, Se3_i_to_q.t * Lambda[0])
-        Se3_j_to_q = Se3(Se3_j_to_q.quaternion, Se3_j_to_q.t * Lambda[1])
-        print("Lambda:", Lambda)
-        print("t_i rescaled:", Se3_i_to_q.translation.squeeze())
-        print("t_j rescaled:", Se3_j_to_q.translation.squeeze())
-
-        return Se3_i_to_q, Se3_j_to_q
-
