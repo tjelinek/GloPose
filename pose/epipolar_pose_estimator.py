@@ -380,22 +380,7 @@ class EpipolarPoseEstimator:
 
         return Se3_cam1_to_cam2_scaled
 
-    @staticmethod
-    def recover_scale_law_of_cosine(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3, Se3_cam1_to_cam2_gt: Se3):
-
-        d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
-        d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
-        Se3_obj1_to_obj2_unscaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_unscaled, Se3_world_to_cam)
-        phi = Se3_obj1_to_obj2_unscaled.quaternion.polar_angle * 2
-
-        scale_factor = d_cam1_to_cam2_unscaled / (d_world_to_cam1_scaled * torch.sqrt(1 - torch.cos(phi)))
-
-        cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation / scale_factor
-
-        Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
-
-        return Se3_cam1_to_cam2_scaled
-
+    def recover_scale_with_rays(self, Se3_cam1_to_cam2_unscaled, Se3_world_to_cam, Se3_cam1_to_cam2_gt):
 
         Se3_world_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_world_to_cam
         ray_direction_cam1 = Se3_world_to_cam.translation
