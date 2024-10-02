@@ -463,7 +463,6 @@ class Tracking6D:
 
                 self.write_results.write_results(frame_i=frame_i, tex=tex, active_keyframes=self.active_keyframes,
                                                  observations=all_frame_observations,
-                                                 flow_tracks_inits=self.flow_tracks_inits,
                                                  pose_icosphere=self.pose_icosphere)
 
                 gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \

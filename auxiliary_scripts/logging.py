@@ -751,8 +751,7 @@ class WriteResults:
 
     @torch.no_grad()
     def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer,
-                      observations: FrameObservation, flow_tracks_inits: List[int],
-                      pose_icosphere: PoseIcosphere):
+                      observations: FrameObservation, pose_icosphere: PoseIcosphere):
 
         observed_segmentations = observations.observed_segmentation
 
@@ -784,7 +783,7 @@ class WriteResults:
 
             if (self.tracking_config.analyze_ransac_matchings and
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
-                self.analyze_ransac_matchings(frame_i, flow_tracks_inits)
+                self.analyze_ransac_matchings(frame_i)
 
             if self.tracking_config.visualize_point_clouds_from_ransac:
                 self.visualize_point_clouds_from_ransac(frame_i)
@@ -1098,7 +1097,7 @@ class WriteResults:
                 if self.tracking_config.plot_mft_flow_kde_error_plot and camera == Cameras.FRONTVIEW:
                     self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
-    def analyze_ransac_matchings(self, frame_i, flow_tracks_inits):
+    def analyze_ransac_matchings(self, frame_i):
 
         if frame_i % 10 == 0:
             return
