@@ -417,13 +417,13 @@ def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
     d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
     d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
 
-    cam_to_obj_ray = Se3_world_to_cam.translation
+    cam1_to_obj1_ray = Se3_world_to_cam.translation
     cam1_to_cam2_ray = Se3_cam1_to_cam2_unscaled.inverse().translation
 
-    alpha = torch.nn.functional.cosine_similarity(cam_to_obj_ray, cam1_to_cam2_ray).acos()
-    theta = torch.pi - 2 * alpha
+    beta = torch.nn.functional.cosine_similarity(cam1_to_obj1_ray, cam1_to_cam2_ray).acos()
+    alpha = torch.pi - 2 * beta
 
-    d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(theta) * torch.sin(alpha)
+    d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(alpha) * torch.sin(beta)
     scale_factor = d_world_to_cam1_scaled / d_world_to_cam1_unscaled
 
     cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
