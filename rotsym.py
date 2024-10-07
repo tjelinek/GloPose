@@ -1,5 +1,4 @@
 from sympy import symbols, Matrix, BlockMatrix, MatrixSymbol, ZeroMatrix
-from sympy.matrices import eye
 
 # Define symbols
 alpha = symbols('alpha', real=True)
@@ -13,13 +12,13 @@ T_w2c = BlockMatrix([[R_w2c, t_w2c], [ZeroMatrix(1, 3), Matrix([[1]])]])
 T_c = BlockMatrix([[R_c, t_c], [ZeroMatrix(1, 3), Matrix([[1]])]])
 
 # Alpha-scaled translation component of T_w2c
-T_w2c_alpha = Matrix([[R_w2c, alpha * t_w2c], [ZeroMatrix(1, 3), Matrix([[1]])]])
+T_w2c_alpha = BlockMatrix([[R_w2c, alpha * t_w2c], [ZeroMatrix(1, 3), Matrix([[1]])]])
 
 # Construct the expression
-expr = T_w2c_alpha.inv() * T_c * T_w2c * (T_w2c_alpha.inv() * T_c * T_w2c_alpha)
+T_o = T_w2c_alpha.inv() * T_c * T_w2c * (T_w2c_alpha.inv() * T_c * T_w2c_alpha)
 
 # Simplify the expression
 # simplified_expr = expr.simplify()
 
-print(expr)
+print(T_o)
 # print(simplified_expr)
