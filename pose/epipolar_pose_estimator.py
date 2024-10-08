@@ -432,43 +432,22 @@ def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
     return Se3_cam1_to_cam2_scaled
 
 def recover_scale_with_lineq(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
-    '''
-    ***************************************************************
-    *                                      X                      *
-    *                                     / \                     *
-    *                             T_obj  / α \                    *
-    *                            ,-'`-. /     \                   *
-    *                         ,-'      `-.     \  T_w2c           *
-    *                    Obj (      X     )     \                 *
-    *                         `-.      ,-'       \                *
-    *                            `-.,-'           \               *
-    *                          /                   \              *
-    *                  T_w2   /                     \             *
-    *                        /                   ________         *
-    *                       /                    \      /         *
-    *                      /                      \    /          *
-    *                _______                       \  /  C_2      *
-    *                \     /                    γ   \/            *
-    *                 \   /                 ________X             *
-    *              C_1 \ / β      _________/                      *
-    *                   X________/       T_C                      *
-    *                                                             *
-    ***************************************************************
-    '''
-    d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
-    d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
 
-    cam1_to_obj1_ray = Se3_world_to_cam.translation
-    cam1_to_cam2_ray = Se3_cam1_to_cam2_unscaled.inverse().translation
+    R_w2c = Se3_world_to_cam.quaternion.matrix().squeeze(0)
+    R_c = Se3_cam1_to_cam2_unscaled.quaternion.matrix().squeeze(0)
 
-    beta = torch.nn.functional.cosine_similarity(cam1_to_obj1_ray, cam1_to_cam2_ray).acos()
-    alpha = torch.pi - 2 * beta
+    t_w2c = Se3_world_to_cam.translation.T
+    t_c = Se3_cam1_to_cam2_unscaled.translation.T
 
-    d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(alpha) * torch.sin(beta)
-    scale_factor = d_world_to_cam1_scaled / d_world_to_cam1_unscaled
+    # SymPy Result:
+    # t_obj2_to_cam2_pred = alpha*(R_w2c.T @ R_c.T @ R_w2c @ t_c - R_w2c.T@R_c.T@t_c) + R_w2c.T@R_c.T@R_w2c@R_c@t_w2c + R_w2c.T@R_c.T@t_w2c - R_w2c.T@t_w2c
 
-    cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
-    Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
+    factored_vector = R_w2c.T @ R_c.T @ R_w2c @ t_c - R_w2c.T@R_c.T@t_c
+    left_side = t_c - (R_w2c.T@R_c.T@R_w2c@R_c@t_w2c + R_w2c.T@R_c.T@t_w2c - R_w2c.T@t_w2c)
+
+    alpha_sol = factored_vector.T @ left_side / torch.linalg.norm(factored_vector)
+    t_c_scaled = Se3_cam1_to_cam2_unscaled.translation * alpha_sol
+    Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, t_c_scaled)
 
     return Se3_cam1_to_cam2_scaled
 
