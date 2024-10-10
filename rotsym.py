@@ -15,7 +15,7 @@ T_c = BlockMatrix([[R_c, alpha * t_c], [ZeroMatrix(1, 3), Matrix([[1]])]])
 T_c2w = BlockMatrix([[R_w2c.T, -R_w2c.T * t_w2c], [ZeroMatrix(1, 3), Matrix([[1]])]])
 
 # Construct the expression
-T_o = (T_c * T_w2c).inv() * (T_w2c.inv() * T_c * T_w2c)
+T_o = T_c * T_w2c * (T_w2c.inverse() * T_c * T_w2c).inverse()
 
 # Simplify the expression
 T_o = block_collapse(T_o)
