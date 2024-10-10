@@ -5,6 +5,7 @@ import rerun.blueprint as rrb
 import torch
 from kornia.geometry import Se3, Quaternion
 
+from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam
 from utils import homogenize_3x4_transformation_matrix
 
 camera_trans = torch.tensor([[3.14, -5.0, -2.81]]).cpu().to(torch.float32)
@@ -37,30 +38,37 @@ position_cam1 = Se3_obj_to_cam.inverse().t.squeeze()
 Se3_cam1_to_cam2_scaled = Se3(rotation, translation)
 Se3_obj1_to_cam2_scaled = Se3_cam1_to_cam2_scaled * Se3_obj_to_cam
 Se3_obj1_to_obj2_scaled = Se3_obj_to_cam * Se3_obj1_to_cam2_scaled
+Se3_obj2_to_obj1_scaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_scaled, Se3_obj_to_cam).inverse()
+
 position_cam2_scaled = Se3_obj1_to_cam2_scaled.inverse().t.squeeze()
 position_obj2_scaled = Se3_obj1_to_obj2_scaled.inverse().t.squeeze()
+position_obj1_scaled = Se3_obj2_to_obj1_scaled.inverse().t.squeeze()
 
-colors_unscaled = [[0, 255, 0]] * 3
-colors_scaled = [[0, 0, 255]] * 3
-strips_radii = [0.1] * 3
+colors_unscaled = (np.asarray([[0, 255, 0]] * 4) * np.array([1., 0.75, 0.5, 0.25])[:, np.newaxis]).astype(np.uint8)
+colors_scaled = (np.asarray([[0, 0, 255]] * 4) * np.array([1., 0.75, 0.5, 0.25])[:, np.newaxis]).astype(np.uint8)
+strips_radii = np.asarray([0.1] * 4)
 
 for factor in torch.linspace(0, 2, 100).cpu():
     Se3_cam1_to_cam2_unscaled = Se3(rotation, translation * factor)
     Se3_obj1_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_obj_to_cam
     Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam * Se3_obj1_to_cam2_unscaled
+    Se3_obj2_to_obj1_unscaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_unscaled, Se3_obj_to_cam).inverse()
 
     position_cam2_unscaled = Se3_obj1_to_cam2_unscaled.inverse().t.squeeze()
     position_obj2_unscaled = Se3_obj1_to_obj2_unscaled.inverse().t.squeeze()
+    position_obj1_unscaled = Se3_obj2_to_obj1_unscaled.inverse().t.squeeze()
 
     rr.set_time_sequence('scale_factor', int(factor * 100))
 
     line_strip_unscaled = np.stack([obj_center[0], position_cam1.numpy(force=True),
                                     position_cam2_unscaled.numpy(force=True),
-                                    position_obj2_unscaled.numpy(force=True)])
+                                    position_obj2_unscaled.numpy(force=True),
+                                    position_obj1_unscaled.numpy(force=True)])
 
     line_strip_scaled = np.stack([obj_center[0], position_cam1.numpy(force=True),
                                   position_cam2_scaled.numpy(force=True),
-                                  position_obj2_scaled.numpy(force=True)])
+                                  position_obj2_scaled.numpy(force=True),
+                                  position_obj1_scaled.numpy(force=True)])
 
     rr.log('pose/unscaled_rotation',
            rr.LineStrips3D(strips=line_strip_unscaled,
