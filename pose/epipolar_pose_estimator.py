@@ -85,6 +85,7 @@ class EpipolarPoseEstimator:
         Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
         Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
         Se3_cam_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
+        Se3_cam_long_jump, scale_factor_long_jump = recover_scale(Se3_cam_long_jump, Se3_cam1_to_cam2_gt, Se3_world_to_cam)
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
 
@@ -142,6 +143,8 @@ class EpipolarPoseEstimator:
         datagraph_long_edge.predicted_obj_delta_se3 = Se3_obj_long_jump
         datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
         datagraph_long_edge.predicted_cam_delta_se3_ransac = Se3_cam_long_jump_RANSAC
+        datagraph_long_edge.camera_scale_estimated = scale_factor_long_jump
+        datagraph_long_edge.camera_scale_per_axis_gt = per_axis_scale_factor_long_edge
 
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
         datagraph_camera_node.long_jump_source = flow_long_jump_source
@@ -352,26 +355,6 @@ class EpipolarPoseEstimator:
 
         return dst_pts_yx
 
-    @staticmethod
-    def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
-
-        d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
-        d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
-
-        cam_to_obj_ray = Se3_world_to_cam.translation
-        cam1_to_cam2_ray = Se3_cam1_to_cam2_unscaled.inverse().translation
-
-        phi = torch.nn.functional.cosine_similarity(cam_to_obj_ray, cam1_to_cam2_ray).acos()
-        theta = torch.pi - 2 * phi
-
-        d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(theta) * torch.sin(phi)
-        scale_factor = d_world_to_cam1_scaled / d_world_to_cam1_unscaled
-
-        cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
-        Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
-
-        return Se3_cam1_to_cam2_scaled
-
     def recover_scale_with_rays(self, Se3_cam1_to_cam2_unscaled, Se3_world_to_cam, Se3_cam1_to_cam2_gt):
 
         Se3_world_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_world_to_cam
@@ -429,7 +412,7 @@ def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
     cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
     Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
 
-    return Se3_cam1_to_cam2_scaled
+    return Se3_cam1_to_cam2_scaled, float(scale_factor)
 
 def recover_scale_with_lineq(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
 

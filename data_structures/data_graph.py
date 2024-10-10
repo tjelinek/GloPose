@@ -85,6 +85,9 @@ class CrossFrameData:
     predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
     predicted_cam_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
 
+    camera_scale_per_axis_gt: torch.Tensor = None
+    camera_scale_estimated: float = None
+
 
 @dataclass
 class DataGraph:

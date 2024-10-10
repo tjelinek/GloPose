@@ -189,6 +189,12 @@ class RerunAnnotations:
     obj_tran_ref_to_last_z: str = '/pose/obj_tran_ref_to_last/z_axis'
     obj_tran_ref_to_last_z_gt: str = '/pose/obj_tran_ref_to_last/z_axis_gt'
 
+    translation_scale: str = '/pose/translation_scale'
+    translation_scale_x_gt: str = '/pose/translation_scale/x_gt'
+    translation_scale_y_gt: str = '/pose/translation_scale/y_gt'
+    translation_scale_z_gt: str = '/pose/translation_scale/z_gt'
+    translation_scale_estimated: str = '/pose/translation_scale/estimated'
+
     # Pose
     pose_per_frame: str = '/pose/pose_per_frame'
 
@@ -279,6 +285,8 @@ class WriteResults:
             RerunAnnotations.cam_tran_ref_to_last_template,
             RerunAnnotations.obj_rot_ref_to_last_template,
             RerunAnnotations.obj_tran_ref_to_last_template,
+
+            RerunAnnotations.translation_scale
         }
 
         blueprint = rrb.Blueprint(
@@ -441,6 +449,15 @@ class WriteResults:
                                 grid_columns=2,
                                 name='Pose'
                             ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.TimeSeriesView(name="Translation Per Axis GT Scale",
+                                                       origin=RerunAnnotations.translation_scale
+                                                       ),
+                                ],
+                                grid_columns=1,
+                                name='Translation Scaling'
+                            ),
                         ],
                         name='Pose'
                     ),
@@ -472,6 +489,7 @@ class WriteResults:
                         getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}'),
                         getattr(RerunAnnotations, f'chained_pose_long_flow_{axis}'),
                         getattr(RerunAnnotations, f'chained_pose_short_flow_{axis}'),
+                        getattr(RerunAnnotations, f'translation_scale_{axis}_gt'),
                     ]
                 ))
 
@@ -1608,6 +1626,11 @@ class WriteResults:
         rr.log(RerunAnnotations.chained_pose_short_flow_polar,
                rr.Scalar(torch.rad2deg(short_jumps_chain_pose_q.polar_angle * 2).item()))
 
+        scale_factor_per_axis_long_edge = datagraph_long_edge.camera_scale_per_axis_gt
+        scale_factor_estimated_long_edge = datagraph_long_edge.camera_scale_estimated
+
+        rr.log(RerunAnnotations.translation_scale_estimated, rr.Scalar(scale_factor_estimated_long_edge))
+
         for axis, axis_label in enumerate(['x', 'y', 'z']):
             rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'),
                    rr.Scalar(obj_rot_1st_to_last[axis]))
@@ -1642,6 +1665,9 @@ class WriteResults:
                    rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
             rr.log(getattr(RerunAnnotations, f'chained_pose_short_flow_{axis_label}'),
                    rr.Scalar(short_jumps_pose_axis_angle[axis].item()))
+
+            rr.log(getattr(RerunAnnotations, f'translation_scale_{axis_label}_gt'),
+                   rr.Scalar(scale_factor_per_axis_long_edge[axis].item()))
 
     def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rotations = []
