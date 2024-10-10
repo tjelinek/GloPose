@@ -83,9 +83,15 @@ class EpipolarPoseEstimator:
                                                   chained_short_jumps_flows_ref_to_current))
 
         Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
-        Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
-        Se3_cam_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
+
+        Se3_obj1_to_obj2_gt = get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target, self.data_graph)
+        Se3_cam1_to_cam2_gt = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_world_to_cam)
+        # Se3_cam1_to_cam2_gt = Se3(Se3_cam1_to_cam2_gt.quaternion, torch.nn.functional.normalize(Se3_cam1_to_cam2_gt.translation, dim=1))
+        per_axis_scale_factor_long_edge = (Se3_cam_long_jump.t / Se3_cam1_to_cam2_gt.t).squeeze().cpu()
+
+        # Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam, get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target, self.data_graph))
         Se3_cam_long_jump, scale_factor_long_jump = recover_scale(Se3_cam_long_jump, Se3_cam1_to_cam2_gt, Se3_world_to_cam)
+
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
 
