@@ -5,6 +5,7 @@ import rerun.blueprint as rrb
 import torch
 from kornia.geometry import Se3, Quaternion
 
+from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
 from utils import homogenize_3x4_transformation_matrix
 
 camera_trans = torch.tensor([[3.14, -5.0, -2.81]]).cpu().to(torch.float32)
@@ -37,7 +38,7 @@ position_cam1 = Se3_obj_to_cam.inverse().t.squeeze()
 
 Se3_cam1_to_cam2_scaled = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_obj_to_cam)
 Se3_obj1_to_cam2_scaled = Se3_cam1_to_cam2_scaled * Se3_obj_to_cam
-Se3_obj1_to_obj2_scaled = Se3_obj_to_cam * Se3_obj1_to_cam2_scaled
+Se3_obj1_to_obj2_scaled = Se3_obj_to_cam.inverse() * Se3_obj1_to_cam2_scaled
 Se3_obj2_to_obj1_scaled = Se3_obj1_to_obj2_scaled.inverse()
 Se3_obj1_to_obj1_scaled = Se3_obj2_to_obj1_scaled * Se3_obj1_to_obj2_scaled
 
@@ -52,7 +53,7 @@ strips_radii = np.asarray([0.1] * 4)
 for factor in torch.linspace(0, 20, 100).cpu():
     Se3_cam1_to_cam2_unscaled = Se3(Se3_cam1_to_cam2_scaled.quaternion, Se3_cam1_to_cam2_scaled.t * factor)
     Se3_obj1_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_obj_to_cam
-    Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam * Se3_obj1_to_cam2_unscaled
+    Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam.inverse() * Se3_obj1_to_cam2_unscaled
     Se3_obj2_to_obj1_unscaled = Se3_obj1_to_obj2_unscaled.inverse()
     Se3_obj1_to_obj1_unscaled = Se3_obj2_to_obj1_unscaled * Se3_obj1_to_obj2_unscaled
 
