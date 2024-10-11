@@ -30,7 +30,7 @@ rr.send_blueprint(blueprint)
 
 ###############################################################
 
-translation = torch.tensor([[1., 2., 3.]]).cpu()
+translation = torch.tensor([[1., 2., 3.]]).cpu() * 1.
 rotation = Quaternion.random(batch_size=1).cpu()
 Se3_obj1_to_obj2_gt = Se3(rotation, translation)
 
@@ -63,12 +63,12 @@ for factor in torch.linspace(0, 2, 100).cpu():
 
     rr.set_time_sequence('scale_factor', int(factor * 100))
 
-    line_strip_unscaled = np.stack([obj_center[0], position_cam1.numpy(force=True),
+    line_strip_unscaled = np.stack([position_obj1_scaled.numpy(force=True), position_cam1.numpy(force=True),
                                     position_cam2_unscaled.numpy(force=True),
                                     position_obj2_unscaled.numpy(force=True),
                                     position_obj1_unscaled.numpy(force=True)])
 
-    line_strip_scaled = np.stack([obj_center[0], position_cam1.numpy(force=True),
+    line_strip_scaled = np.stack([position_obj1_scaled.numpy(force=True), position_cam1.numpy(force=True),
                                   position_cam2_scaled.numpy(force=True),
                                   position_obj2_scaled.numpy(force=True),
                                   position_obj1_scaled.numpy(force=True)])
