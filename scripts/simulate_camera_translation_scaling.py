@@ -38,25 +38,27 @@ position_cam1 = Se3_obj_to_cam.inverse().t.squeeze()
 Se3_cam1_to_cam2_scaled = Se3(rotation, translation)
 Se3_obj1_to_cam2_scaled = Se3_cam1_to_cam2_scaled * Se3_obj_to_cam
 Se3_obj1_to_obj2_scaled = Se3_obj_to_cam * Se3_obj1_to_cam2_scaled
-Se3_obj2_to_obj1_scaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_scaled, Se3_obj_to_cam).inverse()
+Se3_obj2_to_obj1_scaled = Se3_obj1_to_obj2_scaled.inverse()
+Se3_obj1_to_obj1_scaled = Se3_obj2_to_obj1_scaled * Se3_obj1_to_obj2_scaled
 
 position_cam2_scaled = Se3_obj1_to_cam2_scaled.inverse().t.squeeze()
 position_obj2_scaled = Se3_obj1_to_obj2_scaled.inverse().t.squeeze()
-position_obj1_scaled = Se3_obj2_to_obj1_scaled.inverse().t.squeeze()
+position_obj1_scaled = Se3_obj1_to_obj1_scaled.inverse().t.squeeze()
 
 colors_unscaled = (np.asarray([[0, 255, 0]] * 4) * np.array([1., 0.75, 0.5, 0.25])[:, np.newaxis]).astype(np.uint8)
 colors_scaled = (np.asarray([[0, 0, 255]] * 4) * np.array([1., 0.75, 0.5, 0.25])[:, np.newaxis]).astype(np.uint8)
 strips_radii = np.asarray([0.1] * 4)
 
-for factor in torch.linspace(0, 2, 100).cpu():
+for factor in torch.linspace(0, 20, 100).cpu():
     Se3_cam1_to_cam2_unscaled = Se3(rotation, translation * factor)
     Se3_obj1_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_obj_to_cam
     Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam * Se3_obj1_to_cam2_unscaled
-    Se3_obj2_to_obj1_unscaled = Se3_obj_from_epipolar_Se3_cam(Se3_cam1_to_cam2_unscaled, Se3_obj_to_cam).inverse()
+    Se3_obj2_to_obj1_unscaled = Se3_obj1_to_obj2_unscaled.inverse()
+    Se3_obj1_to_obj1_unscaled = Se3_obj2_to_obj1_unscaled * Se3_obj1_to_obj2_unscaled
 
     position_cam2_unscaled = Se3_obj1_to_cam2_unscaled.inverse().t.squeeze()
     position_obj2_unscaled = Se3_obj1_to_obj2_unscaled.inverse().t.squeeze()
-    position_obj1_unscaled = Se3_obj2_to_obj1_unscaled.inverse().t.squeeze()
+    position_obj1_unscaled = Se3_obj1_to_obj1_unscaled.inverse().t.squeeze()
 
     rr.set_time_sequence('scale_factor', int(factor * 100))
 
