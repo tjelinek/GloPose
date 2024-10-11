@@ -79,37 +79,42 @@ for factor in torch.linspace(0, 20, 100).cpu():
                            colors=colors_unscaled,
                            radii=strips_radii))
 
+    # rr.log('pose/unscaled_rotation_cam1_to_obj',
+    #        rr.LineStrips3D(strips=[position_cam2_unscaled, position_cam1],
+    #                        colors=[[255, 255, 0]],
+    #                        radii=[[0.1]]))
+
     rr.log('pose/scaled_rotation',
            rr.LineStrips3D(strips=line_strip_scaled,
                            colors=colors_scaled,
                            radii=strips_radii))
 
-    # rr.log(
-    #     f'pose/camera1',
-    #     rr.Transform3D(translation=Se3_obj_to_cam.t.squeeze().numpy(force=True),
-    #                    rotation=rr.Quaternion(xyzw=Se3_obj_to_cam.quaternion.q.squeeze().numpy(force=True))),
-    #     from_parent=True,
-    # )
-    # rr.log(
-    #     f'pose/camera1',
-    #     rr.Pinhole(
-    #         resolution=[1, 1],
-    #         focal_length=[1., 1.],
-    #         camera_xyz=rr.ViewCoordinates.RUB,
-    #     ),
-    # )
-    #
-    # rr.log(f'pose/camera2',
-    #        rr.Transform3D(translation=Se3_obj1_to_cam2_unscaled.t.squeeze().numpy(force=True),
-    #                       rotation=rr.Quaternion(
-    #                           xyzw=Se3_obj1_to_cam2_unscaled.quaternion.q.squeeze().numpy(force=True))),
-    #        from_parent=True,
-    #        )
-    # rr.log(
-    #     f'pose/camera2',
-    #     rr.Pinhole(
-    #         resolution=[1, 1],
-    #         focal_length=[1., 1.],
-    #         camera_xyz=rr.ViewCoordinates.RUB,
-    #     ),
-    # )
+    rr.log(
+        f'pose/camera1',
+        rr.Transform3D(translation=Se3_obj_to_cam.inverse().t.squeeze().numpy(force=True),
+                       rotation=rr.Quaternion(xyzw=Se3_obj_to_cam.inverse().quaternion.q.squeeze().numpy(force=True)),
+                       from_parent=None),
+    )
+    rr.log(
+        f'pose/camera1',
+        rr.Pinhole(
+            resolution=[1, 1],
+            focal_length=[1., 1.],
+            camera_xyz=rr.ViewCoordinates.RUB,
+        ),
+    )
+
+    rr.log(f'pose/camera2',
+           rr.Transform3D(translation=Se3_obj1_to_cam2_unscaled.inverse().t.squeeze().numpy(force=True),
+                          rotation=rr.Quaternion(
+                              xyzw=Se3_obj1_to_cam2_unscaled.inverse().quaternion.q.squeeze().numpy(force=True)),
+                          from_parent=None),
+           )
+    rr.log(
+        f'pose/camera2',
+        rr.Pinhole(
+            resolution=[1, 1],
+            focal_length=[1., 1.],
+            camera_xyz=rr.ViewCoordinates.RUB,
+        ),
+    )
