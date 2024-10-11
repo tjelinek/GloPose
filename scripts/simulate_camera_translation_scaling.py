@@ -5,7 +5,6 @@ import rerun.blueprint as rrb
 import torch
 from kornia.geometry import Se3, Quaternion
 
-from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam
 from utils import homogenize_3x4_transformation_matrix
 
 camera_trans = torch.tensor([[3.14, -5.0, -2.81]]).cpu().to(torch.float32)
@@ -71,6 +70,9 @@ for factor in torch.linspace(0, 20, 100).cpu():
                                   position_cam2_scaled.numpy(force=True),
                                   position_obj2_scaled.numpy(force=True),
                                   position_obj1_scaled.numpy(force=True)])
+
+    line_strip_unscaled = np.stack([line_strip_unscaled[:-1], line_strip_unscaled[1:]], axis=1)
+    line_strip_scaled = np.stack([line_strip_scaled[:-1], line_strip_scaled[1:]], axis=1)
 
     rr.log('pose/unscaled_rotation',
            rr.LineStrips3D(strips=line_strip_unscaled,
