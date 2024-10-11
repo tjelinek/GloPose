@@ -380,46 +380,46 @@ class EpipolarPoseEstimator:
         return Se3_cam1_to_cam2_scaled
 
 
-def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
-    '''
-    ***************************************************************
-    *                                      X                      *
-    *                                     / \                     *
-    *                             T_obj  / α \                    *
-    *                            ,-'`-. /     \                   *
-    *                         ,-'      `-.     \  T_w2c           *
-    *                    Obj (      X     )     \                 *
-    *                         `-.      ,-'       \                *
-    *                            `-.,-'           \               *
-    *                          /                   \              *
-    *                  T_w2   /                     \             *
-    *                        /                   ________         *
-    *                       /                    \      /         *
-    *                      /                      \    /          *
-    *                _______                       \  /  C_2      *
-    *                \     /                    γ   \/            *
-    *                 \   /                 ________X             *
-    *              C_1 \ / β      _________/                      *
-    *                   X________/       T_C                      *
-    *                                                             *
-    ***************************************************************
-    '''
-    d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
-    d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
+    def recover_scale(self, Se3_cam1_to_cam2_unscaled: Se3, Se3_cam1_to_cam2_gt: Se3, Se3_world_to_cam: Se3):
+        '''
+        ***************************************************************
+        *                                      X                      *
+        *                                     / \                     *
+        *                             T_obj  / α \                    *
+        *                            ,-'`-. /     \                   *
+        *                         ,-'      `-.     \  T_w2c           *
+        *                    Obj (      X     )     \                 *
+        *                         `-.      ,-'       \                *
+        *                            `-.,-'           \               *
+        *                          /                   \              *
+        *                  T_w2   /                     \             *
+        *                        /                   ________         *
+        *                       /                    \      /         *
+        *                      /                      \    /          *
+        *                _______                       \  /  C_2      *
+        *                \     /                    γ   \/            *
+        *                 \   /                 ________X             *
+        *              C_1 \ / β      _________/                      *
+        *                   X________/       T_C                      *
+        *                                                             *
+        ***************************************************************
+        '''
+        d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
+        d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
 
-    cam1_to_obj1_ray = Se3_world_to_cam.translation
-    cam1_to_cam2_ray = Se3_cam1_to_cam2_unscaled.inverse().translation
+        cam1_to_obj1_ray = Se3_world_to_cam.translation
+        cam1_to_cam2_ray = Se3_cam1_to_cam2_unscaled.inverse().translation
 
-    beta = torch.nn.functional.cosine_similarity(cam1_to_obj1_ray, cam1_to_cam2_ray).acos()
-    alpha = torch.pi - 2 * beta
+        beta = torch.nn.functional.cosine_similarity(cam1_to_obj1_ray, cam1_to_cam2_ray).acos()
+        alpha = torch.pi - 2 * beta
 
-    d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(alpha) * torch.sin(beta)
-    scale_factor = d_world_to_cam1_scaled / d_world_to_cam1_unscaled
+        d_world_to_cam1_unscaled = d_cam1_to_cam2_unscaled / torch.sin(alpha) * torch.sin(beta)
+        scale_factor = d_world_to_cam1_scaled / d_world_to_cam1_unscaled
 
-    cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
-    Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
+        cam_t_scaled = Se3_cam1_to_cam2_unscaled.translation * scale_factor
+        Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, cam_t_scaled)
 
-    return Se3_cam1_to_cam2_scaled, float(scale_factor)
+        return Se3_cam1_to_cam2_scaled, float(scale_factor)
 
 def recover_scale_with_lineq(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
 
