@@ -50,7 +50,7 @@ colors_unscaled = (np.asarray([[0, 255, 0]] * 4) * np.array([1., 0.75, 0.5, 0.25
 colors_scaled = (np.asarray([[0, 0, 255]] * 4) * np.array([1., 0.75, 0.5, 0.25])[:, np.newaxis]).astype(np.uint8)
 strips_radii = np.asarray([0.1] * 4)
 
-for factor in torch.linspace(0, 20, 100).cpu():
+for factor in torch.linspace(0, 2, 100).cpu():
     Se3_cam1_to_cam2_unscaled = Se3(Se3_cam1_to_cam2_scaled.quaternion, Se3_cam1_to_cam2_scaled.t * factor)
     Se3_obj1_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_obj_to_cam
     Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam.inverse() * Se3_obj1_to_cam2_unscaled
