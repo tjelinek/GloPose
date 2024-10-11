@@ -31,10 +31,11 @@ rr.send_blueprint(blueprint)
 
 translation = torch.tensor([[1., 2., 3.]]).cpu()
 rotation = Quaternion.random(batch_size=1).cpu()
+Se3_obj1_to_obj2_gt = Se3(rotation, translation)
 
 position_cam1 = Se3_obj_to_cam.inverse().t.squeeze()
 
-Se3_cam1_to_cam2_scaled = Se3(rotation, translation)
+Se3_cam1_to_cam2_scaled = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_obj_to_cam)
 Se3_obj1_to_cam2_scaled = Se3_cam1_to_cam2_scaled * Se3_obj_to_cam
 Se3_obj1_to_obj2_scaled = Se3_obj_to_cam * Se3_obj1_to_cam2_scaled
 Se3_obj2_to_obj1_scaled = Se3_obj1_to_obj2_scaled.inverse()
@@ -49,7 +50,7 @@ colors_scaled = (np.asarray([[0, 0, 255]] * 4) * np.array([1., 0.75, 0.5, 0.25])
 strips_radii = np.asarray([0.1] * 4)
 
 for factor in torch.linspace(0, 20, 100).cpu():
-    Se3_cam1_to_cam2_unscaled = Se3(rotation, translation * factor)
+    Se3_cam1_to_cam2_unscaled = Se3(Se3_cam1_to_cam2_scaled.quaternion, Se3_cam1_to_cam2_scaled.t * factor)
     Se3_obj1_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_obj_to_cam
     Se3_obj1_to_obj2_unscaled = Se3_obj_to_cam * Se3_obj1_to_cam2_unscaled
     Se3_obj2_to_obj1_unscaled = Se3_obj1_to_obj2_unscaled.inverse()
