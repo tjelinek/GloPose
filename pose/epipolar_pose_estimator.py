@@ -155,7 +155,7 @@ class EpipolarPoseEstimator:
         datagraph_long_edge.predicted_obj_delta_se3 = Se3_obj_long_jump
         datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
         datagraph_long_edge.predicted_cam_delta_se3_ransac = Se3_cam_long_jump_RANSAC
-        datagraph_long_edge.camera_scale_estimated = scale_long_jump
+        datagraph_long_edge.camera_scale_estimated = scale_long_jump.item()
         datagraph_long_edge.camera_scale_per_axis_gt = per_axis_scale_long_jump
 
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
@@ -166,10 +166,13 @@ class EpipolarPoseEstimator:
 
         Se3_obj1_to_obj2_gt = get_relative_gt_rotation(flow_source, flow_target, self.data_graph)
         Se3_cam1_to_cam2_gt = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_world_to_cam)
-        Se3_cam1_to_cam2_gt = Se3(Se3_cam1_to_cam2_gt.quaternion,
-                                  torch.nn.functional.normalize(Se3_cam1_to_cam2_gt.translation, dim=1))
-        per_axis_scale_factor = (Se3_cam1_to_cam2_est.t / Se3_cam1_to_cam2_gt.t).squeeze()
-        aggregated_scale = per_axis_scale_factor.mean()
+
+        per_axis_scale_factor = (Se3_cam1_to_cam2_gt.t / Se3_cam1_to_cam2_est.t).squeeze()
+
+        d_cam_gt = torch.linalg.vector_norm(Se3_cam1_to_cam2_gt.t)
+        d_cam_est = torch.linalg.vector_norm(Se3_cam1_to_cam2_est.t)
+
+        aggregated_scale = d_cam_gt / d_cam_est
 
         return per_axis_scale_factor, aggregated_scale
 
