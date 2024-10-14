@@ -98,8 +98,8 @@ class EpipolarPoseEstimator:
             Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
             Se3_cam_long_jump, scale_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
 
-        Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
-        Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
+        Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[long_jump_source]]
+        Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[short_jump_source]]
 
         Se3_obj_long_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_long_jump, Se3_world_to_cam)
         Se3_obj_short_jump = Se3_obj_from_epipolar_Se3_cam(Se3_cam_short_jump, Se3_world_to_cam)
