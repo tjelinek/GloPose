@@ -44,6 +44,8 @@ class EpipolarPoseEstimator:
 
         self.camera = camera
 
+        self.i_can_recover_the_scale_myself = False
+
     @torch.no_grad()
     def essential_matrix_preinitialization(self, keyframes, flow_tracks_inits):
 
@@ -54,8 +56,8 @@ class EpipolarPoseEstimator:
 
         flow_arc_short_jump = (frame_i - 1, frame_i)
 
-        flow_long_jump_source, flow_long_jump_target = flow_arc_long_jump
-        flow_short_jump_source, flow_short_jump_target = flow_arc_short_jump
+        long_jump_source, long_jump_target = flow_arc_long_jump
+        short_jump_source, short_jump_target = flow_arc_short_jump
 
         flow_long_jump_observations: FlowObservation = (self.data_graph.get_edge_observations(*flow_arc_long_jump).
                                                         observed_flow).cuda()
@@ -63,7 +65,7 @@ class EpipolarPoseEstimator:
                                                          observed_flow).cuda()
 
         short_jumps_data = [self.data_graph.get_edge_observations(i, i + 1)
-                            for i in range(flow_long_jump_source, frame_i - 1)]
+                            for i in range(long_jump_source, frame_i - 1)]
 
         pred_short_deltas_se3: List[Se3] = [data.predicted_obj_delta_se3 for data in short_jumps_data]
 
@@ -84,13 +86,17 @@ class EpipolarPoseEstimator:
 
         Se3_world_to_cam = Se3.from_matrix(self.camera.extrinsics)
 
-        Se3_obj1_to_obj2_gt = get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target, self.data_graph)
-        Se3_cam1_to_cam2_gt = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_world_to_cam)
-        # Se3_cam1_to_cam2_gt = Se3(Se3_cam1_to_cam2_gt.quaternion, torch.nn.functional.normalize(Se3_cam1_to_cam2_gt.translation, dim=1))
-        per_axis_scale_factor_long_edge = (Se3_cam_long_jump.t / Se3_cam1_to_cam2_gt.t).squeeze().cpu()
+        per_axis_scale_long_jump, scale_long_jump = self.recover_scale_with_gt(Se3_cam_long_jump, Se3_world_to_cam,
+                                                                               long_jump_source, long_jump_target)
+        per_axis_scale_short_jump, scale_short_jump = self.recover_scale_with_gt(Se3_cam_short_jump, Se3_world_to_cam,
+                                                                                 short_jump_source, short_jump_target)
 
-        # Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam, get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target, self.data_graph))
-        Se3_cam_long_jump, scale_factor_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
+        if not self.i_can_recover_the_scale_myself:
+            Se3_cam_long_jump = Se3(Se3_cam_long_jump.quaternion, Se3_cam_long_jump.t * scale_long_jump)
+            Se3_cam_short_jump = Se3(Se3_cam_short_jump.quaternion, Se3_cam_short_jump.t * scale_short_jump)
+        else:
+            Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
+            Se3_cam_long_jump, scale_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
 
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
@@ -105,8 +111,7 @@ class EpipolarPoseEstimator:
                             [Se3_obj_short_jump])
 
         if self.config.icosphere_use_gt_long_jumps:
-            Se3_obj_long_jump_gt = get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target,
-                                                            self.data_graph)
+            Se3_obj_long_jump_gt = get_relative_gt_rotation(long_jump_source, long_jump_target, self.data_graph)
             Se3_obj_chained_long_jump = Se3_obj_long_jump_gt * Se3_obj_reference_frame
 
         Se3_obj_chained_short_jumps = np.prod(list(products))
@@ -129,8 +134,8 @@ class EpipolarPoseEstimator:
             prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_long_jump.quaternion
             self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
 
-        self.encoder.quaternion_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
-        self.encoder.translation_offsets[flow_long_jump_target] = Se3_obj_chained_long_jump.translation
+        self.encoder.quaternion_offsets[long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
+        self.encoder.translation_offsets[long_jump_target] = Se3_obj_chained_long_jump.translation
 
         duration = time() - start_time
         datagraph_node = self.data_graph.get_frame_data(frame_i)
@@ -150,12 +155,23 @@ class EpipolarPoseEstimator:
         datagraph_long_edge.predicted_obj_delta_se3 = Se3_obj_long_jump
         datagraph_long_edge.predicted_cam_delta_se3 = Se3_cam_long_jump
         datagraph_long_edge.predicted_cam_delta_se3_ransac = Se3_cam_long_jump_RANSAC
-        datagraph_long_edge.camera_scale_estimated = scale_factor_long_jump
-        datagraph_long_edge.camera_scale_per_axis_gt = per_axis_scale_factor_long_edge
+        datagraph_long_edge.camera_scale_estimated = scale_long_jump
+        datagraph_long_edge.camera_scale_per_axis_gt = per_axis_scale_long_jump
 
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
-        datagraph_camera_node.long_jump_source = flow_long_jump_source
-        datagraph_camera_node.short_jump_source = flow_short_jump_source
+        datagraph_camera_node.long_jump_source = long_jump_source
+        datagraph_camera_node.short_jump_source = short_jump_source
+
+    def recover_scale_with_gt(self, Se3_cam1_to_cam2_est, Se3_world_to_cam, flow_source, flow_target):
+
+        Se3_obj1_to_obj2_gt = get_relative_gt_rotation(flow_source, flow_target, self.data_graph)
+        Se3_cam1_to_cam2_gt = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_world_to_cam)
+        Se3_cam1_to_cam2_gt = Se3(Se3_cam1_to_cam2_gt.quaternion,
+                                  torch.nn.functional.normalize(Se3_cam1_to_cam2_gt.translation, dim=1))
+        per_axis_scale_factor = (Se3_cam1_to_cam2_est.t / Se3_cam1_to_cam2_gt.t).squeeze()
+        aggregated_scale = per_axis_scale_factor.mean()
+
+        return per_axis_scale_factor, aggregated_scale
 
     def estimate_pose_using_optical_flow(self, flow_observation_long_jump: FlowObservation, flow_arc,
                                          chained_flow_verification=None) -> Tuple[Se3, Se3]:
