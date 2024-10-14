@@ -90,7 +90,7 @@ class EpipolarPoseEstimator:
         per_axis_scale_factor_long_edge = (Se3_cam_long_jump.t / Se3_cam1_to_cam2_gt.t).squeeze().cpu()
 
         # Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam, get_relative_gt_rotation(flow_long_jump_source, flow_long_jump_target, self.data_graph))
-        Se3_cam_long_jump, scale_factor_long_jump = recover_scale(Se3_cam_long_jump, Se3_cam1_to_cam2_gt, Se3_world_to_cam)
+        Se3_cam_long_jump, scale_factor_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
 
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[flow_short_jump_source]]
@@ -380,8 +380,8 @@ class EpipolarPoseEstimator:
         return Se3_cam1_to_cam2_scaled
 
 
-    def recover_scale(self, Se3_cam1_to_cam2_unscaled: Se3, Se3_cam1_to_cam2_gt: Se3, Se3_world_to_cam: Se3):
-        '''
+    def recover_scale(self, Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
+        """
         ***************************************************************
         *                                      X                      *
         *                                     / \                     *
@@ -403,7 +403,8 @@ class EpipolarPoseEstimator:
         *                   X________/       T_C                      *
         *                                                             *
         ***************************************************************
-        '''
+        !!!!!! Works only if the underlying translation of T_o is zero
+        """
         d_cam1_to_cam2_unscaled = torch.linalg.vector_norm(Se3_cam1_to_cam2_unscaled.translation)
         d_world_to_cam1_scaled = torch.linalg.vector_norm(Se3_world_to_cam.inverse().translation)
 
