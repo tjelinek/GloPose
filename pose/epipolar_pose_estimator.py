@@ -441,23 +441,3 @@ class EpipolarPoseEstimator:
 
         return Se3_cam1_to_cam2_scaled, float(scale_factor)
 
-def recover_scale_with_lineq(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
-
-    R_w2c = Se3_world_to_cam.quaternion.matrix().squeeze(0)
-    R_c = Se3_cam1_to_cam2_unscaled.quaternion.matrix().squeeze(0)
-
-    t_w2c = Se3_world_to_cam.translation.T
-    t_c = Se3_cam1_to_cam2_unscaled.translation.T
-
-    # SymPy Result:
-    # t_obj2_to_cam2_pred = alpha*(R_w2c.T @ R_c.T @ R_w2c @ t_c - R_w2c.T@R_c.T@t_c) + R_w2c.T@R_c.T@R_w2c@R_c@t_w2c + R_w2c.T@R_c.T@t_w2c - R_w2c.T@t_w2c
-
-    factored_vector = R_w2c.T @ R_c.T @ R_w2c @ t_c - R_w2c.T@R_c.T@t_c
-    left_side = t_c - (R_w2c.T@R_c.T@R_w2c@R_c@t_w2c + R_w2c.T@R_c.T@t_w2c - R_w2c.T@t_w2c)
-
-    alpha_sol = factored_vector.T @ left_side / torch.linalg.norm(factored_vector)
-    t_c_scaled = Se3_cam1_to_cam2_unscaled.translation * alpha_sol
-    Se3_cam1_to_cam2_scaled = Se3(Se3_cam1_to_cam2_unscaled.quaternion, t_c_scaled)
-
-    return Se3_cam1_to_cam2_scaled
-
