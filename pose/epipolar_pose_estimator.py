@@ -95,8 +95,18 @@ class EpipolarPoseEstimator:
             Se3_cam_long_jump = Se3(Se3_cam_long_jump.quaternion, Se3_cam_long_jump.t * scale_long_jump)
             Se3_cam_short_jump = Se3(Se3_cam_short_jump.quaternion, Se3_cam_short_jump.t * scale_short_jump)
         else:
-            Se3_cam_short_jump = self.recover_scale(Se3_cam_short_jump, Se3_world_to_cam)
-            Se3_cam_long_jump, scale_long_jump = self.recover_scale(Se3_cam_long_jump, Se3_world_to_cam)
+            datagraph_short_node = self.data_graph.get_frame_data(flow_arc_short_jump[0])
+            datagraph_long_node = self.data_graph.get_frame_data(flow_arc_long_jump[0])
+
+            Se3_obj_short_jump = datagraph_short_node.predicted_object_se3_long_jump
+            Se3_obj_long_jump = datagraph_long_node.predicted_object_se3_long_jump
+
+            Se3_cam_long_jump_pose = Se3_epipolar_cam_from_Se3_obj(Se3_obj_long_jump, Se3_world_to_cam)
+            Se3_cam_short_jump_pose = Se3_epipolar_cam_from_Se3_obj(Se3_obj_short_jump, Se3_world_to_cam)
+
+            Se3_cam_long_jump, Se3_cam_short_jump = self.recover_scale_with_rays(Se3_cam_long_jump, Se3_cam_short_jump,
+                                                                                 Se3_cam_long_jump_pose,
+                                                                                 Se3_cam_short_jump_pose)
 
         Se3_obj_reference_frame = self.encoder.get_se3_at_frame_vectorized()[[long_jump_source]]
         Se3_obj_short_jump_ref_frame = self.encoder.get_se3_at_frame_vectorized()[[short_jump_source]]
@@ -381,25 +391,41 @@ class EpipolarPoseEstimator:
 
         return dst_pts_yx
 
-    def recover_scale_with_rays(self, Se3_cam1_to_cam2_unscaled, Se3_world_to_cam, Se3_cam1_to_cam2_gt):
+    @staticmethod
+    def recover_scale_with_rays(Se3_cam_i_to_cam2_unscaled: Se3, Se3_cam_j_to_cam2_unscaled: Se3,
+                                Se3_cam_i: Se3, Se3_cam_j: Se3):
 
-        Se3_world_to_cam2_unscaled = Se3_cam1_to_cam2_unscaled * Se3_world_to_cam
-        ray_direction_cam1 = Se3_world_to_cam.translation
-        ray_direction_cam2 = Se3_world_to_cam2_unscaled.translation
+        c_i = Se3_cam_i.inverse().t.T
+        c_j = Se3_cam_j.inverse().t.T
 
-        ray_direction_cam1_magnitude = torch.linalg.norm(ray_direction_cam1)
-        ray_direction_cam2_magnitude = torch.linalg.norm(ray_direction_cam2)
+        R_i_inv = Se3_cam_i.quaternion.inv().matrix()
+        R_j_inv = Se3_cam_j.quaternion.inv().matrix()
 
-        magnitude_ratio = ray_direction_cam1_magnitude / ray_direction_cam2_magnitude
-        scaled_translation = Se3_cam1_to_cam2_unscaled.translation * magnitude_ratio
-        Se3_world_to_cam2_scaled = Se3(Se3_world_to_cam2_unscaled.quaternion, scaled_translation)
+        R_iq = Se3_cam_i_to_cam2_unscaled.quaternion.matrix()
+        R_jq = Se3_cam_j_to_cam2_unscaled.quaternion.matrix()
 
-        Se3_cam1_to_cam2_scaled = Se3_world_to_cam.inverse() * Se3_world_to_cam2_scaled
+        t_iq = Se3_cam_i_to_cam2_unscaled.translation.T
+        t_jq = Se3_cam_j_to_cam2_unscaled.translation.T
 
-        return Se3_cam1_to_cam2_scaled
+        ray_iq = (R_i_inv @ R_iq @ t_iq).squeeze(0)
+        ray_jq = (R_j_inv @ R_jq @ t_jq).squeeze(0)
+
+        A = torch.cat([ray_iq, -ray_jq], dim=1)
+        b = c_i - c_j
+
+        solution = torch.linalg.lstsq(A, b)
+        lambdas = solution.solution
+        lambda_i = lambdas[0]
+        lambda_j = lambdas[1]
+
+        Se3_cam_i_to_cam2_scaled = Se3(Se3_cam_i_to_cam2_unscaled.quaternion, Se3_cam_i_to_cam2_unscaled.t * lambda_i)
+        Se3_cam_j_to_cam2_scaled = Se3(Se3_cam_j_to_cam2_unscaled.quaternion, Se3_cam_j_to_cam2_unscaled.t * lambda_j)
 
 
-    def recover_scale(self, Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
+        return Se3_cam_i_to_cam2_scaled, Se3_cam_j_to_cam2_scaled
+
+    @staticmethod
+    def recover_scale(Se3_cam1_to_cam2_unscaled: Se3, Se3_world_to_cam: Se3):
         """
         ***************************************************************
         *                                      X                      *
