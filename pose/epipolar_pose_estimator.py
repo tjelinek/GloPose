@@ -398,11 +398,11 @@ class EpipolarPoseEstimator:
         c_i = Se3_cam_i.inverse().t.T
         c_j = Se3_cam_j.inverse().t.T
 
-        R_i_inv = Se3_cam_i.quaternion.inv().matrix()
-        R_j_inv = Se3_cam_j.quaternion.inv().matrix()
+        R_i_inv = Se3_cam_i.quaternion.matrix().mT
+        R_j_inv = Se3_cam_j.quaternion.matrix().mT
 
-        R_iq = Se3_cam_i_to_cam2_unscaled.quaternion.matrix()
-        R_jq = Se3_cam_j_to_cam2_unscaled.quaternion.matrix()
+        R_iq = Se3_cam_i_to_cam2_unscaled.quaternion.matrix().mT
+        R_jq = Se3_cam_j_to_cam2_unscaled.quaternion.matrix().mT
 
         t_iq = Se3_cam_i_to_cam2_unscaled.translation.T
         t_jq = Se3_cam_j_to_cam2_unscaled.translation.T
