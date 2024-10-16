@@ -126,43 +126,6 @@ def triangulate_points_from_Rt(R_cam: torch.Tensor, t_cam: torch.Tensor, src_pts
     return X
 
 
-def relative_scale_recovery(essential_matrix_data, flow_arc, K1):
-    flow_source, flow_target = flow_arc
-
-    flow_arc_prev = (flow_source, flow_target - 1)
-
-    inlier_mask1 = essential_matrix_data.inlier_mask[flow_arc_prev]
-    inlier_mask2 = essential_matrix_data.inlier_mask[flow_arc]
-
-    # extend_inlier_mask1(inlier_mask1, inlier_mask2, src_pts_yx_current, src_pts_yx_prev)
-
-    # common_inlier_mask = (inlier_mask1 & inlier_mask2)
-    # common_inlier_indices = torch.nonzero(common_inlier_mask, as_tuple=True)
-
-    inliers_src_pts1 = essential_matrix_data.source_points[flow_arc_prev][inlier_mask1]
-    inliers_dst_pts1 = essential_matrix_data.target_points[flow_arc_prev][inlier_mask1]
-    inliers_src_pts2 = inliers_dst_pts1
-    inliers_dst_pts2 = essential_matrix_data.target_points[flow_arc][inlier_mask2]
-
-    triangulated_points_1 = essential_matrix_data.ransac_triangulated_points[flow_arc_prev]
-    triangulated_points_2 = essential_matrix_data.ransac_triangulated_points[flow_arc]
-
-    N_point = triangulated_points_1.shape[0]
-
-    pairs_N = min(100, N_point)
-
-    random_pairs_indices = torch.randperm(N_point)[:pairs_N * 2].view(-1, 2)
-
-    pts1_1i = triangulated_points_1[random_pairs_indices[:, 0]]
-    pts2_2i = triangulated_points_1[random_pairs_indices[:, 1]]
-
-    pts1_ij = triangulated_points_2[random_pairs_indices[:, 0]]
-    pts2_ij = triangulated_points_2[random_pairs_indices[:, 1]]
-
-    # breakpoint()
-    ratio = torch.linalg.norm(triangulated_points_1 - triangulated_points_2)
-
-
 def compute_bearing_vectors(pts_xy, focal_x, focal_y, c_x, c_y):
     normalized_x = (pts_xy[:, 0] - c_x) / focal_x
     normalized_y = (pts_xy[:, 1] - c_y) / focal_y
