@@ -10,7 +10,7 @@ from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaterni
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
-from data_structures.datagraph_utils import get_relative_gt_rotation
+from data_structures.datagraph_utils import get_relative_gt_obj_rotation, get_relative_gt_cam_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
@@ -121,7 +121,7 @@ class EpipolarPoseEstimator:
                             [Se3_obj_short_jump])
 
         if self.config.icosphere_use_gt_long_jumps:
-            Se3_obj_long_jump_gt = get_relative_gt_rotation(long_jump_source, long_jump_target, self.data_graph)
+            Se3_obj_long_jump_gt = get_relative_gt_obj_rotation(long_jump_source, long_jump_target, self.data_graph)
             Se3_obj_chained_long_jump = Se3_obj_long_jump_gt * Se3_obj_reference_frame
 
         Se3_obj_chained_short_jumps = np.prod(list(products))
