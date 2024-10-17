@@ -393,7 +393,19 @@ class EpipolarPoseEstimator:
 
     @staticmethod
     def recover_scale_with_rays(Se3_cam_i_to_cam2_unscaled: Se3, Se3_cam_j_to_cam2_unscaled: Se3,
-                                Se3_cam_i: Se3, Se3_cam_j: Se3):
+                                Se3_cam_i: Se3, Se3_cam_j: Se3, i, j, q, datagraph: DataGraph, Se3_world_to_cam: Se3):
+
+        # Se3_cam_i_to_cam2_gt = get_relative_gt_cam_rotation(i, q, Se3_world_to_cam, datagraph)
+        # Se3_cam_i_to_cam2_unscaled = Se3(Se3_cam_i_to_cam2_gt.quaternion, torch.nn.functional.normalize(Se3_cam_i_to_cam2_gt.t))
+        #
+        # Se3_cam_j_to_cam2_gt = get_relative_gt_cam_rotation(j, q, Se3_world_to_cam, datagraph)
+        # Se3_cam_j_to_cam2_unscaled = Se3(Se3_cam_j_to_cam2_gt.quaternion, torch.nn.functional.normalize(Se3_cam_j_to_cam2_gt.t))
+        #
+        # Se3_cam_i = get_gt_cam_pose(i, Se3_world_to_cam, datagraph)
+        # Se3_cam_j = get_gt_cam_pose(j, Se3_world_to_cam, datagraph)
+        # Se3_cam_q = get_gt_cam_pose(q, Se3_world_to_cam, datagraph)
+
+        # c_q = Se3_cam_q.inverse().t.T
 
         c_i = Se3_cam_i.inverse().t.T
         c_j = Se3_cam_j.inverse().t.T
@@ -407,6 +419,9 @@ class EpipolarPoseEstimator:
         t_iq = Se3_cam_i_to_cam2_unscaled.translation.T
         t_jq = Se3_cam_j_to_cam2_unscaled.translation.T
 
+        # t_iq_scaled = Se3_cam_i_to_cam2_gt.translation.T
+        # t_jq_scaled = Se3_cam_j_to_cam2_gt.translation.T
+
         ray_iq = (R_i_inv @ R_iq @ t_iq).squeeze(0)
         ray_jq = (R_j_inv @ R_jq @ t_jq).squeeze(0)
 
@@ -418,9 +433,40 @@ class EpipolarPoseEstimator:
         lambda_i = lambdas[0]
         lambda_j = lambdas[1]
 
+        # lambda_i_gt = (t_iq_scaled / t_iq).mean().squeeze()
+        # lambda_j_gt = (t_jq_scaled / t_jq).mean().squeeze()
+
+        # print(f'lambda i {lambda_i.mean().squeeze()}, gt {lambda_i_gt}')
+        # print(f'lambda j {lambda_j.mean().squeeze()}, gt {lambda_j_gt}')
+
+        # ray_iq_gt = (R_i_inv @ R_iq @ t_iq_scaled).squeeze(0)
+        # ray_jq_gt = (R_j_inv @ R_jq @ t_jq_scaled).squeeze(0)
+
+        ray_iq_scaled = ray_iq * lambda_i
+        ray_jq_scaled = ray_jq * lambda_j
+
+        # print(f'ray iq {ray_iq_scaled.squeeze().numpy(force=True)}, gt {ray_iq_gt.squeeze().numpy(force=True)}')
+        # print(f'ray jq {ray_jq_scaled.squeeze().numpy(force=True)}, gt {ray_jq_gt.squeeze().numpy(force=True)}')
+
+        camera_pos_q_iq = c_i - ray_iq_scaled
+        camera_pos_q_jq = c_j - ray_jq_scaled
+        # print(camera_pos_q_iq.squeeze().numpy(force=True))
+        # print(camera_pos_q_jq.squeeze().numpy(force=True))
+        # print(c_q.squeeze().numpy(force=True))
+
         Se3_cam_i_to_cam2_scaled = Se3(Se3_cam_i_to_cam2_unscaled.quaternion, Se3_cam_i_to_cam2_unscaled.t * lambda_i)
         Se3_cam_j_to_cam2_scaled = Se3(Se3_cam_j_to_cam2_unscaled.quaternion, Se3_cam_j_to_cam2_unscaled.t * lambda_j)
 
+        # c_i_ray = (Se3_cam_i_to_cam2_scaled * Se3_cam_i).inverse().t
+        # c_j_ray = (Se3_cam_j_to_cam2_scaled * Se3_cam_j).inverse().t
+
+        # c_i_ray_gt = (Se3_cam_i_to_cam2_gt * Se3_cam_i).inverse().t
+        # c_j_ray_gt = (Se3_cam_j_to_cam2_gt * Se3_cam_j).inverse().t
+        # print('c_q', c_q.squeeze().numpy(force=True))
+        # print('c_i', c_i_ray.squeeze().numpy(force=True), Se3_cam_i_to_cam2_scaled.quaternion.q.squeeze().numpy(force=True), Se3_cam_i_to_cam2_scaled.t.squeeze().numpy(force=True))
+        # print('c_i gt', c_i_ray_gt.squeeze().numpy(force=True), Se3_cam_i_to_cam2_gt.quaternion.q.squeeze().numpy(force=True), Se3_cam_i_to_cam2_gt.t.squeeze().numpy(force=True))
+        # print('c_j', c_j_ray.squeeze().numpy(force=True), Se3_cam_j_to_cam2_scaled.quaternion.q.squeeze().numpy(force=True), Se3_cam_j_to_cam2_scaled.t.squeeze().numpy(force=True))
+        # print('c_j gt', c_j_ray_gt.squeeze().numpy(force=True), Se3_cam_j_to_cam2_gt.quaternion.q.squeeze().numpy(force=True), Se3_cam_j_to_cam2_gt.t.squeeze().numpy(force=True))
 
         return Se3_cam_i_to_cam2_scaled, Se3_cam_j_to_cam2_scaled
 
