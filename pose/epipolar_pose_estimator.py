@@ -10,7 +10,7 @@ from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaterni
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
-from data_structures.datagraph_utils import get_relative_gt_obj_rotation, get_relative_gt_cam_rotation
+from data_structures.datagraph_utils import get_relative_gt_obj_rotation, get_relative_gt_cam_rotation, get_gt_cam_pose
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
@@ -174,7 +174,7 @@ class EpipolarPoseEstimator:
 
     def recover_scale_with_gt(self, Se3_cam1_to_cam2_est, Se3_world_to_cam, flow_source, flow_target):
 
-        Se3_obj1_to_obj2_gt = get_relative_gt_rotation(flow_source, flow_target, self.data_graph)
+        Se3_obj1_to_obj2_gt = get_relative_gt_obj_rotation(flow_source, flow_target, self.data_graph)
         Se3_cam1_to_cam2_gt = Se3_epipolar_cam_from_Se3_obj(Se3_obj1_to_obj2_gt, Se3_world_to_cam)
 
         per_axis_scale_factor = (Se3_cam1_to_cam2_gt.t / Se3_cam1_to_cam2_est.t).squeeze()
