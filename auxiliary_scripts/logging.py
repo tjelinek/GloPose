@@ -29,7 +29,7 @@ from pytorch3d.io import save_ply
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
-from data_structures.datagraph_utils import get_relative_gt_rotation
+from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
 from models.loss import iou_loss, FMOLoss
@@ -1582,7 +1582,7 @@ class WriteResults:
         pred_obj_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3
         pred_cam_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3
 
-        gt_obj_ref_to_last = get_relative_gt_rotation(long_jump_source, frame_i, self.data_graph)
+        gt_obj_ref_to_last = get_relative_gt_obj_rotation(long_jump_source, frame_i, self.data_graph)
 
         Se3_world_to_cam = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
