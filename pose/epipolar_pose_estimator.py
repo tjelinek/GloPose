@@ -310,7 +310,7 @@ class EpipolarPoseEstimator:
         data.src_pts_yx = src_pts_yx.cpu()
         data.dst_pts_yx = dst_pts_yx.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
-        data.observed_flow_segmentation = observed_segmentation_binary_mask.cpu()
+        data.adjusted_segmentation = observed_segmentation_binary_mask.cpu()
         data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
         data.gt_visible_fg_points_mask = gt_visible_fg_points_mask.cpu()
         data.ransac_inliers = inlier_src_pts.cpu()

@@ -1083,7 +1083,7 @@ class WriteResults:
                                                arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
             correct_inliers = inliers_errors < correct_threshold
 
-            fg_points_num = float(arc_data.observed_flow_segmentation.sum())
+            fg_points_num = float(arc_data.adjusted_segmentation.sum())
             pred_visible_num = float(arc_data.observed_visible_fg_points_mask.sum())
             correct_flows_num = float(correct_flows.sum())
             predicted_inliers_num = float(inlier_mask.sum())

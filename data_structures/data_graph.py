@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Set
 
 import networkx as nx
 import torch
@@ -42,6 +42,8 @@ class CameraSpecificFrameData:
 
     long_jump_source: int = None
     short_jump_source: int = None
+    reliable_sources: Set[int] = field(default_factory=set)
+    is_source_reliable: bool = True
 
     def set_attributes(self, **kwargs):
         for key, value in kwargs.items():
@@ -65,7 +67,7 @@ class CrossFrameData:
     ransac_inliers_mask: torch.Tensor = None
     ransac_inlier_ratio: float = None
 
-    observed_flow_segmentation: torch.Tensor = None
+    adjusted_segmentation: torch.Tensor = None
     observed_visible_fg_points_mask: torch.Tensor = None
     gt_visible_fg_points_mask: torch.Tensor = None
     ransac_inliers: torch.Tensor = None
