@@ -8,6 +8,7 @@ import torch
 from argparse import Namespace
 from abc import ABC, abstractmethod
 
+from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from flow import tensor_image_to_mft_format
 from repositories.GMA.core.utils.utils import InputPadder
 from tracker_config import TrackerConfig
@@ -38,6 +39,17 @@ class FlowProvider(ABC):
     @abstractmethod
     def next_flow(self, source_image, target_image):
         raise NotImplementedError
+
+    def next_flow_observation(self, source_image: FrameObservation, target_image: FrameObservation) -> FlowObservation:
+        flow, occl, sigma = self.next_flow(source_image.observed_image, target_image.observed_image)
+
+
+        flow_observation = FlowObservation(observed_flow=flow,
+                                           observed_flow_segmentation=source_image.observed_segmentation,
+                                           observed_flow_uncertainty=sigma, observed_flow_occlusion=occl,
+                                           flow_source_frames=[0], flow_target_frames=[1])
+
+        return flow_observation
 
 
 class RAFTFlowProvider(FlowProvider):
@@ -72,6 +84,48 @@ class RAFTFlowProvider(FlowProvider):
         uncertainty = torch.zeros(1, 1, 1, *flow_up.shape[-2:]).to(flow_up.device)
 
         return flow_up, occlusion, uncertainty
+
+
+class RoMaFlowProvider(FlowProvider):
+
+    def __init__(self, config_name, **kwargs):
+        super().__init__(**kwargs, get_model=False)
+        self.add_to_path()
+        from repositories.MFT_tracker.MFT.roma import RoMaWrapper
+        self.flow_model: RoMaWrapper = self.get_flow_model(config_name)
+
+    @staticmethod
+    def add_to_path():
+        if 'MFT_tracker' not in sys.path:
+            sys.path.append('repositories/MFT_tracker')
+
+    def init(self, template):
+        pass
+
+    def next_flow(self, source_image, target_image):
+        source_image_mft = tensor_image_to_mft_format(source_image)
+        target_image_mft = tensor_image_to_mft_format(target_image)
+
+        flow, extra = self.flow_model.compute_flow(source_image_mft, target_image_mft, mode='flow')
+
+        flow = flow.cuda()[None, None]
+        occlusion = extra['occlusion'].cuda()[None, None]
+        sigma = extra['sigma'].cuda()[None, None]
+
+        return flow, occlusion, sigma
+
+    def get_flow_model(self, config_name=None):
+        MFTFlowProvider.add_to_path()
+
+        from repositories.MFT_tracker.MFT.roma import RoMaWrapper
+        config_module = importlib.import_module(f'repositories.MFT_tracker.configs.{config_name}')
+
+        with temporary_change_directory("repositories/MFT_tracker"):
+            default_config = config_module.get_config()
+            default_config.occlusion_threshold = self.tracker_config.occlusion_coef_threshold
+            model = RoMaWrapper(default_config.flow_config)
+
+        return model
 
 
 class GMAFlowProvider(FlowProvider):
