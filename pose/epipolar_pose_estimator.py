@@ -161,21 +161,6 @@ class EpipolarPoseEstimator:
         short_long_chain_ang_diff = quaternion_minimal_angular_difference(Se3_obj_chained_long_jump.quaternion,
                                                                           Se3_obj_chained_short_jumps.quaternion).item()
 
-        print(f'-----------------------------------Long, short chain diff: {short_long_chain_ang_diff}')
-        if short_long_chain_ang_diff > self.config.long_short_flow_chaining_pose_level_threshold \
-                and self.config.long_short_flow_chaining_pose_level_verification:
-            print(f'-----------------------------------Last long jump axis-angle '
-                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_reference_frame.quaternion.q))}')
-            print(f'-----------------------------------Chained long jump axis-angle '
-                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_long_jump.quaternion.q))}')
-            print(f'-----------------------------------Chained short jumps axis-angle '
-                  f'{torch.rad2deg(quaternion_to_axis_angle(Se3_obj_chained_short_jumps.quaternion.q))}')
-
-            prev_node_idx = frame_i - 1
-            prev_node_observation = self.data_graph.get_camera_specific_frame_data(prev_node_idx).frame_observation
-            prev_node_pose = self.data_graph.get_frame_data(prev_node_idx).predicted_object_se3_long_jump.quaternion
-            self.pose_icosphere.insert_new_reference(prev_node_observation, prev_node_pose, prev_node_idx)
-
         self.encoder.quaternion_offsets[long_jump_target] = Se3_obj_chained_long_jump.quaternion.q
         self.encoder.translation_offsets[long_jump_target] = Se3_obj_chained_long_jump.translation
 
