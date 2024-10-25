@@ -924,16 +924,17 @@ class WriteResults:
 
         datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
         template_frame_idx = datagraph_camera_node.long_jump_source
-        datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
+        for template_frame_idx in datagraph_camera_node.reliable_sources:
+            datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
-        template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+            template_node_Se3 = datagraph_template_node.predicted_object_se3_total
+            template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
 
-        rr.log(RerunAnnotations.space_predicted_closest_keypoint,
-               rr.LineStrips3D(strips=[[pred_t_cam[-1],
-                                        template_node_cam_se3.translation.squeeze().numpy(force=True)]],
-                               colors=[[255, 0, 0]],
-                               radii=[0.025 * strips_radii_factor]))
+            rr.log(RerunAnnotations.space_predicted_closest_keypoint,
+                   rr.LineStrips3D(strips=[[pred_t_cam[-1],
+                                            template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+                                   colors=[[255, 0, 0]],
+                                   radii=[0.025 * strips_radii_factor]))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
 
@@ -1057,8 +1058,8 @@ class WriteResults:
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
-            in_edges = self.data_graph.G.in_edges(i, data=False)
-            flow_arc = (min(e[0] for e in in_edges), i)
+            flow_arc_source = self.data_graph.get_camera_specific_frame_data(i, camera).long_jump_source
+            flow_arc = (flow_arc_source, i)
 
             arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
 
