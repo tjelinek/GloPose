@@ -39,7 +39,10 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     # Echo the arguments
     print("Running sbatch job.batch with arguments:", args)
     print('----------------------------------------')
-    subprocess.run(["sbatch", "scripts/job.batch"] + args)
+    if os.path.basename(os.getcwd()) == "scripts":
+        subprocess.run(["sbatch", "job.batch"] + args)
+    else:
+        subprocess.run(["scripts/sbatch", "job.batch"] + args)
 
 
 def create_unused_folder(output_folder: Path):
@@ -157,9 +160,9 @@ def main():
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_pose_pixel_ver',
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_prosac',
         'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling',
-        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_ver',
-        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pixel_ver',
-        'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_pixel_ver',
+        # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_ver',
+        # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pixel_ver',
+        # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_pixel_ver',
         # 'base_config'
     ]
 
