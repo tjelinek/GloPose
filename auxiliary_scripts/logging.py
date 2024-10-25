@@ -937,19 +937,18 @@ class WriteResults:
                                colors=[[255, 0, 0]],
                                radii=[0.025 * strips_radii_factor]))
 
-        for reliable_template_idx in datagraph_camera_node.reliable_sources:
-            if reliable_template_idx == template_frame_idx:
-                continue
-            datagraph_template_node = self.data_graph.get_frame_data(reliable_template_idx)
+        if len(datagraph_camera_node.reliable_sources) > 1:
+            for reliable_template_idx in datagraph_camera_node.reliable_sources:
+                datagraph_template_node = self.data_graph.get_frame_data(reliable_template_idx)
 
-            template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-            template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+                template_node_Se3 = datagraph_template_node.predicted_object_se3_total
+                template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
 
-            rr.log(f'{RerunAnnotations.space_predicted_reliable_templates}/{reliable_template_idx}',
-                   rr.LineStrips3D(strips=[[pred_t_cam[-1],
-                                            template_node_cam_se3.translation.squeeze().numpy(force=True)]],
-                                   colors=[[255, 255, 0]],
-                                   radii=[0.025 * strips_radii_factor]))
+                rr.log(f'{RerunAnnotations.space_predicted_reliable_templates}/{reliable_template_idx}',
+                       rr.LineStrips3D(strips=[[pred_t_cam[-1],
+                                                template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+                                       colors=[[255, 255, 0]],
+                                       radii=[0.025 * strips_radii_factor]))
 
         for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
 
