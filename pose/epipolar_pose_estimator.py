@@ -6,6 +6,7 @@ import torch
 from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle, PinholeCamera
 
 from auxiliary_scripts.cameras import Cameras
+from auxiliary_scripts.flow_provider import RoMaFlowProvider
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
@@ -20,14 +21,16 @@ from pose.essential_matrix_pose_estimation import (filter_inliers_using_ransac, 
                                                    estimate_pose_using_8pt_algorithm)
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
+from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy, \
+    get_foreground_and_segment_mask
 
 
 class EpipolarPoseEstimator:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, rendering: RenderingKaolin, gt_encoder, encoder,
-                 pose_icosphere, camera: PinholeCamera):
+                 pose_icosphere, camera: PinholeCamera, roma_flow_provider):
 
+        self.flow_reliability_threshold = 0.5
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.rendering: RenderingKaolin = rendering
@@ -52,7 +55,36 @@ class EpipolarPoseEstimator:
         start_time = time()
         frame_i = max(keyframes)
 
-        flow_arc_long_jump = (flow_tracks_inits[-1], frame_i)
+        preceding_frame_node = self.data_graph.get_camera_specific_frame_data(frame_i - 1)
+
+        reliable_flows = set()
+        if preceding_frame_node.is_source_reliable and frame_i > 1:
+            source = preceding_frame_node.long_jump_source
+        elif frame_i > 1:
+
+            best_source: int = 0
+            best_source_reliability: float = 0.
+
+            for node in self.pose_icosphere.reference_poses:
+                source_node_idx = node.keyframe_idx_observed
+
+                self.add_new_flow(source_node_idx, frame_i)
+                flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i).observed_flow
+                flow_reliability = self.flow_reliability(flow_edge_data)
+
+                if flow_reliability > best_source_reliability and flow_reliability >= self.flow_reliability_threshold:
+                    best_source = source_node_idx
+                    best_source_reliability = flow_reliability
+                    reliable_flows |= {source_node_idx}
+
+            source = best_source
+
+        else:
+            source = 0
+
+        flow_arc_long_jump = (source, frame_i)
+
+        self.add_new_flow(source, frame_i)
 
         flow_arc_short_jump = (frame_i - 1, frame_i)
 
@@ -172,6 +204,40 @@ class EpipolarPoseEstimator:
         datagraph_camera_node.long_jump_source = long_jump_source
         datagraph_camera_node.short_jump_source = short_jump_source
 
+        flow_arc_observation: FlowObservation = datagraph_long_edge.observed_flow
+
+        flow_reliability = self.flow_reliability(flow_arc_observation)
+        print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
+        if flow_reliability < self.flow_reliability_threshold:
+            datagraph_camera_node.is_source_reliable = False
+
+            new_node_frame_idx = frame_i - 1
+            frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
+            pose: Se3 = Se3(Quaternion.from_axis_angle(frame_data.gt_rot_axis_angle[None]),
+                            frame_data.gt_translation[None])
+            cam_frame_data = self.data_graph.get_camera_specific_frame_data(new_node_frame_idx)
+            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, pose, new_node_frame_idx)
+
+        datagraph_camera_node.reliable_sources |= ({long_jump_source} | reliable_flows)
+
+    def flow_reliability(self, flow_arc_observation):
+        segment = flow_arc_observation.observed_flow_segmentation
+        occlusion = flow_arc_observation.observed_flow_occlusion
+        not_occluded_binary_mask, segmentation_binary_mask, not_occluded_foreground_mask = (
+            get_foreground_and_segment_mask(occlusion, segment, self.config.occlusion_coef_threshold,
+                                            self.config.segmentation_mask_threshold))
+        return not_occluded_foreground_mask.sum() / segmentation_binary_mask.sum()
+
+    def add_new_flow(self, source_frame, target_frame):
+        if (source_frame, target_frame) not in self.data_graph.G.edges:
+            self.data_graph.add_new_arc(source_frame, target_frame)
+            frame_node_observation = self.data_graph.get_camera_specific_frame_data(source_frame).frame_observation.cuda()
+            current_frame_observation = self.data_graph.get_camera_specific_frame_data(target_frame).frame_observation.cuda()
+
+            flow_obs = self.roma_flow_provider.next_flow_observation(frame_node_observation, current_frame_observation)
+            self.data_graph.get_edge_observations(source_frame, target_frame).observed_flow = flow_obs.cpu()
+            self.data_graph.get_edge_observations(source_frame, target_frame).synthetic_flow_result = flow_obs.cpu()
+
     def recover_scale_with_gt(self, Se3_cam1_to_cam2_est, Se3_world_to_cam, flow_source, flow_target):
 
         Se3_obj1_to_obj2_gt = get_relative_gt_obj_rotation(flow_source, flow_target, self.data_graph)
@@ -215,7 +281,7 @@ class EpipolarPoseEstimator:
 
         original_points_selected = src_pts_yx.shape[0]
         dst_pts_yx_chained_flow = None
-        if chained_flow_verification is not None:
+        if chained_flow_verification is not None and False:
             chained_flow_image_coords = chained_flow_verification.cast_unit_coords_to_image_coords().observed_flow
             dst_pts_yx_chained_flow = source_to_target_coords_world_coord_system(src_pts_yx, chained_flow_image_coords)
             dst_pts_yx = source_to_target_coords_world_coord_system(src_pts_yx, flow)
@@ -227,7 +293,7 @@ class EpipolarPoseEstimator:
             src_pts_yx = src_pts_yx[ok_pts_indices]
 
         remained_after_filtering = src_pts_yx.shape[0]
-        remaining_ratio = remained_after_filtering / original_points_selected
+        remaining_ratio = remained_after_filtering / (original_points_selected + 1e-5)
 
         if self.config.ransac_sample_points:
             perm = torch.randperm(src_pts_yx.shape[0])
