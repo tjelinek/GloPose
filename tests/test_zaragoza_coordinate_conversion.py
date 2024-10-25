@@ -57,7 +57,7 @@ if config.augment_gt_track or True:
 
 def predict_camera_pose_using_zaragoza(source_frame_, target_frame_, config_, rendering_):
     flow_observation = rendering_.render_flow_for_frame(gt_encoder, source_frame_, target_frame_)
-    segmentation = erode_segment_mask2(7, flow_observation.observed_flow_segmentation[0])[None]
+    segmentation = erode_segment_mask2(7, flow_observation.adjusted_segmentation[0])[None]
     src_pts_yx, observed_visible_fg_points_mask = (
         get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
                                            segmentation,
