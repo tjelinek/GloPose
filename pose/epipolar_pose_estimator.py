@@ -44,6 +44,7 @@ class EpipolarPoseEstimator:
 
         self.occlusion_threshold = self.config.occlusion_coef_threshold
         self.segmentation_threshold = self.config.segmentation_mask_threshold
+        self.roma_flow_provider: RoMaFlowProvider = roma_flow_provider
 
         self.camera = camera
 
@@ -251,6 +252,9 @@ class EpipolarPoseEstimator:
 
         if self.config.ransac_use_gt_occlusions_and_segmentation:
             occlusion, segmentation = gt_occlusion, gt_segmentation
+
+        assert flow_observation_long_jump.coordinate_system == 'unit'
+        assert gt_flow_observation.coordinate_system == 'unit'
 
         flow = flow_observation_long_jump.cast_unit_coords_to_image_coords().observed_flow
         gt_flow = gt_flow_observation.cast_unit_coords_to_image_coords().observed_flow

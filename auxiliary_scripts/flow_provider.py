@@ -41,13 +41,14 @@ class FlowProvider(ABC):
         raise NotImplementedError
 
     def next_flow_observation(self, source_image: FrameObservation, target_image: FrameObservation) -> FlowObservation:
-        flow, occl, sigma = self.next_flow(source_image.observed_image, target_image.observed_image)
-
+        flow, occl, sigma = self.next_flow(source_image.observed_image.float() * 255,
+                                           target_image.observed_image.float() * 255)
 
         flow_observation = FlowObservation(observed_flow=flow,
                                            observed_flow_segmentation=source_image.observed_segmentation,
                                            observed_flow_uncertainty=sigma, observed_flow_occlusion=occl,
-                                           flow_source_frames=[0], flow_target_frames=[1])
+                                           flow_source_frames=[0], flow_target_frames=[1], coordinate_system='image')
+        flow_observation = flow_observation.cast_image_coords_to_unit_coords()
 
         return flow_observation
 
