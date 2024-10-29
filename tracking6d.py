@@ -185,11 +185,12 @@ class Tracking6D:
         if self.config.camera_intrinsics is None:
             camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None]
         else:
-            camera_intrinsics = torch.from_numpy(self.config.camera_intrinsics).cuda()
+            camera_intrinsics = homogenize_3x3_camera_intrinsics(torch.from_numpy(self.config.camera_intrinsics).cuda())[None]
+            assert camera_intrinsics.shape == homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None].shape
         if self.config.camera_extrinsics is None:
             camera_extrinsics = self.rendering.camera_transformation_matrix_Se3().matrix()
         else:
-            camera_extrinsics = torch.from_numpy(self.config.camera_extrinsics).cuda()
+            camera_extrinsics = torch.from_numpy(self.config.camera_extrinsics).cuda()[None]
 
         orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
         orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()

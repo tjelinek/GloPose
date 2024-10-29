@@ -7,6 +7,7 @@ from pathlib import Path
 
 from kornia.geometry import rotation_matrix_to_axis_angle
 
+from auxiliary_scripts.dataset_utils.bop_challenge import get_pinhole_params
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
@@ -94,6 +95,11 @@ def main():
 
                 cam_intrinsics[int(frame)] = K
 
+        # config.camera_intrinsics = cam_intrinsics[0]
+        pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
+        config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
+        config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
+
         config.generate_synthetic_observations_if_possible = False
 
         valid_indices = list(sorted(gt_segs.keys() & gt_images.keys() & gt_translations.keys() &
@@ -116,8 +122,6 @@ def main():
         # config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-
-        config.camera_intrinsics = cam_intrinsics[0]
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
                                  gt_translations=translations_array, images_paths=gt_images,

@@ -4,6 +4,9 @@ import sys
 import time
 from pathlib import Path
 
+from kornia.geometry import Quaternion, Se3
+
+from auxiliary_scripts.dataset_utils.bop_challenge import get_pinhole_params
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
@@ -71,12 +74,12 @@ def main():
             data = np.load(file, allow_pickle=True)
             data_dict = {key: data[key] for key in data}
             cam_intrinsics_list.append(data_dict['camMat'])
-            gt_rotations.append(data_dict['objRot'])
+            gt_rotations.append(data_dict['objRot'].squeeze())
             gt_translations.append(data_dict['objTrans'])
 
         config.generate_synthetic_observations_if_possible = False
 
-        eerr0 = set(i for i in range(len(gt_rotations)) if len(gt_rotations[i].shape) < 2)
+        eerr0 = set(i for i in range(len(gt_rotations)) if len(gt_rotations[i].shape) < 1)
         eert0 = set(i for i in range(len(gt_rotations)) if len(gt_translations[i].shape) < 1)
 
         valid_indices = [i for i in range(len(gt_rotations)) if i not in (eerr0 | eert0)]
@@ -90,7 +93,7 @@ def main():
 
         config.input_frames = len(gt_images_list)
 
-        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)[..., 0]).cuda()
+        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).cuda()
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)).cuda()
 
         # config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
@@ -99,7 +102,13 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
+        quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
+        trans_frame1 = torch.from_numpy(gt_translations[0])[None]
+        Se3_cam_to_obj = Se3(quat_frame1, trans_frame1)
+        T_cam_to_obj = Se3_cam_to_obj.matrix().squeeze()
+
         config.camera_intrinsics = cam_intrinsics_list[0]
+        config.camera_extrinsics = T_cam_to_obj.numpy(force=True)
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
                                  gt_translations=translations_array, images_paths=gt_images_list,
