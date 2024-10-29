@@ -117,7 +117,7 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        config.cam_intrinsics = cam_intrinsics[0]
+        config.camera_intrinsics = cam_intrinsics[0]
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
                                  gt_translations=translations_array, images_paths=gt_images,
