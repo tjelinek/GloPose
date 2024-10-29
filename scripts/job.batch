@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:1
-#SBATCH --mem=256G
-#SBATCH --partition=amdgpufast
+#SBATCH --mem=64G
+#SBATCH --partition=gpufast
 #SBATCH --job-name=FlowTracker
 #SBATCH --err=/mnt/personal/jelint19/results/FlowTracker.err
 #SBATCH --out=/mnt/personal/jelint19/results/FlowTracker.out

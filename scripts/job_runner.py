@@ -42,7 +42,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     if os.path.basename(os.getcwd()) == "scripts":
         subprocess.run(["sbatch", "job.batch"] + args)
     else:
-        subprocess.run(["scripts/sbatch", "job.batch"] + args)
+        subprocess.run(["sbatch", "scripts/job.batch"] + args)
 
 
 def create_unused_folder(output_folder: Path):
@@ -197,17 +197,18 @@ def main():
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
         Datasets.HO3D: [
-            # 'ABF10', #'BB10', 'GPMF10', #'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+            'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
             # 'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
             # 'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
             # 'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
             # 'ABF14', #'BB14', 'GPMF14', #'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
         ],
         Datasets.HANDAL: [
-            # '004002',
-            # '005010',
-            # '005004',
-            # '005006'
+            '000001',
+            '000002',
+            '000003',
+            '000004',
+            '000005',
         ],
         # Datasets.photo360: [
         #     "09"
