@@ -21,8 +21,11 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            '004006',
-            '004002'
+            '000001',
+            '000002',
+            '000003',
+            '000004',
+            '000005',
         ]
 
     for sequence in sequences:
@@ -55,16 +58,17 @@ def main():
 
         t0 = time.time()
 
-        sequence_folder = Path(dataset_folder) / 'HANDAL' / 'handal_dataset_hammers' / 'train' / sequence
+        sequence_folder = Path(dataset_folder) / 'bop' / 'handal' / 'val' / sequence
         image_folder = sequence_folder / 'rgb'
-        segmentation_folder = sequence_folder / 'mask'
+        segmentation_folder = sequence_folder / 'mask_visib'
 
-        gt_images_list = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
-        gt_segmentations_list = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
+        gt_segs = {int(file.stem.split('_')[0]): file for file in sorted(segmentation_folder.iterdir()) if
+                       file.stem.endswith('000000')}
+        gt_images = {int(file.stem): file for file in sorted(image_folder.iterdir()) if file.is_file()}
 
-        gt_translations = []
-        gt_rotations = []
-        cam_intrinsics_list = []
+        gt_translations = {}
+        gt_rotations = {}
+        cam_intrinsics = {}
 
         pose_json_path = sequence_folder / 'scene_gt.json'
         with open(pose_json_path, 'r') as file:
@@ -78,8 +82,8 @@ def main():
                     cam_t_m2c = entry['cam_t_m2c']
                     t = np.array(cam_t_m2c)
 
-                    gt_rotations.append(r)
-                    gt_translations.append(t)
+                    gt_rotations[int(frame)] = r
+                    gt_translations[int(frame)] = t
 
         camera_calibrations_json_path = sequence_folder / 'scene_camera.json'
         with open(camera_calibrations_json_path, 'r') as file:
@@ -88,20 +92,22 @@ def main():
                 cam_K = data['cam_K']
                 K = np.array(cam_K).reshape(3, 3)
 
-                cam_intrinsics_list.append(K)
+                cam_intrinsics[int(frame)] = K
 
         config.generate_synthetic_observations_if_possible = False
 
-        valid_indices = [i for i in range(len(gt_rotations))]
+        valid_indices = list(sorted(gt_segs.keys() & gt_images.keys() & gt_translations.keys() &
+                                    gt_rotations.keys()))
         valid_indices = valid_indices[::skip_indices]
 
         # Filter the lists to include only valid elements
         filtered_gt_rotations = [gt_rotations[i] for i in valid_indices]
         filtered_gt_translations = [gt_translations[i] for i in valid_indices]
-        gt_images_list = [gt_images_list[i] for i in valid_indices]
-        gt_segmentations_list = [gt_segmentations_list[i] for i in valid_indices]
+        gt_images = [gt_images[i] for i in valid_indices]
+        gt_segs = [gt_segs[i] for i in valid_indices]
+        cam_intrinsics = [cam_intrinsics[i] for i in sorted(list(cam_intrinsics.keys()))]
 
-        config.input_frames = len(gt_images_list)
+        config.input_frames = len(gt_images)
 
         rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).cuda().to(torch.float32)
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)).cuda().to(torch.float32)
@@ -111,11 +117,11 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        cam_intrinsics = torch.from_numpy(cam_intrinsics_list[0]).cuda()
+        config.cam_intrinsics = cam_intrinsics[0]
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
-                                 gt_translations=translations_array, images_paths=gt_images_list,
-                                 segmentation_paths=gt_segmentations_list, camera_intrinsics=cam_intrinsics)
+                                 gt_translations=translations_array, images_paths=gt_images,
+                                 segmentation_paths=gt_segs)
 
 
 if __name__ == "__main__":
