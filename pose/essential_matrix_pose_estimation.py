@@ -168,4 +168,4 @@ def estimate_pose_zaragoza(src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, f
     R_cam_01, t_cam_01 = matrix4x4_to_Rt(T_01)
     r_cam_01 = rotation_matrix_to_axis_angle(R_cam_01)
 
-    return r_cam_01, t_cam_01
+    return r_cam_01, -t_cam_01
