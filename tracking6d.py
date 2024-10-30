@@ -21,7 +21,8 @@ from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import (consecutive_quaternions_angular_difference,
                                           get_object_pose_after_in_plane_rot_in_cam_space)
 from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider,
-                                             MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider)
+                                             MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider,
+                                             RoMaFlowProvider)
 from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
 from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation, MultiCameraObservation, \
     generate_rotated_observations
@@ -88,6 +89,7 @@ class Tracking6D:
         # Optical flow
         self.short_flow_model: Optional[Union[FlowProvider, MFTFlowProvider]] = None
         self.long_flow_provider: Optional[MFTFlowProvider] = None
+        self.roma_flow_provider: Optional[RoMaFlowProvider] = None
 
         # Ground truth related
         assert torch.all(gt_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
@@ -200,7 +202,8 @@ class Tracking6D:
 
         self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.rendering,
                                                              self.gt_encoder, self.encoder, self.pose_icosphere,
-                                                             self.pinhole_params[Cameras.FRONTVIEW])
+                                                             self.pinhole_params[Cameras.FRONTVIEW],
+                                                             self.roma_flow_provider)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
