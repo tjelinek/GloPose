@@ -204,7 +204,7 @@ class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
                  deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras],
-                 pinhole_params):
+                 pinhole_params, pose_icosphere: PoseIcosphere):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -545,6 +545,7 @@ class WriteResults:
 
     def __del__(self):
 
+        self.dump_pose_icosphere_for_glomap()
         self.tracking_log.close()
         self.metrics_log.close()
 
@@ -839,7 +840,7 @@ class WriteResults:
 
         print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
 
-    def visualize_3d_camera_space(self, frame_i: int, pose_icosphere: PoseIcosphere):
+    def visualize_3d_camera_space(self, frame_i: int):
 
         rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
 
@@ -2107,6 +2108,25 @@ class WriteResults:
         blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
 
         return blended_image
+
+    def dump_pose_icosphere_for_glomap(self):
+
+        pose_icosphere_dump = (self.write_folder /
+                               f'icosphere_dump_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}')
+        pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
+
+        for node in self.pose_icosphere.reference_poses:
+            frame_idx = node.keyframe_idx_observed
+
+            frame_data = self.data_graph.get_camera_specific_frame_data(frame_idx)
+
+            img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
+            img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
+
+            img *= img_seg
+
+            node_save_path = pose_icosphere_dump / f'node_{frame_idx}.png'
+            imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
     def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
                   ignore_dimensions=False):
