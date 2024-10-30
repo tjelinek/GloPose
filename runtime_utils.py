@@ -1,3 +1,4 @@
+import gc
 import shutil
 import sys
 import os
@@ -36,6 +37,9 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, gt_textu
     sfb = Tracking6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, gt_rotations=gt_rotations,
                      gt_translations=gt_translations, images_paths=images_paths, segmentation_paths=segmentation_paths)
     best_model = sfb.run_tracking()
+
+    del sfb
+    gc.collect()
     print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds, best model loss {best_model["value"]}')
 
 
