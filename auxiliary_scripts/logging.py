@@ -219,6 +219,8 @@ class WriteResults:
         self.deep_encoder: Encoder = deep_encoder
         self.rgb_encoder: Encoder = rgb_encoder
 
+        self.pose_icosphere: PoseIcosphere = pose_icosphere
+
         self.logged_flow_tracks_inits: Dict[Cameras, List] = defaultdict(list)
 
         self.tracking_config: TrackerConfig = tracking_config
@@ -769,8 +771,7 @@ class WriteResults:
         return image_with_margins
 
     @torch.no_grad()
-    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer,
-                      observations: FrameObservation, pose_icosphere: PoseIcosphere):
+    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer, observations: FrameObservation):
 
         observed_segmentations = observations.observed_segmentation
 
@@ -786,7 +787,7 @@ class WriteResults:
             new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
             self.visualize_outliers_distribution(new_flow_arc)
 
-        self.visualize_3d_camera_space(frame_i, pose_icosphere)
+        self.visualize_3d_camera_space(frame_i)
 
         encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
         detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
@@ -950,7 +951,7 @@ class WriteResults:
                                        colors=[[255, 255, 0]],
                                        radii=[0.025 * strips_radii_factor]))
 
-        for i, icosphere_node in enumerate(pose_icosphere.reference_poses):
+        for i, icosphere_node in enumerate(self.pose_icosphere.reference_poses):
 
             if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits[Cameras.FRONTVIEW]:
                 template_idx = len(self.logged_flow_tracks_inits[Cameras.FRONTVIEW])

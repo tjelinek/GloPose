@@ -394,7 +394,8 @@ class Tracking6D:
                                           tracking_config=self.config, rendering=self.rendering,
                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
                                           rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
-                                          cameras=self.used_cameras, pinhole_params=self.pinhole_params)
+                                          cameras=self.used_cameras, pinhole_params=self.pinhole_params,
+                                          pose_icosphere=self.pose_icosphere)
 
         self.data_graph.add_new_frame(0)
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
@@ -468,8 +469,7 @@ class Tracking6D:
             if self.config.write_results:
 
                 self.write_results.write_results(frame_i=frame_i, tex=tex, active_keyframes=self.active_keyframes,
-                                                 observations=all_frame_observations,
-                                                 pose_icosphere=self.pose_icosphere)
+                                                 observations=all_frame_observations)
 
                 gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
                     if self.gt_mesh_prototype is not None else None
