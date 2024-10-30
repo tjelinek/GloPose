@@ -111,7 +111,7 @@ class Tracking6D:
         self.used_cameras = [Cameras.FRONTVIEW]
         if config.matching_target_to_backview:
             self.used_cameras.append(Cameras.BACKVIEW)
-        self.pinhole_params: Dict[Cameras, Optional[PinholeCamera]] = {cam: None for cam in self.used_cameras}
+        self.pinhole_params: Optional[PinholeCamera] = None
 
         # Flow tracks
         self.flow_tracks_inits = [0]
@@ -196,14 +196,13 @@ class Tracking6D:
 
         orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
         orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()
-        self.pinhole_params[Cameras.FRONTVIEW] = PinholeCamera(camera_intrinsics, camera_extrinsics,
-                                                               orig_image_width, orig_image_height)
-        self.pinhole_params[Cameras.FRONTVIEW].scale_(self.config.image_downsample)
+        self.pinhole_params = PinholeCamera(camera_intrinsics, camera_extrinsics,
+                                            orig_image_width, orig_image_height)
+        self.pinhole_params.scale_(self.config.image_downsample)
 
         self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.rendering,
                                                              self.gt_encoder, self.encoder, self.pose_icosphere,
-                                                             self.pinhole_params[Cameras.FRONTVIEW],
-                                                             self.roma_flow_provider)
+                                                             self.pinhole_params, self.roma_flow_provider)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))

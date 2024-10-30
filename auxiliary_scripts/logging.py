@@ -210,7 +210,7 @@ class WriteResults:
         self.image_width = shape.width
 
         self.cameras: List[Cameras] = cameras
-        self.pinhole_params: Dict[Cameras, PinholeCamera] = pinhole_params
+        self.pinhole_params: PinholeCamera = pinhole_params
 
         self.data_graph: DataGraph = data_graph
 
@@ -221,7 +221,7 @@ class WriteResults:
 
         self.pose_icosphere: PoseIcosphere = pose_icosphere
 
-        self.logged_flow_tracks_inits: Dict[Cameras, List] = defaultdict(list)
+        self.logged_flow_tracks_inits: List = list()
 
         self.tracking_config: TrackerConfig = tracking_config
         self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
@@ -777,14 +777,14 @@ class WriteResults:
         observed_segmentations = observations.observed_segmentation
 
         for camera in self.cameras:
-            self.visualize_observed_data(active_keyframes, frame_i, camera)
+            self.visualize_observed_data(active_keyframes, frame_i)
 
             if not self.tracking_config.write_to_rerun_rather_than_disk:
                 self.visualize_flow_with_matching(frame_i)
             self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
-            datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+            datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i)
             new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
             self.visualize_outliers_distribution(new_flow_arc)
 
@@ -847,7 +847,7 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i+1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
+        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params.extrinsics)
         T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
@@ -925,7 +925,7 @@ class WriteResults:
                                colors=colors_pred,
                                radii=strips_radii))
 
-        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
         template_frame_idx = datagraph_camera_node.long_jump_source
 
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
@@ -954,12 +954,12 @@ class WriteResults:
 
         for i, icosphere_node in enumerate(self.pose_icosphere.reference_poses):
 
-            if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits[Cameras.FRONTVIEW]:
-                template_idx = len(self.logged_flow_tracks_inits[Cameras.FRONTVIEW])
+            if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits:
+                template_idx = len(self.logged_flow_tracks_inits)
 
                 template = icosphere_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
-                self.logged_flow_tracks_inits[Cameras.FRONTVIEW].append(icosphere_node.keyframe_idx_observed)
+                self.logged_flow_tracks_inits.append(icosphere_node.keyframe_idx_observed)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
                 rr.log(template_image_grid_annotation, rr.Image(template))
@@ -981,8 +981,8 @@ class WriteResults:
                     f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
                     rr.Pinhole(
                         resolution=[self.image_width, self.image_height],
-                        focal_length=[float(self.pinhole_params[Cameras.FRONTVIEW].fx.item()),
-                                      float(self.pinhole_params[Cameras.FRONTVIEW].fy.item())],
+                        focal_length=[float(self.pinhole_params.fx.item()),
+                                      float(self.pinhole_params.fy.item())],
                         camera_xyz=rr.ViewCoordinates.RUB,
                     ),
                 )
@@ -1039,7 +1039,7 @@ class WriteResults:
         in_edges = self.data_graph.G.in_edges(frame_i, data=False)
         flow_source = int(min(e[0] for e in in_edges))
 
-        arc_data = self.data_graph.get_edge_observations(flow_source, frame_i, Cameras.FRONTVIEW)
+        arc_data = self.data_graph.get_edge_observations(flow_source, frame_i)
 
         rr.set_time_sequence("frame", frame_i)
 
@@ -1069,15 +1069,15 @@ class WriteResults:
             save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
             save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
-    def measure_ransac_stats(self, frame_i, camera=Cameras.FRONTVIEW):
+    def measure_ransac_stats(self, frame_i):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
-            flow_arc_source = self.data_graph.get_camera_specific_frame_data(i, camera).long_jump_source
+            flow_arc_source = self.data_graph.get_camera_specific_frame_data(i).long_jump_source
             flow_arc = (flow_arc_source, i)
 
-            arc_data = self.data_graph.get_edge_observations(*flow_arc, camera=camera)
+            arc_data = self.data_graph.get_edge_observations(*flow_arc)
 
             pred_inlier_ratio = arc_data.ransac_inlier_ratio
             inlier_mask = arc_data.ransac_inliers_mask
@@ -1125,11 +1125,11 @@ class WriteResults:
         if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
 
             for camera in self.cameras:
-                front_results = self.measure_ransac_stats(frame_i, camera)
+                front_results = self.measure_ransac_stats(frame_i)
 
                 mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
 
-                if self.tracking_config.plot_mft_flow_kde_error_plot and camera == Cameras.FRONTVIEW:
+                if self.tracking_config.plot_mft_flow_kde_error_plot:
                     self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
     def analyze_ransac_matchings(self, frame_i):
@@ -1138,7 +1138,7 @@ class WriteResults:
             return
 
         for camera in self.cameras:
-            ransac_stats = self.measure_ransac_stats(frame_i, camera)
+            ransac_stats = self.measure_ransac_stats(frame_i)
 
             ransac_stats.pop('mft_flow_gt_flow_difference')
 
@@ -1187,7 +1187,7 @@ class WriteResults:
 
         dpi = 600
 
-        datagraph_frontview_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        datagraph_frontview_data = self.data_graph.get_camera_specific_frame_data(frame_i)
         new_flow_arcs = [(datagraph_frontview_data.long_jump_source, frame_i)]
 
         for new_flow_arc in new_flow_arcs:
@@ -1281,21 +1281,20 @@ class WriteResults:
         if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
             return
 
-        datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW)
+        datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i)
         new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
         rr.set_time_sequence('frame', flow_arc_target)
 
-        camera = Cameras.FRONTVIEW
-        arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target, camera)
+        arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
         flow_observation = arc_observation.observed_flow
         opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
         opt_flow_np = opt_flow.numpy(force=True)
 
-        template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source, camera)
-        target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target, camera)
+        template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source)
+        target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target)
         template_image = self.convert_observation_to_numpy(template_data.frame_observation.observed_image)
         target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
 
@@ -1337,7 +1336,7 @@ class WriteResults:
 
     def visualize_outliers_distribution(self, new_flow_arc):
 
-        new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc, camera=Cameras.FRONTVIEW)
+        new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc)
         gt_flow = new_flow_arc_data.synthetic_flow_result.observed_flow
 
         inlier_list = torch.nonzero(new_flow_arc_data.ransac_inliers_mask)[:, 0]
@@ -1601,7 +1600,7 @@ class WriteResults:
 
         gt_obj_ref_to_last = get_relative_gt_obj_rotation(long_jump_source, frame_i, self.data_graph)
 
-        Se3_world_to_cam = Se3.from_matrix(self.pinhole_params[Cameras.FRONTVIEW].extrinsics)
+        Se3_world_to_cam = Se3.from_matrix(self.pinhole_params.extrinsics)
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
 
         pred_cam_RANSAC_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac
@@ -1966,9 +1965,7 @@ class WriteResults:
         encoder_result_prime = encoder(keyframes_prime)
         return encoder_result_prime, keyframes_prime
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i, view=Cameras.FRONTVIEW):
-
-        view_name = view.value
+    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i):
 
         observed_image_annotation = RerunAnnotations.observed_image_frontview
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation_frontview
@@ -1993,111 +1990,108 @@ class WriteResults:
             image_segmentation = last_frame_observation.observed_segmentation
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
-        # Visualize new flow arcs
-        if view == Cameras.FRONTVIEW:
-            data_graph_camera = self.data_graph.get_camera_specific_frame_data(frame_i, view)
-            new_flow_arcs = [(data_graph_camera.long_jump_source, frame_i)]
+        data_graph_camera = self.data_graph.get_camera_specific_frame_data(frame_i)
+        new_flow_arcs = [(data_graph_camera.long_jump_source, frame_i)]
 
-            for new_flow_arcs in sorted(new_flow_arcs):
-                source_frame = new_flow_arcs[0]
-                target_frame = new_flow_arcs[1]
+        for new_flow_arcs in sorted(new_flow_arcs):
+            source_frame = new_flow_arcs[0]
+            target_frame = new_flow_arcs[1]
 
-                data_graph_edge_data = self.data_graph.get_edge_observations(source_frame, target_frame,
-                                                                             Cameras.FRONTVIEW)
-                flow_observation = data_graph_edge_data.observed_flow
-                flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords()
+            data_graph_edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+            flow_observation = data_graph_edge_data.observed_flow
+            flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords()
 
-                synthetic_flow_obs = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
+            synthetic_flow_obs = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
 
-                source_frame_data = self.data_graph.get_camera_specific_frame_data(source_frame, view)
-                target_frame_data = self.data_graph.get_camera_specific_frame_data(target_frame, view)
+            source_frame_data = self.data_graph.get_camera_specific_frame_data(source_frame)
+            target_frame_data = self.data_graph.get_camera_specific_frame_data(target_frame)
 
-                source_frame_observation = source_frame_data.frame_observation
-                target_frame_observation = target_frame_data.frame_observation
+            source_frame_observation = source_frame_data.frame_observation
+            target_frame_observation = target_frame_data.frame_observation
 
-                source_frame_image = source_frame_observation.observed_image
-                source_frame_segment = source_frame_observation.observed_segmentation
+            source_frame_image = source_frame_observation.observed_image
+            source_frame_segment = source_frame_observation.observed_segmentation
 
-                if (len(self.logged_flow_tracks_inits[view]) == 0 or
-                        source_frame != self.logged_flow_tracks_inits[view][-1]):
-                    template = source_frame_image.squeeze().permute(1, 2, 0)
+            if (len(self.logged_flow_tracks_inits) == 0 or
+                    source_frame != self.logged_flow_tracks_inits[-1]):
+                template = source_frame_image.squeeze().permute(1, 2, 0)
 
-                    template_image_path = self.observations_path / Path(f'template_img_{str(view)}_{frame_i}.png')
-                    self.log_image(target_frame, template, template_image_path,
-                                   template_image_annotation)
+                template_image_path = self.observations_path / Path(f'template_img_{frame_i}.png')
+                self.log_image(target_frame, template, template_image_path,
+                               template_image_annotation)
 
-                    if self.tracking_config.write_to_rerun_rather_than_disk:
-                        rr.set_time_sequence("frame", target_frame)
-                        rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
+                if self.tracking_config.write_to_rerun_rather_than_disk:
+                    rr.set_time_sequence("frame", target_frame)
+                    rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
 
-                target_frame_image = target_frame_observation.observed_image.cpu()
-                target_frame_segment = target_frame_observation.observed_segmentation.cpu()
+            target_frame_image = target_frame_observation.observed_image.cpu()
+            target_frame_segment = target_frame_observation.observed_segmentation.cpu()
 
-                observed_flow_reordered = flow_observation_image_coords.observed_flow.squeeze().permute(1, 2, 0).numpy()
+            observed_flow_reordered = flow_observation_image_coords.observed_flow.squeeze().permute(1, 2, 0).numpy()
 
-                source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
-                target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
+            source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
+            target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
 
-                source_frame_segment_squeezed = source_frame_segment.squeeze()
-                target_frame_segment_squeezed = target_frame_segment.squeeze()
-                observed_flow_occlusions_squeezed = flow_observation.observed_flow_occlusion.cpu().squeeze()
-                observed_flow_uncertainties_squeezed = flow_observation.observed_flow_uncertainty.cpu().squeeze()
+            source_frame_segment_squeezed = source_frame_segment.squeeze()
+            target_frame_segment_squeezed = target_frame_segment.squeeze()
+            observed_flow_occlusions_squeezed = flow_observation.observed_flow_occlusion.cpu().squeeze()
+            observed_flow_uncertainties_squeezed = flow_observation.observed_flow_uncertainty.cpu().squeeze()
 
-                # TODO this computation is not mathematically justified, and serves just for visualization purposes
-                observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
-                                                         observed_flow_uncertainties_squeezed.min())
-                observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
+            # TODO this computation is not mathematically justified, and serves just for visualization purposes
+            observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
+                                                     observed_flow_uncertainties_squeezed.min())
+            observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
 
-                flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
-                                                               [observed_flow_reordered], None,
-                                                               gt_silhouette_current=source_frame_segment_squeezed,
-                                                               gt_silhouettes_prev=[target_frame_segment_squeezed],
-                                                               flow_occlusion_masks=[observed_flow_occlusions_squeezed])
+            flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
+                                                           [observed_flow_reordered], None,
+                                                           gt_silhouette_current=source_frame_segment_squeezed,
+                                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
+                                                           flow_occlusion_masks=[observed_flow_occlusions_squeezed])
 
-                uncertainty_illustration = (
-                    visualize_flow_with_images([source_image_discrete], target_image_discrete,
-                                               [observed_flow_reordered], None,
-                                               gt_silhouette_current=source_frame_segment_squeezed,
-                                               gt_silhouettes_prev=[target_frame_segment_squeezed],
-                                               flow_occlusion_masks=[observed_flow_uncertainties_0_1_range]))
+            uncertainty_illustration = (
+                visualize_flow_with_images([source_image_discrete], target_image_discrete,
+                                           [observed_flow_reordered], None,
+                                           gt_silhouette_current=source_frame_segment_squeezed,
+                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
+                                           flow_occlusion_masks=[observed_flow_uncertainties_0_1_range]))
 
-                # flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
-                #                                                          target_image_discrete,
-                #                                                          flow_observation_image_coords,
-                #                                                          synthetic_flow_obs)
+            # flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
+            #                                                          target_image_discrete,
+            #                                                          flow_observation_image_coords,
+            #                                                          synthetic_flow_obs)
 
-                # Define output file paths
-                observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
-                observed_flow_uncertainty_path = (self.observations_path /
-                                                  Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
-                observed_flow_errors_path = self.observations_path / Path(
-                    f'flow_errors_{source_frame}_{target_frame}.png')
-                occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
-                uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
+            # Define output file paths
+            observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
+            observed_flow_uncertainty_path = (self.observations_path /
+                                              Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
+            observed_flow_errors_path = self.observations_path / Path(
+                f'flow_errors_{source_frame}_{target_frame}.png')
+            occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
+            uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
 
-                flow_occlusions_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                                                    observed_flow_occlusions_squeezed,
-                                                                                    alpha=0.8)
-                # Uncertainty visualizations
-                flow_uncertainty_image = (
-                    self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                                observed_flow_uncertainties_0_1_range, alpha=0.8))
+            flow_occlusions_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
+                                                                                observed_flow_occlusions_squeezed,
+                                                                                alpha=0.8)
+            # Uncertainty visualizations
+            flow_uncertainty_image = (
+                self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
+                                                            observed_flow_uncertainties_0_1_range, alpha=0.8))
 
-                flow_illustration_torch = (
-                    torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
-                flow_illustration_uncertainty_torch = (
-                    torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
+            flow_illustration_torch = (
+                torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
+            flow_illustration_uncertainty_torch = (
+                torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
 
-                # self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
-                #                 observed_flow_errors_annotations)
-                self.log_image(target_frame, flow_occlusions_image, occlusion_path,
-                               observed_flow_occlusion_annotation)
-                self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,
-                               observed_flow_uncertainty_annotation)
-                self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
-                               observed_flow_uncertainty_illustration_annotation, ignore_dimensions=True)
-                self.log_image(target_frame, flow_illustration_torch, observed_flow_path, observed_flow_annotation,
-                               ignore_dimensions=True)
+            # self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
+            #                 observed_flow_errors_annotations)
+            self.log_image(target_frame, flow_occlusions_image, occlusion_path,
+                           observed_flow_occlusion_annotation)
+            self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,
+                           observed_flow_uncertainty_annotation)
+            self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
+                           observed_flow_uncertainty_illustration_annotation, ignore_dimensions=True)
+            self.log_image(target_frame, flow_illustration_torch, observed_flow_path, observed_flow_annotation,
+                           ignore_dimensions=True)
 
     def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
         assert flow_occlusion.shape == (self.image_height, self.image_width)
