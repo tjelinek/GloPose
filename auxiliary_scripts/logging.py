@@ -549,7 +549,6 @@ class WriteResults:
 
     def __del__(self):
 
-        self.dump_pose_icosphere_for_glomap()
         self.tracking_log.close()
         self.metrics_log.close()
 
@@ -961,6 +960,8 @@ class WriteResults:
             if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits:
                 template_idx = len(self.logged_flow_tracks_inits)
 
+                self.dump_icosphere_node_for_glomap(icosphere_node)
+
                 template = icosphere_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
                 self.logged_flow_tracks_inits.append(icosphere_node.keyframe_idx_observed)
@@ -990,6 +991,15 @@ class WriteResults:
                         camera_xyz=rr.ViewCoordinates.RUB,
                     ),
                 )
+
+    def dump_icosphere_node_for_glomap(self, icosphere_node):
+        frame_idx = icosphere_node.keyframe_idx_observed
+        frame_data = self.data_graph.get_camera_specific_frame_data(frame_idx)
+        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
+        img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
+        img *= img_seg
+        node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
+        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
@@ -2106,22 +2116,6 @@ class WriteResults:
         blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
 
         return blended_image
-
-    def dump_pose_icosphere_for_glomap(self):
-
-
-        for node in self.pose_icosphere.reference_poses:
-            frame_idx = node.keyframe_idx_observed
-
-            frame_data = self.data_graph.get_camera_specific_frame_data(frame_idx)
-
-            img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
-            img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
-
-            img *= img_seg
-
-            node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
-            imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
     def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
                   ignore_dimensions=False):
