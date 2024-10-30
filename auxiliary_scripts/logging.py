@@ -238,6 +238,9 @@ class WriteResults:
         self.ransac_path = self.write_folder / Path('ransac')
         self.point_clouds_path = self.write_folder / Path('point_clouds')
         self.exported_mesh_path = self.write_folder / Path('3d_model')
+        self.pose_icosphere_dump = (self.write_folder /
+                                    f'icosphere_dump_{self.tracking_config.experiment_name}_'
+                                    f'{self.tracking_config.sequence}')
 
         self.init_directories()
 
@@ -259,6 +262,7 @@ class WriteResults:
         self.correspondences_log_write_common_data()
 
     def init_directories(self):
+        self.pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
         self.observations_path.mkdir(exist_ok=True, parents=True)
         self.gt_values_path.mkdir(exist_ok=True, parents=True)
         self.optimized_values_path.mkdir(exist_ok=True, parents=True)
@@ -2105,9 +2109,6 @@ class WriteResults:
 
     def dump_pose_icosphere_for_glomap(self):
 
-        pose_icosphere_dump = (self.write_folder /
-                               f'icosphere_dump_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}')
-        pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
 
         for node in self.pose_icosphere.reference_poses:
             frame_idx = node.keyframe_idx_observed
@@ -2119,7 +2120,7 @@ class WriteResults:
 
             img *= img_seg
 
-            node_save_path = pose_icosphere_dump / f'node_{frame_idx}.png'
+            node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
             imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
     def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
