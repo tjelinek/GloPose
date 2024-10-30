@@ -381,6 +381,8 @@ class Tracking6D:
         else:
             raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
+        self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
+
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
