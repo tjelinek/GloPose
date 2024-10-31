@@ -27,6 +27,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_
 from pytorch3d.loss.chamfer import chamfer_distance
 from pytorch3d.io import save_ply
 
+from auxiliary_scripts.colmap_database import COLMAPDatabase
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
@@ -260,6 +261,10 @@ class WriteResults:
         self.correspondences_log_file = self.write_folder / (f'correspondences_{self.tracking_config.sequence}'
                                                              f'_flow_{self.tracking_config.gt_flow_source}.h5')
         self.correspondences_log_write_common_data()
+
+        self.colmap_db_path = self.pose_icosphere_dump / 'database.db'
+        self.colmap_db = COLMAPDatabase.connect(self.colmap_db_path)
+        self.colmap_db.create_tables()
 
     def init_directories(self):
         self.pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
@@ -997,9 +1002,41 @@ class WriteResults:
         frame_data = self.data_graph.get_camera_specific_frame_data(frame_idx)
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
+        # img_features_xy = frame_data.frame_observation.observed_image_features.squeeze().permute(1, 2, 0)
+        # img_features_xy_padded = torch.zeros(img_features_xy.shape[0], img_features_xy.shape[1], 128)
+        # img_features_xy_padded[..., img_features_xy.shape[2]:] = img_features_xy
         img *= img_seg
         node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
+
+        seg_nonzero_yx = img_seg[..., 0].nonzero()[..., [1, 0]]
+        # seg_nonzero_xy_features = img_features_xy_padded[seg_nonzero_xy[0], seg_nonzero_xy[1]]
+
+        self.colmap_db.add_image(name=str(node_save_path.name), camera_id=0, image_id=frame_idx)
+        self.colmap_db.add_keypoints(frame_idx, seg_nonzero_yx[..., [1, 0]].numpy(force=True))
+
+        icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
+        incoming_edges = self.data_graph.G.in_edges(frame_idx)
+
+        for edge in incoming_edges:
+            edge_source = edge[0]
+            edge_target = edge[1]
+
+            if edge_source not in icosphere_nodes_idx:
+                continue
+
+            source_node = self.data_graph.get_camera_specific_frame_data(edge_source)
+            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
+            seg_target_nonzero_yx = (img_seg_target[..., 0]).nonzero()
+            edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
+
+            src_pts_xy = edge_data.src_pts_yx.to(torch.int)
+            dst_pts_xy = edge_data.dst_pts_yx.to(torch.int)
+
+            src_pts_indices = torch.where((seg_nonzero_yx.unsqueeze(0) == src_pts_xy.unsqueeze(1)).all(-1))[1]
+            dst_pts_indices = torch.where((seg_target_nonzero_yx.unsqueeze(0) == dst_pts_xy.unsqueeze(1)).all(-1))[1]
+
+            self.colmap_db.add_matches()
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
