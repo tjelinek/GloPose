@@ -45,13 +45,6 @@ class CameraSpecificFrameData:
     reliable_sources: Set[int] = field(default_factory=set)
     is_source_reliable: bool = True
 
-    def set_attributes(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                raise AttributeError(f"{self.__class__.__name__} has no attribute '{key}'")
-
 
 @dataclass
 class CrossFrameData:
