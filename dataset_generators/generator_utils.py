@@ -8,7 +8,7 @@ import torch
 import csv
 import pickle
 
-from kornia.geometry import normalize_quaternion
+from kornia.geometry import So3, Quaternion
 from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_rotation_matrix
 from pathlib import Path
 
@@ -16,7 +16,6 @@ from dataset_generators.scenarios import MovementScenario
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils import normalize_vertices
-from auxiliary_scripts.math_utils import qmult
 from flow import visualize_flow_with_images
 
 
@@ -234,8 +233,8 @@ def render_object_poses(rendering: RenderingKaolin, vertices, face_features, tex
     for frame_i, rotation_quaternion in enumerate(movement_scenario.rotation_quaternions):
         rotation_quaternion_tensor = torch.from_numpy(rotation_quaternion).to(torch.float32)
 
-        composed_rotation_quaternion_tensor = qmult(normalize_quaternion(initial_rotation_quaternion[None]),
-                                                    normalize_quaternion(rotation_quaternion_tensor[None]))[0].cuda()
+        composed_rotation_quaternion_tensor = (So3(Quaternion(initial_rotation_quaternion[None])) *
+                                               So3(Quaternion(rotation_quaternion_tensor[None]))).q.q[0].cuda()
         quaternions[0, frame_i] = composed_rotation_quaternion_tensor
 
         rotation_matrix = quaternion_to_rotation_matrix(composed_rotation_quaternion_tensor)[None]

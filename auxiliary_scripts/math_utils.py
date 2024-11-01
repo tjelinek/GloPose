@@ -56,16 +56,6 @@ def Se3_last_cam_to_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> S
     return Se3_cam
 
 
-def qmult(q1, q0):  # q0, then q1, you get q3
-    w0, x0, y0, z0 = q0[0]
-    w1, x1, y1, z1 = q1[0]
-    q3 = torch.cat(((-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0)[None, None],
-                    (x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0)[None, None],
-                    (-x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0)[None, None],
-                    (x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0)[None, None]), 1)
-    return q3
-
-
 def quaternion_angular_difference(quaternions1: Quaternion, quaternions2: Quaternion):
     so3_1 = So3(quaternions1)
     so3_2 = So3(quaternions2)
