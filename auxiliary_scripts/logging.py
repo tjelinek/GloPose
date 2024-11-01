@@ -784,12 +784,11 @@ class WriteResults:
 
         observed_segmentations = observations.observed_segmentation
 
-        for camera in self.cameras:
-            self.visualize_observed_data(active_keyframes, frame_i)
+        self.visualize_observed_data(active_keyframes, frame_i)
 
-            if not self.tracking_config.write_to_rerun_rather_than_disk:
-                self.visualize_flow_with_matching(frame_i)
-            self.visualize_rotations_per_epoch(frame_i)
+        if not self.tracking_config.write_to_rerun_rather_than_disk:
+            self.visualize_flow_with_matching(frame_i)
+        self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
             datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i)
