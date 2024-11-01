@@ -56,6 +56,11 @@ def Se3_last_cam_to_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> S
     return Se3_cam
 
 
+def pixel_coords_to_unit_coords(image_width: int, image_height: int, pts_yx: torch.Tensor, dtype=torch.float32)\
+        -> torch.Tensor:
+    return pts_yx.to(dtype) / torch.Tensor([image_height, image_width]).to(pts_yx.device)
+
+
 def quaternion_angular_difference(quaternions1: Quaternion, quaternions2: Quaternion):
     so3_1 = So3(quaternions1)
     so3_2 = So3(quaternions2)
