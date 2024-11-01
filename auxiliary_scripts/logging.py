@@ -266,6 +266,10 @@ class WriteResults:
         self.colmap_db = COLMAPDatabase.connect(self.colmap_db_path)
         self.colmap_db.create_tables()
 
+        colmap_db_camera_params = np.array([self.pinhole_params.fx.item(), self.pinhole_params.fy.item(),
+                                            self.pinhole_params.cx.item(), self.pinhole_params.cy.item()])
+        self.colmap_db.add_camera(1, self.image_width, self.image_height, colmap_db_camera_params, camera_id=0)
+
     def init_directories(self):
         self.pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
         self.observations_path.mkdir(exist_ok=True, parents=True)
@@ -1011,7 +1015,7 @@ class WriteResults:
         seg_target_nonzero = img_seg[..., 0].nonzero()
         # seg_nonzero_xy_features = img_features_xy_padded[seg_nonzero_xy[0], seg_nonzero_xy[1]]
 
-        self.colmap_db.add_image(name=str(node_save_path.name), camera_id=0, image_id=frame_idx)
+        self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=0, image_id=frame_idx)
         self.colmap_db.add_keypoints(frame_idx, seg_target_nonzero[..., [1, 0]].numpy(force=True))
 
         icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
