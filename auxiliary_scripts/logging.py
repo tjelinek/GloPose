@@ -1009,11 +1009,11 @@ class WriteResults:
         node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
-        seg_nonzero_yx = img_seg[..., 0].nonzero()[..., [1, 0]]
+        seg_target_nonzero = img_seg[..., 0].nonzero()
         # seg_nonzero_xy_features = img_features_xy_padded[seg_nonzero_xy[0], seg_nonzero_xy[1]]
 
         self.colmap_db.add_image(name=str(node_save_path.name), camera_id=0, image_id=frame_idx)
-        self.colmap_db.add_keypoints(frame_idx, seg_nonzero_yx[..., [1, 0]].numpy(force=True))
+        self.colmap_db.add_keypoints(frame_idx, seg_target_nonzero[..., [1, 0]].numpy(force=True))
 
         icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
         incoming_edges = self.data_graph.G.in_edges(frame_idx)
@@ -1027,16 +1027,22 @@ class WriteResults:
 
             source_node = self.data_graph.get_camera_specific_frame_data(edge_source)
             img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
-            seg_target_nonzero_yx = (img_seg_target[..., 0]).nonzero()
+            seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
-            src_pts_xy = edge_data.src_pts_yx.to(torch.int)
-            dst_pts_xy = edge_data.dst_pts_yx.to(torch.int)
+            src_pts = edge_data.src_pts_yx.to(torch.int)
+            dst_pts = edge_data.dst_pts_yx.to(torch.int)
 
-            src_pts_indices = torch.where((seg_nonzero_yx.unsqueeze(0) == src_pts_xy.unsqueeze(1)).all(-1))[1]
-            dst_pts_indices = torch.where((seg_target_nonzero_yx.unsqueeze(0) == dst_pts_xy.unsqueeze(1)).all(-1))[1]
+            dst_pts_mask = ((seg_target_nonzero.unsqueeze(0) == dst_pts.unsqueeze(1)).all(-1)).any(1)
+            src_pts_indices = torch.where((seg_source_nonzero.unsqueeze(0) == src_pts.unsqueeze(1)).all(-1))[1]
+            dst_pts_indices = torch.where((seg_target_nonzero.unsqueeze(0) == dst_pts.unsqueeze(1)).all(-1))[1]
 
-            self.colmap_db.add_matches()
+            src_pts_indices_filtered = src_pts_indices[dst_pts_mask]
+
+            matches = torch.stack([src_pts_indices_filtered, dst_pts_indices], dim=1)
+            self.colmap_db.add_matches(edge_source, edge_target, matches.numpy(force=True))
+
+        self.colmap_db.commit()
 
     @staticmethod
     def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
