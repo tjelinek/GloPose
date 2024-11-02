@@ -1018,7 +1018,7 @@ class WriteResults:
         assert seg_target_nonzero_xy_np.dtype == np.float32
 
         self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx+1)
-        self.colmap_db.add_keypoints(frame_idx, seg_target_nonzero_xy_np)
+        self.colmap_db.add_keypoints(frame_idx+1, seg_target_nonzero_xy_np)
 
         icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
         incoming_edges = self.data_graph.G.in_edges(frame_idx)
