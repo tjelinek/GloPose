@@ -1013,8 +1013,8 @@ class WriteResults:
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
         seg_target_nonzero = img_seg[..., 0].nonzero()
-        seg_target_nonzero_unit = pixel_coords_to_unit_coords(self.image_width, self.image_height, seg_target_nonzero)
-        seg_target_nonzero_xy_np = seg_target_nonzero_unit[..., [1, 0]].numpy(force=True)
+        seg_target_nonzero_unit = seg_target_nonzero#pixel_coords_to_unit_coords(self.image_width, self.image_height, seg_target_nonzero)
+        seg_target_nonzero_xy_np = seg_target_nonzero_unit[..., [1, 0]].numpy(force=True).astype(np.float32)
         assert seg_target_nonzero_xy_np.dtype == np.float32
 
         self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx+1)
@@ -1046,6 +1046,7 @@ class WriteResults:
 
             matches = torch.stack([src_pts_indices_filtered, dst_pts_indices], dim=1)
             self.colmap_db.add_matches(edge_source+1, edge_target+1, matches.numpy(force=True))
+            self.colmap_db.add_two_view_geometry(edge_source+1, edge_target+1, matches.numpy(force=True))
 
         self.colmap_db.commit()
 
