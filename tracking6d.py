@@ -9,11 +9,12 @@ from kornia.geometry import Quaternion, Se3, PinholeCamera
 from pathlib import Path
 
 from torch.optim import lr_scheduler
-from typing import Optional, NamedTuple, List, Callable, Union, Dict
+from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
+from pose.glomap import GlomapWrapper
 from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
@@ -204,6 +205,16 @@ class Tracking6D:
                                                              self.gt_encoder, self.encoder, self.pose_icosphere,
                                                              self.pinhole_params, self.roma_flow_provider)
 
+        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
+                                            self.pinhole_params, self.pose_icosphere)
+
+        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
+                                          tracking_config=self.config, rendering=self.rendering,
+                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
+                                          rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
+                                          cameras=self.used_cameras, pinhole_params=self.pinhole_params,
+                                          pose_icosphere=self.pose_icosphere)
+
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
 
@@ -388,13 +399,6 @@ class Tracking6D:
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
 
         our_losses = -np.ones((self.config.input_frames - 1, 1))
-
-        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
-                                          tracking_config=self.config, rendering=self.rendering,
-                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
-                                          rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
-                                          cameras=self.used_cameras, pinhole_params=self.pinhole_params,
-                                          pose_icosphere=self.pose_icosphere)
 
         self.data_graph.add_new_frame(0)
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]

@@ -12,7 +12,7 @@ from data_structures.pose_icosphere import PoseIcosphere
 from tracker_config import TrackerConfig
 
 
-class GlomapMapper:
+class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
                  image_shape: ImageShape, pinhole_params: PinholeCamera, pose_icosphere: PoseIcosphere):
