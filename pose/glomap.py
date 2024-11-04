@@ -1,7 +1,9 @@
+import subprocess
 from pathlib import Path
 
 import imageio
 import numpy as np
+import pycolmap
 import torch
 from kornia.geometry import PinholeCamera
 
@@ -18,10 +20,10 @@ class GlomapWrapper:
                  image_shape: ImageShape, pinhole_params: PinholeCamera, pose_icosphere: PoseIcosphere):
         self.write_folder = write_folder
         self.tracking_config = tracking_config
-        self.pose_icosphere_dump = (self.write_folder /
+        self.colmap_image_path = (self.write_folder /
                                     f'icosphere_dump_{self.tracking_config.experiment_name}_'
                                     f'{self.tracking_config.sequence}')
-        self.pose_icosphere_dump.mkdir(exist_ok=True, parents=True)
+        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
 
         self.image_width = image_shape.width
         self.image_height = image_shape.height
@@ -30,7 +32,8 @@ class GlomapWrapper:
         self.pinhole_params = pinhole_params
         self.pose_icosphere = pose_icosphere
 
-        self.colmap_db_path = self.pose_icosphere_dump / 'database.db'
+        self.colmap_db_path = self.colmap_image_path / 'database.db'
+        self.colmap_output_path = self.colmap_image_path / 'output'
         self.colmap_db: COLMAPDatabase = COLMAPDatabase.connect(self.colmap_db_path)
         self.colmap_db.create_tables()
 
@@ -47,7 +50,7 @@ class GlomapWrapper:
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
         img *= img_seg
 
-        node_save_path = self.pose_icosphere_dump / f'node_{frame_idx}.png'
+        node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
         seg_target_nonzero = img_seg[..., 0].nonzero()
@@ -96,6 +99,26 @@ class GlomapWrapper:
 
             matches = torch.stack([src_pts_indices_filtered, dst_pts_indices], dim=1)
             self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
-            self.colmap_db.add_two_view_geometry(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
+            # self.colmap_db.add_two_view_geometry(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
 
         self.colmap_db.commit()
+
+    def __del__(self):
+        self.colmap_db.close()
+
+        pycolmap.match_exhaustive(str(self.colmap_db_path))
+        output_path: Path = Path('./output')
+        maps = pycolmap.incremental_mapping(str(self.colmap_db_path), str(self.colmap_image_path), str(self.colmap_output_path))
+
+        output_path.mkdir(exist_ok=True)
+        maps[0].write(output_path)
+
+        glomap_command = [
+            "glomap",
+            "mapper",
+            "--database_path", self.colmap_db_path,
+            "--output_path", self.colmap_output_path,
+            "--image_path", self.colmap_image_path
+        ]
+
+        subprocess.run(glomap_command, check=True, capture_output=True, text=True)

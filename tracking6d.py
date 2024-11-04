@@ -415,11 +415,7 @@ class Tracking6D:
 
         initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
 
-        if self.config.icosphere_add_inplane_rotatiosn:
-            self.insert_templates_into_icosphere(T_world_to_cam, template_frame_observation, initial_pose,
-                                                 self.config.icosphere_trust_region_degrees, 0)
-        else:
-            self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, 0)
+        self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, 0)
 
         for frame_i in range(1, self.config.input_frames):
 
@@ -503,15 +499,7 @@ class Tracking6D:
                 self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
                 self.encoder.quaternion_offsets[frame_i + 1:] = self.encoder.quaternion_offsets[frame_i]
 
-                if self.config.icosphere_add_inplane_rotatiosn:
-                    obj_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
-
-                    self.insert_templates_into_icosphere(T_world_to_cam, new_frame_observation, obj_pose,
-                                                         self.config.icosphere_trust_region_degrees, frame_i)
-
-                else:
-                    obj_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
-                    self.pose_icosphere.insert_new_reference(new_frame_observation, obj_pose, frame_i)
+                # self.pose_icosphere.insert_new_reference(new_frame_observation, obj_pose, frame_i)
 
                 self.flow_tracks_inits.append(frame_i)
 
@@ -538,22 +526,9 @@ class Tracking6D:
             del all_frame_observations
             del all_flow_observations
 
+        del self.glomap_wrapper
+
         return self.best_model
-
-    def insert_templates_into_icosphere(self, T_world_to_cam_4x4, frame_observation, pose: Se3,
-                                        degree_delta, frame_i):
-        rotated_observations, degrees = generate_rotated_observations(frame_observation, 2 * degree_delta)
-        for i, degree in enumerate(degrees):
-            obj_rotation_q = pose.quaternion.q
-            obj_rotated_world_q = Quaternion(get_object_pose_after_in_plane_rot_in_cam_space(obj_rotation_q,
-                                                                                             T_world_to_cam_4x4,
-                                                                                             degree))
-
-            obj_rotated_world = Se3(obj_rotated_world_q, pose.translation)
-
-            rotated_observation = rotated_observations[i]
-            self.pose_icosphere.insert_new_reference(rotated_observation, obj_rotated_world, frame_i)
-        raise NotImplementedError("This implementation is almost certainly wrong as it does not transform translation")
 
     @torch.no_grad()
     def add_new_flows(self, frame_i):
