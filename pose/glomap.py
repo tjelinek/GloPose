@@ -66,11 +66,8 @@ class GlomapWrapper:
         # gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
         # gt_q_cam_np = gt_Se3_cam.quaternion.q.squeeze().numpy(force=True).copy()
         # gt_t_cam_np = gt_Se3_cam.t.squeeze().numpy(force=True).copy()
-        gt_q_cam_np = None
-        gt_t_cam_np = None
 
-        self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx + 1,
-                                 prior_q=gt_q_cam_np, prior_t=gt_t_cam_np)
+        self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx + 1)
         self.colmap_db.add_keypoints(frame_idx + 1, seg_target_nonzero_xy_np.copy())
 
         icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
@@ -103,15 +100,13 @@ class GlomapWrapper:
 
         self.colmap_db.commit()
 
-    def __del__(self):
+    def run_colmap(self):
         self.colmap_db.close()
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
-        output_path: Path = Path('./output')
         maps = pycolmap.incremental_mapping(str(self.colmap_db_path), str(self.colmap_image_path), str(self.colmap_output_path))
 
-        output_path.mkdir(exist_ok=True)
-        maps[0].write(output_path)
+        maps[0].write(self.colmap_output_path)
 
         glomap_command = [
             "glomap",
@@ -122,3 +117,4 @@ class GlomapWrapper:
         ]
 
         subprocess.run(glomap_command, check=True, capture_output=True, text=True)
+

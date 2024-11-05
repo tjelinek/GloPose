@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Callable, Optional
 
 from dataclasses import dataclass
 
@@ -21,6 +21,7 @@ class PoseIcosphere:
 
     def __init__(self):
         self.reference_poses: List[IcosphereNode] = []
+        self.glomap_callback: Optional[Callable] = None
 
     def insert_new_reference(self, template_observation: FrameObservation, pose: Se3, keyframe_idx_observed: int):
         pose_quat_shape = pose.quaternion.q.shape
@@ -30,6 +31,10 @@ class PoseIcosphere:
                              observation=template_observation, keyframe_idx_observed=keyframe_idx_observed)
 
         self.reference_poses.append(node)
+
+        if self.glomap_callback is None:
+            raise ValueError('\'glomap_callback\' needs to be initialized.')
+        self.glomap_callback(node)
 
     def get_closest_reference(self, pose_quaternion: Quaternion) -> Tuple[IcosphereNode, float]:
         # Gives the closest reference template image, and angular difference to the closest template image

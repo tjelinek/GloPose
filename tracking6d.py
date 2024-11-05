@@ -208,6 +208,8 @@ class Tracking6D:
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.pinhole_params, self.pose_icosphere)
 
+        self.pose_icosphere.glomap_callback = self.glomap_wrapper.dump_icosphere_node_for_glomap
+
         self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                           tracking_config=self.config, rendering=self.rendering,
                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
@@ -526,7 +528,7 @@ class Tracking6D:
             del all_frame_observations
             del all_flow_observations
 
-        del self.glomap_wrapper
+        self.glomap_wrapper.run_colmap()
 
         return self.best_model
 
