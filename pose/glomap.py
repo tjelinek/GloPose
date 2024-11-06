@@ -21,8 +21,7 @@ class GlomapWrapper:
         self.write_folder = write_folder
         self.tracking_config = tracking_config
         self.colmap_image_path = (self.write_folder /
-                                    f'icosphere_dump_{self.tracking_config.experiment_name}_'
-                                    f'{self.tracking_config.sequence}')
+                                    f'icosphere_dump_{self.tracking_config.sequence}')
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
 
         self.image_width = image_shape.width
