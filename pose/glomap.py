@@ -75,16 +75,21 @@ class GlomapWrapper:
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
-            src_pts = edge_data.src_pts_yx.to(torch.int)
-            dst_pts = edge_data.dst_pts_yx.to(torch.int)
+            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].cuda()
+            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].cuda()
 
-            dst_pts_mask = ((seg_target_nonzero.unsqueeze(0) == dst_pts.unsqueeze(1)).all(-1)).any(1)
-            src_pts_indices = torch.where((seg_source_nonzero.unsqueeze(0) == src_pts.unsqueeze(1)).all(-1))[1]
-            dst_pts_indices = torch.where((seg_target_nonzero.unsqueeze(0) == dst_pts.unsqueeze(1)).all(-1))[1]
+            src_pts_xy_roma = edge_data.src_pts_xy_roma.to(torch.int).cuda()
+            dst_pts_xy_roma = edge_data.dst_pts_xy_roma.to(torch.int).cuda()
 
-            src_pts_indices_filtered = src_pts_indices[dst_pts_mask]
+            src_pts_mask = ((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
+            dst_pts_mask = ((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
+            src_pts_xy_roma = src_pts_xy_roma[dst_pts_mask & src_pts_mask]
+            dst_pts_xy_roma = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
 
-            matches = torch.stack([src_pts_indices_filtered, dst_pts_indices], dim=1)
+            src_pts_indices = torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1))[1]
+            dst_pts_indices = torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1))[1]
+
+            matches = torch.stack([src_pts_indices, dst_pts_indices], dim=1)
             self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
             # self.colmap_db.add_two_view_geometry(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
 
