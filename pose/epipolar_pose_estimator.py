@@ -3,7 +3,9 @@ from time import time
 
 import numpy as np
 import torch
-from kornia.geometry import Se3, Quaternion, quaternion_to_axis_angle, PinholeCamera
+import torchvision
+from kornia.geometry import Se3, Quaternion, PinholeCamera
+from romatch import roma_indoor
 
 from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.flow_provider import RoMaFlowProvider
@@ -45,10 +47,32 @@ class EpipolarPoseEstimator:
         self.occlusion_threshold = self.config.occlusion_coef_threshold
         self.segmentation_threshold = self.config.segmentation_mask_threshold
         self.roma_flow_provider: RoMaFlowProvider = roma_flow_provider
+        self.roma_matcher: roma_indoor = roma_indoor(device='cuda')
 
         self.camera = camera
 
         self.i_can_recover_the_scale_myself = False
+
+    def get_roma_match(self, source_image_frame, target_image_frame):
+
+        source_image = self.data_graph.get_camera_specific_frame_data(
+            source_image_frame).frame_observation.observed_image.cuda()
+        target_image = self.data_graph.get_camera_specific_frame_data(
+            target_image_frame).frame_observation.observed_image.cuda()
+
+        flow_edge_data = self.data_graph.get_edge_observations(source_image_frame, target_image_frame)
+
+        source_image_roma = torchvision.transforms.functional.to_pil_image(source_image.squeeze())
+        target_image_roma = torchvision.transforms.functional.to_pil_image(target_image.squeeze())
+
+        warp, certainty = self.roma_matcher.match(source_image_roma, target_image_roma, device='cuda')
+
+        src_pts_xy, dst_pts_xy = self.roma_matcher.to_pixel_coordinates(warp, self.image_height, self.image_width,
+                                                                        self.image_height, self.image_width)
+
+        flow_edge_data.src_pts_xy_roma = src_pts_xy.cpu()
+        flow_edge_data.dst_pts_xy_roma = dst_pts_xy.cpu()
+
 
     @torch.no_grad()
     def essential_matrix_preinitialization(self, keyframes, flow_tracks_inits):
@@ -70,8 +94,8 @@ class EpipolarPoseEstimator:
                 source_node_idx = node.keyframe_idx_observed
 
                 self.add_new_flow(source_node_idx, frame_i)
-                flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i).observed_flow
-                flow_reliability = self.flow_reliability(flow_edge_data)
+                flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
+                flow_reliability = self.flow_reliability(flow_edge_data.observed_flow)
 
                 if flow_reliability > best_source_reliability and flow_reliability >= self.flow_reliability_threshold:
                     best_source = source_node_idx
@@ -86,6 +110,8 @@ class EpipolarPoseEstimator:
         flow_arc_long_jump = (source, frame_i)
 
         self.add_new_flow(source, frame_i)
+        if self.data_graph.get_edge_observations(source, frame_i).src_pts_xy_roma is None:
+            self.get_roma_match(source, frame_i)
 
         flow_arc_short_jump = (frame_i - 1, frame_i)
 
