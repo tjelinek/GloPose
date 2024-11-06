@@ -100,30 +100,30 @@ class GlomapWrapper:
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
 
-        glomap_command = [
-            "glomap",
+        self.colmap_output_path.mkdir(exist_ok=True)
+
+        colmap_command = [
+            "colmap",
             "mapper",
-            "--TrackEstablishment.min_num_view_per_track", 2,
-            "--database_path", self.colmap_db_path,
-            "--output_path", self.colmap_output_path,
-            "--image_path", self.colmap_image_path
+            "--database_path", str(self.colmap_db_path),
+            "--output_path", str(self.colmap_output_path),
+            "--image_path", str(self.colmap_image_path),
+            "--Mapper.tri_ignore_two_view_tracks", str(0),
         ]
 
-        subprocess.run(glomap_command, check=True, capture_output=True, text=True)
+        subprocess.run(colmap_command, check=True, capture_output=True, text=True)
 
-        mapper_options = pycolmap.IncrementalMapperOptions(tri_ignore_two_view_tracks=0)
-        maps = pycolmap.incremental_mapping(str(self.colmap_db_path), str(self.colmap_image_path),
-                                            str(self.colmap_output_path), mapper_options=mapper_options)
-
-        maps[0].write(self.colmap_output_path)
+        # mapper_options = pycolmap.IncrementalMapperOptions(tri_ignore_two_view_tracks=0)
+        # maps = pycolmap.incremental_mapping(str(self.colmap_db_path), str(self.colmap_image_path), str(self.colmap_output_path), mapper_options=mapper_options)
+        # maps[0].write(self.colmap_output_path)
 
         glomap_command = [
             "glomap",
             "mapper",
-            "--TrackEstablishment.min_num_view_per_track", 2,
-            "--database_path", self.colmap_db_path,
-            "--output_path", self.colmap_output_path,
-            "--image_path", self.colmap_image_path
+            "--database_path", str(self.colmap_db_path),
+            "--output_path", str(self.colmap_output_path),
+            "--image_path", str(self.colmap_image_path),
+            "--TrackEstablishment.min_num_view_per_track", str(2),
         ]
 
         subprocess.run(glomap_command, check=True, capture_output=True, text=True)
