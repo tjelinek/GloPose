@@ -782,7 +782,7 @@ class WriteResults:
         self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
-            datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i)
+            datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
             new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
             self.visualize_outliers_distribution(new_flow_arc)
 
@@ -923,7 +923,7 @@ class WriteResults:
                                colors=colors_pred,
                                radii=strips_radii))
 
-        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
+        datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
         template_frame_idx = datagraph_camera_node.long_jump_source
 
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
@@ -1072,7 +1072,7 @@ class WriteResults:
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
-            flow_arc_source = self.data_graph.get_camera_specific_frame_data(i).long_jump_source
+            flow_arc_source = self.data_graph.get_frame_data(i).long_jump_source
             flow_arc = (flow_arc_source, i)
 
             arc_data = self.data_graph.get_edge_observations(*flow_arc)
@@ -1185,7 +1185,7 @@ class WriteResults:
 
         dpi = 600
 
-        datagraph_frontview_data = self.data_graph.get_camera_specific_frame_data(frame_i)
+        datagraph_frontview_data = self.data_graph.get_frame_data(frame_i)
         new_flow_arcs = [(datagraph_frontview_data.long_jump_source, frame_i)]
 
         for new_flow_arc in new_flow_arcs:
@@ -1210,7 +1210,7 @@ class WriteResults:
 
             for i, camera in enumerate(self.cameras):
 
-                arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target, camera)
+                arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
                 rendered_flow_res = arc_observation.synthetic_flow_result
 
@@ -1223,8 +1223,8 @@ class WriteResults:
                 occlusion_mask_thresh = np.greater_equal(occlusion_mask, self.tracking_config.occlusion_coef_threshold)
                 segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
 
-                template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source, camera)
-                target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target, camera)
+                template_data = self.data_graph.get_frame_data(flow_arc_source)
+                target_data = self.data_graph.get_frame_data(flow_arc_target)
                 template_observation_frontview = template_data.frame_observation
                 target_observation_frontview = target_data.frame_observation
                 template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
@@ -1279,7 +1279,7 @@ class WriteResults:
         if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
             return
 
-        datagraph_camera_data = self.data_graph.get_camera_specific_frame_data(frame_i)
+        datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
         new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
@@ -1291,8 +1291,8 @@ class WriteResults:
         opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
         opt_flow_np = opt_flow.numpy(force=True)
 
-        template_data = self.data_graph.get_camera_specific_frame_data(flow_arc_source)
-        target_data = self.data_graph.get_camera_specific_frame_data(flow_arc_target)
+        template_data = self.data_graph.get_frame_data(flow_arc_source)
+        target_data = self.data_graph.get_frame_data(flow_arc_target)
         template_image = self.convert_observation_to_numpy(template_data.frame_observation.observed_image)
         target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
 
@@ -1573,7 +1573,7 @@ class WriteResults:
     def log_poses_into_rerun(self, frame_i: int):
 
         data_graph_node = self.data_graph.get_frame_data(frame_i)
-        camera_specific_graph_node = self.data_graph.get_camera_specific_frame_data(frame_i)
+        camera_specific_graph_node = self.data_graph.get_frame_data(frame_i)
 
         short_jump_source = camera_specific_graph_node.short_jump_source
         long_jump_source = camera_specific_graph_node.long_jump_source
@@ -1988,7 +1988,7 @@ class WriteResults:
             image_segmentation = last_frame_observation.observed_segmentation
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
-        data_graph_camera = self.data_graph.get_camera_specific_frame_data(frame_i)
+        data_graph_camera = self.data_graph.get_frame_data(frame_i)
         new_flow_arcs = [(data_graph_camera.long_jump_source, frame_i)]
 
         for new_flow_arcs in sorted(new_flow_arcs):
@@ -2001,8 +2001,8 @@ class WriteResults:
 
             synthetic_flow_obs = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
 
-            source_frame_data = self.data_graph.get_camera_specific_frame_data(source_frame)
-            target_frame_data = self.data_graph.get_camera_specific_frame_data(target_frame)
+            source_frame_data = self.data_graph.get_frame_data(source_frame)
+            target_frame_data = self.data_graph.get_frame_data(target_frame)
 
             source_frame_observation = source_frame_data.frame_observation
             target_frame_observation = target_frame_data.frame_observation

@@ -31,10 +31,6 @@ class CommonFrameData:
 
     pose_estimation_time: float = None
 
-
-@dataclass
-class CameraSpecificFrameData:
-
     frame_observation: FrameObservation = None
 
     gt_pose_cam: Se3 = None
@@ -95,29 +91,20 @@ class DataGraph:
     def add_new_frame(self, frame_idx: int) -> None:
         assert not self.G.has_node(frame_idx)
 
-        self.G.add_node(frame_idx,
-                        camera_specific_frame_data={camera: CameraSpecificFrameData() for camera in self.used_cameras},
-                        frame_data=CommonFrameData())
+        self.G.add_node(frame_idx, frame_data=CommonFrameData())
 
     def add_new_arc(self, source_frame_idx: int, target_frame_idx: int) -> None:
         assert not self.G.has_edge(source_frame_idx, target_frame_idx)
 
         self.G.add_edge(source_frame_idx, target_frame_idx,
-                        edge_observations={camera: CrossFrameData() for camera in self.used_cameras})
-
-    def get_camera_specific_frame_data(self, frame_idx: int, camera: Cameras = Cameras.FRONTVIEW) \
-            -> CameraSpecificFrameData:
-        assert self.G.has_node(frame_idx)
-
-        return self.G.nodes[frame_idx]['camera_specific_frame_data'][camera]
+                        edge_observations=CrossFrameData())
 
     def get_frame_data(self, frame_idx: int) -> CommonFrameData:
         assert self.G.has_node(frame_idx)
 
         return self.G.nodes[frame_idx]['frame_data']
 
-    def get_edge_observations(self, source_frame_idx: int, target_frame_idx,
-                              camera: Cameras = Cameras.FRONTVIEW) -> CrossFrameData:
+    def get_edge_observations(self, source_frame_idx: int, target_frame_idx) -> CrossFrameData:
         assert self.G.has_edge(source_frame_idx, target_frame_idx)
 
-        return self.G.get_edge_data(source_frame_idx, target_frame_idx)['edge_observations'][camera]
+        return self.G.get_edge_data(source_frame_idx, target_frame_idx)['edge_observations']

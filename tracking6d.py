@@ -412,7 +412,7 @@ class Tracking6D:
 
         template_frame_observation = self.tracker.next(0)
         self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
-        self.data_graph.get_camera_specific_frame_data(0, Cameras.FRONTVIEW).frame_observation = (
+        self.data_graph.get_frame_data(0).frame_observation = (
             template_frame_observation.send_to_device('cpu'))
 
         initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
@@ -428,7 +428,7 @@ class Tracking6D:
             next_tracker_frame = frame_i  # Index of a frame
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
-            self.data_graph.get_camera_specific_frame_data(frame_i, Cameras.FRONTVIEW).frame_observation = (
+            self.data_graph.get_frame_data(frame_i).frame_observation = (
                 new_frame_observation.send_to_device('cpu'))
             self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
 
@@ -550,7 +550,7 @@ class Tracking6D:
             synthetic_flow_cpu = synthetic_flow.send_to_device('cpu')
 
             # Get the observed segmentation for the flow source frame
-            frame_observation = (self.data_graph.get_camera_specific_frame_data(flow_source_frame).
+            frame_observation = (self.data_graph.get_frame_data(flow_source_frame).
                                  frame_observation.send_to_device('cuda'))
             segment = frame_observation.observed_segmentation
 
@@ -565,8 +565,7 @@ class Tracking6D:
             active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
 
             # Update the edge data with synthetic flow results
-            camera = Cameras.FRONTVIEW
-            edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame, camera)
+            edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
             edge_data.synthetic_flow_result = synthetic_flow_cpu
             edge_data.observed_flow = flow_observation.send_to_device('cpu')
 
@@ -610,8 +609,8 @@ class Tracking6D:
 
         elif self.config.gt_flow_source == 'FlowNetwork':
 
-            source_frame_obs = self.data_graph.get_camera_specific_frame_data(flow_source_frame).frame_observation
-            target_frame_obs = self.data_graph.get_camera_specific_frame_data(flow_target_frame).frame_observation
+            source_frame_obs = self.data_graph.get_frame_data(flow_source_frame).frame_observation
+            target_frame_obs = self.data_graph.get_frame_data(flow_target_frame).frame_observation
 
             target_image = target_frame_obs.observed_image.float() * 255
             template_image = source_frame_obs.observed_image.float() * 255

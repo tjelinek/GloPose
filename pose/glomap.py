@@ -43,7 +43,7 @@ class GlomapWrapper:
 
     def dump_icosphere_node_for_glomap(self, icosphere_node):
         frame_idx = icosphere_node.keyframe_idx_observed
-        frame_data = self.data_graph.get_camera_specific_frame_data(frame_idx)
+        frame_data = self.data_graph.get_frame_data(frame_idx)
 
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
@@ -70,7 +70,7 @@ class GlomapWrapper:
             if edge_source not in icosphere_nodes_idx:
                 continue
 
-            source_node = self.data_graph.get_camera_specific_frame_data(edge_source)
+            source_node = self.data_graph.get_frame_data(edge_source)
             img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)

@@ -13,7 +13,7 @@ from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaterni
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.depth import DepthAnythingProvider
-from data_structures.datagraph_utils import get_relative_gt_obj_rotation, get_relative_gt_cam_rotation, get_gt_cam_pose
+from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
@@ -55,10 +55,8 @@ class EpipolarPoseEstimator:
 
     def add_roma_match(self, source_image_frame, target_image_frame):
 
-        source_image = self.data_graph.get_camera_specific_frame_data(
-            source_image_frame).frame_observation.observed_image.cuda()
-        target_image = self.data_graph.get_camera_specific_frame_data(
-            target_image_frame).frame_observation.observed_image.cuda()
+        source_image = self.data_graph.get_frame_data(source_image_frame).frame_observation.observed_image.cuda()
+        target_image = self.data_graph.get_frame_data(target_image_frame).frame_observation.observed_image.cuda()
 
         flow_edge_data = self.data_graph.get_edge_observations(source_image_frame, target_image_frame)
 
@@ -81,7 +79,7 @@ class EpipolarPoseEstimator:
         start_time = time()
         frame_i = max(keyframes)
 
-        preceding_frame_node = self.data_graph.get_camera_specific_frame_data(frame_i - 1)
+        preceding_frame_node = self.data_graph.get_frame_data(frame_i - 1)
 
         reliable_flows = set()
         if preceding_frame_node.is_source_reliable and frame_i > 1:
@@ -215,9 +213,8 @@ class EpipolarPoseEstimator:
         datagraph_long_edge.camera_scale_estimated = scale_long_jump.item()
         datagraph_long_edge.camera_scale_per_axis_gt = per_axis_scale_long_jump
 
-        datagraph_camera_node = self.data_graph.get_camera_specific_frame_data(frame_i)
-        datagraph_camera_node.long_jump_source = long_jump_source
-        datagraph_camera_node.short_jump_source = short_jump_source
+        datagraph_node.long_jump_source = long_jump_source
+        datagraph_node.short_jump_source = short_jump_source
 
         flow_arc_observation: FlowObservation = datagraph_long_edge.observed_flow
 
@@ -225,16 +222,16 @@ class EpipolarPoseEstimator:
         datagraph_long_edge.reliability_score = flow_reliability.item()
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
         if flow_reliability < self.flow_reliability_threshold:
-            datagraph_camera_node.is_source_reliable = False
+            datagraph_node.is_source_reliable = False
 
             new_node_frame_idx = frame_i
             frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
             pose: Se3 = Se3(Quaternion.from_axis_angle(frame_data.gt_rot_axis_angle[None]),
                             frame_data.gt_translation[None])
-            cam_frame_data = self.data_graph.get_camera_specific_frame_data(new_node_frame_idx)
+            cam_frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
             self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, pose, new_node_frame_idx)
 
-        datagraph_camera_node.reliable_sources |= ({long_jump_source} | reliable_flows)
+        datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
 
     def flow_reliability(self, flow_arc_observation):
         segment = flow_arc_observation.observed_flow_segmentation
@@ -247,8 +244,8 @@ class EpipolarPoseEstimator:
     def add_new_flow(self, source_frame, target_frame):
         if (source_frame, target_frame) not in self.data_graph.G.edges:
             self.data_graph.add_new_arc(source_frame, target_frame)
-            frame_node_observation = self.data_graph.get_camera_specific_frame_data(source_frame).frame_observation.cuda()
-            current_frame_observation = self.data_graph.get_camera_specific_frame_data(target_frame).frame_observation.cuda()
+            frame_node_observation = self.data_graph.get_frame_data(source_frame).frame_observation.cuda()
+            current_frame_observation = self.data_graph.get_frame_data(target_frame).frame_observation.cuda()
 
             flow_obs = self.roma_flow_provider.next_flow_observation(frame_node_observation, current_frame_observation)
             self.data_graph.get_edge_observations(source_frame, target_frame).observed_flow = flow_obs.cpu()
@@ -273,7 +270,7 @@ class EpipolarPoseEstimator:
 
         K1 = K2 = self.camera.intrinsics[0, :3, :3].to(dtype=torch.float32)
 
-        datagraph_edge_data = self.data_graph.get_edge_observations(flow_arc[0], flow_arc[1], Cameras.FRONTVIEW)
+        datagraph_edge_data = self.data_graph.get_edge_observations(flow_arc[0], flow_arc[1])
         gt_flow_observation: SyntheticFlowObservation = datagraph_edge_data.synthetic_flow_result.cuda()
 
         occlusion, segmentation = self.get_adjusted_occlusion_and_segmentation(flow_observation_long_jump)
@@ -391,9 +388,11 @@ class EpipolarPoseEstimator:
         # max(1, x) avoids division by zero
         inlier_ratio = len(inlier_src_pts) / max(1, len(inlier_src_pts) + len(outlier_src_pts))
 
-        data = self.data_graph.get_edge_observations(*flow_arc, camera=Cameras.FRONTVIEW)
+        data = self.data_graph.get_edge_observations(*flow_arc)
         data.src_pts_yx = src_pts_yx.cpu()
         data.dst_pts_yx = dst_pts_yx.cpu()
+        data.src_pts_xy_roma = src_pts_yx_all.cpu()
+        data.dst_pts_xy_roma = dst_pts_yx_all.cpu()
         data.dst_pts_yx_gt = dst_pts_yx_gt_flow.cpu()
         data.adjusted_segmentation = observed_segmentation_binary_mask.cpu()
         data.observed_visible_fg_points_mask = observed_visible_fg_points_mask.cpu()
@@ -407,6 +406,21 @@ class EpipolarPoseEstimator:
         data.dst_pts_yx_chained = dst_pts_yx_chained_flow.cpu() if dst_pts_yx_chained_flow is not None else None
 
         return Se3_cam, Se3_cam_RANSAC
+
+    def get_all_src_and_dst_pts(self, flow_observation: FlowObservation):
+
+        assert flow_observation.coordinate_system == 'unit'
+
+        flow = flow_observation.cast_unit_coords_to_image_coords().observed_flow
+        src_pts_yx_all, observed_visible_fg_points_mask = (
+            get_not_occluded_foreground_points(flow_observation.observed_flow_occlusion,
+                                               flow_observation.observed_flow_segmentation,
+                                               self.occlusion_threshold,
+                                               self.segmentation_threshold))
+
+        dst_pts_yx_all = source_to_target_coords_world_coord_system(src_pts_yx_all, flow)
+
+        return src_pts_yx_all, dst_pts_yx_all
 
     def get_adjusted_occlusion_and_segmentation(self, flow_observation_current_frame: BaseFlowObservation):
 
