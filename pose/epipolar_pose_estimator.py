@@ -53,7 +53,7 @@ class EpipolarPoseEstimator:
 
         self.i_can_recover_the_scale_myself = False
 
-    def get_roma_match(self, source_image_frame, target_image_frame):
+    def add_roma_match(self, source_image_frame, target_image_frame):
 
         source_image = self.data_graph.get_camera_specific_frame_data(
             source_image_frame).frame_observation.observed_image.cuda()
@@ -66,8 +66,9 @@ class EpipolarPoseEstimator:
         target_image_roma = torchvision.transforms.functional.to_pil_image(target_image.squeeze())
 
         warp, certainty = self.roma_matcher.match(source_image_roma, target_image_roma, device='cuda')
+        matches, certainty = self.roma_matcher.sample(warp, certainty)
 
-        src_pts_xy, dst_pts_xy = self.roma_matcher.to_pixel_coordinates(warp, self.image_height, self.image_width,
+        src_pts_xy, dst_pts_xy = self.roma_matcher.to_pixel_coordinates(matches, self.image_height, self.image_width,
                                                                         self.image_height, self.image_width)
 
         flow_edge_data.src_pts_xy_roma = src_pts_xy.cpu()
@@ -94,10 +95,12 @@ class EpipolarPoseEstimator:
                 source_node_idx = node.keyframe_idx_observed
 
                 self.add_new_flow(source_node_idx, frame_i)
+                self.add_roma_match(source_node_idx, frame_i)
                 flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
                 flow_reliability = self.flow_reliability(flow_edge_data.observed_flow)
+                flow_edge_data.reliability_score = flow_reliability.item()
 
-                if flow_reliability > best_source_reliability and flow_reliability >= self.flow_reliability_threshold:
+                if flow_reliability > best_source_reliability:
                     best_source = source_node_idx
                     best_source_reliability = flow_reliability
                     reliable_flows |= {source_node_idx}
@@ -111,7 +114,7 @@ class EpipolarPoseEstimator:
 
         self.add_new_flow(source, frame_i)
         if self.data_graph.get_edge_observations(source, frame_i).src_pts_xy_roma is None:
-            self.get_roma_match(source, frame_i)
+            self.add_roma_match(source, frame_i)
 
         flow_arc_short_jump = (frame_i - 1, frame_i)
 
@@ -219,11 +222,12 @@ class EpipolarPoseEstimator:
         flow_arc_observation: FlowObservation = datagraph_long_edge.observed_flow
 
         flow_reliability = self.flow_reliability(flow_arc_observation)
+        datagraph_long_edge.reliability_score = flow_reliability.item()
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
         if flow_reliability < self.flow_reliability_threshold:
             datagraph_camera_node.is_source_reliable = False
 
-            new_node_frame_idx = frame_i - 1
+            new_node_frame_idx = frame_i
             frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
             pose: Se3 = Se3(Quaternion.from_axis_angle(frame_data.gt_rot_axis_angle[None]),
                             frame_data.gt_translation[None])
