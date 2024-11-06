@@ -54,6 +54,8 @@ class CrossFrameData:
 
     src_pts_yx: torch.Tensor = None
     dst_pts_yx: torch.Tensor = None
+    src_pts_xy_roma: torch.Tensor = None
+    dst_pts_xy_roma: torch.Tensor = None
     dst_pts_yx_gt: torch.Tensor = None
     dst_pts_yx_chained: torch.Tensor = None
     remaining_pts_after_filtering: float = None
