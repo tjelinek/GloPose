@@ -54,18 +54,9 @@ class GlomapWrapper:
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
 
         seg_target_nonzero = img_seg[..., 0].nonzero()
-        seg_target_nonzero_unit = seg_target_nonzero  #pixel_coords_to_unit_coords(self.image_width, self.image_height, seg_target_nonzero)
+        seg_target_nonzero_unit = seg_target_nonzero
         seg_target_nonzero_xy_np = seg_target_nonzero_unit[..., [1, 0]].numpy(force=True).astype(np.float32)
         assert seg_target_nonzero_xy_np.dtype == np.float32
-
-        # general_fame_data = self.data_graph.get_frame_data(frame_idx)
-        # gt_t_obj = general_fame_data.gt_translation[None]
-        # gt_r_obj = general_fame_data.gt_rot_axis_angle[None]
-        # gt_Se3_obj = Se3(Quaternion.from_axis_angle(gt_r_obj), gt_t_obj)
-        # Se3_world_to_cam = Se3.from_matrix(self.pinhole_params.extrinsics)
-        # gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
-        # gt_q_cam_np = gt_Se3_cam.quaternion.q.squeeze().numpy(force=True).copy()
-        # gt_t_cam_np = gt_Se3_cam.t.squeeze().numpy(force=True).copy()
 
         self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx + 1)
         self.colmap_db.add_keypoints(frame_idx + 1, seg_target_nonzero_xy_np.copy())
