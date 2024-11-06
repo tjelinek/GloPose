@@ -75,6 +75,9 @@ class GlomapWrapper:
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
+            if edge_data.reliability_score < 0.25:
+                continue
+
             seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].cuda()
             seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].cuda()
 
