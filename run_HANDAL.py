@@ -45,12 +45,12 @@ def main():
         config.gt_mesh_path = gt_mesh_path
         config.gt_track_path = None
         config.sequence = sequence
-        config.image_downsample = 0.25
+        config.image_downsample = 0.5
 
         # config.camera_position = (-5.0, -5.0, -5.0)
         # config.camera_up = (0, 0, 1)
 
-        skip_indices = 1
+        skip_indices = 4
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence

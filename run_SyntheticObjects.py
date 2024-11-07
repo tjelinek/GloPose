@@ -5,7 +5,9 @@ import sys
 import time
 from pathlib import Path
 
-from dataset_generators.track_augmentation import modify_rotations
+import torch
+
+from dataset_generators import scenarios
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from auxiliary_scripts.data_utils import load_gt_data
@@ -76,6 +78,9 @@ def main():
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
+        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
+        gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
+
         config.input_frames = gt_rotations.shape[0]
         run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 

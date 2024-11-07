@@ -29,7 +29,7 @@ def main():
 
         ]
 
-    skip_indices = 5
+    skip_indices = 15
 
     for sequence in sequences:
         config = load_config(args.config)
