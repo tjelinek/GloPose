@@ -12,13 +12,14 @@ from copy import deepcopy
 from collections import defaultdict
 import numpy as np
 
+
 def load_torch_image(fname, device=torch.device('cuda')):
-    img = K.image_to_tensor(cv2.imread(fname), False).float() /255.
+    img = K.image_to_tensor(cv2.imread(fname), False).float() / 255.
     img = K.color.bgr_to_rgb(img.to(device))
     return img
 
-device = torch.device('cuda')
 
+device = torch.device('cuda')
 
 #%% md
 # ## Download example data
@@ -33,29 +34,29 @@ plt.imshow(cv2.cvtColor(cv2.imread(img_fnames[0]), cv2.COLOR_BGR2RGB))
 import torchvision
 from pathlib import Path
 from romatch import roma_outdoor, roma_indoor
+
+
 def get_unique_idxs(A, dim=1):
     # https://stackoverflow.com/questions/72001505/how-to-get-unique-elements-and-their-firstly-appeared-indices-of-a-pytorch-tenso
     unique, idx, counts = torch.unique(A, dim=dim, sorted=True, return_inverse=True, return_counts=True)
     _, ind_sorted, = torch.sort(idx, stable=True)
     cum_sum = counts.cumsum(0)
-    cum_sum = torch.cat((torch.tensor([0],device=cum_sum.device), cum_sum[:-1]))
+    cum_sum = torch.cat((torch.tensor([0], device=cum_sum.device), cum_sum[:-1]))
     first_indicies = ind_sorted[cum_sum]
     return first_indicies
 
 
 def match_features(img_fnames,
                    index_pairs,
-                   feature_dir = '.featureout_roma',
+                   feature_dir='.featureout_roma',
                    device=torch.device('cuda'),
-                   min_matches=15, resize_to_ = (640, 480)):
-
-
+                   min_matches=15, resize_to_=(640, 480)):
     roma_model = roma_outdoor(device=device)
-    
+
     Path(feature_dir).mkdir(exist_ok=True)
     with h5py.File(f'{feature_dir}/matches_roma.h5', mode='w') as f_match:
         for i, pair_idx in enumerate(index_pairs):
-            print(f'Processing pair {i+1}/{len(index_pairs)}')
+            print(f'Processing pair {i + 1}/{len(index_pairs)}')
             idx1, idx2 = pair_idx
             fname1, fname2 = img_fnames[idx1], img_fnames[idx2]
             key1, key2 = fname1.split('/')[-1], fname2.split('/')[-1]
@@ -79,90 +80,82 @@ def match_features(img_fnames,
             timg_resized2 = K.geometry.resize(timg2, resize_to2, antialias=True)
             h2, w2 = timg_resized2.shape[2:]
             with torch.inference_mode():
-                
-                # img_A_path = 'A.png'
-                # img_B_path = 'B.png' 
-                # 
-                # imageio.v3.imwrite(img_A_path, (timg_resized1.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
-                # imageio.v3.imwrite(img_B_path, (timg_resized2.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
+
                 img_A = torchvision.transforms.functional.to_pil_image(timg_resized1.squeeze())
                 img_B = torchvision.transforms.functional.to_pil_image(timg_resized2.squeeze())
-                
+
                 warp, certainty = roma_model.match(img_A, img_B, device=device)
                 matches, certainty = roma_model.sample(warp, certainty)
-                
+
             kptsA, kptsB = roma_model.to_pixel_coordinates(matches, h1, w1, h2, w2)
-            
+
             mkpts0 = kptsA.numpy(force=True)
             mkpts1 = kptsB.numpy(force=True)
-            
-            # mkpts0 = correspondences['keypoints0'].cuda().numpy()
-            # mkpts1 = correspondences['keypoints1'].cuda().numpy()
 
-            mkpts0[:,0] *= float(W1) / float(w1)
-            mkpts0[:,1] *= float(H1) / float(h1)
+            mkpts0[:, 0] *= float(W1) / float(w1)
+            mkpts0[:, 1] *= float(H1) / float(h1)
 
-            mkpts1[:,0] *= float(W2) / float(w2)
-            mkpts1[:,1] *= float(H2) / float(h2)
-            
+            mkpts1[:, 0] *= float(W2) / float(w2)
+            mkpts1[:, 1] *= float(H2) / float(h2)
+
             # Custom condition to filter out matches based on pixel values
             valid_matches = []
             for pt0, pt1 in zip(mkpts0, mkpts1):
                 x1, y1 = int(pt0[0]), int(pt0[1])
                 x2, y2 = int(pt1[0]), int(pt1[1])
-            
+
                 # Retrieve pixel values from original images (assuming grayscale, adjust if RGB)
                 pixel_value_img1 = timg1[0, 0, y1, x1].item()  # Pixel in image1 at (x1, y1)
                 pixel_value_img2 = timg2[0, 0, y2, x2].item()  # Pixel in image2 at (x2, y2)
-            
+
                 # Condition to check pixel values (modify the threshold as needed)
                 if (pixel_value_img1 > 1e-4) and (pixel_value_img2 > 1e-4):
                     valid_matches.append((pt0, pt1))
-            
+
             # Unpack valid matches into separate mkpts0 and mkpts1 arrays
             mkpts0 = np.array([match[0] for match in valid_matches])
             mkpts1 = np.array([match[1] for match in valid_matches])
 
             n_matches = len(mkpts1)
-            group  = f_match.require_group(key1)
+            group = f_match.require_group(key1)
             if n_matches >= min_matches:
-                 group.create_dataset(key2, data=np.concatenate([mkpts0, mkpts1], axis=1))
+                group.create_dataset(key2, data=np.concatenate([mkpts0, mkpts1], axis=1))
     # Let's find unique roma pixels and group them together
     kpts = defaultdict(list)
     match_indexes = defaultdict(dict)
-    total_kpts=defaultdict(int)
+    total_kpts = defaultdict(int)
     with h5py.File(f'{feature_dir}/matches_roma.h5', mode='r') as f_match:
         for k1 in f_match.keys():
-            group  = f_match[k1]
-            
+            group = f_match[k1]
+
             for k2 in group.keys():
                 matches = group[k2][...]
                 total_kpts[k1]
                 kpts[k1].append(matches[:, :2])
                 kpts[k2].append(matches[:, 2:])
                 current_match = torch.arange(len(matches)).reshape(-1, 1).repeat(1, 2)
-                current_match[:, 0]+=total_kpts[k1]
-                current_match[:, 1]+=total_kpts[k2]
-                total_kpts[k1]+=len(matches)
-                total_kpts[k2]+=len(matches)
-                match_indexes[k1][k2]=current_match
+                current_match[:, 0] += total_kpts[k1]
+                current_match[:, 1] += total_kpts[k2]
+                total_kpts[k1] += len(matches)
+                total_kpts[k2] += len(matches)
+                match_indexes[k1][k2] = current_match
     for k in kpts.keys():
         kpts[k] = np.round(np.concatenate(kpts[k], axis=0))
     unique_kpts = {}
     unique_match_idxs = {}
     out_match = defaultdict(dict)
     for k in kpts.keys():
-        uniq_kps, uniq_reverse_idxs = torch.unique(torch.from_numpy(kpts[k]),dim=0, return_inverse=True)
+        uniq_kps, uniq_reverse_idxs = torch.unique(torch.from_numpy(kpts[k]), dim=0, return_inverse=True)
         unique_match_idxs[k] = uniq_reverse_idxs
         unique_kpts[k] = uniq_kps.numpy()
     for k1, group in match_indexes.items():
         for k2, m in group.items():
             m2 = deepcopy(m)
-            m2[:,0] = unique_match_idxs[k1][m2[:,0]]
-            m2[:,1] = unique_match_idxs[k2][m2[:,1]]
-            mkpts = np.concatenate([unique_kpts[k1][ m2[:,0]],
-                                    unique_kpts[k2][  m2[:,1]],
-                                   ],
+            m2[:, 0] = unique_match_idxs[k1][m2[:, 0]]
+            m2[:, 1] = unique_match_idxs[k2][m2[:, 1]]
+            mkpts = np.concatenate([unique_kpts[k1][m2[:, 0]],
+                                    unique_kpts[k2][m2[:, 1]],
+                                    ],
                                    axis=1)
             unique_idxs_current = get_unique_idxs(torch.from_numpy(mkpts), dim=0)
             m2_semiclean = m2[unique_idxs_current]
@@ -174,15 +167,15 @@ def match_features(img_fnames,
     with h5py.File(f'{feature_dir}/keypoints.h5', mode='w') as f_kp:
         for k, kpts1 in unique_kpts.items():
             f_kp[k] = kpts1
-    
+
     with h5py.File(f'{feature_dir}/matches.h5', mode='w') as f_match:
         for k1, gr in out_match.items():
-            group  = f_match.require_group(k1)
+            group = f_match.require_group(k1)
             for k2, match in gr.items():
                 group[k2] = match
     return
 
-                    
+
 #%%
 
 #%%
@@ -191,15 +184,15 @@ def match_features(img_fnames,
 # matching all to all
 index_pairs = []
 for i in range(len(img_fnames)):
-    for j in range(i+1, len(img_fnames)):
+    for j in range(i + 1, len(img_fnames)):
         if i == j - 1 or True:
-            index_pairs.append((i,j))
+            index_pairs.append((i, j))
 
 #%%
 feature_dir = '.featureout_roma'
-dev=torch.device('mps')
-dev=torch.device('cuda')
-match_features(img_fnames, index_pairs, feature_dir = feature_dir, device=dev)
+dev = torch.device('mps')
+dev = torch.device('cuda')
+match_features(img_fnames, index_pairs, feature_dir=feature_dir, device=dev)
 #%% md
 # 
 #%%
@@ -209,9 +202,10 @@ match_features(img_fnames, index_pairs, feature_dir = feature_dir, device=dev)
 #%%
 from h5_to_db import add_keypoints, add_matches, COLMAPDatabase
 
+
 def import_into_colmap(img_dir,
-                       feature_dir ='.featureout',
-                       database_path = 'colmap.db',
+                       feature_dir='.featureout',
+                       database_path='colmap.db',
                        img_ext='.jpg'):
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
@@ -226,14 +220,17 @@ def import_into_colmap(img_dir,
     db.commit()
     return
 
+
 database_path = Path('colmap_roma.db')
 database_path.unlink(missing_ok=True)
-import_into_colmap(dirname,feature_dir=feature_dir, database_path=database_path)
-#%%
+import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path)
+
 
 #%%
 
-def run_reconstruction(image_dir, output_path = 'colmap_rec', database_path = 'colmap.db'):
+#%%
+
+def run_reconstruction(image_dir, output_path='colmap_rec', database_path='colmap.db'):
     pycolmap.match_exhaustive(database_path)
 
     Path(output_path).mkdir(exist_ok=True)
@@ -252,6 +249,8 @@ def run_reconstruction(image_dir, output_path = 'colmap_rec', database_path = 'c
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
     maps[0].write(output_path)
+
+
 #%%
 output_path = './output'
 run_reconstruction(dirname, output_path, database_path)
