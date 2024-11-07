@@ -1,4 +1,5 @@
 #%%
+import argparse
 import subprocess
 
 import cv2
@@ -7,10 +8,10 @@ import pycolmap
 import os
 import h5py
 import kornia as K
-import matplotlib.pyplot as plt
 from copy import deepcopy
 from collections import defaultdict
 import numpy as np
+from pathlib import Path
 
 
 def load_torch_image(fname, device=torch.device('cuda')):
@@ -24,15 +25,20 @@ device = torch.device('cuda')
 #%% md
 # ## Download example data
 #%%
-dirname = 'data/Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total'
-img_fnames = [os.path.join(dirname, x) for x in os.listdir(dirname) if '.png' in x][:-11]
-plt.imshow(cv2.cvtColor(cv2.imread(img_fnames[0]), cv2.COLOR_BGR2RGB))
+
+parser = argparse.ArgumentParser(description="Run feature matching and reconstruction")
+parser.add_argument("--dirname", type=str, required=False, help="Directory name for the image folder",
+                    default='data/Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total')
+args = parser.parse_args()
+dirname = Path(args.dirname)
+
+img_fnames = [os.path.join(dirname, x) for x in os.listdir(dirname) if '.png' in x]
+
 #%% md
 # ## roma Matching
 #%%
 
 import torchvision
-from pathlib import Path
 from romatch import roma_outdoor, roma_indoor
 
 
@@ -51,10 +57,11 @@ def match_features(img_fnames,
                    feature_dir='.featureout_roma',
                    device=torch.device('cuda'),
                    min_matches=15, resize_to_=(640, 480)):
-    roma_model = roma_outdoor(device=device)
+    roma_model = roma_indoor(device=device)
 
-    Path(feature_dir).mkdir(exist_ok=True)
-    with h5py.File(f'{feature_dir}/matches_roma.h5', mode='w') as f_match:
+    feature_path = dirname / feature_dir
+    Path(feature_path).mkdir(exist_ok=True)
+    with h5py.File(f'{feature_path}/matches_roma.h5', mode='w') as f_match:
         for i, pair_idx in enumerate(index_pairs):
             print(f'Processing pair {i + 1}/{len(index_pairs)}')
             idx1, idx2 = pair_idx
@@ -83,9 +90,16 @@ def match_features(img_fnames,
 
                 img_A = torchvision.transforms.functional.to_pil_image(timg_resized1.squeeze())
                 img_B = torchvision.transforms.functional.to_pil_image(timg_resized2.squeeze())
-
                 warp, certainty = roma_model.match(img_A, img_B, device=device)
                 matches, certainty = roma_model.sample(warp, certainty)
+
+                # img_A_path = 'A.png'
+                # img_B_path = 'B.png'
+                #
+                # imageio.v3.imwrite(img_A_path, (timg_resized1.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
+                # imageio.v3.imwrite(img_B_path, (timg_resized2.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
+
+                # warp, certainty = roma_model.match(img_A_path, img_B_path, device=device)
 
             kptsA, kptsB = roma_model.to_pixel_coordinates(matches, h1, w1, h2, w2)
 
@@ -105,11 +119,11 @@ def match_features(img_fnames,
                 x2, y2 = int(pt1[0]), int(pt1[1])
 
                 # Retrieve pixel values from original images (assuming grayscale, adjust if RGB)
-                pixel_value_img1 = timg1[0, 0, y1, x1].item()  # Pixel in image1 at (x1, y1)
-                pixel_value_img2 = timg2[0, 0, y2, x2].item()  # Pixel in image2 at (x2, y2)
+                pixel_value_img1 = timg1[0, :, y1, x1] # Pixel in image1 at (x1, y1)
+                pixel_value_img2 = timg2[0, :, y2, x2]  # Pixel in image2 at (x2, y2)
 
                 # Condition to check pixel values (modify the threshold as needed)
-                if (pixel_value_img1 > 1e-4) and (pixel_value_img2 > 1e-4):
+                if (pixel_value_img1 > 1e-3).all() and (pixel_value_img2 > 1e-3).all():
                     valid_matches.append((pt0, pt1))
 
             # Unpack valid matches into separate mkpts0 and mkpts1 arrays
@@ -124,7 +138,7 @@ def match_features(img_fnames,
     kpts = defaultdict(list)
     match_indexes = defaultdict(dict)
     total_kpts = defaultdict(int)
-    with h5py.File(f'{feature_dir}/matches_roma.h5', mode='r') as f_match:
+    with h5py.File(f'{feature_path}/matches_roma.h5', mode='r') as f_match:
         for k1 in f_match.keys():
             group = f_match[k1]
 
@@ -164,11 +178,11 @@ def match_features(img_fnames,
             unique_idxs_current2 = get_unique_idxs(m2_semiclean[:, 1], dim=0)
             m2_semiclean2 = m2_semiclean[unique_idxs_current2]
             out_match[k1][k2] = m2_semiclean2.numpy()
-    with h5py.File(f'{feature_dir}/keypoints.h5', mode='w') as f_kp:
+    with h5py.File(f'{feature_path}/keypoints.h5', mode='w') as f_kp:
         for k, kpts1 in unique_kpts.items():
             f_kp[k] = kpts1
 
-    with h5py.File(f'{feature_dir}/matches.h5', mode='w') as f_match:
+    with h5py.File(f'{feature_path}/matches.h5', mode='w') as f_match:
         for k1, gr in out_match.items():
             group = f_match.require_group(k1)
             for k2, match in gr.items():
@@ -221,7 +235,7 @@ def import_into_colmap(img_dir,
     return
 
 
-database_path = Path('colmap_roma.db')
+database_path = dirname / Path('colmap_roma.db')
 database_path.unlink(missing_ok=True)
 import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path)
 
@@ -230,39 +244,41 @@ import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path
 
 #%%
 
-def run_reconstruction(image_dir, output_path='colmap_rec', database_path='colmap.db'):
+def run_reconstruction(image_dir, output_path, database_path):
     pycolmap.match_exhaustive(database_path)
 
     Path(output_path).mkdir(exist_ok=True)
-    #
-    # colmap_command = [
-    #     "colmap",
-    #     "mapper",
-    #     "--database_path", str(database_path),
-    #     "--output_path", output_path,
-    #     "--image_path", str(image_dir),
-    #     "--Mapper.tri_ignore_two_view_tracks", str(0),
-    # ]
-    #
-    # subprocess.run(colmap_command, check=True, capture_output=True, text=True)
-    maps = pycolmap.incremental_mapping(database_path, dirname, output_path)
-    if not os.path.isdir(output_path):
-        os.makedirs(output_path)
-    maps[0].write(output_path)
+
+    colmap_command = [
+        "colmap",
+        "mapper",
+        "--database_path", str(database_path),
+        "--output_path", str(output_path),
+        "--image_path", str(image_dir),
+        "--Mapper.tri_ignore_two_view_tracks", str(False),
+        # "--Mapper.init_min_num_inliers", str(100),
+    ]
+
+    subprocess.run(colmap_command, check=True, capture_output=True, text=True)
+
+    # maps = pycolmap.incremental_mapping(database_path, dirname, output_path)
+    # if not os.path.isdir(output_path):
+    #     os.makedirs(output_path)
+    # maps[0].write(output_path)
 
 
 #%%
-output_path = './output'
+output_path = dirname / 'output'
 run_reconstruction(dirname, output_path, database_path)
 #%%
 
 glomap_command = [
     "glomap",
     "mapper",
-    "--database_path", './colmap_roma.db',
-    "--output_path", './output',
-    "--image_path", f'./{dirname}',
-    # "--TrackEstablishment.min_num_view_per_track", str(2),
+    "--database_path", str(database_path),
+    "--output_path", str(output_path),
+    "--image_path", str(dirname),
+    "--TrackEstablishment.min_num_view_per_track", str(2),
 ]
 
 subprocess.run(glomap_command, check=True, capture_output=True, text=True)
