@@ -31,10 +31,10 @@ class Encoder(nn.Module):
 
         # Offsets initialization
         quaternion_offsets = Quaternion.identity(config.input_frames)
-        self.register_buffer('quaternion_offsets', quaternion_offsets.q)
+        self.register_buffer('quaternion_offsets', qinit)
 
         translation_offsets = torch.zeros(config.input_frames, 3)
-        self.register_buffer('translation_offsets', translation_offsets)
+        self.register_buffer('translation_offsets', translation_init)
 
         self.translation = nn.Parameter(torch.zeros_like(translation_offsets))
         quat = Quaternion.identity(config.input_frames)
@@ -111,35 +111,30 @@ class Encoder(nn.Module):
         self.translation = torch.nn.Parameter(translations)
 
     def get_total_rotation_at_frame_vectorized(self):
-        offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.initial_quaternion),
-                                                        normalize_quaternion(self.quaternion_offsets))
+        offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.quaternion_offsets),
+                                                        normalize_quaternion(self.quaternion))
 
-        quaternions = quaternion_multiply(offset_initial_quaternion,
-                                          normalize_quaternion(self.quaternion))
-        total_rotation_quaternion = normalize_quaternion(quaternions)
+        total_rotation_quaternion = normalize_quaternion(offset_initial_quaternion)
 
         return total_rotation_quaternion
 
     def get_se3_at_frame_vectorized(self) -> Se3:
 
-        so3_initial = So3(Quaternion(self.initial_quaternion))
         so3_offset = So3(Quaternion(self.quaternion_offsets))
         so3_optimized = So3(Quaternion(normalize_quaternion(self.quaternion)))
 
-        total_rotation = so3_initial * so3_offset * so3_optimized
+        total_rotation = so3_offset * so3_optimized
 
-        translation_at_frame_vectorized = self.initial_translation + self.translation_offsets + self.translation
+        translation_at_frame_vectorized = self.translation_offsets + self.translation
 
         total_se3 = Se3(total_rotation, translation_at_frame_vectorized)
 
         return total_se3
 
     def get_total_translation_at_frame_vectorized(self):
-        return self.initial_translation + self.translation_offsets + self.translation
+        return self.translation_offsets + self.translation
 
     def compute_next_offset(self, stepi):
-        self.initial_translation[stepi] = self.initial_translation[stepi - 1]
-        self.initial_quaternion[stepi] = self.initial_quaternion[stepi - 1]
 
         self.translation_offsets[stepi] = self.translation_offsets[stepi - 1] + self.translation[stepi - 1].detach()
 
