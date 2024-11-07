@@ -32,7 +32,6 @@ class EpipolarPoseEstimator:
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, rendering: RenderingKaolin, gt_encoder, encoder,
                  pose_icosphere, camera: PinholeCamera, roma_flow_provider):
 
-        self.flow_reliability_threshold = 0.5
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.rendering: RenderingKaolin = rendering
@@ -221,7 +220,7 @@ class EpipolarPoseEstimator:
         flow_reliability = self.flow_reliability(flow_arc_observation)
         datagraph_long_edge.reliability_score = flow_reliability.item()
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
-        if flow_reliability < self.flow_reliability_threshold:
+        if flow_reliability < self.config.flow_reliability_threshold:
             datagraph_node.is_source_reliable = False
 
             new_node_frame_idx = frame_i
