@@ -283,5 +283,19 @@ glomap_command = [
 
 subprocess.run(glomap_command, check=True, capture_output=True, text=True)
 
+# process = subprocess.Popen(
+#     glomap_command,
+#     stdout=subprocess.PIPE,
+#     stderr=subprocess.PIPE,
+#     text=True
+# )
+
+# for line in process.stdout:
+#     print(line, end='')  # Print each line as it appears
+#
+# process.stdout.close()
+# process.wait()
+
+
 #%% md
 # ## Visualize with colmap GUI (yes, it is cheating)
