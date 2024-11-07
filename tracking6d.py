@@ -384,14 +384,6 @@ class Tracking6D:
             raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
 
         # For long_flow_model
-        if self.config.long_flow_model in long_flow_models:
-            self.long_flow_provider = long_flow_models[self.config.long_flow_model](self.config.MFT_backbone_cfg,
-                                                                                    config=self.config,
-                                                                                    faces=self.faces,
-                                                                                    gt_encoder=self.gt_encoder
-                                                                                    )
-        else:
-            raise ValueError(f"Unsupported long flow model: {self.config.long_flow_model}")
 
         self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
 
