@@ -39,7 +39,7 @@ img_fnames = [os.path.join(dirname, x) for x in os.listdir(dirname) if '.png' in
 #%%
 
 import torchvision
-from romatch import roma_outdoor, roma_indoor
+from romatch import roma_outdoor
 
 
 def get_unique_idxs(A, dim=1):
@@ -57,7 +57,7 @@ def match_features(img_fnames,
                    feature_dir='.featureout_roma',
                    device=torch.device('cuda'),
                    min_matches=15, resize_to_=(640, 480)):
-    roma_model = roma_indoor(device=device)
+    roma_model = roma_outdoor(device=device)
 
     feature_path = dirname / feature_dir
     Path(feature_path).mkdir(exist_ok=True)
