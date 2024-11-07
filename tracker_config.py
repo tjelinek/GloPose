@@ -107,7 +107,7 @@ class TrackerConfig:
 
     # Input Data
     generate_synthetic_observations_if_possible: bool = True
-    segmentation_tracker: str = 'SAM2'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
+    segmentation_tracker: str = 'precomputed'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     short_flow_model: str = 'MFT'  # 'RAFT' 'GMA'
@@ -133,7 +133,7 @@ class TrackerConfig:
     run_main_optimization_loop: bool = False
 
     # Optical flow settings
-    add_flow_arcs_strategy: str = None  # One of 'all-previous', 'single-previous' and 'absolute'
+    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
     # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 3
@@ -152,7 +152,7 @@ class TrackerConfig:
 
     ransac_use_gt_occlusions_and_segmentation: bool = False
     ransac_dilate_occlusion: bool = False
-    ransac_erode_segmentation: bool = True
+    ransac_erode_segmentation: bool = False
 
     ransac_use_dust3r: bool = False
 
