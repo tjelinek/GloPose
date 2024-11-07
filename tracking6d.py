@@ -488,6 +488,7 @@ class Tracking6D:
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
 
+            self.active_keyframes.remove_edges([(0, frame_i), (frame_i - 1, frame_i)])
             if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
 
                 self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
@@ -554,6 +555,8 @@ class Tracking6D:
                                                flow_target_frames=[flow_target_frame])
 
             # Add new flow to active keyframes
+            if flow_source_frame not in self.active_keyframes.G.nodes:
+                self.active_keyframes.add_new_keyframe_observation(frame_observation, flow_source_frame)
             active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
 
             # Update the edge data with synthetic flow results
