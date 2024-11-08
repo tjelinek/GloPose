@@ -70,34 +70,24 @@ def match_features(img_fnames,
             # Load img1
             timg1 = load_torch_image(fname1, device=device)
             H1, W1 = timg1.shape[2:]
-            if H1 < W1:
-                resize_to = resize_to_[1], resize_to_[0]
-            else:
-                resize_to = resize_to_
-            timg_resized1 = K.geometry.resize(timg1, resize_to, antialias=True)
-            h1, w1 = timg_resized1.shape[2:]
+            h1, w1 = timg1.shape[2:]
 
             # Load img2
             timg2 = load_torch_image(fname2, device=device)
             H2, W2 = timg2.shape[2:]
-            if H2 < W2:
-                resize_to2 = resize_to[1], resize_to[0]
-            else:
-                resize_to2 = resize_to_
-            timg_resized2 = K.geometry.resize(timg2, resize_to2, antialias=True)
-            h2, w2 = timg_resized2.shape[2:]
+            h2, w2 = timg2.shape[2:]
             with torch.inference_mode():
 
-                img_A = torchvision.transforms.functional.to_pil_image(timg_resized1.squeeze())
-                img_B = torchvision.transforms.functional.to_pil_image(timg_resized2.squeeze())
+                img_A = torchvision.transforms.functional.to_pil_image(timg1.squeeze())
+                img_B = torchvision.transforms.functional.to_pil_image(timg2.squeeze())
                 warp, certainty = roma_model.match(img_A, img_B, device=device)
                 matches, certainty = roma_model.sample(warp, certainty)
 
                 # img_A_path = 'A.png'
                 # img_B_path = 'B.png'
                 #
-                # imageio.v3.imwrite(img_A_path, (timg_resized1.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
-                # imageio.v3.imwrite(img_B_path, (timg_resized2.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
+                # imageio.v3.imwrite(img_A_path, (timg1.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
+                # imageio.v3.imwrite(img_B_path, (timg2.squeeze().permute(1, 2, 0) * 255).to(torch.uint8).numpy(force=True))
 
                 # warp, certainty = roma_model.match(img_A_path, img_B_path, device=device)
 
