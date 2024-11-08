@@ -183,4 +183,4 @@ class TrackerConfig:
     icosphere_use_gt_long_jumps: bool = False
     icosphere_trust_region_degrees = 20
 
-    flow_reliability_threshold: float = 0.75
+    flow_reliability_threshold: float = 0.5
