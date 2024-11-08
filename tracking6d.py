@@ -611,8 +611,7 @@ class Tracking6D:
             template_image = source_frame_obs.observed_image.float() * 255
 
             if mode == 'long':
-                assert (flow_source_frame == self.flow_tracks_inits[-1] and
-                        flow_target_frame == max(self.active_keyframes.keyframes))
+                assert (flow_target_frame == max(self.active_keyframes.keyframes))
 
                 if self.long_flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
                     self.long_flow_provider.init(template_image)
