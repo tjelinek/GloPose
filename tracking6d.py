@@ -576,12 +576,18 @@ class Tracking6D:
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
             process_flow_arc(flow_source_frame, flow_target_frame, mode='short')
 
-        if self.config.long_flow_model is not None:
-            long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
-            if long_flow_arc not in short_flow_arcs:
-                flow_source_frame, flow_target_frame = long_flow_arc
-                self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-                process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
+        # if self.config.long_flow_model is not None:
+        #     long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
+        #     if long_flow_arc not in short_flow_arcs:
+        #         flow_source_frame, flow_target_frame = long_flow_arc
+        #         self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
+        #         process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
+            # unique_flow_tracks_inits = sorted(list(set(self.flow_tracks_inits)))
+            # if len(unique_flow_tracks_inits) > 1:
+            #     preprev_init = unique_flow_tracks_inits[-2]
+            #     if (preprev_init, frame_i) not in self.data_graph.G.edges:
+            #         self.data_graph.add_new_arc(preprev_init, frame_i)
+            #         process_flow_arc(preprev_init, frame_i, mode='long')
 
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
 
