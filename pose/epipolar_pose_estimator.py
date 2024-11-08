@@ -290,6 +290,9 @@ class EpipolarPoseEstimator:
         src_pts_yx, observed_visible_fg_points_mask = (
             get_not_occluded_foreground_points(occlusion, segmentation, self.occlusion_threshold,
                                                self.segmentation_threshold))
+
+        src_pts_yx_all, dst_pts_yx_all = self.get_all_src_and_dst_pts(flow_observation_long_jump)
+
         _, gt_visible_fg_points_mask = (
             get_not_occluded_foreground_points(gt_occlusion, gt_segmentation, self.occlusion_threshold,
                                                self.segmentation_threshold))
