@@ -54,14 +54,13 @@ def get_unique_idxs(A, dim=1):
 
 def match_features(img_fnames,
                    index_pairs,
-                   feature_dir='.featureout_roma',
+                   feature_dir,
                    device=torch.device('cuda'),
                    min_matches=15, resize_to_=(640, 480)):
     roma_model = roma_outdoor(device=device)
 
-    feature_path = dirname / feature_dir
-    Path(feature_path).mkdir(exist_ok=True)
-    with h5py.File(f'{feature_path}/matches_roma.h5', mode='w') as f_match:
+    Path(feature_dir).mkdir(exist_ok=True)
+    with h5py.File(f'{feature_dir}/matches_roma.h5', mode='w') as f_match:
         for i, pair_idx in enumerate(index_pairs):
             print(f'Processing pair {i + 1}/{len(index_pairs)}')
             idx1, idx2 = pair_idx
@@ -128,7 +127,7 @@ def match_features(img_fnames,
     kpts = defaultdict(list)
     match_indexes = defaultdict(dict)
     total_kpts = defaultdict(int)
-    with h5py.File(f'{feature_path}/matches_roma.h5', mode='r') as f_match:
+    with h5py.File(f'{feature_dir}/matches_roma.h5', mode='r') as f_match:
         for k1 in f_match.keys():
             group = f_match[k1]
 
@@ -168,11 +167,11 @@ def match_features(img_fnames,
             unique_idxs_current2 = get_unique_idxs(m2_semiclean[:, 1], dim=0)
             m2_semiclean2 = m2_semiclean[unique_idxs_current2]
             out_match[k1][k2] = m2_semiclean2.numpy()
-    with h5py.File(f'{feature_path}/keypoints.h5', mode='w') as f_kp:
+    with h5py.File(f'{feature_dir}/keypoints.h5', mode='w') as f_kp:
         for k, kpts1 in unique_kpts.items():
             f_kp[k] = kpts1
 
-    with h5py.File(f'{feature_path}/matches.h5', mode='w') as f_match:
+    with h5py.File(f'{feature_dir}/matches.h5', mode='w') as f_match:
         for k1, gr in out_match.items():
             group = f_match.require_group(k1)
             for k2, match in gr.items():
@@ -193,7 +192,7 @@ for i in range(len(img_fnames)):
             index_pairs.append((i, j))
 
 #%%
-feature_dir = '.featureout_roma'
+feature_dir = dirname / 'featureout_roma'
 dev = torch.device('mps')
 dev = torch.device('cuda')
 match_features(img_fnames, index_pairs, feature_dir=feature_dir, device=dev)
