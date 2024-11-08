@@ -146,6 +146,8 @@ class TrackerConfig:
     ransac_inlier_pose_method: str = 'zaragoza'  # 'zaragoza', '8point', 'numerical_E_optimization'
     ransac_refine_E_numerically: bool = False
 
+    long_short_flow_chaining_pixel_level_verification: bool = False
+
     ransac_outlier_threshold: float = 0.01
     ransac_min_iters: int = 10000
     ransac_confidence: float = 0.9999
