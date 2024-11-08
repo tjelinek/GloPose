@@ -654,7 +654,7 @@ class Tracking6D:
         self.logged_sgd_translations = []
 
         # Updates offset of the next rotation
-        self.encoder.compute_next_offset(frame_index)
+        # self.encoder.compute_next_offset(frame_index)
 
         self.write_results.set_tensorboard_log_for_frame(frame_index)
 
