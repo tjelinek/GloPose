@@ -773,9 +773,6 @@ class WriteResults:
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
                 self.analyze_ransac_matchings(frame_i)
 
-            if self.tracking_config.visualize_point_clouds_from_ransac:
-                self.visualize_point_clouds_from_ransac(frame_i)
-
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
 
