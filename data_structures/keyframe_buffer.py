@@ -1,19 +1,16 @@
 import copy
 import sys
 from bisect import insort
-from copy import deepcopy
 from functools import reduce
-from typing import Tuple, List, Dict, Union, TypeVar, get_origin, get_args, Optional
+from typing import Tuple, List, TypeVar, get_origin, Optional
 from itertools import chain
 
 import numpy as np
 import torch
-import torchvision.transforms.functional as TF
 import networkx as nx
 
 from dataclasses import dataclass, field, replace, is_dataclass
 
-from auxiliary_scripts.cameras import Cameras
 from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
 
 sys.path.append('repositories/MFT_tracker')
@@ -26,18 +23,6 @@ FlowObservationType = TypeVar('FlowObservationType', bound='BaseFlowObservation'
 
 @dataclass
 class Observation:
-
-    def trim_bounding_box(self, bounding_box: Tuple[int, int, int, int]):
-        copy = deepcopy(self)
-
-        for attr_name, attr_type in self.__annotations__.items():
-            to_trim = getattr(self, attr_name)
-            if not issubclass(attr_type, torch.Tensor) or to_trim is None:
-                continue
-            trimmed = to_trim[:, :, :, bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-            setattr(copy, attr_name, trimmed)
-
-        return copy
 
     def assert_same_length(self) -> Optional[int]:
 
@@ -59,6 +44,13 @@ class Observation:
                     assert attr_length == global_shape
 
         return global_shape
+
+    def assert_device(self, device):
+        for attr_name, attr_type in self.__annotations__.items():
+            value = getattr(self, attr_name)
+            if value is not None:
+                if issubclass(attr_type, torch.Tensor):
+                    assert value.device == device
 
     def get_memory_size(self):
         memory_used = 0.0
@@ -253,38 +245,6 @@ class SyntheticFlowObservation(BaseFlowObservation):
     flow_target_frames: list[int] = field(default_factory=list)
 
 
-@dataclass
-class MultiCameraObservation:
-    cameras_observations: Dict[Cameras, Union[FrameObservation, FlowObservationType]] = field(default_factory=dict)
-
-    @classmethod
-    def from_kwargs(cls, **kwargs) -> 'MultiCameraObservation':
-        observation_types = {type(obs) for obs in kwargs.values()}
-        if len(observation_types) != 1:
-            raise ValueError("Mixed observation types are not supported.")
-
-        cameras_observations_kwargs = {
-            Cameras[key.upper()]: value for key, value in kwargs.items() if key.upper() in Cameras.__members__
-        }
-        return cls(cameras_observations=cameras_observations_kwargs)
-
-    def stack(self) -> Union[FrameObservation, FlowObservationType]:
-        observation_types = {type(obs) for obs in self.cameras_observations.values()}
-
-        if len(observation_types) > 1:
-            raise ValueError("Mixed observation types are not supported.")
-
-        observation_type = observation_types.pop()
-
-        sorted_observations = sorted(self.cameras_observations.items(), key=lambda item: item[0].value)
-        observations = [obs for _, obs in sorted_observations]
-
-        if issubclass(observation_type, FrameObservation) or issubclass(observation_type, BaseFlowObservation):
-            return observation_type.concatenate(*observations)
-        else:
-            raise ValueError("Unknown observation type encountered.")
-
-
 class KeyframeBuffer:
 
     def __init__(self, storage_device='cuda', output_device='cuda'):
@@ -379,49 +339,28 @@ class KeyframeBuffer:
 
         return self.G.get_edge_data(source_frame, target_frame)['flow_observations'].send_to_device(self._output_device)
 
-    def get_observations_for_all_keyframes(self, bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
+    def get_observations_for_all_keyframes(self) -> FrameObservation:
         vertices = list(filter(lambda vertex: vertex[0] in self.keyframes, self.G.nodes(data=True)))
         vertices.sort(key=lambda vertex: vertex[0])
 
         vertices_observations = [vertex[1]['observations'] for vertex in vertices]
         concatenated_observations = FrameObservation.concatenate(*vertices_observations)
 
-        if bounding_box is not None:
-            concatenated_observations = concatenated_observations.trim_bounding_box(bounding_box)
-
         return concatenated_observations.send_to_device(self._output_device)
 
-    def get_observations_for_keyframe(self, keyframe,
-                                      bounding_box: Tuple[int, int, int, int] = None) -> FrameObservation:
+    def get_observations_for_keyframe(self, keyframe) -> FrameObservation:
         observations = self.G.nodes[keyframe]['observations']
-
-        if bounding_box is not None:
-            observations = observations.trim_bounding_box(bounding_box)
 
         return observations.send_to_device(self._output_device)
 
-    def get_flows_observations(self, bounding_box=None):
+    def get_flows_observations(self):
         arcs = list(self.G.edges(data=True))
         arcs.sort(key=lambda edge: edge[:2:-1])  # Sort by the target frame, then by the source frame
 
         flow_observations = [arc[2]['flow_observations'] for arc in arcs]
         concatenated_tensors = FlowObservation.concatenate(*flow_observations)
 
-        if bounding_box is not None:
-            concatenated_tensors = (concatenated_tensors.trim_bounding_box(bounding_box).
-                                    send_to_device(self._output_device))
-
         return concatenated_tensors
-
-    def trim_keyframes(self, max_keyframes):
-        if len(self.keyframes) > max_keyframes:
-            # Keep only those last ones
-            keep_keyframes = np.zeros(len(self.keyframes), dtype=bool)
-            keep_keyframes[-max_keyframes:] = True
-
-            return self.keep_selected_keyframes(keep_keyframes)
-        else:
-            return KeyframeBuffer()
 
     def remove_frames(self, frames_to_remove: List):
         remaining_keyframes = sorted(list(set(self.keyframes) - set(frames_to_remove)))
@@ -457,27 +396,3 @@ class KeyframeBuffer:
         self.G = kept_graph
 
         return deleted_buffer
-
-
-def generate_rotated_observations(observation: FrameObservation, degree: int):
-    if 360 % degree != 0:
-        raise ValueError("Degree must divide 360 evenly.")
-
-    num_rotations = 360 // degree
-    rotated_observations = []
-    degrees = []
-
-    for i in range(num_rotations):
-        rotation_degree = i * degree
-        degrees.append(rotation_degree)
-
-        # Rotate the image, features, and segmentation
-        rotated_image = TF.rotate(observation.observed_image[0, 0], rotation_degree)[None, None]
-        rotated_image_features = TF.rotate(observation.observed_image_features[0, 0], rotation_degree)[None, None]
-        rotated_segmentation = TF.rotate(observation.observed_segmentation[0, 0], rotation_degree)[None, None]
-
-        # Create a new FrameObservation with the rotated tensors
-        rotated_observation = FrameObservation(rotated_image, rotated_image_features, rotated_segmentation)
-        rotated_observations.append(rotated_observation)
-
-    return rotated_observations, degrees

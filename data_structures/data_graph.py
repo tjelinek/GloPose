@@ -85,7 +85,6 @@ class CrossFrameData:
 
 @dataclass
 class DataGraph:
-    used_cameras: List[Cameras]
     G: nx.DiGraph = field(default_factory=nx.DiGraph)
 
     def add_new_frame(self, frame_idx: int) -> None:

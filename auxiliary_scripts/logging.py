@@ -32,7 +32,6 @@ from data_structures.pose_icosphere import PoseIcosphere
 from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
-from auxiliary_scripts.cameras import Cameras
 from utils import normalize_vertices
 from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj, \
     Se3_epipolar_cam_from_Se3_obj
@@ -83,13 +82,13 @@ class RerunAnnotations:
     matching_correspondences_inliers: str = '/epipolar/matching/correspondences_inliers'
     matching_correspondences_outliers: str = '/epipolar/matching/correspondences_outliers'
 
-    ransac_stats_frontview: str = '/epipolar/ransac_stats_frontview'
-    ransac_stats_frontview_visible: str = '/epipolar/ransac_stats_frontview/visible'
-    ransac_stats_frontview_predicted_as_visible: str = '/epipolar/ransac_stats_frontview/predicted_as_visible'
-    ransac_stats_frontview_correctly_predicted_flows: str = '/epipolar/ransac_stats_frontview/correctly_predicted_flows'
-    ransac_stats_frontview_ransac_predicted_inliers: str = '/epipolar/ransac_stats_frontview/ransac_predicted_inliers'
-    ransac_stats_frontview_correctly_predicted_inliers: str = '/epipolar/ransac_stats_frontview/correctly_predicted_inliers'
-    ransac_stats_frontview_ransac_inlier_ratio: str = '/epipolar/ransac_stats_frontview/ransac_inlier_ratio'
+    ransac_stats: str = '/epipolar/ransac_stats'
+    ransac_stats_visible: str = '/epipolar/ransac_stats/visible'
+    ransac_stats_predicted_as_visible: str = '/epipolar/ransac_stats/predicted_as_visible'
+    ransac_stats_correctly_predicted_flows: str = '/epipolar/ransac_stats/correctly_predicted_flows'
+    ransac_stats_ransac_predicted_inliers: str = '/epipolar/ransac_stats/ransac_predicted_inliers'
+    ransac_stats_correctly_predicted_inliers: str = '/epipolar/ransac_stats/correctly_predicted_inliers'
+    ransac_stats_ransac_inlier_ratio: str = '/epipolar/ransac_stats/ransac_inlier_ratio'
 
     # Pose
     pose_estimation_timing: str = '/pose/timing/'
@@ -199,13 +198,11 @@ class RerunAnnotations:
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, rgb_encoder, data_graph: DataGraph, cameras: List[Cameras],
-                 pinhole_params, pose_icosphere: PoseIcosphere):
+                 deep_encoder, rgb_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere):
 
         self.image_height = shape.height
         self.image_width = shape.width
 
-        self.cameras: List[Cameras] = cameras
         self.pinhole_params: PinholeCamera = pinhole_params
 
         self.data_graph: DataGraph = data_graph
@@ -374,7 +371,7 @@ class WriteResults:
                             rrb.Grid(
                                 contents=[
                                     rrb.TimeSeriesView(name="RANSAC - Frontview",
-                                                       origin=RerunAnnotations.ransac_stats_frontview
+                                                       origin=RerunAnnotations.ransac_stats
                                                        ),
                                     rrb.TimeSeriesView(name="Pose - Rotation",
                                                        origin=RerunAnnotations.obj_rot_1st_to_last
@@ -1052,34 +1049,32 @@ class WriteResults:
 
         if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
 
-            for camera in self.cameras:
-                front_results = self.measure_ransac_stats(frame_i)
+            front_results = self.measure_ransac_stats(frame_i)
 
-                mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
+            mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
 
-                if self.tracking_config.plot_mft_flow_kde_error_plot:
-                    self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
+            if self.tracking_config.plot_mft_flow_kde_error_plot:
+                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
     def analyze_ransac_matchings(self, frame_i):
 
         if frame_i % 10 == 0:
             return
 
-        for camera in self.cameras:
-            ransac_stats = self.measure_ransac_stats(frame_i)
+        ransac_stats = self.measure_ransac_stats(frame_i)
 
-            ransac_stats.pop('mft_flow_gt_flow_difference')
+        ransac_stats.pop('mft_flow_gt_flow_difference')
 
-            # We want each line to have its assigned color
-            for i, metric in enumerate(ransac_stats.keys()):
-                if metric == 'model_obtained_from':
-                    continue
+        # We want each line to have its assigned color
+        for i, metric in enumerate(ransac_stats.keys()):
+            if metric == 'model_obtained_from':
+                continue
 
-                rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{camera.value}_{metric}')
+            rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{metric}')
 
-                rr.set_time_sequence("frame", frame_i)
-                metric_val: float = ransac_stats[metric][-1]
-                rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
+            rr.set_time_sequence("frame", frame_i)
+            metric_val: float = ransac_stats[metric][-1]
+            rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
 
     def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
         sns.set(style="whitegrid")
@@ -1122,7 +1117,7 @@ class WriteResults:
 
             flow_arc_source, flow_arc_target = new_flow_arc
 
-            fig, axs = plt.subplots(3, len(self.cameras), figsize=(8, 12), dpi=600)
+            fig, axs = plt.subplots(3, 1, figsize=(8, 12), dpi=600)
             axs: Any = axs
 
             flow_source_label = self.tracking_config.gt_flow_source
@@ -1132,67 +1127,64 @@ class WriteResults:
             heading_text = (f"Frames {new_flow_arc}\n"
                             f"Flow: {flow_source_label}")
 
-            if len(self.cameras) == 1:
-                axs = np.atleast_2d(axs).T
+            axs = np.atleast_2d(axs).T
 
             axs[0, 0].text(1.05, 1, heading_text, transform=axs[0, 0].transAxes, verticalalignment='top',
                            fontsize='medium')
 
-            for i, camera in enumerate(self.cameras):
+            arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
-                arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
+            rendered_flow_res = arc_observation.synthetic_flow_result
 
-                rendered_flow_res = arc_observation.synthetic_flow_result
+            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
+            rend_flow_np = rend_flow.numpy(force=True)
 
-                rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
-                rend_flow_np = rend_flow.numpy(force=True)
+            flow_observation = arc_observation.observed_flow
+            opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
+            occlusion_mask = self.convert_observation_to_numpy(flow_observation.observed_flow_occlusion)
+            occlusion_mask_thresh = np.greater_equal(occlusion_mask, self.tracking_config.occlusion_coef_threshold)
+            segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
 
-                flow_observation = arc_observation.observed_flow
-                opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
-                occlusion_mask = self.convert_observation_to_numpy(flow_observation.observed_flow_occlusion)
-                occlusion_mask_thresh = np.greater_equal(occlusion_mask, self.tracking_config.occlusion_coef_threshold)
-                segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
+            template_data = self.data_graph.get_frame_data(flow_arc_source)
+            target_data = self.data_graph.get_frame_data(flow_arc_target)
+            template_observation_frontview = template_data.frame_observation
+            target_observation_frontview = target_data.frame_observation
+            template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
+            target_image = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
 
-                template_data = self.data_graph.get_frame_data(flow_arc_source)
-                target_data = self.data_graph.get_frame_data(flow_arc_target)
-                template_observation_frontview = template_data.frame_observation
-                target_observation_frontview = target_data.frame_observation
-                template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
-                target_image = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
+            template_overlay = overlay_occlusion(template_image, occlusion_mask_thresh.astype(np.float32))
 
-                template_overlay = overlay_occlusion(template_image, occlusion_mask_thresh.astype(np.float32))
+            display_bounds = (0, self.image_width, 0, self.image_height)
 
-                display_bounds = (0, self.image_width, 0, self.image_height)
+            for ax in axs.flat:
+                ax.axis('off')
 
-                for ax in axs.flat:
-                    ax.axis('off')
+            darkening_factor = 0.5
+            axs[0, 0].imshow(template_overlay * darkening_factor, extent=display_bounds)
+            axs[0, 0].set_title(f'Template occlusion')
 
-                darkening_factor = 0.5
-                axs[0, i].imshow(template_overlay * darkening_factor, extent=display_bounds)
-                axs[0, i].set_title(f'Template {camera} occlusion')
+            axs[1, 0].imshow(template_image * darkening_factor, extent=display_bounds)
+            axs[1, 0].set_title(f'Template')
 
-                axs[1, i].imshow(template_image * darkening_factor, extent=display_bounds)
-                axs[1, i].set_title(f'Template {camera}')
+            axs[2, 0].imshow(target_image * darkening_factor, extent=display_bounds)
+            axs[2, 0].set_title(f'Target')
 
-                axs[2, i].imshow(target_image * darkening_factor, extent=display_bounds)
-                axs[2, i].set_title(f'Target {camera}')
+            step = self.image_width // 20
+            x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
+            template_coords = np.stack((y, x), axis=0).reshape(2, -1).T
 
-                step = self.image_width // 20
-                x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
-                template_coords = np.stack((y, x), axis=0).reshape(2, -1).T
+            # Plot lines on the target front and back view subplots
+            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
 
-                # Plot lines on the target front and back view subplots
-                occlusion_threshold = self.tracking_config.occlusion_coef_threshold
+            flow_frontview_np = opt_flow.numpy(force=True)
 
-                flow_frontview_np = opt_flow.numpy(force=True)
+            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
+                                                     rend_flow_np, segmentation_mask, occlusion_mask,
+                                                     arc_observation.ransac_inliers,
+                                                     arc_observation.ransac_outliers)
 
-                self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
-                                                         rend_flow_np, segmentation_mask, occlusion_mask,
-                                                         arc_observation.ransac_inliers,
-                                                         arc_observation.ransac_outliers)
-
-                self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask, occlusion_threshold,
-                                        flow_frontview_np, cmap='spring', marker='o', segment_mask=segmentation_mask)
+            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask, occlusion_threshold,
+                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=segmentation_mask)
 
             legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
                                Patch(facecolor='red', edgecolor='red', label='FP inliers'),
