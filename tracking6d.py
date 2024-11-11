@@ -522,6 +522,7 @@ class Tracking6D:
             del all_flow_observations
 
         self.glomap_wrapper.run_colmap()
+        self.glomap_wrapper.eval_poses()
 
         return self.best_model
 
