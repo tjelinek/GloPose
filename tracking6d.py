@@ -660,7 +660,6 @@ class Tracking6D:
 
         frame_losses = []
         # Restore the learning rate on its prior values
-        self.reset_learning_rate()
 
         if self.config.use_lr_scheduler:
             self.config.loss_rgb_weight = 0
@@ -702,8 +701,6 @@ class Tracking6D:
 
         # Now optimize all the parameters jointly using normal gradient descent
         print("Optimizing all parameters")
-
-        # self.reset_learning_rate()
 
         if self.config.run_main_optimization_loop:
             for epoch in range(epoch, self.config.iterations):
@@ -893,57 +890,6 @@ class Tracking6D:
         infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
                                         'deep_features')
         return infer_result
-
-    def gradient_descent_with_linear_lr_schedule(self, observations, flow_observations, epoch, frame_losses, keyframes,
-                                                 flow_frames, flow_arcs, loss_improvement_threshold, no_improvements):
-        best_loss = math.inf
-        while no_improvements < self.config.break_sgd_after_iters_with_no_change:
-            self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
-            self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
-
-            infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                            'deep_features')
-            encoder_result, loss_result, renders, rendered_flow_result = infer_result
-            loss_result: LossResult = loss_result
-
-            joint_loss = loss_result.loss.mean()
-            self.optimizer_positional_parameters.zero_grad()
-            joint_loss.backward()
-
-            loss_improvement = best_loss - joint_loss
-            if loss_improvement > loss_improvement_threshold:
-                best_loss = joint_loss
-                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-                for param_group in self.optimizer_positional_parameters.param_groups:
-                    param_group['lr'] *= 2.0
-            elif loss_improvement < 0:
-                self.encoder.load_state_dict(self.best_model["encoder"])
-                for param_group in self.optimizer_positional_parameters.param_groups:
-                    param_group['lr'] /= 2.0
-            elif 0 <= loss_improvement <= loss_improvement_threshold:
-                model_loss = self.log_inference_results(best_loss, epoch, frame_losses, joint_loss, loss_result.losses,
-                                                        encoder_result, flow_arcs[-1][1])
-                self.best_model["value"] = model_loss
-                self.best_model["losses"] = loss_result.losses_all
-                self.optimizer_positional_parameters.step()
-                epoch += 1
-                no_improvements += 1
-
-        self.encoder.load_state_dict(self.best_model["encoder"])
-        infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        'deep_features')
-        return infer_result
-
-    def reset_learning_rate(self):
-        for param_group in self.optimizer_non_positional_parameters.param_groups:
-            param_group['lr'] = self.config.learning_rate
-        for param_group in self.optimizer_positional_parameters.param_groups:
-            param_group['lr'] = self.config.learning_rate
-            if 'name' in param_group.keys():
-                if param_group['name'] in ['axes_quat', 'half_cosine', 'axis_angle']:
-                    param_group['lr'] *= self.config.quaternion_learning_rate_coef
-                elif param_group['name'] == 'trans':
-                    param_group['lr'] *= self.config.translation_learning_rate_coef
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):
