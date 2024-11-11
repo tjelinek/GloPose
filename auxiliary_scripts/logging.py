@@ -11,6 +11,7 @@ import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
+import torchvision
 from PIL import Image
 from kornia.geometry import normalize_quaternion, Se3, Quaternion, PinholeCamera
 from matplotlib import pyplot as plt
