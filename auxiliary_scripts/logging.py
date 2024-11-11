@@ -21,7 +21,6 @@ from matplotlib.colors import Normalize
 from matplotlib.patches import ConnectionPatch, Patch
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
 
@@ -987,8 +986,8 @@ class WriteResults:
                             self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path,
                             str(model_i_th_path.name))
 
-        save_image(detached_result.texture_maps[:, :3], tex_path)
-        save_image(tex, tex_i_th_path)
+        torchvision.utils.save_image(detached_result.texture_maps[:, :3], tex_path)
+        torchvision.utils.save_image(tex, tex_i_th_path)
 
         with open(model_path, "r") as file:
             lines = file.readlines()
