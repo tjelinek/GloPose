@@ -11,7 +11,6 @@ import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
-import torchvision
 from PIL import Image
 from kornia.geometry import normalize_quaternion, Se3, Quaternion, PinholeCamera
 from matplotlib import pyplot as plt
@@ -24,7 +23,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 from pytorch3d.loss.chamfer import chamfer_distance
-from pytorch3d.io import save_ply
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
@@ -230,12 +228,10 @@ class WriteResults:
 
         self.write_folder = Path(write_folder)
 
-        self.observations_path = self.write_folder / Path('observed_input')
-        self.gt_values_path = self.write_folder / Path('gt_output')
-        self.optimized_values_path = self.write_folder / Path('predicted_output')
+        self.observations_path = self.write_folder / Path('images')
+        self.segmentation_path = self.write_folder / Path('segments')
         self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
-        self.point_clouds_path = self.write_folder / Path('point_clouds')
         self.exported_mesh_path = self.write_folder / Path('3d_model')
 
         self.init_directories()
@@ -255,11 +251,9 @@ class WriteResults:
 
     def init_directories(self):
         self.observations_path.mkdir(exist_ok=True, parents=True)
-        self.gt_values_path.mkdir(exist_ok=True, parents=True)
-        self.optimized_values_path.mkdir(exist_ok=True, parents=True)
+        self.segmentation_path.mkdir(exist_ok=True, parents=True)
         self.rerun_log_path.mkdir(exist_ok=True, parents=True)
         self.ransac_path.mkdir(exist_ok=True, parents=True)
-        self.point_clouds_path.mkdir(exist_ok=True, parents=True)
         self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
@@ -1006,41 +1000,6 @@ class WriteResults:
         # Write the result to a new file
         with open(model_i_th_path, "w") as file:
             file.writelines(lines)
-
-    def visualize_point_clouds_from_ransac(self, frame_i):
-
-        in_edges = self.data_graph.G.in_edges(frame_i, data=False)
-        flow_source = int(min(e[0] for e in in_edges))
-
-        arc_data = self.data_graph.get_edge_observations(flow_source, frame_i)
-
-        rr.set_time_sequence("frame", frame_i)
-
-        triangulated_point_cloud_gt_flow = arc_data.ransac_triangulated_points_gt_Rt_gt_flow[0]
-        triangulated_point_cloud_pred_flow = arc_data.ransac_triangulated_points_gt_Rt[0]
-        triangulated_point_cloud_dust3r_im1 = arc_data.dust3r_point_cloud_im1
-        triangulated_point_cloud_dust3r_im2 = arc_data.dust3r_point_cloud_im2
-
-        triangulated_point_cloud_gt_flow_path = (self.point_clouds_path /
-                                                 f'triangulated_point_cloud_gt_Rt_gt_flow_{frame_i}.ply')
-        triangulated_point_cloud_pred_flow_path = (self.point_clouds_path /
-                                                   f'triangulated_point_cloud_gt_Rt_pred_flow_{frame_i}.ply')
-        if self.tracking_config.write_to_rerun_rather_than_disk:
-            if triangulated_point_cloud_gt_flow is not None:
-                rr.log(RerunAnnotations.triangulated_points_gt_Rt_gt_flow,
-                       rr.Points3D(triangulated_point_cloud_gt_flow.numpy()))
-            if triangulated_point_cloud_pred_flow is not None:
-                rr.log(RerunAnnotations.triangulated_points_gt_Rt_mft_flow,
-                       rr.Points3D(triangulated_point_cloud_pred_flow.numpy()))
-            if triangulated_point_cloud_dust3r_im1 is not None:
-                rr.log(RerunAnnotations.point_cloud_dust3r_im1,
-                       rr.Points3D(triangulated_point_cloud_dust3r_im1.numpy()))
-            if triangulated_point_cloud_dust3r_im2 is not None:
-                rr.log(RerunAnnotations.point_cloud_dust3r_im2,
-                       rr.Points3D(triangulated_point_cloud_dust3r_im2.numpy()))
-        else:
-            save_ply(triangulated_point_cloud_gt_flow_path, triangulated_point_cloud_gt_flow)
-            save_ply(triangulated_point_cloud_pred_flow_path, triangulated_point_cloud_pred_flow)
 
     def measure_ransac_stats(self, frame_i):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold

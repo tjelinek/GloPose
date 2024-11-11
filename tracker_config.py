@@ -26,7 +26,6 @@ class TrackerConfig:
     plot_mft_flow_kde_error_plot: bool = True
     dump_correspondences: bool = False
     save_3d_model: bool = False
-    visualize_point_clouds_from_ransac: bool = False
     analyze_ransac_matchings: bool = True
     analyze_ransac_matching_errors: bool = False
     visualize_outliers_distribution: bool = False
