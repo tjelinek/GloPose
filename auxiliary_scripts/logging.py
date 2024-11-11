@@ -33,14 +33,13 @@ from models.loss import iou_loss, FMOLoss
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.cameras import Cameras
-from utils import coordinates_xy_to_tensor_index, normalize_vertices
+from utils import normalize_vertices
 from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj, \
     Se3_epipolar_cam_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
 from flow import visualize_flow_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_image, get_non_occluded_foreground_correspondences, source_coords_to_target_coords, \
-    get_correct_correspondences_mask, source_coords_to_target_coords_np
+    source_coords_to_target_coords_image, source_coords_to_target_coords, source_coords_to_target_coords_np
 
 
 @dataclass
@@ -1837,7 +1836,6 @@ class WriteResults:
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation_frontview
         template_image_annotation = RerunAnnotations.template_image_frontview
         template_image_segmentation_annotation = RerunAnnotations.template_image_segmentation_frontview
-        observed_flow_errors_annotations = RerunAnnotations.observed_flow_errors_frontview
         observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion_frontview
         observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty_frontview
         observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty_frontview
