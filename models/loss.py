@@ -95,7 +95,7 @@ class FMOLoss(nn.Module):
             losses["tv"] = losses["tv"].sum(dim=1)
 
         per_pixel_flow_loss = None
-        if self.config.loss_flow_weight > 0:
+        if self.config.loss_flow_weight > 0 and observed_flow is not None:
             image_area, per_pixel_flow_loss_occlusions_rendered, rendered_flow_segmentation = (
                 self.get_per_pixel_flow_epe(observed_flow, observed_flow_occlusion, observed_flow_segmentation,
                                             rendered_flow, rendered_flow_segmentation, custom_points_for_ransac))
