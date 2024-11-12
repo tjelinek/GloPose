@@ -8,6 +8,8 @@ import torch
 from argparse import Namespace
 from abc import ABC, abstractmethod
 
+import torchvision
+
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation
 from flow import tensor_image_to_mft_format
 from repositories.GMA.core.utils.utils import InputPadder
@@ -114,6 +116,24 @@ class RoMaFlowProvider(FlowProvider):
         sigma = extra['sigma'].cuda()[None, None]
 
         return flow, occlusion, sigma
+
+    def next_flow_raw(self, source_image, target_image, sample=None):
+        source_image_roma = torchvision.transforms.functional.to_pil_image(source_image.squeeze())
+        target_image_roma = torchvision.transforms.functional.to_pil_image(target_image.squeeze())
+
+        warp, certainty = self.flow_model.model.match(source_image_roma, target_image_roma, device='cuda')
+        if sample:
+            warp, certainty = self.flow_model.model.sample(warp, certainty, sample)
+
+        return warp, certainty
+
+    def next_flow_roma_src_pts_xy(self, source_image, target_image, image_height, image_width, sample=None):
+
+        matches, certainty = self.next_flow_raw(source_image, target_image, sample)
+        src_pts_xy, dst_pts_xy = self.flow_model.model.to_pixel_coordinates(matches, image_height, image_width,
+                                                                            image_height, image_width)
+
+        return src_pts_xy, dst_pts_xy
 
     def get_flow_model(self, config_name=None):
         MFTFlowProvider.add_to_path()

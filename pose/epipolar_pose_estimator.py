@@ -3,9 +3,7 @@ from time import time
 
 import numpy as np
 import torch
-import torchvision
 from kornia.geometry import Se3, Quaternion, PinholeCamera
-from romatch import roma_indoor
 
 from auxiliary_scripts.flow_provider import RoMaFlowProvider
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
@@ -45,7 +43,6 @@ class EpipolarPoseEstimator:
         self.occlusion_threshold = self.config.occlusion_coef_threshold
         self.segmentation_threshold = self.config.segmentation_mask_threshold
         self.roma_flow_provider: RoMaFlowProvider = roma_flow_provider
-        self.roma_matcher: roma_indoor = roma_indoor(device='cuda')
 
         self.camera = camera
 
@@ -58,18 +55,12 @@ class EpipolarPoseEstimator:
 
         flow_edge_data = self.data_graph.get_edge_observations(source_image_frame, target_image_frame)
 
-        source_image_roma = torchvision.transforms.functional.to_pil_image(source_image.squeeze())
-        target_image_roma = torchvision.transforms.functional.to_pil_image(target_image.squeeze())
-
-        warp, certainty = self.roma_matcher.match(source_image_roma, target_image_roma, device='cuda')
-        matches, certainty = self.roma_matcher.sample(warp, certainty)
-
-        src_pts_xy, dst_pts_xy = self.roma_matcher.to_pixel_coordinates(matches, self.image_height, self.image_width,
-                                                                        self.image_height, self.image_width)
+        src_pts_xy, dst_pts_xy = self.roma_flow_provider.next_flow_roma_src_pts_xy(source_image, target_image,
+                                                                                   self.image_height, self.image_width,
+                                                                                   sample=10000)
 
         flow_edge_data.src_pts_xy_roma = src_pts_xy.cpu()
         flow_edge_data.dst_pts_xy_roma = dst_pts_xy.cpu()
-
 
     @torch.no_grad()
     def essential_matrix_preinitialization(self, keyframes):
