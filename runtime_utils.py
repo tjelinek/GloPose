@@ -20,10 +20,6 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, gt_textu
         shutil.rmtree(write_folder)
 
     write_folder.mkdir(exist_ok=True, parents=True)
-    model_3d_dir = write_folder / '3d_model'
-    model_3d_dir.mkdir(exist_ok=True, parents=True)
-
-    shutil.copyfile(Path('prototypes') / 'model.mtl', model_3d_dir / 'model.mtl')
 
     print('\n\n\n---------------------------------------------------')
     write_folder_path = Path(write_folder)
@@ -36,11 +32,11 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, gt_textu
 
     sfb = Tracking6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, gt_rotations=gt_rotations,
                      gt_translations=gt_translations, images_paths=images_paths, segmentation_paths=segmentation_paths)
-    best_model = sfb.run_tracking()
+    sfb.run_tracking()
 
     del sfb
     gc.collect()
-    print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds, best model loss {best_model["value"]}')
+    print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds.')
 
 
 def parse_args():
