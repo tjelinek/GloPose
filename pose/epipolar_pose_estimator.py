@@ -7,7 +7,6 @@ import torchvision
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 from romatch import roma_indoor
 
-from auxiliary_scripts.cameras import Cameras
 from auxiliary_scripts.flow_provider import RoMaFlowProvider
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
     Se3_epipolar_cam_from_Se3_obj
