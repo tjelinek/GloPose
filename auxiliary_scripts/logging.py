@@ -1635,12 +1635,6 @@ class WriteResults:
         silhouette_overlap_path = self.write_folder / 'silhouette_overlap' / Path(f"silhouette_overlap_{frame_idx}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
-    @staticmethod
-    def encoder_result_all_frames(encoder: Encoder, last_keyframe_idx: int):
-        keyframes_prime = list(range(last_keyframe_idx))
-        encoder_result_prime = encoder(keyframes_prime)
-        return encoder_result_prime, keyframes_prime
-
     def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i):
 
         observed_image_annotation = RerunAnnotations.observed_image_frontview
