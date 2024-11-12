@@ -138,6 +138,13 @@ class RenderingKaolin(nn.Module):
                           coordinates range [0, 1].
         """
 
+        if len(flow_arcs_indices) == 0:
+            theoretical_flow = torch.zeros(1, 0, 2, self.height, self.width).cuda()
+            rendered_flow_segmentation = torch.zeros(1, 0, 1, self.height, self.width).cuda()
+            occlusion_masks = torch.zeros_like(rendered_flow_segmentation).cuda()
+            flow_result = RenderedFlowResult(theoretical_flow, rendered_flow_segmentation, occlusion_masks)
+            return flow_result
+
         batches = self.rotations_translations_batched(encoder_out_pose_1, encoder_out_pose_2, flow_arcs_indices)
         (rotation_matrix_1_batch, rotation_matrix_2_batch,
          translation_vector_1_batch, translation_vector_2_batch) = batches
