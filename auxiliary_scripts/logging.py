@@ -188,9 +188,6 @@ class RerunAnnotations:
     translation_scale_z_gt: str = '/pose/translation_scale/z_gt'
     translation_scale_estimated: str = '/pose/translation_scale/estimated'
 
-    # Pose
-    pose_per_frame: str = '/pose/pose_per_frame'
-
 
 class WriteResults:
 
@@ -719,7 +716,6 @@ class WriteResults:
 
         if not self.tracking_config.write_to_rerun_rather_than_disk:
             self.visualize_flow_with_matching(frame_i)
-        self.visualize_rotations_per_epoch(frame_i)
 
         if self.tracking_config.visualize_outliers_distribution:
             datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
@@ -1359,16 +1355,6 @@ class WriteResults:
             axs1.scatter(*zip(*dots_axs1), c=colors_axs1, marker='X', s=0.5, alpha=0.33)
             axs2.scatter(*zip(*dots_axs2), c=colors_axs2, marker='X', s=0.5, alpha=0.33)
 
-    @staticmethod
-    def add_loss_plot(ax_, frame_losses_, indices=None):
-        if indices is None:
-            indices = range(len(frame_losses_))
-        ax_loss = ax_.twinx()
-        ax_loss.set_ylabel('Loss')
-        ax_loss.plot(indices, frame_losses_, color='red', label='Loss')
-        ax_loss.spines.right.set_position(("axes", 1.15))
-        ax_loss.legend(loc='upper left')
-
     def log_poses_into_rerun(self, frame_i: int):
 
         data_graph_node = self.data_graph.get_frame_data(frame_i)
@@ -1551,67 +1537,6 @@ class WriteResults:
         # Scatter plot for source and target points
         ax1.scatter(x1, y1, color=colors, marker=marker, alpha=0.8, s=1.5)
         ax2.scatter(x2_f, y2_f, color=colors, marker=marker, alpha=0.8, s=1.5)
-
-    def visualize_rotations_per_epoch(self, frame_i):
-        frame_data = self.data_graph.get_frame_data(frame_i)
-        logged_sgd_translations = frame_data.translations_during_optimization
-        logged_sgd_quaternions = frame_data.quaternions_during_optimization
-        frame_losses = frame_data.frame_losses
-
-        gt_rotation = frame_data.gt_rot_axis_angle
-        gt_translation = frame_data.gt_translation
-
-        fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(10, 12))  # Adjusted for two subplots, one above the other
-        fig.subplots_adjust(left=0.25, right=0.85, hspace=0.5)
-
-        # Current rotation and translation values
-        translation_tensors = [t[-1].detach().cpu() for t in logged_sgd_translations]
-        rotation_tensors = [
-            torch.rad2deg(quaternion_to_axis_angle(q.detach().cpu()))[-1]
-            for q in logged_sgd_quaternions
-        ]
-
-        # Plot rotations
-        axis_labels = ['X-axis rotation', 'Y-axis rotation', 'Z-axis rotation']
-        colors = ['yellow', 'green', 'blue']
-        for i in range(3):
-            values = [tensor[i].item() for tensor in rotation_tensors]
-            ax1.plot(range(len(rotation_tensors)), values, label=axis_labels[i], color=colors[i])
-            # Plot GT rotations if provided
-            if gt_rotation is not None:
-                gt_rotation_deg = torch.rad2deg(gt_rotation)
-                gt_rotation_values = gt_rotation_deg.numpy(force=True).repeat(len(rotation_tensors))
-                ax1.plot(range(gt_rotation_values.shape[0]), gt_rotation_values, linestyle='dashed',
-                         label=f"GT {axis_labels[i]}", alpha=0.5, color=colors[i])
-
-        ax1.set_xlabel('Gradient descend iteration')
-        ax1.set_ylabel('Rotation [degrees]')
-        ax1.legend(loc='lower left')
-
-        # Plot translations
-        translation_axis_labels = ['X-axis translation', 'Y-axis translation', 'Z-axis translation']
-        for i in range(3):
-            values = [tensor[i].item() for tensor in translation_tensors]
-            ax3.plot(range(len(translation_tensors)), values, label=translation_axis_labels[i], color=colors[i])
-            # Plot GT translations if provided
-            if gt_translation is not None:
-                gt_translation_values = gt_translation.squeeze().numpy(force=True).repeat(len(translation_tensors))
-                ax3.plot(range(gt_translation_values.shape[0]), gt_translation_values, linestyle='dashed',
-                         label=f"GT {translation_axis_labels[i]}", alpha=0.5, color=colors[i])
-
-        ax3.set_xlabel('Gradient descend iteration')
-        ax3.set_ylabel('Translation')
-        ax3.legend(loc='lower left')
-
-        # Adjust the loss plot on the rotation axis for clarity
-        self.add_loss_plot(ax1, frame_losses)
-        self.add_loss_plot(ax3, frame_losses)
-
-        # Saving the figure
-        (Path(self.write_folder) / Path('rotations_by_epoch')).mkdir(exist_ok=True, parents=True)
-        fig_path = (Path(self.write_folder) / Path('rotations_by_epoch') / f'rotations_by_epoch_frame_{frame_i}.svg')
-        plt.savefig(fig_path)
-        plt.close()
 
     def render_silhouette_overlap(self, last_rendered_silhouette, last_segment_mask, frame_idx):
         last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0.5
