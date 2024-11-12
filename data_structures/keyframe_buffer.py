@@ -358,6 +358,8 @@ class KeyframeBuffer:
         arcs.sort(key=lambda edge: edge[:2:-1])  # Sort by the target frame, then by the source frame
 
         flow_observations = [arc[2]['flow_observations'] for arc in arcs]
+        if len(flow_observations) == 0:
+            return FlowObservation()
         concatenated_tensors = FlowObservation.concatenate(*flow_observations)
 
         return concatenated_tensors
