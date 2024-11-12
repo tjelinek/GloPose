@@ -981,7 +981,6 @@ class WriteResults:
             results['correctly_predicted_flows'].append(correct_flows_num / fg_points_num)
             results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
             results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
-            results['model_obtained_from'].append(not arc_data.is_source_of_matching)
             results['ransac_inlier_ratio'].append(pred_inlier_ratio)
             results['mft_flow_gt_flow_difference'].append(dst_pts_pred_visible_yx_small_errors -
                                                           dst_pts_pred_visible_yx_gt_small_errors)
@@ -1010,8 +1009,6 @@ class WriteResults:
 
         # We want each line to have its assigned color
         for i, metric in enumerate(ransac_stats.keys()):
-            if metric == 'model_obtained_from':
-                continue
 
             rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{metric}')
 

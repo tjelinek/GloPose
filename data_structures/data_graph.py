@@ -74,8 +74,6 @@ class CrossFrameData:
     dust3r_point_cloud_im1: torch.Tensor = None
     dust3r_point_cloud_im2: torch.Tensor = None
 
-    is_source_of_matching: bool = True
-
     predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
     predicted_obj_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
     predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
