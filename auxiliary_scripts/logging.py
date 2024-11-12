@@ -33,7 +33,7 @@ from data_structures.data_graph import DataGraph
 from utils import normalize_vertices
 from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
-from models.encoder import EncoderResult, Encoder
+from models.encoder import Encoder
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)
 
@@ -219,7 +219,6 @@ class WriteResults:
 
         self.observations_path = self.write_folder / Path('images')
         self.segmentation_path = self.write_folder / Path('segments')
-        self.rerun_log_path = self.write_folder / Path('rerun')
         self.ransac_path = self.write_folder / Path('ransac')
         self.exported_mesh_path = self.write_folder / Path('3d_model')
 
@@ -234,16 +233,17 @@ class WriteResults:
         self.tensorboard_log = None
 
     def init_directories(self):
-        self.observations_path.mkdir(exist_ok=True, parents=True)
-        self.segmentation_path.mkdir(exist_ok=True, parents=True)
-        self.rerun_log_path.mkdir(exist_ok=True, parents=True)
-        self.ransac_path.mkdir(exist_ok=True, parents=True)
-        self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
+        if not self.tracking_config.write_to_rerun_rather_than_disk:
+            self.observations_path.mkdir(exist_ok=True, parents=True)
+            self.segmentation_path.mkdir(exist_ok=True, parents=True)
+            self.ransac_path.mkdir(exist_ok=True, parents=True)
+            self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
         rr.init(f'{self.tracking_config.sequence}-{self.tracking_config.experiment_name}')
-        rr.save(
-            self.rerun_log_path / f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
+        rerun_file = (self.write_folder /
+                      f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
+        rr.save(rerun_file)
 
         self.template_fields = {
             RerunAnnotations.chained_pose_polar_template,
