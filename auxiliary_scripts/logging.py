@@ -302,28 +302,32 @@ class WriteResults:
 
         annotations = set()
         for axis, c in axes_colors.items():
-            for movement_type in ['rot', 'tran']:
-                annotations |= set(map(
-                    lambda annotation: (annotation, c),
-                    [
-                        getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}'),
-                        getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}'),
-                        getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}'),
-                        getattr(RerunAnnotations, f'chained_pose_long_flow_{axis}'),
-                        getattr(RerunAnnotations, f'chained_pose_short_flow_{axis}'),
-                        getattr(RerunAnnotations, f'translation_scale_{axis}_gt'),
-                    ]
+            annotations |= set(map(
+                lambda annotation: (annotation, c),
+                [
+                    RerunAnnotations.obj_tran_1st_to_last_axes[axis],
+                    RerunAnnotations.obj_tran_ref_to_last_axes[axis],
+                    RerunAnnotations.cam_tran_ref_to_last_axes[axis],
+                    RerunAnnotations.obj_rot_1st_to_last_axes[axis],
+                    RerunAnnotations.obj_rot_ref_to_last_axes[axis],
+                    RerunAnnotations.cam_rot_ref_to_last_axes[axis],
+                    RerunAnnotations.chained_pose_long_flow_axes[axis],
+                    RerunAnnotations.chained_pose_short_flow_axes[axis],
+                    RerunAnnotations.translation_scale_gt_axes[axis],
+                ]
                 ))
 
         for axis, c in gt_axes_colors.items():
-            for movement_type in ['rot', 'tran']:
-                annotations |= set(map(
-                    lambda annotation: (annotation, c),
-                    [
-                        getattr(RerunAnnotations, f'obj_{movement_type}_1st_to_last_{axis}_gt'),
-                        getattr(RerunAnnotations, f'obj_{movement_type}_ref_to_last_{axis}_gt'),
-                        getattr(RerunAnnotations, f'cam_{movement_type}_ref_to_last_{axis}_gt'),
-                    ]
+            annotations |= set(map(
+                lambda annotation: (annotation, c),
+                [
+                    RerunAnnotations.obj_rot_1st_to_last_gt_axes[axis],
+                    RerunAnnotations.obj_rot_ref_to_last_gt_axes[axis],
+                    RerunAnnotations.cam_rot_ref_to_last_gt_axes[axis],
+                    RerunAnnotations.obj_tran_1st_to_last_gt_axes[axis],
+                    RerunAnnotations.obj_tran_ref_to_last_gt_axes[axis],
+                    RerunAnnotations.cam_tran_ref_to_last_gt_axes[axis],
+                ]
                 ))
 
             for rerun_annotation, color in annotations:
@@ -1280,41 +1284,33 @@ class WriteResults:
         rr.log(RerunAnnotations.translation_scale_estimated, rr.Scalar(scale_factor_estimated_long_edge))
 
         for axis, axis_label in enumerate(['x', 'y', 'z']):
-            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}'),
-                   rr.Scalar(obj_rot_1st_to_last[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_rot_1st_to_last_{axis_label}_gt'),
-                   rr.Scalar(obj_rot_1st_to_last_gt[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}'),
-                   rr.Scalar(obj_tran_1st_to_last[axis]))
-            rr.log(getattr(RerunAnnotations, f'obj_tran_1st_to_last_{axis_label}_gt'),
-                   rr.Scalar(obj_tran_1st_to_last_gt[axis]))
+            rr.log(RerunAnnotations.obj_rot_1st_to_last_axes[axis_label], rr.Scalar(obj_rot_1st_to_last[axis]))
+            rr.log(RerunAnnotations.obj_rot_1st_to_last_gt_axes[axis_label], rr.Scalar(obj_rot_1st_to_last_gt[axis]))
+            rr.log(RerunAnnotations.obj_tran_1st_to_last_axes[axis_label], rr.Scalar(obj_tran_1st_to_last[axis]))
 
-            rr.log(getattr(RerunAnnotations, f'obj_rot_ref_to_last_{axis_label}'),
-                   rr.Scalar(pred_obj_rot_ref_to_last[axis]))
-            rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}'),
-                   rr.Scalar(pred_cam_rot_ref_to_last[axis]))
+            rr.log(RerunAnnotations.obj_tran_1st_to_last_gt_axes[axis_label], rr.Scalar(obj_tran_1st_to_last_gt[axis]))
+            rr.log(RerunAnnotations.obj_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_obj_rot_ref_to_last[axis]))
+            rr.log(RerunAnnotations.cam_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_cam_rot_ref_to_last[axis]))
 
-            rr.log(getattr(RerunAnnotations, f'obj_rot_ref_to_last_{axis_label}_gt'),
-                   rr.Scalar(gt_obj_rot_ref_to_last[axis]))
-            rr.log(getattr(RerunAnnotations, f'cam_rot_ref_to_last_{axis_label}_gt'),
-                   rr.Scalar(gt_cam_rot_ref_to_last[axis]))
+            rr.log(RerunAnnotations.obj_rot_ref_to_last_axes[axis_label], rr.Scalar(gt_obj_rot_ref_to_last[axis]))
+            rr.log(RerunAnnotations.cam_rot_ref_to_last_gt_axes[axis_label], rr.Scalar(gt_cam_rot_ref_to_last[axis]))
 
-            rr.log(getattr(RerunAnnotations, f'obj_tran_ref_to_last_{axis_label}'),
+            rr.log(RerunAnnotations.obj_tran_ref_to_last_axes[axis_label],
                    rr.Scalar(pred_obj_ref_to_last.translation[0, axis].item()))
-            rr.log(getattr(RerunAnnotations, f'cam_tran_ref_to_last_{axis_label}'),
+            rr.log(RerunAnnotations.cam_tran_ref_to_last_axes[axis_label],
                    rr.Scalar(pred_cam_ref_to_last.translation[0, axis].item()))
 
-            rr.log(getattr(RerunAnnotations, f'obj_tran_ref_to_last_{axis_label}_gt'),
+            rr.log(RerunAnnotations.obj_tran_ref_to_last_gt_axes[axis_label],
                    rr.Scalar(gt_obj_ref_to_last.translation[0, axis].item()))
-            rr.log(getattr(RerunAnnotations, f'cam_tran_ref_to_last_{axis_label}_gt'),
+            rr.log(RerunAnnotations.cam_tran_ref_to_last_gt_axes[axis_label],
                    rr.Scalar(gt_cam_ref_to_last.translation[0, axis].item()))
 
-            rr.log(getattr(RerunAnnotations, f'chained_pose_long_flow_{axis_label}'),
+            rr.log(RerunAnnotations.chained_pose_long_flow_axes[axis_label],
                    rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
-            rr.log(getattr(RerunAnnotations, f'chained_pose_short_flow_{axis_label}'),
+            rr.log(RerunAnnotations.chained_pose_short_flow_axes[axis_label],
                    rr.Scalar(short_jumps_pose_axis_angle[axis].item()))
 
-            rr.log(getattr(RerunAnnotations, f'translation_scale_{axis_label}_gt'),
+            rr.log(RerunAnnotations.translation_scale_gt_axes[axis_label],
                    rr.Scalar(scale_factor_per_axis_long_edge[axis].item()))
 
     def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
