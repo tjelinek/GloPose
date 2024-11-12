@@ -72,7 +72,7 @@ class EpipolarPoseEstimator:
 
 
     @torch.no_grad()
-    def essential_matrix_preinitialization(self, keyframes, flow_tracks_inits):
+    def essential_matrix_preinitialization(self, keyframes):
 
         start_time = time()
         frame_i = max(keyframes)

@@ -734,7 +734,7 @@ class Tracking6D:
             self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
                                                 flow_frames, keyframes, flow_arcs)
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes, self.flow_tracks_inits)
+            self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
         else:
             raise ValueError("Unknown pre-init method.")
 
