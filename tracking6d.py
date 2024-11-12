@@ -428,30 +428,8 @@ class Tracking6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
-            tex = None
-            if self.config.features == 'deep':
-                if self.config.optimize_texture:
-                    self.rgb_apply(self.active_keyframes.keyframes, self.active_keyframes.flow_frames, flow_arcs,
-                                   frame_observations, flow_observations)
-                tex = torch.nn.Sigmoid()(self.rgb_encoder.texture_map)
-
             if self.config.write_results:
-
-                self.write_results.write_results(frame_i=frame_i, tex=tex, active_keyframes=self.active_keyframes,
-                                                 observations=frame_observations)
-
-                gt_mesh_vertices = self.gt_mesh_prototype.vertices[None].to(self.device) \
-                    if self.gt_mesh_prototype is not None else None
-                # self.write_results.evaluate_metrics(stepi=stepi, tracking6d=self,
-                #                                     keyframes=self.active_keyframes.keyframes,
-                #                                     predicted_vertices=encoder_result.vertices,
-                #                                     predicted_quaternion=encoder_result.quaternions,
-                #                                     predicted_translation=encoder_result.translations,
-                #                                     predicted_mask=frame_result.renders[:, :, 0, -1, ...],
-                #                                     gt_vertices=gt_mesh_vertices,
-                #                                     gt_rotation=self.gt_rotations,
-                #                                     gt_translation=self.gt_translations,
-                #                                     gt_object_mask=self.active_keyframes.segments[:, :, 1, ...])
+                self.write_results.write_results(frame_i=frame_i, active_keyframes=self.active_keyframes)
 
             angles = consecutive_quaternions_angular_difference(
                 self.data_graph.get_frame_data(frame_i).encoder_result.quaternions)

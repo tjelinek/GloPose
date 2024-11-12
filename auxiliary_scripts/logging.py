@@ -6,14 +6,13 @@ from typing import Dict, Tuple, List, Any
 
 import torch
 import imageio
-import csv
 import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
 import seaborn as sns
 import torchvision
 from PIL import Image
-from kornia.geometry import normalize_quaternion, Se3, Quaternion, PinholeCamera
+from kornia.geometry import Se3, Quaternion, PinholeCamera
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -22,23 +21,21 @@ from matplotlib.patches import ConnectionPatch, Patch
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
-from pytorch3d.loss.chamfer import chamfer_distance
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
-from models.loss import iou_loss, FMOLoss
+from models.loss import FMOLoss
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from utils import normalize_vertices
-from auxiliary_scripts.math_utils import quaternion_angular_difference, Se3_last_cam_to_world_from_Se3_obj, \
-    Se3_epipolar_cam_from_Se3_obj
+from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from models.rendering import infer_normalized_renderings, RenderingKaolin
 from models.encoder import EncoderResult, Encoder
-from flow import visualize_flow_with_images, flow_unit_coords_to_image_coords, \
-    source_coords_to_target_coords_image, source_coords_to_target_coords, source_coords_to_target_coords_np
+from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
+                  source_coords_to_target_coords, source_coords_to_target_coords_np)
 
 
 @dataclass
@@ -217,10 +214,6 @@ class WriteResults:
         self.logged_flow_tracks_inits: List = list()
 
         self.tracking_config: TrackerConfig = tracking_config
-        self.baseline_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
-        self.our_iou = -np.ones((self.tracking_config.input_frames - 1, 1))
-        self.tracking_log = open(Path(write_folder) / "tracking_log.txt", "w")
-        self.metrics_log = open(Path(write_folder) / "tracking_metrics_log.txt", "w")
 
         self.write_folder = Path(write_folder)
 
@@ -235,11 +228,6 @@ class WriteResults:
         self.template_fields: List[str] = []
 
         self.rerun_init()
-
-        self.metrics_writer = csv.writer(self.metrics_log)
-
-        self.metrics_writer.writerow(["Frame", "mIoU", "lastIoU", "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
-                                      "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"])
 
         self.tensorboard_log_dir = Path(write_folder) / Path("logs")
         self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
@@ -508,11 +496,6 @@ class WriteResults:
 
         rr.send_blueprint(blueprint)
 
-    def __del__(self):
-
-        self.tracking_log.close()
-        self.metrics_log.close()
-
     def visualize_loss_landscape(self, observations: FrameObservation, flow_observations: FlowObservation, tracking6d,
                                  stepi, relative_mode=False):
         """
@@ -729,16 +712,8 @@ class WriteResults:
         for field_name, value in values_dict.items():
             self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
-    def write_tensor_into_bbox(self, image, bounding_box):
-        image_with_margins = torch.zeros(image.shape[:-2] + self.image_width).to(image.device)
-        image_with_margins[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]] = \
-            image[..., bounding_box[0]:bounding_box[1], bounding_box[2]:bounding_box[3]]
-        return image_with_margins
-
     @torch.no_grad()
-    def write_results(self, frame_i, tex, active_keyframes: KeyframeBuffer, observations: FrameObservation):
-
-        observed_segmentations = observations.observed_segmentation
+    def write_results(self, frame_i, active_keyframes: KeyframeBuffer):
 
         self.visualize_observed_data(active_keyframes, frame_i)
 
@@ -752,10 +727,6 @@ class WriteResults:
             self.visualize_outliers_distribution(new_flow_arc)
 
         self.visualize_3d_camera_space(frame_i)
-
-        encoder_result = self.data_graph.get_frame_data(frame_i).encoder_result
-        detached_result = EncoderResult(*[it.clone().detach() if type(it) is torch.Tensor else it
-                                          for it in encoder_result])
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             self.log_poses_into_rerun(frame_i)
@@ -771,34 +742,6 @@ class WriteResults:
 
         print(f"Keyframes: {active_keyframes.keyframes}, "
               f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
-
-        self.tracking_log.write(f"Step {frame_i}:\n")
-        self.tracking_log.write(f"Keyframes: {active_keyframes.keyframes}\n")
-
-        self.write_keyframe_rotations(detached_result, active_keyframes.keyframes)
-        self.write_all_encoder_rotations(self.deep_encoder, max(active_keyframes.keyframes) + 1)
-
-        if self.tracking_config.features == 'rgb':
-            tex = detached_result.texture_maps
-
-        rgb_renders_result = self.rendering.forward(detached_result.translations, detached_result.quaternions,
-                                                    detached_result.vertices, self.deep_encoder.face_features,
-                                                    tex, detached_result.lights)
-
-        renders = rgb_renders_result.rendered_image
-        rendered_silhouette = rgb_renders_result.rendered_image_segmentation
-
-        # self.render_silhouette_overlap(rendered_silhouette[:, [-1]],
-        #                                observed_segmentations[:, [-1]], frame_i)
-
-        for tmpi in range(renders.shape[1]):
-            segmentations_discrete = (observed_segmentations[:, -1:, [-1]] > 0).to(observed_segmentations.dtype)
-            self.baseline_iou[frame_i - 1] = 1 - iou_loss(segmentations_discrete,
-                                                          observed_segmentations[:, -1:, [-1]]).detach().cpu()
-            self.our_iou[frame_i - 1] = 1 - iou_loss(rendered_silhouette[:, [-1]],
-                                                     observed_segmentations[:, -1:, [-1]]).detach().cpu()
-
-        print('Baseline IoU {}, our IoU {}'.format(self.baseline_iou[frame_i - 1], self.our_iou[frame_i - 1]))
 
     def visualize_3d_camera_space(self, frame_i: int):
 
@@ -1612,97 +1555,6 @@ class WriteResults:
         ax1.scatter(x1, y1, color=colors, marker=marker, alpha=0.8, s=1.5)
         ax2.scatter(x2_f, y2_f, color=colors, marker=marker, alpha=0.8, s=1.5)
 
-    @torch.no_grad()
-    def evaluate_metrics(self, stepi, tracking6d, keyframes, predicted_vertices, predicted_quaternion,
-                         predicted_translation, predicted_mask, gt_vertices=None, gt_rotation=None, gt_translation=None,
-                         gt_object_mask=None):
-
-        encoder_result_all_frames, _ = self.encoder_result_all_frames(tracking6d.encoder, max(keyframes) + 1)
-
-        chamfer_dist = "NA"
-        iou_3d = "NA"
-        miou_2d = "NA"
-        last_iou_2d = "NA"
-        mTransAll = "NA"
-        mTransKF = "NA"
-        transLast = "NA"
-        mAngDiffAll = "NA"
-        mAngDiffKF = "NA"
-        angDiffLast = "NA"
-
-        if gt_vertices is not None:
-            chamfer_dist = float(chamfer_distance(predicted_vertices, gt_vertices)[0])
-
-        if gt_rotation is not None:
-            gt_quaternion = axis_angle_to_quaternion(gt_rotation)
-
-            pred_quaternion_all_frames = encoder_result_all_frames.quaternions
-            gt_quaternion_all_frames = gt_quaternion[:, :stepi + 1]
-
-            pred_quaternion_keyframes = predicted_quaternion
-            gt_quaternion_keyframes = gt_quaternion[:, keyframes]
-
-            pred_quaternion_last = predicted_quaternion[None, :, -1]
-            gt_quaternion_last = gt_quaternion[None, :, stepi]
-
-            ang_diff_all_frames = quaternion_angular_difference(pred_quaternion_all_frames,
-                                                                gt_quaternion_all_frames)
-            mAngDiffAll = float(ang_diff_all_frames.mean())
-
-            ang_diff_keyframes = quaternion_angular_difference(pred_quaternion_keyframes,
-                                                               gt_quaternion_keyframes)
-            mAngDiffKF = float(ang_diff_keyframes.mean())
-
-            ang_diff_last_frame = quaternion_angular_difference(pred_quaternion_last,
-                                                                gt_quaternion_last)
-            angDiffLast = float(ang_diff_last_frame.mean())
-
-        if gt_translation is not None:
-            pred_translation_all_frames = encoder_result_all_frames.translations
-            gt_translation_all_frames = gt_translation[:, :, :stepi + 1]
-
-            pred_translation_keyframes = predicted_translation
-            gt_translation_keyframes = gt_translation[:, :, keyframes]
-
-            pred_translation_last = predicted_translation[None, :, :, -1]
-            gt_translation_last = gt_translation[None, :, :, stepi]
-
-            # Compute L2 norm for all frames
-            translation_l2_diff_all_frames = torch.norm(pred_translation_all_frames - gt_translation_all_frames,
-                                                        dim=-1)
-            mTransAll = float(translation_l2_diff_all_frames.mean())
-
-            # Compute L2 norm for keyframes
-            translation_l2_diff_keyframes = torch.norm(pred_translation_keyframes - gt_translation_keyframes,
-                                                       dim=-1)
-            mTransKF = float(translation_l2_diff_keyframes.mean())
-
-            # Compute L2 norm for the last frame
-            translation_l2_diff_last = torch.norm(pred_translation_last - gt_translation_last, dim=-1)
-            transLast = float(translation_l2_diff_last.mean())
-
-        if gt_object_mask is not None:
-
-            frame_iou = 0.
-            ious = torch.zeros(gt_object_mask.shape[1])
-            for frame_i in range(gt_object_mask.shape[1]):
-                frame_iou = 1 - iou_loss(predicted_mask[None, None, :, frame_i],
-                                         gt_object_mask[None, None, :, frame_i])
-                ious[frame_i] = frame_iou
-
-            last_iou_2d = float(frame_iou)
-            miou_2d = float(torch.mean(ious))
-
-        # ["Frame", "mIoU", "lastIoU" "mIoU_3D", "ChamferDistance", "mTransAll", "mTransKF",
-        #  "transLast", "mAngDiffAll", "mAngDiffKF", "angDiffLast"]
-        row_results = [stepi, miou_2d, last_iou_2d, iou_3d, chamfer_dist, mTransAll, mTransKF, transLast,
-                       mAngDiffAll, mAngDiffKF, angDiffLast]
-
-        row_results_rounded = [round(res, 3) if type(res) is float else res for res in row_results]
-
-        self.metrics_writer.writerow(row_results_rounded)
-        self.metrics_log.flush()
-
     def visualize_rotations_per_epoch(self, frame_i):
         frame_data = self.data_graph.get_frame_data(frame_i)
         logged_sgd_translations = frame_data.translations_during_optimization
@@ -1785,36 +1637,6 @@ class WriteResults:
         (self.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
         silhouette_overlap_path = self.write_folder / 'silhouette_overlap' / Path(f"silhouette_overlap_{frame_idx}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
-
-    def write_keyframe_rotations(self, detached_result, keyframes):
-        quaternions = detached_result.quaternions  # Assuming shape is (1, N, 4)
-        for k in range(quaternions.shape[0]):
-            quaternions[k] = normalize_quaternion(quaternions[k])
-        # Convert quaternions to Euler angles
-        angles_rad = quaternion_to_axis_angle(quaternions)
-        # Convert radians to degrees
-        angles_deg = torch.rad2deg(angles_rad)
-        rot_axes = ['X-axis: ', 'Y-axis: ', 'Z-axis: ']
-        for k in range(angles_rad.shape[0]):
-            rotations = [rot_axes[i] + str(round(float(angles_deg[k, i]), 3))
-                         for i in range(3)]
-            self.tracking_log.write(
-                f"Keyframe {keyframes[k]} rotation: " + str(rotations) + '\n')
-        for k in range(detached_result.quaternions.shape[0]):
-            self.tracking_log.write(
-                f"Keyframe {keyframes[k]} translation: str{detached_result.translations[k]}\n")
-        self.tracking_log.write('\n')
-        self.tracking_log.flush()
-
-    def write_all_encoder_rotations(self, encoder: Encoder, last_keyframe_idx):
-        self.tracking_log.write("============================================\n")
-        self.tracking_log.write("Writing all the states of the encoder\n")
-        self.tracking_log.write("============================================\n")
-        encoder_result_prime, keyframes_prime = self.encoder_result_all_frames(encoder, last_keyframe_idx)
-        self.write_keyframe_rotations(encoder_result_prime, keyframes_prime)
-        self.tracking_log.write("============================================\n")
-        self.tracking_log.write("END of Writing all the states of the encoder\n")
-        self.tracking_log.write("============================================\n\n\n")
 
     @staticmethod
     def encoder_result_all_frames(encoder: Encoder, last_keyframe_idx: int):
