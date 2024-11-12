@@ -5,41 +5,43 @@ import networkx as nx
 import torch
 from kornia.geometry import Se3
 
-from auxiliary_scripts.cameras import Cameras
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
 from models.encoder import EncoderResult
 
 
 @dataclass
 class CommonFrameData:
+
+    # Input data
+    frame_observation: FrameObservation = None
+
+    # Ground truth data
     gt_rot_axis_angle: torch.Tensor = None
     gt_translation: torch.Tensor = None
+    gt_pose_cam: Se3 = None
 
+    # Intermediate output data
+    encoder_result: EncoderResult = None
+
+    # Optimization
+    frame_losses: Any = None
     translations_during_optimization: List = field(default_factory=list)
     quaternions_during_optimization: List = field(default_factory=list)
 
+    # Long short jumps
+    long_jump_source: int = None
+    short_jump_source: int = None
     predicted_object_se3_long_jump: Se3 = Se3.identity(1, 'cuda')
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
     predicted_object_se3_short_jump: Se3 = Se3.identity(1, 'cuda')
-
     predicted_obj_long_short_chain_diff: float = 0.0
 
-    ransac_rot_obj_axis_angle: torch.Tensor = None
-
-    frame_losses: Any = None
-    encoder_result: EncoderResult = None
-
-    pose_estimation_time: float = None
-
-    frame_observation: FrameObservation = None
-
-    gt_pose_cam: Se3 = None
-    predicted_pose_cam: Se3 = None
-
-    long_jump_source: int = None
-    short_jump_source: int = None
+    # Sources
     reliable_sources: Set[int] = field(default_factory=set)
     is_source_reliable: bool = True
+
+    # Timings
+    pose_estimation_time: float = None
 
 
 @dataclass
