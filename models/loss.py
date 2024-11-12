@@ -107,6 +107,8 @@ class FMOLoss(nn.Module):
 
             flow_loss = per_pixel_mean_flow_loss_rendered
             losses["flow_loss"] = flow_loss * self.config.loss_flow_weight
+        else:
+            losses["flow_loss"] = torch.tensor([0.]).cuda()
 
         loss = 0
         for ls in losses:
