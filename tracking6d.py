@@ -362,18 +362,19 @@ class Tracking6D:
         }
 
         # For short_flow_model
-        if self.config.short_flow_model in short_flow_models:
-            self.short_flow_model = short_flow_models[self.config.short_flow_model](self.config.MFT_short_backbone_cfg,
-                                                                                    config=self.config,
-                                                                                    faces=self.faces,
-                                                                                    gt_encoder=self.gt_encoder)
-        else:
-            # Default case or raise an error if you don't want a default FlowProvider
-            raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
+        # if self.config.short_flow_model in short_flow_models:
+        #     self.short_flow_model =short_flow_models[self.config.short_flow_model](self.config.MFT_short_backbone_cfg,
+        #                                                                             config=self.config,
+        #                                                                             faces=self.faces,
+        #                                                                             gt_encoder=self.gt_encoder)
+        # else:
+        #     # Default case or raise an error if you don't want a default FlowProvider
+        #     raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
 
         # For long_flow_model
 
         self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
+        self.short_flow_model = self.roma_flow_provider
 
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
