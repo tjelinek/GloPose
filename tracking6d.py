@@ -17,7 +17,7 @@ from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
+from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference, Se3_epipolar_cam_from_Se3_obj
 from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider,
                                              MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider,
                                              RoMaFlowProvider)
@@ -383,12 +383,15 @@ class Tracking6D:
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
+        Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
 
         our_losses = -np.ones((self.config.input_frames - 1, 1))
 
         self.data_graph.add_new_frame(0)
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
         self.data_graph.get_frame_data(0).gt_translation = self.gt_translations[0]
+        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[0]]), self.gt_translations[[0]])
+        self.data_graph.get_frame_data(0).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
 
         initial_predicted_quat = Quaternion.from_axis_angle(self.gt_rotations[[0]])
         initial_predicted_Se3 = Se3(initial_predicted_quat, self.gt_translations[[0]])
@@ -407,6 +410,9 @@ class Tracking6D:
             self.data_graph.add_new_frame(frame_i)
             self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[frame_i]
             self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[frame_i]
+            gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]), self.gt_translations[[frame_i]])
+            self.data_graph.get_frame_data(frame_i).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj,
+                                                                                                Se3_world_to_cam)
 
             next_tracker_frame = frame_i  # Index of a frame
 
