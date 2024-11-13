@@ -1,6 +1,3 @@
-import sys
-
-import numpy as np
 import torch
 
 from dataset_generators import scenarios
@@ -10,8 +7,6 @@ from runtime_utils import run_tracking_on_sequence, parse_args
 from auxiliary_scripts.data_utils import load_mesh, load_texture
 from utils import load_config
 from pathlib import Path
-
-sys.path.append('repositories/OSTrack/S2DNet')
 
 
 def main():

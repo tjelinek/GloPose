@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import sys
 import time
 import json
 from pathlib import Path
@@ -11,8 +10,6 @@ from auxiliary_scripts.dataset_utils.bop_challenge import get_pinhole_params
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from utils import load_config
-
-sys.path.append('repositories/OSTrack/S2DNet')
 
 
 def main():
