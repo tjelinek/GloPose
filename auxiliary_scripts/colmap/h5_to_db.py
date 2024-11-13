@@ -17,7 +17,8 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image, ExifTags
 
-from database import COLMAPDatabase, image_ids_to_pair_id
+from auxiliary_scripts.colmap.colmap_database import image_ids_to_pair_id, COLMAPDatabase
+
 
 def get_focal(image_path, err_on_default=False):
     image         = Image.open(image_path)
