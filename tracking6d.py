@@ -1,4 +1,5 @@
 import copy
+import sys
 
 import kaolin
 import numpy as np
@@ -14,7 +15,6 @@ from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
-from repositories.OSTrack.S2DNet.s2dnet import S2DNet
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference
@@ -81,7 +81,7 @@ class Tracking6D:
         self.rgb_optimizer = None
 
         # Feature extraction
-        self.feature_extractor: Optional[S2DNet] = None
+        self.feature_extractor = None
 
         # Optical flow
         self.short_flow_model: Optional[Union[FlowProvider, MFTFlowProvider]] = None
@@ -295,7 +295,10 @@ class Tracking6D:
 
     def initialize_feature_extractor(self):
         if self.config.features == 'deep':
-            self.feature_extractor = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
+            sys.path.append('repositories/OSTrack/S2DNet')
+            from repositories.OSTrack.S2DNet.s2dnet import S2DNet
+
+            self.feature_extractor: S2DNet = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
             self.feat = lambda x: self.feature_extractor(x[0])[0][None][:, :, :self.config.features_channels]
             self.feat_rgb = lambda x: x
         else:

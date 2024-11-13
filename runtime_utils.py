@@ -1,6 +1,5 @@
 import gc
 import shutil
-import sys
 import os
 import torch
 import time
@@ -8,9 +7,6 @@ import argparse
 from pathlib import Path
 
 from tracker_config import TrackerConfig
-
-sys.path.append('repositories/OSTrack/S2DNet')
-
 from tracking6d import Tracking6D
 
 
