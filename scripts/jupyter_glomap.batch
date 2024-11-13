@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --time 1-0:00:00
 #SBATCH --job-name jupyter-notebook
-#SBATCH --output /mnt/personal/jelint19/jupyter-glomap-%J.log
+#SBATCH --output /mnt/personal/jelint19/jupyter-glomap.log
 
 # get tunneling info
 XDG_RUNTIME_DIR=""
