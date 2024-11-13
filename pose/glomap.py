@@ -1,16 +1,21 @@
 import subprocess
+import sys
 from pathlib import Path
+from typing import Dict
 
 import imageio
 import numpy as np
 import pycolmap
 import torch
-from kornia.geometry import PinholeCamera
+from kornia.geometry import PinholeCamera, Quaternion
 
-from auxiliary_scripts.colmap_database import COLMAPDatabase
+from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
+from auxiliary_scripts.colmap.read_write_model import read_images_binary, Image
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
+sys.path.append('repositories/bop_toolkit')
+from repositories.bop_toolkit.bop_toolkit_lib.pose_error import re, te
 from tracker_config import TrackerConfig
 
 
@@ -20,8 +25,11 @@ class GlomapWrapper:
                  image_shape: ImageShape, pinhole_params: PinholeCamera, pose_icosphere: PoseIcosphere):
         self.write_folder = write_folder
         self.tracking_config = tracking_config
-        self.colmap_image_path = (self.write_folder /
-                                    f'icosphere_dump_{self.tracking_config.sequence}')
+        self.colmap_base_path = (self.write_folder /
+                                  f'icosphere_dump_{self.tracking_config.sequence}')
+
+        self.colmap_image_path = self.colmap_base_path / 'images'
+
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
 
         self.image_width = image_shape.width
@@ -31,8 +39,8 @@ class GlomapWrapper:
         self.pinhole_params = pinhole_params
         self.pose_icosphere = pose_icosphere
 
-        self.colmap_db_path = self.colmap_image_path / 'database.db'
-        self.colmap_output_path = self.colmap_image_path / 'output'
+        self.colmap_db_path = self.colmap_base_path / 'database.db'
+        self.colmap_output_path = self.colmap_base_path / 'output'
         self.colmap_db: COLMAPDatabase = COLMAPDatabase.connect(self.colmap_db_path)
         self.colmap_db.create_tables()
 
@@ -89,10 +97,10 @@ class GlomapWrapper:
             src_pts_xy_roma = src_pts_xy_roma[dst_pts_mask & src_pts_mask]
             dst_pts_xy_roma = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
 
-            src_pts_indices = torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1))[1]
-            dst_pts_indices = torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1))[1]
+            src_pts_idxs = torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1))[1]
+            dst_pts_idxs = torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1))[1]
 
-            matches = torch.stack([src_pts_indices, dst_pts_indices], dim=1)
+            matches = torch.stack([src_pts_idxs, dst_pts_idxs], dim=1)
             self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
             # self.colmap_db.add_two_view_geometry(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
 
@@ -112,6 +120,7 @@ class GlomapWrapper:
             "--output_path", str(self.colmap_output_path),
             "--image_path", str(self.colmap_image_path),
             "--Mapper.tri_ignore_two_view_tracks", str(0),
+            "--log_to_stderr", str(1),
         ]
 
         subprocess.run(colmap_command, check=True, capture_output=True, text=True)
@@ -131,3 +140,29 @@ class GlomapWrapper:
 
         subprocess.run(glomap_command, check=True, capture_output=True, text=True)
 
+    def eval_poses(self):
+
+        eval_path = self.colmap_output_path / '0'
+        images_file_path = eval_path / 'images.bin'
+
+        images: Dict[int, Image] = read_images_binary(images_file_path)
+        rot_errs = []
+        tran_errs = []
+        for image_idx, image in images.items():
+            frame_idx = image_idx - 1
+            qvec_pred = image.qvec
+            R_pred = Quaternion(torch.from_numpy(qvec_pred)[None]).matrix().squeeze().numpy(force=True)
+            t_pred = image.tvec
+
+            gt_pose_Se3 = self.data_graph.get_frame_data(frame_idx).gt_pose_cam
+            R_gt = gt_pose_Se3.quaternion.matrix().squeeze().numpy(force=True)
+            t_gt = gt_pose_Se3.translation.squeeze().numpy(force=True)
+
+            rot_error = re(R_pred, R_gt)
+            tran_error = te(t_pred, t_gt)
+
+            rot_errs.append(rot_error)
+            tran_errs.append(tran_error)
+
+        print(f'Mean rotation error is {np.mean(rot_errs)}')
+        print(f'Mean translation error is {np.mean(tran_errs)}')
