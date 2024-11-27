@@ -9,7 +9,6 @@ from auxiliary_scripts.flow_provider import RoMaFlowProvider
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
-from auxiliary_scripts.depth import DepthAnythingProvider
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
@@ -35,7 +34,6 @@ class EpipolarPoseEstimator:
         self.encoder: Encoder = encoder
         self.gt_encoder: Encoder = gt_encoder
         self.pose_icosphere: PoseIcosphere = pose_icosphere
-        self.depth_anything: DepthAnythingProvider = DepthAnythingProvider()
 
         self.image_width: int = int(camera.width.item())
         self.image_height: int = int(camera.height.item())
