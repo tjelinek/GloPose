@@ -24,6 +24,7 @@ class GlomapWrapper:
                                   f'icosphere_dump_{self.tracking_config.sequence}')
 
         self.colmap_image_path = self.colmap_base_path / 'images'
+        self.colmap_seg_path = self.colmap_base_path / 'segmentations'
 
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
 
@@ -54,6 +55,9 @@ class GlomapWrapper:
 
         node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
+
+        segmentation_save_path = self.colmap_seg_path / f'segment_{frame_idx}.png'
+        imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
 
         seg_target_nonzero = img_seg[..., 0].nonzero()
         seg_target_nonzero_unit = seg_target_nonzero
