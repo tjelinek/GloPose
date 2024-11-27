@@ -1,15 +1,13 @@
 import subprocess
 from pathlib import Path
-from typing import Dict
 
 import imageio
 import numpy as np
 import pycolmap
 import torch
-from kornia.geometry import PinholeCamera, Quaternion
+from kornia.geometry import PinholeCamera
 
 from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
-from auxiliary_scripts.colmap.read_write_model import read_images_binary, Image
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
@@ -110,56 +108,29 @@ class GlomapWrapper:
 
         self.colmap_output_path.mkdir(exist_ok=True)
 
-        colmap_command = [
-            "colmap",
-            "mapper",
-            "--database_path", str(self.colmap_db_path),
-            "--output_path", str(self.colmap_output_path),
-            "--image_path", str(self.colmap_image_path),
-            "--Mapper.tri_ignore_two_view_tracks", str(0),
-            "--log_to_stderr", str(1),
-        ]
+        if self.tracking_config.frame_reconstruction_algorithm == 'colmap':
+            colmap_command = [
+                "colmap",
+                "mapper",
+                "--database_path", str(self.colmap_db_path),
+                "--output_path", str(self.colmap_output_path),
+                "--image_path", str(self.colmap_image_path),
+                "--Mapper.tri_ignore_two_view_tracks", str(0),
+                "--log_to_stderr", str(1),
+            ]
 
-        subprocess.run(colmap_command, check=True, capture_output=True, text=True)
+            subprocess.run(colmap_command, check=True, capture_output=True, text=True)
+        elif self.tracking_config.frame_reconstruction_algorithm == 'glomap':
+            glomap_command = [
+                "glomap",
+                "mapper",
+                "--database_path", str(self.colmap_db_path),
+                "--output_path", str(self.colmap_output_path),
+                "--image_path", str(self.colmap_image_path),
+                "--TrackEstablishment.min_num_view_per_track", str(2),
+            ]
 
-        # mapper_options = pycolmap.IncrementalMapperOptions(tri_ignore_two_view_tracks=0)
-        # maps = pycolmap.incremental_mapping(str(self.colmap_db_path), str(self.colmap_image_path), str(self.colmap_output_path), mapper_options=mapper_options)
-        # maps[0].write(self.colmap_output_path)
-
-        glomap_command = [
-            "glomap",
-            "mapper",
-            "--database_path", str(self.colmap_db_path),
-            "--output_path", str(self.colmap_output_path),
-            "--image_path", str(self.colmap_image_path),
-            "--TrackEstablishment.min_num_view_per_track", str(2),
-        ]
-
-        subprocess.run(glomap_command, check=True, capture_output=True, text=True)
-
-    # def eval_poses(self):
-    #
-    #     eval_path = self.colmap_output_path / '0'
-    #     images_file_path = eval_path / 'images.bin'
-    #
-    #     images: Dict[int, Image] = read_images_binary(images_file_path)
-    #     rot_errs = []
-    #     tran_errs = []
-    #     for image_idx, image in images.items():
-    #         frame_idx = image_idx - 1
-    #         qvec_pred = image.qvec
-    #         R_pred = Quaternion(torch.from_numpy(qvec_pred)[None]).matrix().squeeze().numpy(force=True)
-    #         t_pred = image.tvec
-    #
-    #         gt_pose_Se3 = self.data_graph.get_frame_data(frame_idx).gt_pose_cam
-    #         R_gt = gt_pose_Se3.quaternion.matrix().squeeze().numpy(force=True)
-    #         t_gt = gt_pose_Se3.translation.squeeze().numpy(force=True)
-    #
-    #         rot_error = re(R_pred, R_gt)
-    #         tran_error = te(t_pred, t_gt)
-    #
-    #         rot_errs.append(rot_error)
-    #         tran_errs.append(tran_error)
-    #
-    #     print(f'Mean rotation error is {np.mean(rot_errs)}')
-    #     print(f'Mean translation error is {np.mean(tran_errs)}')
+            subprocess.run(glomap_command, check=True, capture_output=True, text=True)
+        else:
+            raise ValueError(f"Unknown value frame_reconstruction_algorithm=="
+                             f"{self.tracking_config.frame_reconstruction_algorithm}")
