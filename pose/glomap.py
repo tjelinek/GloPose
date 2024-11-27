@@ -1,5 +1,4 @@
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict
 
@@ -14,8 +13,6 @@ from auxiliary_scripts.colmap.read_write_model import read_images_binary, Image
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
-sys.path.append('repositories/bop_toolkit')
-from repositories.bop_toolkit.bop_toolkit_lib.pose_error import re, te
 from tracker_config import TrackerConfig
 
 
@@ -140,29 +137,29 @@ class GlomapWrapper:
 
         subprocess.run(glomap_command, check=True, capture_output=True, text=True)
 
-    def eval_poses(self):
-
-        eval_path = self.colmap_output_path / '0'
-        images_file_path = eval_path / 'images.bin'
-
-        images: Dict[int, Image] = read_images_binary(images_file_path)
-        rot_errs = []
-        tran_errs = []
-        for image_idx, image in images.items():
-            frame_idx = image_idx - 1
-            qvec_pred = image.qvec
-            R_pred = Quaternion(torch.from_numpy(qvec_pred)[None]).matrix().squeeze().numpy(force=True)
-            t_pred = image.tvec
-
-            gt_pose_Se3 = self.data_graph.get_frame_data(frame_idx).gt_pose_cam
-            R_gt = gt_pose_Se3.quaternion.matrix().squeeze().numpy(force=True)
-            t_gt = gt_pose_Se3.translation.squeeze().numpy(force=True)
-
-            rot_error = re(R_pred, R_gt)
-            tran_error = te(t_pred, t_gt)
-
-            rot_errs.append(rot_error)
-            tran_errs.append(tran_error)
-
-        print(f'Mean rotation error is {np.mean(rot_errs)}')
-        print(f'Mean translation error is {np.mean(tran_errs)}')
+    # def eval_poses(self):
+    #
+    #     eval_path = self.colmap_output_path / '0'
+    #     images_file_path = eval_path / 'images.bin'
+    #
+    #     images: Dict[int, Image] = read_images_binary(images_file_path)
+    #     rot_errs = []
+    #     tran_errs = []
+    #     for image_idx, image in images.items():
+    #         frame_idx = image_idx - 1
+    #         qvec_pred = image.qvec
+    #         R_pred = Quaternion(torch.from_numpy(qvec_pred)[None]).matrix().squeeze().numpy(force=True)
+    #         t_pred = image.tvec
+    #
+    #         gt_pose_Se3 = self.data_graph.get_frame_data(frame_idx).gt_pose_cam
+    #         R_gt = gt_pose_Se3.quaternion.matrix().squeeze().numpy(force=True)
+    #         t_gt = gt_pose_Se3.translation.squeeze().numpy(force=True)
+    #
+    #         rot_error = re(R_pred, R_gt)
+    #         tran_error = te(t_pred, t_gt)
+    #
+    #         rot_errs.append(rot_error)
+    #         tran_errs.append(tran_error)
+    #
+    #     print(f'Mean rotation error is {np.mean(rot_errs)}')
+    #     print(f'Mean translation error is {np.mean(tran_errs)}')
