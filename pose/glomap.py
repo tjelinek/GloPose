@@ -46,15 +46,15 @@ class GlomapWrapper:
         self.colmap_db.add_camera(1, self.image_width, self.image_height, colmap_db_camera_params, camera_id=1)
 
     def dump_icosphere_node_for_glomap(self, icosphere_node):
+
         frame_idx = icosphere_node.keyframe_idx_observed
         frame_data = self.data_graph.get_frame_data(frame_idx)
 
-        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
-        img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
-        img *= img_seg
+        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to('cuda')
+        img_seg = frame_data.frame_observation.observed_segment.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
 
         node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
-        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8))
+        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
 
         segmentation_save_path = self.colmap_seg_path / f'segment_{frame_idx}.png'
         imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
@@ -78,26 +78,33 @@ class GlomapWrapper:
                 continue
 
             source_node = self.data_graph.get_frame_data(edge_source)
-            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0)
+            img_seg_target = source_node.frame_observation.observed_segment.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
             if edge_data.reliability_score < 1 / 3 * self.tracking_config.flow_reliability_threshold:
                 continue
 
-            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].cuda()
-            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].cuda()
+            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].to('cuda')
+            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].to('cuda')
 
-            src_pts_xy_roma = edge_data.src_pts_xy_roma.to(torch.int).cuda()
-            dst_pts_xy_roma = edge_data.dst_pts_xy_roma.to(torch.int).cuda()
+            H, W = self.image_height, self.image_width
+            src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(edge_data.flow_warp, H, W, H, W)
+
+            src_pts_xy_roma = src_pts_xy_roma.to(torch.int).to('cuda')
+            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int).to('cuda')
 
             src_pts_mask = ((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
             dst_pts_mask = ((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
-            src_pts_xy_roma = src_pts_xy_roma[dst_pts_mask & src_pts_mask]
-            dst_pts_xy_roma = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
+            src_pts_xy_roma_valid = src_pts_xy_roma[dst_pts_mask & src_pts_mask]
+            dst_pts_xy_roma_valid = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
 
-            src_pts_idxs = torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1))[1]
-            dst_pts_idxs = torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1))[1]
+            src_pts_idxs = \
+            torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
+            dst_pts_idxs = \
+            torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
+
+            # print(f'{src_pts_idxs.shape}, {dst_pts_idxs.shape}')
 
             matches = torch.stack([src_pts_idxs, dst_pts_idxs], dim=1)
             self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
