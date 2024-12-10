@@ -13,6 +13,7 @@ from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
+from optimization.optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
 from data_structures.data_graph import DataGraph
@@ -29,7 +30,6 @@ from models.flow_loss_model import LossFunctionWrapper
 from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from optimization import lsq_lma_custom, levenberg_marquardt_ceres
 from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker, \
     PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem, PrecomputedTrackerSegmentAnything2
 from tracker_config import TrackerConfig
@@ -741,8 +741,20 @@ class Tracking6D:
         print("Pre-initializing the objects position")
 
         if self.config.preinitialization_method == 'levenberg-marquardt':
-            self.run_levenberg_marquardt_method(stacked_observations, stacked_flow_observations,
-                                                flow_frames, keyframes, flow_arcs)
+            self.run_levenberg_marquardt_method(
+                observations=stacked_observations,
+                flow_observations=stacked_flow_observations,
+                flow_frames=flow_frames,
+                keyframes=keyframes,
+                flow_arcs=flow_arcs,
+                encoder=self.encoder,
+                rendering=self.rendering,
+                loss_function=self.loss_function,
+                image_shape=self.image_shape,
+                config=self.config,
+                use_custom_jacobian=self.config.use_custom_jacobian,
+                levenberg_marquardt_implementation=self.config.levenberg_marquardt_implementation,
+            )
         elif self.config.preinitialization_method == 'essential_matrix_decomposition':
             self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
         else:
@@ -756,18 +768,52 @@ class Tracking6D:
         self.best_model["value"] = float(joint_loss)
         self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
-    def run_levenberg_marquardt_method(self, observations: FrameObservation, flow_observations: FlowObservation,
-                                       flow_frames, keyframes, flow_arcs):
+    @staticmethod
+    def run_levenberg_marquardt_method(
+            observations,
+            flow_observations,
+            flow_frames,
+            keyframes,
+            flow_arcs,
+            encoder,
+            rendering,
+            loss_function,
+            image_shape,
+            config,
+            use_custom_jacobian=False,
+            levenberg_marquardt_implementation='ceres',
+            max_iterations=100
+    ):
+        """
+        Standalone implementation of the Levenberg-Marquardt method.
+
+        Args:
+            observations: Observed images and segmentations.
+            flow_observations: Observed flows, segmentations, occlusions, uncertainties.
+            flow_frames: List of flow frames.
+            keyframes: List of keyframes.
+            flow_arcs: Pairs of flow-to-keyframe relationships.
+            encoder: Encoder object for inference.
+            rendering: Rendering object for flow rendering and image generation.
+            loss_function: Loss function wrapper for calculating optimization losses.
+            image_shape: Shape of the image (width and height).
+            config: Configuration object with parameters for optimization.
+            use_custom_jacobian (bool): Flag to use custom Jacobian.
+            levenberg_marquardt_implementation (str): 'ceres' or 'custom'.
+            max_iterations (int): Maximum number of iterations for optimization.
+
+        Returns:
+            dict: Best model information including losses and encoder state.
+        """
+        # Extract and zero-out other loss coefficients
         loss_coefs_names = [
-            'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight',
-            'loss_dist_weight', 'loss_q_weight',
-            'loss_t_weight', 'loss_rgb_weight', 'loss_flow_weight'
+            'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight', 'loss_dist_weight',
+            'loss_q_weight', 'loss_t_weight', 'loss_rgb_weight', 'loss_flow_weight'
         ]
 
-        # We only care about the flow loss at the moment
         for field_name in loss_coefs_names:
             if field_name != "loss_flow_weight":
-                setattr(self.config, field_name, 0)
+                setattr(config, field_name, 0)
 
         observed_images = observations.observed_image
         observed_segmentations = observations.observed_segmentation
@@ -778,77 +824,88 @@ class Tracking6D:
 
         flow_arcs_indices = [(flow_frames.index(pair[0]), keyframes.index(pair[1])) for pair in flow_arcs]
 
-        self.best_model["value"] = 100
+        best_model = {"value": float('inf')}
 
-        encoder_result, encoder_result_flow_frames = self.encoder.frames_and_flow_frames_inference(keyframes,
-                                                                                                   flow_frames)
+        # Perform encoder inference
+        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
         kf_translations = encoder_result.translations[0].detach()
         kf_quaternions = encoder_result.quaternions.detach()
         trans_quats = torch.cat([kf_translations, kf_quaternions], dim=-1).squeeze().flatten()
 
-        flow_loss_model = LossFunctionWrapper(encoder_result, encoder_result_flow_frames, self.encoder, self.rendering,
-                                              flow_arcs_indices, self.loss_function, observed_flows,
-                                              observed_flows_segmentations,
-                                              self.rendering.width, self.rendering.height, self.image_shape.width,
-                                              self.image_shape.height)
+        # Create the loss model
+        flow_loss_model = LossFunctionWrapper(
+            encoder_result, encoder_result_flow_frames, encoder, rendering, flow_arcs_indices,
+            loss_function, observed_flows, observed_flows_segmentations,
+            rendering.width, rendering.height, image_shape.width, image_shape.height
+        )
 
         fun = flow_loss_model.forward
         jac_function = None
-        if self.config.use_custom_jacobian:
+        if use_custom_jacobian:
             jac_function = flow_loss_model.compute_jacobian
-        if self.config.levenberg_marquardt_implementation == 'ceres':
-            coefficients_list = levenberg_marquardt_ceres(p=trans_quats, cost_function=fun,
-                                                          num_residuals=self.config.flow_sgd_n_samples * len(flow_arcs))
-        elif self.config.levenberg_marquardt_implementation == 'custom':
-            coefficients_list = lsq_lma_custom(p=trans_quats, function=fun, args=(), jac_function=jac_function,
-                                               max_iter=self.config.levenberg_marquardt_max_ter)
+
+        # Select implementation
+        if levenberg_marquardt_implementation == 'ceres':
+            coefficients_list = levenberg_marquardt_ceres(
+                p=trans_quats, cost_function=fun,
+                num_residuals=config.flow_sgd_n_samples * len(flow_arcs)
+            )
+        elif levenberg_marquardt_implementation == 'custom':
+            coefficients_list = lsq_lma_custom(
+                p=trans_quats, function=fun, args=(), jac_function=jac_function, max_iter=max_iterations
+            )
         else:
             raise ValueError("'levenberg_marquardt_implementation' must be either 'custom' or 'ceres'")
 
-        for epoch in range(len(coefficients_list)):
-            trans_quats = coefficients_list[epoch]
+        # Optimization loop
+        for epoch, trans_quats in enumerate(coefficients_list):
             trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 7, 7))
 
             row_translation = trans_quats[:, :3]
             row_quaternion = trans_quats[:, 3:]
             encoder_result = encoder_result._replace(translations=row_translation, quaternions=row_quaternion)
 
-            inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
-                                                           encoder_result_flow_frames, flow_arcs_indices,
-                                                           self.image_shape.width, self.image_shape.height)
+            # Perform inference
+            inference_result = infer_normalized_renderings(
+                rendering, encoder.face_features, encoder_result,
+                encoder_result_flow_frames, flow_arcs_indices,
+                image_shape.width, image_shape.height
+            )
             renders, rendered_silhouettes, rendered_flow_result = inference_result
 
-            loss_result = self.loss_function.forward(rendered_images=renders,
-                                                     observed_images=observed_images,
-                                                     rendered_silhouettes=rendered_silhouettes,
-                                                     observed_silhouettes=observed_segmentations,
-                                                     rendered_flow=rendered_flow_result.theoretical_flow,
-                                                     observed_flow=observed_flows,
-                                                     observed_flow_segmentation=observed_flows_segmentations,
-                                                     rendered_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
-                                                     observed_flow_occlusion=observed_flows_occlusion,
-                                                     rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
-                                                     observed_flow_uncertainties=observed_flows_uncertainty,
-                                                     keyframes_encoder_result=encoder_result)
+            # Compute loss
+            loss_result = loss_function.forward(
+                rendered_images=renders,
+                observed_images=observed_images,
+                rendered_silhouettes=rendered_silhouettes,
+                observed_silhouettes=observed_segmentations,
+                rendered_flow=rendered_flow_result.theoretical_flow,
+                observed_flow=observed_flows,
+                observed_flow_segmentation=observed_flows_segmentations,
+                rendered_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
+                observed_flow_occlusion=observed_flows_occlusion,
+                rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
+                observed_flow_uncertainties=observed_flows_uncertainty,
+                keyframes_encoder_result=encoder_result
+            )
 
             losses_all, losses, joint_loss, per_pixel_error = loss_result
             joint_loss = joint_loss.mean()
-            if joint_loss < self.best_model["value"]:
-                self.best_model["losses"] = losses_all
-                self.best_model["value"] = joint_loss
+            if joint_loss < best_model["value"]:
+                best_model["losses"] = losses_all
+                best_model["value"] = joint_loss
 
-                self.encoder.translation_offsets[keyframes] = encoder_result.translations.detach()
-                self.encoder.quaternion_offsets[keyframes] = encoder_result.quaternions.detach()
+                encoder.translation_offsets[keyframes] = encoder_result.translations.detach()
+                encoder.quaternion_offsets[keyframes] = encoder_result.quaternions.detach()
 
-                self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
+                best_model["encoder"] = copy.deepcopy(encoder.state_dict())
 
+        # Restore loss coefficients
         for field_name in loss_coefs_names:
             if field_name != "loss_flow_weight":
-                setattr(self.config, field_name, getattr(self.config_copy, field_name))
+                setattr(config, field_name, getattr(config, f"{field_name}_backup", 1))
 
-        infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames, flow_arcs,
-                                        'deep_features')
-        return infer_result
+        return best_model
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):
