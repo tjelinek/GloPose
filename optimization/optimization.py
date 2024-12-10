@@ -295,3 +295,18 @@ def lsq_lma_custom(
     torch.cuda.synchronize()
     print(f"Whole Levenberg-Marquardt Duration {time.time() - global_start_time}")
     return p_list
+
+
+# run_levenberg_marquardt_method(
+#     flow_observations=stacked_flow_observations,
+#     flow_frames=flow_frames,
+#     keyframes=keyframes,
+#     flow_arcs=flow_arcs,
+#     encoder=self.encoder,
+#     rendering=self.rendering,
+#     loss_function=self.loss_function,
+#     image_shape=self.image_shape,
+#     config=self.config,
+#     use_custom_jacobian=self.config.use_custom_jacobian,
+#     levenberg_marquardt_implementation=self.config.levenberg_marquardt_implementation,
+# )
