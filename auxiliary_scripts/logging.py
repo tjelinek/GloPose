@@ -1,5 +1,4 @@
 from collections import defaultdict
-from itertools import product
 
 from typing import Tuple, List, Any
 
@@ -23,7 +22,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
-from data_structures.keyframe_buffer import FrameObservation, FlowObservation, KeyframeBuffer
+from data_structures.keyframe_buffer import KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
