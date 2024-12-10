@@ -1,7 +1,7 @@
 from collections import defaultdict
 from itertools import product
 
-from typing import Dict, Tuple, List, Any
+from typing import Tuple, List, Any
 
 import torch
 import imageio
@@ -18,7 +18,6 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import ConnectionPatch, Patch
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
 from kornia.geometry.conversions import quaternion_to_axis_angle, axis_angle_to_quaternion
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
@@ -73,10 +72,6 @@ class WriteResults:
         self.template_fields: List[str] = []
 
         self.rerun_init()
-
-        self.tensorboard_log_dir = Path(write_folder) / Path("logs")
-        self.tensorboard_log_dir.mkdir(exist_ok=True, parents=True)
-        self.tensorboard_log = None
 
     def init_directories(self):
         if not self.tracking_config.write_to_rerun_rather_than_disk:
@@ -553,14 +548,6 @@ class WriteResults:
                 joint_losses[i, j] = joint_loss
 
         return joint_losses
-
-    def set_tensorboard_log_for_frame(self, frame_i):
-        self.tensorboard_log = SummaryWriter(str(self.tensorboard_log_dir / f'Frame_{frame_i}'))
-
-    def write_into_tensorboard_log(self, sgd_iter: int, values_dict: Dict):
-
-        for field_name, value in values_dict.items():
-            self.tensorboard_log.add_scalar(field_name, value, sgd_iter)
 
     @torch.no_grad()
     def write_results(self, frame_i, active_keyframes: KeyframeBuffer):
