@@ -4,7 +4,107 @@ import pyceres as ceres
 
 from typing import Callable, Union, Tuple, List
 
+from models.flow_loss_model import LossFunctionWrapper
 from optimization.epe import EndPointErrorCostFunction
+
+
+def run_levenberg_marquardt_method(
+        flow_observations,
+        flow_frames,
+        keyframes,
+        flow_arcs,
+        encoder,
+        rendering,
+        loss_function,
+        image_shape,
+        config,
+        use_custom_jacobian=False,
+        levenberg_marquardt_implementation='ceres',
+        max_iterations=100
+):
+    """
+    Standalone implementation of the Levenberg-Marquardt method.
+
+    Args:
+        observations: Observed images and segmentations.
+        flow_observations: Observed flows, segmentations, occlusions, uncertainties.
+        flow_frames: List of flow frames.
+        keyframes: List of keyframes.
+        flow_arcs: Pairs of flow-to-keyframe relationships.
+        encoder: Encoder object for inference.
+        rendering: Rendering object for flow rendering and image generation.
+        loss_function: Loss function wrapper for calculating optimization losses.
+        image_shape: Shape of the image (width and height).
+        config: Configuration object with parameters for optimization.
+        use_custom_jacobian (bool): Flag to use custom Jacobian.
+        levenberg_marquardt_implementation (str): 'ceres' or 'custom'.
+        max_iterations (int): Maximum number of iterations for optimization.
+
+    Returns:
+        dict: Best model information including losses and encoder state.
+    """
+    # Extract and zero-out other loss coefficients
+    loss_coefs_names = [
+        'loss_laplacian_weight', 'loss_tv_weight', 'loss_iou_weight', 'loss_dist_weight',
+        'loss_q_weight', 'loss_t_weight', 'loss_rgb_weight', 'loss_flow_weight'
+    ]
+
+    for field_name in loss_coefs_names:
+        if field_name != "loss_flow_weight":
+            setattr(config, field_name, 0)
+
+    observed_flows = flow_observations.observed_flow
+    observed_flows_segmentations = flow_observations.observed_flow_segmentation
+
+    flow_arcs_indices = [(flow_frames.index(pair[0]), keyframes.index(pair[1])) for pair in flow_arcs]
+
+    # Perform encoder inference
+    encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
+    kf_translations = encoder_result.translations[0].detach()
+    kf_quaternions = encoder_result.quaternions.detach()
+    trans_quats = torch.cat([kf_translations, kf_quaternions], dim=-1).squeeze().flatten()
+
+    # Create the loss model
+    flow_loss_model = LossFunctionWrapper(
+        encoder_result, encoder_result_flow_frames, encoder, rendering, flow_arcs_indices,
+        loss_function, observed_flows, observed_flows_segmentations,
+        rendering.width, rendering.height, image_shape.width, image_shape.height
+    )
+
+    fun = flow_loss_model.forward
+    jac_function = None
+    if use_custom_jacobian:
+        jac_function = flow_loss_model.compute_jacobian
+
+    # Select implementation
+    if levenberg_marquardt_implementation == 'ceres':
+        coefficients_list = levenberg_marquardt_ceres(
+            p=trans_quats, cost_function=fun,
+            num_residuals=config.flow_sgd_n_samples * len(flow_arcs)
+        )
+    elif levenberg_marquardt_implementation == 'custom':
+        coefficients_list = lsq_lma_custom(
+            p=trans_quats, function=fun, args=(), jac_function=jac_function, max_iter=max_iterations
+        )
+    else:
+        raise ValueError("'levenberg_marquardt_implementation' must be either 'custom' or 'ceres'")
+
+    translations = []
+    quaternions = []
+    # Optimization loop
+    for epoch, trans_quats in enumerate(coefficients_list):
+        trans_quats = trans_quats.unflatten(-1, (1, trans_quats.shape[-1] // 7, 7))
+
+        row_translation = trans_quats[:, :3]
+        row_quaternion = trans_quats[:, 3:]
+
+        translations.append(row_translation)
+        translations.append(row_quaternion)
+
+    translations = torch.cat(translations, dim=0)
+    quaternions = torch.cat(quaternions, dim=0)
+
+    return translations, quaternions
 
 
 def compute_jacobian_using_vmap(p: torch.Tensor, f: Callable) -> torch.Tensor:
