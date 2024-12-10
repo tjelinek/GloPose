@@ -8,7 +8,6 @@ import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 from pathlib import Path
 
-from torch.optim import lr_scheduler
 from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
@@ -171,10 +170,6 @@ class Tracking6D:
         if self.config.features == 'deep':
             self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.image_shape)
 
-        self.best_model = {"value": 100.,
-                           "face_features": self.encoder.face_features.detach().clone(),
-                           "faces": self.faces,
-                           "encoder": copy.deepcopy(self.encoder.state_dict())}
         self.active_keyframes = KeyframeBuffer()
 
         if self.config.camera_intrinsics is None:
@@ -431,9 +426,6 @@ class Tracking6D:
             self.apply(frame_observations, flow_observations, self.active_keyframes.keyframes,
                        self.active_keyframes.flow_frames, flow_arcs, frame_index=frame_i)
 
-            silh_losses = np.array(self.best_model["losses"]["silh"])
-
-            our_losses[frame_i - 1] = silh_losses[-1]
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
@@ -484,7 +476,7 @@ class Tracking6D:
         self.glomap_wrapper.run_colmap()
         self.glomap_wrapper.eval_poses()
 
-        return self.best_model
+        return
 
     @torch.no_grad()
     def add_new_flows(self, frame_i):
@@ -608,131 +600,13 @@ class Tracking6D:
         self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
         self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
 
-        self.logged_sgd_quaternions = []
-        self.logged_sgd_translations = []
-
-        # Updates offset of the next rotation
-        # self.encoder.compute_next_offset(frame_index)
-
-        self.write_results.set_tensorboard_log_for_frame(frame_index)
-
-        frame_losses = []
-        # Restore the learning rate on its prior values
-
-        if self.config.use_lr_scheduler:
-            self.config.loss_rgb_weight = 0
-            if frame_index <= 2:
-                self.config.loss_flow_weight = 0
-            else:
-                self.config.loss_flow_weight = self.config_copy.loss_flow_weight
-
-        scheduler_positional_params = lr_scheduler.ReduceLROnPlateau(self.optimizer_positional_parameters,
-                                                                     mode='min', factor=0.8,
-                                                                     patience=self.config.lr_scheduler_patience)
-
-        def lambda_schedule(epoch_):
-            return 1 / (1 + np.exp(-0.25 * (epoch_ - self.config.optimize_non_positional_params_after)))
-
-        scheduler_non_positional_params = lr_scheduler.LambdaLR(self.optimizer_non_positional_parameters,
-                                                                lambda_schedule)
-
-        self.best_model["value"] = 100
-        self.best_model["losses"] = None
-        iters_without_change = 0
-
-        epoch = 0
-
         # First inference just to log the results
-        with torch.no_grad():
-            self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
-                                             flow_observations, observations)
-
         if self.config.preinitialization_method is not None:
             self.run_preinitializations(flow_arcs, flow_frames, keyframes,
                                         flow_observations, observations)
 
-            epoch += 1
-            self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
-                                             flow_observations, observations)
-
-        self.encoder.load_state_dict(self.best_model["encoder"])
-
         # Now optimize all the parameters jointly using normal gradient descent
         print("Optimizing all parameters")
-
-        if self.config.run_main_optimization_loop:
-            for epoch in range(epoch, self.config.iterations):
-
-                infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames,
-                                                flow_arcs, 'deep_features')
-                encoder_result, loss_result, renders, rendered_flow_result = infer_result
-                loss_result: LossResult = loss_result
-
-                model_loss = self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
-                                                        loss_result.losses, encoder_result, frame_index)
-                if abs(model_loss - self.best_model["value"]) > 1e-3:
-                    iters_without_change = 0
-                    self.best_model["value"] = model_loss
-                    self.best_model["losses"] = loss_result.losses_all
-                    self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
-                else:
-                    iters_without_change += 1
-
-                if self.config.loss_rgb_weight == 0 and self.config_copy.loss_rgb_weight:
-                    if epoch > 100 or model_loss < 0.1:
-                        self.config.loss_rgb_weight = self.config_copy.loss_rgb_weight
-                        self.best_model["value"] = 100
-                else:
-                    if epoch > self.config.allow_break_sgd_after and \
-                            abs(self.best_model["value"] - model_loss) <= 1e-3 and \
-                            iters_without_change > self.config.break_sgd_after_iters_with_no_change:
-                        break
-                if epoch < self.config.iterations - 1:
-                    joint_loss = loss_result.loss.mean()
-                    self.optimizer_all_parameters.zero_grad()
-
-                    self.optimizer_positional_parameters.zero_grad()
-                    self.optimizer_rotational_parameters.zero_grad()
-                    self.optimizer_translational_parameters.zero_grad()
-                    self.optimizer_non_positional_parameters.zero_grad()
-
-                    joint_loss.backward()
-
-                    self.optimizer_all_parameters.step()
-
-                    if self.config.use_lr_scheduler:
-                        scheduler_positional_params.step(joint_loss)
-                        scheduler_non_positional_params.step()
-
-        self.encoder.load_state_dict(self.best_model["encoder"])
-
-        if (self.config.visualize_loss_landscape and
-                (frame_index in {0, 1, 2, 3} or frame_index % self.config.loss_landscape_visualization_frequency == 0)):
-            self.write_results.visualize_loss_landscape(observations, flow_observations, self, frame_index,
-                                                        relative_mode=True)
-
-        # Inferring the most up-to date state after the optimization is finished
-        with torch.no_grad():
-            infer_result = self.infer_model(observations, flow_observations, keyframes, flow_frames,
-                                            flow_arcs, 'deep_features')
-        encoder_result, loss_result, renders, rendered_flow_result = infer_result
-
-        data_graph_common_frame_data = self.data_graph.get_frame_data(frame_index)
-
-        data_graph_common_frame_data.frame_losses = frame_losses
-        data_graph_common_frame_data.encoder_result = encoder_result
-
-        self.infer_model_and_log_results(flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
-                                         flow_observations, observations)
-
-    def infer_model_and_log_results(self, flow_arcs, epoch, keyframes, flow_frames, frame_index, frame_losses,
-                                    stacked_flow_observations, stacked_observations):
-        infer_result: InferenceResult = self.infer_model(stacked_observations, stacked_flow_observations, keyframes,
-                                                         flow_frames, flow_arcs, 'deep_features')
-        encoder_result, loss_result, renders, rendered_flow_result = infer_result
-        loss_result: LossResult = loss_result
-        self.log_inference_results(self.best_model["value"], epoch, frame_losses, loss_result.loss,
-                                   loss_result.losses, encoder_result, frame_index)
 
     def run_preinitializations(self, flow_arcs, flow_frames, keyframes,
                                stacked_flow_observations, stacked_observations):
@@ -757,14 +631,6 @@ class Tracking6D:
             self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
         else:
             raise ValueError("Unknown pre-init method.")
-
-        infer_result = self.infer_model(stacked_observations, stacked_flow_observations, keyframes, flow_frames,
-                                        flow_arcs, 'deep_features')
-
-        joint_loss = infer_result.loss_result.loss.mean()
-        self.best_model["losses"] = infer_result.loss_result.losses_all
-        self.best_model["value"] = float(joint_loss)
-        self.best_model["encoder"] = copy.deepcopy(self.encoder.state_dict())
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):
@@ -865,11 +731,7 @@ class Tracking6D:
                   flow_observations: FlowObservation):
         start_time = time.time()
 
-        self.best_model["value"] = 100
         model_state = self.rgb_encoder.state_dict()
-        pretrained_dict = self.best_model["encoder"]
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k != "texture_map"}
-        model_state.update(pretrained_dict)
         self.rgb_encoder.load_state_dict(model_state)
 
         observations = observations
