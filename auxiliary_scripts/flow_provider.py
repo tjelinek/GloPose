@@ -168,24 +168,6 @@ class RoMaFlowProvider(FlowProvider):
 
         return model
 
-
-class GMAFlowProvider(FlowProvider):
-
-    @staticmethod
-    def get_flow_model():
-        sys.path.append('repositories/GMA')
-        from repositories.GMA.core.network import RAFTGMA
-
-        args = Namespace(model='GMA/checkpoints/gma-sintel.pth', model_name='GMA', path=None, num_heads=1,
-                         position_only=False,
-                         position_and_content=False, mixed_precision=True)
-
-        model = torch.nn.DataParallel(RAFTGMA(args=args))
-        model = FlowProvider.prepare_model(args, model)
-
-        return model
-
-
 @contextlib.contextmanager
 def temporary_change_directory(new_directory):
     original_directory = os.getcwd()
