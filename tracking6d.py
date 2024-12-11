@@ -1,5 +1,4 @@
 import copy
-import sys
 
 import kaolin
 import numpy as np
@@ -16,13 +15,12 @@ from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import consecutive_quaternions_angular_difference, Se3_epipolar_cam_from_Se3_obj
-from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, GMAFlowProvider, MFTFlowProvider,
+from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
+from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, MFTFlowProvider,
                                              MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider,
                                              RoMaFlowProvider)
 from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
 from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
-from main_settings import g_ext_folder
 from models.encoder import Encoder, EncoderResult
 from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
@@ -338,7 +336,6 @@ class Tracking6D:
 
         short_flow_models = {
             'RAFT': RAFTFlowProvider,
-            'GMA': GMAFlowProvider,
             'MFT': MFTFlowProvider,
             'MFT_Synth': MFTIQSyntheticFlowProvider,
         }
