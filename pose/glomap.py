@@ -28,6 +28,7 @@ class GlomapWrapper:
         self.colmap_seg_path = self.colmap_base_path / 'segmentations'
 
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
+        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
         self.image_width = image_shape.width
         self.image_height = image_shape.height
