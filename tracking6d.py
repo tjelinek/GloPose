@@ -12,7 +12,6 @@ from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from data_structures.pose_icosphere import PoseIcosphere
-from optimization.optimization import run_levenberg_marquardt_method
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
 from data_structures.data_graph import DataGraph
@@ -613,24 +612,7 @@ class Tracking6D:
 
         print("Pre-initializing the objects position")
 
-        if self.config.preinitialization_method == 'levenberg-marquardt':
-            run_levenberg_marquardt_method(
-                flow_observations=stacked_flow_observations,
-                flow_frames=flow_frames,
-                keyframes=keyframes,
-                flow_arcs=flow_arcs,
-                encoder=self.encoder,
-                rendering=self.rendering,
-                loss_function=self.loss_function,
-                image_shape=self.image_shape,
-                config=self.config,
-                use_custom_jacobian=self.config.use_custom_jacobian,
-                levenberg_marquardt_implementation=self.config.levenberg_marquardt_implementation,
-            )
-        elif self.config.preinitialization_method == 'essential_matrix_decomposition':
-            self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
-        else:
-            raise ValueError("Unknown pre-init method.")
+        self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):

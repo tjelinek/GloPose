@@ -5,7 +5,6 @@ import pyceres as ceres
 from typing import Callable, Union, Tuple, List
 
 from models.flow_loss_model import LossFunctionWrapper
-from optimization.epe import EndPointErrorCostFunction
 
 
 def run_levenberg_marquardt_method(
@@ -166,7 +165,7 @@ def levenberg_marquardt_ceres(p: torch.Tensor, cost_function: Callable, num_resi
     parameter_block_np = [p.numpy(force=True).astype(np.float64)]
 
     num_optimized_parameters = p.shape[0]
-    epe_cost_function = EndPointErrorCostFunction(cost_function, num_residuals, num_optimized_parameters)
+    epe_cost_function = LVMEndPointErrorCostFunction(cost_function, num_residuals, num_optimized_parameters)
     loss = ceres.TrivialLoss()
     problem.add_residual_block(epe_cost_function, loss, parameter_block_np)
 
@@ -295,6 +294,39 @@ def lsq_lma_custom(
     torch.cuda.synchronize()
     print(f"Whole Levenberg-Marquardt Duration {time.time() - global_start_time}")
     return p_list
+
+
+class LVMEndPointErrorCostFunction(ceres.CostFunction):
+
+    def __init__(self, cost_function: Callable, num_residuals: int, num_optimized_parameters: int):
+        super().__init__()
+
+        self.num_residuals: int = num_residuals
+        self.num_optimized_parameters: int = num_optimized_parameters
+        self.cost_function: Callable = cost_function
+
+        self.set_num_residuals(num_residuals)
+        self.set_parameter_block_sizes([num_optimized_parameters])
+
+        self.p_list = []
+
+    def Evaluate(self, parameters, residuals, jacobians):
+        parameters_tensor = torch.from_numpy(parameters[0]).to(torch.float).cuda()
+
+        self.p_list.append(parameters_tensor.clone())
+
+        function_eval = self.cost_function(parameters_tensor)
+        function_eval_np = function_eval.numpy(force=True)
+        residuals[:] = function_eval_np[:]
+
+        if jacobians is not None:
+            jacobian = compute_jacobian_using_vmap(parameters_tensor, self.cost_function).flatten()
+            jacobian_np_flat = jacobian.detach().cpu()
+            jacobians[0][:] = jacobian_np_flat[:]
+
+        torch.cuda.synchronize()
+
+        return True
 
 
 # run_levenberg_marquardt_method(
