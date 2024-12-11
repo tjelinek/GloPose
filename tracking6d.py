@@ -431,11 +431,6 @@ class Tracking6D:
             if self.config.write_results:
                 self.write_results.write_results(frame_i=frame_i, active_keyframes=self.active_keyframes)
 
-            angles = consecutive_quaternions_angular_difference(
-                self.data_graph.get_frame_data(frame_i).encoder_result.quaternions)
-
-            print("Angles:", angles)
-
             current_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i - 1]].quaternion
             closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
 
