@@ -251,3 +251,19 @@ def get_non_occluded_foreground_correspondences(observed_flow_occlusion, observe
 
 def tensor_image_to_mft_format(image_tensor):
     return image_tensor.squeeze().permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+
+
+def roma_warp_to_pixel_coordinates(coords, H_A, W_A, H_B=None, W_B=None):
+    if coords.shape[-1] == 2:
+        return _roma_warp_to_pixel_coordinates(coords, H_A, W_A)
+
+    if isinstance(coords, (list, tuple)):
+        kpts_A, kpts_B = coords[0], coords[1]
+    else:
+        kpts_A, kpts_B = coords[..., :2], coords[..., 2:]
+    return _roma_warp_to_pixel_coordinates(kpts_A, H_A, W_A), _roma_warp_to_pixel_coordinates(kpts_B, H_B, W_B)
+
+
+def _roma_warp_to_pixel_coordinates(coords, H, W):
+    kpts = torch.stack((W / 2 * (coords[..., 0] + 1), H / 2 * (coords[..., 1] + 1)), dim=-1)
+    return kpts

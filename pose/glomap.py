@@ -11,6 +11,7 @@ from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
+from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 
 
@@ -51,7 +52,7 @@ class GlomapWrapper:
         frame_data = self.data_graph.get_frame_data(frame_idx)
 
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to('cuda')
-        img_seg = frame_data.frame_observation.observed_segment.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
+        img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
 
         node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
@@ -78,7 +79,7 @@ class GlomapWrapper:
                 continue
 
             source_node = self.data_graph.get_frame_data(edge_source)
-            img_seg_target = source_node.frame_observation.observed_segment.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
+            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
