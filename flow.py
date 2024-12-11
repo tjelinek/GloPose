@@ -3,8 +3,8 @@ from PIL import Image, ImageDraw
 import torch
 import torchvision.transforms as T
 
-from repositories.GMA.core.utils import flow_viz
 from utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
+from visualizations import flow_viz
 
 
 def compare_flows_with_images(image1, image2, flow_up, flow_up_prime,
