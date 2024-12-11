@@ -287,15 +287,7 @@ class Tracking6D:
         self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
 
     def initialize_feature_extractor(self):
-        if self.config.features == 'deep':
-            sys.path.append('repositories/OSTrack/S2DNet')
-            from repositories.OSTrack.S2DNet.s2dnet import S2DNet
-
-            self.feature_extractor: S2DNet = S2DNet(device=self.device, checkpoint_path=g_ext_folder).to(self.device)
-            self.feat = lambda x: self.feature_extractor(x[0])[0][None][:, :, :self.config.features_channels]
-            self.feat_rgb = lambda x: x
-        else:
-            self.feat = lambda x: x
+        self.feat = lambda x: x
 
     def initialize_mesh(self):
         if not self.config.optimize_shape and self.gt_mesh_prototype is not None:
