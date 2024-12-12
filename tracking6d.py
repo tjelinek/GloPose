@@ -456,8 +456,7 @@ class Tracking6D:
 
                 print(f"Removed nodes {nodes_to_remove}")
 
-        self.glomap_wrapper.run_colmap()
-        self.glomap_wrapper.eval_poses()
+        self.glomap_wrapper.run_glomap()
 
         return
 

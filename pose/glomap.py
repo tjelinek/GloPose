@@ -1,3 +1,4 @@
+import select
 import subprocess
 from pathlib import Path
 
@@ -114,36 +115,73 @@ class GlomapWrapper:
 
         self.colmap_db.commit()
 
-    def run_colmap(self):
-        self.colmap_db.close()
+    def run_glomap(self, mapper: str = 'glomap'):
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
+        self.colmap_output_path.mkdir(exist_ok=True, parents=True)
+        if mapper in ['colmap', 'glomap']:
+            if mapper == 'glomap':
+                pycolmap.match_exhaustive(self.colmap_db_path)
+                command = [
+                    "glomap",
+                    "mapper",
+                    "--database_path", str(self.colmap_db_path),
+                    "--output_path", str(self.colmap_output_path),
+                    "--image_path", str(self.colmap_image_path),
+                    "--TrackEstablishment.min_num_view_per_track", str(2),
+                ]
 
-        self.colmap_output_path.mkdir(exist_ok=True)
+            elif mapper == 'colmap':
+                pycolmap.match_exhaustive(self.colmap_db_path)
+                command = [
+                    "colmap",
+                    "mapper",
+                    "--database_path", (self.colmap_db_path),
+                    "--output_path", (self.colmap_output_path),
+                    "--image_path", (self.colmap_image_path),
+                    "--Mapper.tri_ignore_two_view_tracks", str(0),
+                    "--log_to_stderr", str(1),
+                ]
+            else:
+                raise ValueError("This code should not ve reachable")
 
-        if self.tracking_config.frame_reconstruction_algorithm == 'colmap':
-            colmap_command = [
-                "colmap",
-                "mapper",
-                "--database_path", str(self.colmap_db_path),
-                "--output_path", str(self.colmap_output_path),
-                "--image_path", str(self.colmap_image_path),
-                "--Mapper.tri_ignore_two_view_tracks", str(0),
-                "--log_to_stderr", str(1),
-            ]
+            with subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+            ) as process:
+                fds = [process.stdout.fileno(), process.stderr.fileno()]
+                while True:
+                    ready_fds, _, _ = select.select(fds, [], [])
+                    for fd in ready_fds:
+                        if fd == process.stdout.fileno():
+                            line = process.stdout.readline()
+                            if line:
+                                print(f"STDOUT: {line.strip()}")
+                        elif fd == process.stderr.fileno():
+                            line = process.stderr.readline()
+                            if line:
+                                print(f"STDERR: {line.strip()}")
+                    if process.poll() is not None:
+                        break
 
-            subprocess.run(colmap_command, check=True, capture_output=True, text=True)
-        elif self.tracking_config.frame_reconstruction_algorithm == 'glomap':
-            glomap_command = [
-                "glomap",
-                "mapper",
-                "--database_path", str(self.colmap_db_path),
-                "--output_path", str(self.colmap_output_path),
-                "--image_path", str(self.colmap_image_path),
-                "--TrackEstablishment.min_num_view_per_track", str(2),
-            ]
+                process.wait()
+                if process.returncode != 0:
+                    error_message = process.stderr.read()
+                    print(f"Error: {error_message}")
+                    raise subprocess.CalledProcessError(process.returncode, command, output=None, stderr=error_message)
 
-            subprocess.run(glomap_command, check=True, capture_output=True, text=True)
+        elif mapper == 'pycolmap':
+            opts = pycolmap.IncrementalPipelineOptions()
+            opts.triangulation.ignore_two_view_tracks = False
+            pycolmap.match_exhaustive(self.colmap_db_path)
+            maps = pycolmap.incremental_mapping(self.colmap_db_path, self.colmap_image_path, self.colmap_output_path,
+                                                options=opts)
+            if len(maps) > 0:
+                maps[0].write(self.colmap_output_path)
+                print(maps[0].summary())
         else:
-            raise ValueError(f"Unknown value frame_reconstruction_algorithm=="
-                             f"{self.tracking_config.frame_reconstruction_algorithm}")
+            raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
+
