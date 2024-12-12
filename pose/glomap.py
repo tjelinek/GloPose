@@ -1,14 +1,22 @@
 import select
 import subprocess
+from collections import defaultdict
 from pathlib import Path
+from typing import List, Tuple
 
+import h5py
 import imageio
 import numpy as np
 import pycolmap
 import torch
+from PIL import Image
 from kornia.geometry import PinholeCamera
+from torchvision import transforms
+from romatch import roma_outdoor
+from tqdm import tqdm
 
 from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
+from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
@@ -21,15 +29,16 @@ class GlomapWrapper:
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
                  image_shape: ImageShape, pinhole_params: PinholeCamera, pose_icosphere: PoseIcosphere):
         self.write_folder = write_folder
-        self.tracking_config = tracking_config
-        self.colmap_base_path = (self.write_folder /
-                                  f'icosphere_dump_{self.tracking_config.sequence}')
+        self.config = tracking_config
+        self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
 
         self.colmap_image_path = self.colmap_base_path / 'images'
         self.colmap_seg_path = self.colmap_base_path / 'segmentations'
+        self.feature_dir = self.colmap_base_path / 'features'
 
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
+        self.feature_dir.mkdir(exist_ok=True, parents=True)
 
         self.image_width = image_shape.width
         self.image_height = image_shape.height
@@ -50,11 +59,13 @@ class GlomapWrapper:
 
     def dump_icosphere_node_for_glomap(self, icosphere_node):
 
+        device = self.config.device
+
         frame_idx = icosphere_node.keyframe_idx_observed
         frame_data = self.data_graph.get_frame_data(frame_idx)
 
-        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to('cuda')
-        img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
+        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
+        img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to(device)
 
         node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
@@ -81,21 +92,22 @@ class GlomapWrapper:
                 continue
 
             source_node = self.data_graph.get_frame_data(edge_source)
-            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to('cuda')
+            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to(
+                device)
             seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
             edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
 
-            if edge_data.reliability_score < 1 / 3 * self.tracking_config.flow_reliability_threshold:
+            if edge_data.reliability_score < 1 / 3 * self.config.flow_reliability_threshold:
                 continue
 
-            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].to('cuda')
-            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].to('cuda')
+            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].to(device)
+            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].to(device)
 
             H, W = self.image_height, self.image_width
             src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(edge_data.flow_warp, H, W, H, W)
 
-            src_pts_xy_roma = src_pts_xy_roma.to(torch.int).to('cuda')
-            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int).to('cuda')
+            src_pts_xy_roma = src_pts_xy_roma.to(torch.int).to(device)
+            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int).to(device)
 
             src_pts_mask = ((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
             dst_pts_mask = ((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
@@ -103,17 +115,147 @@ class GlomapWrapper:
             dst_pts_xy_roma_valid = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
 
             src_pts_idxs = \
-            torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
+                torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
             dst_pts_idxs = \
-            torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
-
-            # print(f'{src_pts_idxs.shape}, {dst_pts_idxs.shape}')
+                torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
 
             matches = torch.stack([src_pts_idxs, dst_pts_idxs], dim=1)
             self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
-            # self.colmap_db.add_two_view_geometry(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
-
         self.colmap_db.commit()
+
+    def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
+                                   matching_pairs: List[Tuple[int, int]]):
+        if len(matching_pairs) == 0:
+            raise ValueError("Needed at least 1 match.")
+
+        device = self.config.device
+        dtype = torch.float16 if 'cuda' in str(device) else torch.float32
+        matcher = roma_outdoor(device, amp_dtype=dtype)
+
+        output_path = self.colmap_output_path
+        database_path = self.colmap_db_path
+
+        base_image_path = output_path / 'images'
+        base_image_path.mkdir(exist_ok=True, parents=True)
+
+        for i, image_path in enumerate(images):
+            destination = base_image_path / image_path.name
+            images[i] = destination
+
+        image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
+        segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
+
+        transform_from_PIL = transforms.ToTensor()
+
+        assert not database_path.exists()
+        img_ext = 'png'
+
+        keypoints_data = defaultdict(lambda: torch.empty(0, 2).to(device))
+        matches_data = defaultdict(dict)
+        single_camera = True
+        assert len(images) > 0
+        count = 0
+        for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
+
+            img1_path = Path(img1_path)
+            img2_path = Path(img2_path)
+
+            assert img1_path.parent == img2_path.parent
+
+            img1_PIL = Image.open(str(img1_path)).convert('RGB')
+            img2_PIL = Image.open(str(img2_path)).convert('RGB')
+
+            h1, w1 = img1_PIL.size
+            h2, w2 = img2_PIL.size
+            if h1 != h2 or w1 != w2:
+                single_camera = False
+            img1_seg = transform_from_PIL(Image.open(seg1_path).convert('L')).to(device)
+            img2_seg = transform_from_PIL(Image.open(seg2_path).convert('L')).to(device)
+
+            roma_size_hw = (864, 864)
+            roma_h, roma_w = roma_size_hw
+
+            img1_seg_roma_size = transforms.functional.resize(img1_seg.clone(), size=roma_size_hw)
+            img2_seg_roma_size = transforms.functional.resize(img2_seg.clone(), size=roma_size_hw)
+            if len(img1_seg_roma_size.shape) > 2:
+                img1_seg_roma_size = img1_seg_roma_size.mean(dim=0)
+            if len(img2_seg_roma_size.shape) > 2:
+                img2_seg_roma_size = img2_seg_roma_size.mean(dim=0)
+
+            warp, certainty = matcher.match(img1_PIL, img2_PIL, device=device)
+
+            certainty = certainty.clone()
+            certainty[:, :roma_w] *= img1_seg_roma_size.mT.squeeze().bool().float()
+            certainty[:, roma_w:2 * roma_w] *= img2_seg_roma_size.mT.squeeze().bool().float()
+
+            warp, certainty = matcher.sample(warp, certainty, self.config.roma_sample_size)
+            warp = warp[certainty > 0]
+
+            src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+
+            src_pts_xy_roma_int = src_pts_xy_roma.to(torch.int)
+            dst_pts_xy_roma_int = dst_pts_xy_roma.to(torch.int)
+
+            src_pts_xy_roma_all = torch.cat([keypoints_data[img1_path.name], src_pts_xy_roma_int])
+            dst_pts_xy_roma_all = torch.cat([keypoints_data[img2_path.name], dst_pts_xy_roma_int])
+
+            src_pts_xy_roma_unique = torch.unique(src_pts_xy_roma_all, return_inverse=False, dim=0)
+            dst_pts_xy_roma_unique = torch.unique(dst_pts_xy_roma_all, return_inverse=False, dim=0)
+
+            keypoints_data[img1_path.name] = src_pts_xy_roma_unique
+            keypoints_data[img2_path.name] = dst_pts_xy_roma_unique
+
+            n_matches = src_pts_xy_roma_int.shape[0]
+            count += 1
+
+            matches_data[img1_path.name] = {img2_path.name: (src_pts_xy_roma_int, dst_pts_xy_roma_int)}
+
+        # Delete possibly old data
+        for file in self.feature_dir.iterdir():
+            if file.is_file():
+                file.unlink()
+        if database_path.exists():
+            database_path.unlink()
+
+        matches_file = self.feature_dir / 'matches.h5'
+        keypoints_file = self.feature_dir / 'keypoints.h5'
+
+        assert not matches_file.exists()
+        assert not keypoints_file.exists()
+
+        with h5py.File(matches_file, mode='w') as f_match:
+            for img1_key, match_data in matches_data.items():
+                group = f_match.require_group(str(img1_key))
+                for img2_key, (src_pts, dst_pts) in match_data.items():
+                    keypoints_image1 = keypoints_data[img1_key].to(torch.int)
+                    keypoints_image2 = keypoints_data[img2_key].to(torch.int)
+
+                    src_pts_indices = get_match_points_indices(keypoints_image1, src_pts)
+                    dst_pts_indices = get_match_points_indices(keypoints_image2, dst_pts)
+
+                    match_indices = torch.stack([src_pts_indices, dst_pts_indices], dim=-1).numpy(force=True)
+
+                    group.create_dataset(str(img2_key), data=match_indices)
+
+        with h5py.File(keypoints_file, mode='w') as f_kp:
+            for img_key, keypoints in keypoints_data.items():
+                f_kp[str(img_key)] = keypoints.numpy(force=True)
+
+        import_into_colmap(base_image_path, self.feature_dir, database_path, img_ext, single_camera)
+
+        self.run_glomap()
+
+        path_to_rec = self.colmap_output_path / '0'
+        print(path_to_rec)
+        from time import sleep
+        sleep(1)  # Wait for the rec to be written
+        rec_gt = pycolmap.Reconstruction(path_to_rec)
+        try:
+            print(rec_gt.summary())
+        except Exception as e:
+            print(e)
+        poses = [np.eye(4)] * len(images)
+        return poses, rec_gt
 
     def run_glomap(self, mapper: str = 'glomap'):
 
@@ -185,3 +327,14 @@ class GlomapWrapper:
         else:
             raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 
+
+def get_match_points_indices(keypoints, match_pts):
+    N = keypoints.shape[0]
+    keypoints_and_match_pts = torch.cat([keypoints, match_pts], dim=0)
+    _, kpts_and_match_pts_indices = torch.unique(keypoints_and_match_pts, return_inverse=True, dim=0)
+
+    if kpts_and_match_pts_indices.max() >= N:
+        raise ValueError("Not all src_pts included in keypoints")
+
+    match_pts_indices = kpts_and_match_pts_indices[N:]
+    return match_pts_indices

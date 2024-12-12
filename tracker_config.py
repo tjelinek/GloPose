@@ -180,6 +180,7 @@ class TrackerConfig:
     use_custom_jacobian: bool = False
     flow_sgd: bool = True
     flow_sgd_n_samples: int = 100
+    roma_sample_size: int = 10000
 
     # Icosphere templates
     icosphere_use_gt_long_jumps: bool = True
