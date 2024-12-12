@@ -21,8 +21,8 @@ from auxiliary_scripts.colmap.colmap_database import image_ids_to_pair_id, COLMA
 
 
 def get_focal(image_path, err_on_default=False):
-    image         = Image.open(image_path)
-    max_size      = max(image.size)
+    image = Image.open(image_path)
+    max_size = max(image.size)
 
     exif = image.getexif()
     focal = None
@@ -37,7 +37,7 @@ def get_focal(image_path, err_on_default=False):
 
         if focal_35mm is not None:
             focal = focal_35mm / 35. * max_size
-    
+
     if focal is None:
         if err_on_default:
             raise RuntimeError("Failed to find focal length")
@@ -48,29 +48,30 @@ def get_focal(image_path, err_on_default=False):
 
     return focal
 
+
 def create_camera(db, image_path, camera_model):
-    image         = Image.open(image_path)
+    image = Image.open(image_path)
     width, height = image.size
 
     focal = get_focal(image_path)
 
     if camera_model == 'simple-pinhole':
-        model = 0 # simple pinhole
+        model = 0  # simple pinhole
         param_arr = np.array([focal, width / 2, height / 2])
     if camera_model == 'pinhole':
-        model = 1 # pinhole
+        model = 1  # pinhole
         param_arr = np.array([focal, focal, width / 2, height / 2])
     elif camera_model == 'simple-radial':
-        model = 2 # simple radial
+        model = 2  # simple radial
         param_arr = np.array([focal, width / 2, height / 2, 0.1])
     elif camera_model == 'opencv':
-        model = 4 # opencv
+        model = 4  # opencv
         param_arr = np.array([focal, focal, width / 2, height / 2, 0., 0., 0., 0.])
-         
+
     return db.add_camera(model, width, height, param_arr)
 
 
-def add_keypoints(db, h5_path, image_path, img_ext, camera_model, single_camera = True):
+def add_keypoints(db, h5_path, image_path, img_ext, camera_model, single_camera=True):
     keypoint_f = h5py.File(os.path.join(h5_path, 'keypoints.h5'), 'r')
 
     camera_id = None
@@ -78,7 +79,7 @@ def add_keypoints(db, h5_path, image_path, img_ext, camera_model, single_camera 
     for filename in tqdm(list(keypoint_f.keys())):
         keypoints = keypoint_f[filename][()]
 
-        fname_with_ext = filename# + img_ext
+        fname_with_ext = filename  # + img_ext
         path = os.path.join(image_path, fname_with_ext)
         if not os.path.isfile(path):
             raise IOError(f'Invalid image path {path}')
@@ -92,9 +93,10 @@ def add_keypoints(db, h5_path, image_path, img_ext, camera_model, single_camera 
 
     return fname_to_id
 
+
 def add_matches(db, h5_path, fname_to_id):
     match_file = h5py.File(os.path.join(h5_path, 'matches.h5'), 'r')
-    
+
     added = set()
     n_keys = len(match_file.keys())
     n_total = (n_keys * (n_keys - 1)) // 2
@@ -110,7 +112,7 @@ def add_matches(db, h5_path, fname_to_id):
                 if pair_id in added:
                     warnings.warn(f'Pair {pair_id} ({id_1}, {id_2}) already added!')
                     continue
-            
+
                 matches = group[key_2][()]
                 db.add_matches(id_1, id_2, matches)
 
@@ -118,14 +120,15 @@ def add_matches(db, h5_path, fname_to_id):
 
                 pbar.update(1)
 
+
 def import_into_colmap(img_dir,
-                       feature_dir ='.featureout',
-                       database_path = 'colmap.db',
-                       img_ext='.jpg'):
+                       feature_dir='.featureout',
+                       database_path='colmap.db',
+                       img_ext='.jpg',
+                       single_camera=False):
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
-    single_camera = False
-    fname_to_id = add_keypoints(db, feature_dir, img_dir, img_ext, 'simple-radial', single_camera)
+    fname_to_id = add_keypoints(db, feature_dir, img_dir, img_ext, 'simple-pinhole', single_camera)
     add_matches(
         db,
         feature_dir,
@@ -134,6 +137,7 @@ def import_into_colmap(img_dir,
 
     db.commit()
     return
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -145,8 +149,8 @@ if __name__ == '__main__':
         help='Extension of files in image_path'
     )
     parser.add_argument('--database-path', default='database.db',
-        help='Location where the COLMAP .db file will be created'
-    )
+                        help='Location where the COLMAP .db file will be created'
+                        )
     parser.add_argument(
         '--single-camera', action='store_true',
         help=('Consider all photos to be made with a single camera (COLMAP '
@@ -175,7 +179,7 @@ if __name__ == '__main__':
     db.create_tables()
 
     fname_to_id = add_keypoints(db, args.h5_path, args.image_path, args.image_extension,
-                               args.camera_model, args.single_camera)
+                                args.camera_model, args.single_camera)
     add_matches(
         db,
         args.h5_path,
