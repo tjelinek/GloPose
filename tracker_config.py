@@ -12,6 +12,7 @@ class TrackerConfig:
             setattr(self, key, value)
 
     # General settings
+    device = 'cuda'
     tracker_type: str = 'd3s'
     features: str = 'deep'
     features_channels = 64
