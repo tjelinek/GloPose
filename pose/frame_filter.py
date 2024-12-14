@@ -1,6 +1,6 @@
 from enum import Enum
 from time import time
-from typing import Callable, List, Tuple
+from typing import List, Tuple
 
 import torch
 from kornia.geometry import PinholeCamera
@@ -35,14 +35,6 @@ class FrameFilter:
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
-        when_lost_algorithms = {
-            FrameFilterAlgorithms.ALL_KFS: self.matching_to_all_kfs_getting_lost_procedure,
-            FrameFilterAlgorithms.BETWEEN_CURRENT_AND_LAST_KF: self.matching_to_last_to_newest_getting_lost_procedure
-        }
-
-        when_lost_algorithm_enum_val = FrameFilterAlgorithms.from_value(self.config.frame_filter_when_lost_algorithm)
-        self.selected_when_lost_algorithm: Callable = when_lost_algorithms[when_lost_algorithm_enum_val]
-
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
 
@@ -55,7 +47,8 @@ class FrameFilter:
         if edge_data.is_match_reliable and frame_i > 1:
             source = preceding_source
         elif frame_i > 1:
-            reliable_flows, source = self.selected_when_lost_algorithm(frame_i, reliable_flows, preceding_source)
+            reliable_flows, source = self.matching_to_last_to_newest_getting_lost_procedure(frame_i, reliable_flows,
+                                                                                            preceding_source)
         else:
             source = 0
 
