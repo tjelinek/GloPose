@@ -1,7 +1,6 @@
 import copy
 
 import kaolin
-import numpy as np
 import time
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
@@ -363,8 +362,6 @@ class Tracking6D:
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
         Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
 
-        our_losses = -np.ones((self.config.input_frames - 1, 1))
-
         self.data_graph.add_new_frame(0)
         self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
         self.data_graph.get_frame_data(0).gt_translation = self.gt_translations[0]
@@ -403,13 +400,7 @@ class Tracking6D:
 
             self.add_new_flows(frame_i)
 
-            frame_observations: FrameObservation = self.active_keyframes.get_observations_for_all_keyframes()
-            flow_observations: FlowObservation = self.active_keyframes.get_flows_observations()
-
-            flow_arcs = sorted(self.active_keyframes.G.edges(), key=lambda x: x[::-1])
-
-            self.apply(frame_observations, flow_observations, self.active_keyframes.keyframes,
-                       self.active_keyframes.flow_frames, flow_arcs, frame_index=frame_i)
+            self.frame_filter.filter_frames(frame_i)
 
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
@@ -542,26 +533,6 @@ class Tracking6D:
 
         return observed_flow, occlusion, uncertainty
 
-    def apply(self, observations: FrameObservation, flow_observations: FlowObservation,
-              keyframes: List, flow_frames: List, flow_arcs: List, frame_index: int) -> None:
-
-        self.config.loss_fl_not_obs_rend_weight = self.config.loss_flow_weight
-        self.config.loss_fl_obs_and_rend_weight = self.config.loss_flow_weight
-
-        # First inference just to log the results
-        if self.config.preinitialization_method is not None:
-            self.run_preinitializations(flow_arcs, flow_frames, keyframes,
-                                        flow_observations, observations)
-
-        # Now optimize all the parameters jointly using normal gradient descent
-        print("Optimizing all parameters")
-
-    def run_preinitializations(self, flow_arcs, flow_frames, keyframes,
-                               stacked_flow_observations, stacked_observations):
-
-        print("Pre-initializing the objects position")
-
-        self.epipolar_pose_estimator.essential_matrix_preinitialization(keyframes)
 
     def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
                               write_all=False):
