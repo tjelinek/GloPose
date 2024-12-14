@@ -15,7 +15,6 @@ from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
 
-from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
 from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
 from auxiliary_scripts.image_utils import ImageShape
 from data_structures.data_graph import DataGraph
@@ -49,19 +48,11 @@ class GlomapWrapper:
 
         self.colmap_db_path = self.colmap_base_path / 'database.db'
         self.colmap_output_path = self.colmap_base_path / 'output'
-        self.colmap_db: COLMAPDatabase = COLMAPDatabase.connect(self.colmap_db_path)
-        self.colmap_db.create_tables()
 
-        colmap_db_camera_params = (np.array([self.pinhole_params.fx.item(), self.pinhole_params.fy.item(),
-                                             self.pinhole_params.cx.item(), self.pinhole_params.cy.item()]).
-                                   astype(np.float64))
-        self.colmap_db.add_camera(1, self.image_width, self.image_height, colmap_db_camera_params, camera_id=1)
-
-    def dump_icosphere_node_for_glomap(self, icosphere_node):
+    def dump_frame_node_for_glomap(self, frame_idx):
 
         device = self.config.device
 
-        frame_idx = icosphere_node.keyframe_idx_observed
         frame_data = self.data_graph.get_frame_data(frame_idx)
 
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
@@ -72,56 +63,6 @@ class GlomapWrapper:
 
         segmentation_save_path = self.colmap_seg_path / f'segment_{frame_idx}.png'
         imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
-
-        seg_target_nonzero = img_seg[..., 0].nonzero()
-        seg_target_nonzero_unit = seg_target_nonzero
-        seg_target_nonzero_xy_np = seg_target_nonzero_unit[..., [1, 0]].numpy(force=True).astype(np.float32)
-        assert seg_target_nonzero_xy_np.dtype == np.float32
-
-        self.colmap_db.add_image(name=f'./{str(node_save_path.name)}', camera_id=1, image_id=frame_idx + 1)
-        self.colmap_db.add_keypoints(frame_idx + 1, seg_target_nonzero_xy_np.copy())
-
-        icosphere_nodes_idx = {node.keyframe_idx_observed for node in self.pose_icosphere.reference_poses}
-        incoming_edges = self.data_graph.G.in_edges(frame_idx)
-
-        for edge in incoming_edges:
-            edge_source = edge[0]
-            edge_target = edge[1]
-
-            if edge_source not in icosphere_nodes_idx:
-                continue
-
-            source_node = self.data_graph.get_frame_data(edge_source)
-            img_seg_target = source_node.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to(
-                device)
-            seg_source_nonzero = (img_seg_target[..., 0]).nonzero()
-            edge_data = self.data_graph.get_edge_observations(edge_source, edge_target)
-
-            if edge_data.reliability_score < 1 / 3 * self.config.flow_reliability_threshold:
-                continue
-
-            seg_source_nonzero_xy = seg_source_nonzero[..., [1, 0]].to(device)
-            seg_target_nonzero_xy = seg_target_nonzero[..., [1, 0]].to(device)
-
-            H, W = self.image_height, self.image_width
-            src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(edge_data.flow_warp, H, W, H, W)
-
-            src_pts_xy_roma = src_pts_xy_roma.to(torch.int).to(device)
-            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int).to(device)
-
-            src_pts_mask = ((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
-            dst_pts_mask = ((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma.unsqueeze(1)).all(-1)).any(1)
-            src_pts_xy_roma_valid = src_pts_xy_roma[dst_pts_mask & src_pts_mask]
-            dst_pts_xy_roma_valid = dst_pts_xy_roma[dst_pts_mask & src_pts_mask]
-
-            src_pts_idxs = \
-                torch.where((seg_source_nonzero_xy.unsqueeze(0) == src_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
-            dst_pts_idxs = \
-                torch.where((seg_target_nonzero_xy.unsqueeze(0) == dst_pts_xy_roma_valid.unsqueeze(1)).all(-1))[1]
-
-            matches = torch.stack([src_pts_idxs, dst_pts_idxs], dim=1)
-            self.colmap_db.add_matches(edge_source + 1, edge_target + 1, matches.numpy(force=True).copy())
-        self.colmap_db.commit()
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
                                    matching_pairs: List[Tuple[int, int]]):
