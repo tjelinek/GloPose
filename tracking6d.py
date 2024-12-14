@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
+from data_providers.frame_provider import PrecomputedTracker, BaseTracker
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
@@ -25,8 +26,6 @@ from models.encoder import Encoder, EncoderResult
 from models.initial_mesh import generate_face_features
 from models.loss import FMOLoss, LossResult
 from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
-from segmentations import SyntheticDataGeneratingTracker, BaseTracker, PrecomputedTracker, \
-    PrecomputedTrackerSegmentAnything, PrecomputedTrackerXMem, PrecomputedTrackerSegmentAnything2
 from tracker_config import TrackerConfig
 from utils import normalize_vertices, homogenize_3x3_camera_intrinsics
 
@@ -151,14 +150,6 @@ class Tracking6D:
 
             if self.config.segmentation_tracker == 'precomputed':
                 self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
-            elif config.segmentation_tracker == 'SAM':
-                self.tracker = PrecomputedTrackerSegmentAnything(self.config, self.feat, images_paths,
-                                                                 segmentation_paths)
-            elif config.segmentation_tracker == 'SAM2':
-                self.tracker = PrecomputedTrackerSegmentAnything2(self.config, self.feat, images_paths,
-                                                                  segmentation_paths)
-            elif config.segmentation_tracker == 'XMem':
-                self.tracker = PrecomputedTrackerXMem(self.config, self.feat, images_paths, segmentation_paths)
             else:
                 raise ValueError('Unknown value of "segmentation_tracker"')
 
@@ -384,6 +375,7 @@ class Tracking6D:
         initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
 
         self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, 0)
+        self.glomap_wrapper.dump_frame_node_for_glomap(0)
 
         for frame_i in range(1, self.config.input_frames):
 
