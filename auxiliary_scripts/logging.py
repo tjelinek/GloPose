@@ -22,7 +22,6 @@ from kornia.geometry.conversions import quaternion_to_axis_angle
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
 from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
-from data_structures.keyframe_buffer import KeyframeBuffer
 from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
@@ -38,7 +37,7 @@ from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, 
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, rgb_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere):
+                 deep_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -50,7 +49,6 @@ class WriteResults:
         self.rendering: RenderingKaolin = rendering
         self.gt_encoder: Encoder = gt_encoder
         self.deep_encoder: Encoder = deep_encoder
-        self.rgb_encoder: Encoder = rgb_encoder
 
         self.pose_icosphere: PoseIcosphere = pose_icosphere
 
@@ -340,9 +338,9 @@ class WriteResults:
         rr.send_blueprint(blueprint)
 
     @torch.no_grad()
-    def write_results(self, frame_i, active_keyframes: KeyframeBuffer):
+    def write_results(self, frame_i):
 
-        self.visualize_observed_data(active_keyframes, frame_i)
+        self.visualize_observed_data(frame_i)
 
         if not self.tracking_config.write_to_rerun_rather_than_disk:
             self.visualize_flow_with_matching(frame_i)
@@ -365,9 +363,6 @@ class WriteResults:
             if (self.tracking_config.analyze_ransac_matchings and
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
                 self.analyze_ransac_matchings(frame_i)
-
-        print(f"Keyframes: {active_keyframes.keyframes}, "
-              f"flow arcs: {sorted(active_keyframes.G.edges, key=lambda x: x[::-1])}")
 
     def visualize_3d_camera_space(self, frame_i: int):
 
@@ -1182,7 +1177,7 @@ class WriteResults:
         silhouette_overlap_path = self.write_folder / 'silhouette_overlap' / Path(f"silhouette_overlap_{frame_idx}.png")
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
-    def visualize_observed_data(self, keyframe_buffer: KeyframeBuffer, frame_i):
+    def visualize_observed_data(self, frame_i):
 
         observed_image_annotation = RerunAnnotations.observed_image_frontview
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation_frontview
@@ -1194,7 +1189,8 @@ class WriteResults:
         observed_flow_annotation = RerunAnnotations.observed_flow_frontview
 
         # Save the images to disk
-        last_frame_observation = keyframe_buffer.get_observations_for_keyframe(frame_i)
+        last_datagraph_node = self.data_graph.get_frame_data(frame_i)
+        last_frame_observation = last_datagraph_node.frame_observation
 
         new_image_path = self.observations_path / Path(f'gt_img_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)

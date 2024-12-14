@@ -1,41 +1,31 @@
 import copy
+import time
+from pathlib import Path
+from typing import Optional, List, Callable, Union
 
 import kaolin
-import time
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
-from pathlib import Path
 
-from typing import Optional, NamedTuple, List, Callable, Union
-
+from auxiliary_scripts.flow_provider import (FlowProvider, MFTFlowProvider,
+                                             RoMaFlowProvider)
 from auxiliary_scripts.image_utils import get_shape, ImageShape
+from auxiliary_scripts.logging import WriteResults
+from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
+from data_structures.data_graph import DataGraph
+from data_structures.keyframe_buffer import KeyframeBuffer, FlowObservation
 from data_structures.pose_icosphere import PoseIcosphere
+from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
+from models.encoder import Encoder
+from models.initial_mesh import generate_face_features
+from models.rendering import RenderingKaolin
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
-from data_structures.data_graph import DataGraph
-from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
-from auxiliary_scripts.flow_provider import (RAFTFlowProvider, FlowProvider, MFTFlowProvider,
-                                             MFTEnsembleFlowProvider, MFTIQFlowProvider, MFTIQSyntheticFlowProvider,
-                                             RoMaFlowProvider)
-from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
-from data_structures.keyframe_buffer import KeyframeBuffer, FrameObservation, FlowObservation
-from models.encoder import Encoder, EncoderResult
-from models.initial_mesh import generate_face_features
-from models.loss import FMOLoss, LossResult
-from models.rendering import RenderingKaolin, infer_normalized_renderings, RenderedFlowResult
 from tracker_config import TrackerConfig
 from utils import normalize_vertices, homogenize_3x3_camera_intrinsics
-
-
-class InferenceResult(NamedTuple):
-    encoder_result: EncoderResult
-    loss_result: LossResult
-    renders: torch.Tensor
-    rendered_flow_result: RenderedFlowResult
 
 
 class Tracking6D:
@@ -59,21 +49,6 @@ class Tracking6D:
         # Features
         self.feat: Optional[Callable] = None
         self.feat_rgb = None
-
-        # Loss functions and optimizers
-        self.all_parameters = None
-        self.translational_params = None
-        self.rotational_params = None
-        self.positional_params = None
-        self.non_positional_params = None
-        self.loss_function: Optional[FMOLoss] = None
-        self.rgb_loss_function: Optional[FMOLoss] = None
-        self.optimizer_translational_parameters = None
-        self.optimizer_rotational_parameters = None
-        self.optimizer_positional_parameters = None
-        self.optimizer_non_positional_parameters = None
-        self.optimizer_all_parameters = None
-        self.rgb_optimizer = None
 
         # Feature extraction
         self.feature_extractor = None
@@ -110,7 +85,7 @@ class Tracking6D:
         self.tracker: Optional[BaseTracker] = None
 
         # Other utilities and flags
-        self.write_results = None
+        self.results_writer = None
         self.logged_sgd_translations = []
         self.logged_sgd_quaternions = []
 
@@ -154,11 +129,6 @@ class Tracking6D:
             else:
                 raise ValueError('Unknown value of "segmentation_tracker"')
 
-        self.initialize_optimizer_and_loss(ivertices)
-
-        if self.config.features == 'deep':
-            self.initialize_rgb_encoder(self.faces, iface_features, ivertices, self.image_shape)
-
         self.active_keyframes = KeyframeBuffer()
 
         if self.config.camera_intrinsics is None:
@@ -184,11 +154,11 @@ class Tracking6D:
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.pinhole_params, self.pose_icosphere)
 
-        self.write_results = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
-                                          tracking_config=self.config, rendering=self.rendering,
-                                          gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
-                                          rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
-                                          pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
+        self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
+                                           tracking_config=self.config, rendering=self.rendering,
+                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
+                                           data_graph=self.data_graph,
+                                           pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
 
         self.flow_provider = RoMaFlowProviderDirect(self.data_graph, self.config.device)
 
@@ -238,47 +208,6 @@ class Tracking6D:
         if self.gt_texture is not None:
             self.gt_encoder.gt_texture = self.gt_texture
 
-    def initialize_optimizer_and_loss(self, ivertices):
-        self.all_parameters = set(list(self.encoder.parameters()))
-        self.translational_params = {self.encoder.translation}
-        self.rotational_params = {self.encoder.quaternion}
-        # self.rotational_params = {self.encoder.quaternion.q.q}
-        self.positional_params = self.translational_params | self.rotational_params
-        # rotational_params = [
-        #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
-        #      'lr': self.config.learning_rate,
-        #      'name': 'axes_quat'},
-        #     {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-        #      'lr': self.config.learning_rate * 1e-0,
-        #      'name': 'axis_angle'},
-        #     {'params': [self.encoder.quaternion_w],
-        #      'lr': self.config.learning_rate * 1e-0,
-        #      'name': 'half_cosine'}
-        # ]
-        self.non_positional_params = self.all_parameters - self.positional_params
-        # positional_params = [
-        #     {'params': [self.encoder.quaternion_x, self.encoder.quaternion_y, self.encoder.quaternion_z],
-        #      'lr': self.config.learning_rate,
-        #      'name': 'axes_quat'},
-        #     {'params': [self.encoder.axis_angle_x, self.encoder.axis_angle_y, self.encoder.axis_angle_z],
-        #      'lr': self.config.learning_rate * 1e-0,
-        #      'name': 'axis_angle'},
-        #     {'params': [self.encoder.quaternion_w],
-        #      'lr': self.config.learning_rate * 1e-0,
-        #      'name': 'half_cosine'},
-        #     {'params': list(translational_params),
-        #      'lr': self.config.learning_rate * self.config.translation_learning_rate_coef,
-        #      'name': 'trans'},
-        # ]
-        self.optimizer_non_positional_parameters = torch.optim.Adam(self.non_positional_params,
-                                                                    lr=self.config.learning_rate)
-        self.optimizer_positional_parameters = torch.optim.SGD(self.positional_params, lr=self.config.learning_rate)
-        self.optimizer_translational_parameters = torch.optim.SGD(self.translational_params,
-                                                                  lr=self.config.learning_rate)
-        self.optimizer_all_parameters = torch.optim.Adam(self.all_parameters, lr=self.config.learning_rate)
-        self.optimizer_rotational_parameters = torch.optim.SGD(self.rotational_params, lr=self.config.learning_rate)
-        self.loss_function = FMOLoss(self.config, ivertices, self.faces).to(self.device)
-
     def initialize_feature_extractor(self):
         self.feat = lambda x: x
 
@@ -303,55 +232,7 @@ class Tracking6D:
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
         return iface_features, ivertices
 
-    def initialize_rgb_encoder(self, faces, iface_features, ivertices, shape):
-        config = copy.deepcopy(self.config)
-        config.features = 'rgb'
-
-        texture_map_init = None
-        if not self.config.optimize_texture and self.gt_texture is not None:
-            texture_map_init = self.gt_texture.detach()
-
-        self.rgb_encoder = Encoder(config, ivertices, iface_features, shape[-1], shape[-2],
-                                   3, texture_map_init).to(self.device)
-
-        rgb_parameters = [self.rgb_encoder.texture_map]
-        self.rgb_optimizer = torch.optim.Adam(rgb_parameters, lr=self.config.learning_rate)
-        self.rgb_encoder.train()
-        config.loss_laplacian_weight = 0
-        config.loss_tv_weight = 1.0
-        config.loss_iou_weight = 0
-        config.loss_dist_weight = 0
-        config.loss_q_weight = 0
-        config.loss_t_weight = 0
-        config.loss_flow_weight = 0
-        config.loss_texture_change_weight = 0
-        self.rgb_loss_function = FMOLoss(config, ivertices, faces).to(self.device)
-
     def initialize_flow_model(self):
-
-        short_flow_models = {
-            'RAFT': RAFTFlowProvider,
-            'MFT': MFTFlowProvider,
-            'MFT_Synth': MFTIQSyntheticFlowProvider,
-        }
-        long_flow_models = {
-            'MFT': MFTFlowProvider,
-            'MFTEnsemble': MFTEnsembleFlowProvider,
-            'MFT_IQ': MFTIQFlowProvider,
-            'MFT_Synth': MFTIQSyntheticFlowProvider,
-        }
-
-        # For short_flow_model
-        # if self.config.short_flow_model in short_flow_models:
-        #     self.short_flow_model =short_flow_models[self.config.short_flow_model](self.config.MFT_short_backbone_cfg,
-        #                                                                             config=self.config,
-        #                                                                             faces=self.faces,
-        #                                                                             gt_encoder=self.gt_encoder)
-        # else:
-        #     # Default case or raise an error if you don't want a default FlowProvider
-        #     raise ValueError(f"Unsupported short flow model: {self.config.short_flow_model}")
-
-        # For long_flow_model
 
         self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
         self.short_flow_model = self.roma_flow_provider
@@ -373,7 +254,6 @@ class Tracking6D:
         self.data_graph.get_frame_data(0).predicted_object_se3_long_jump = initial_predicted_Se3
 
         template_frame_observation = self.tracker.next(0)
-        self.active_keyframes.add_new_keyframe_observation(template_frame_observation, 0)
         self.data_graph.get_frame_data(0).frame_observation = template_frame_observation.send_to_device('cpu')
 
         initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
@@ -394,7 +274,6 @@ class Tracking6D:
 
             new_frame_observation = self.tracker.next(next_tracker_frame)
             self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
-            self.active_keyframes.add_new_keyframe_observation(new_frame_observation, frame_i)
 
             start = time.time()
 
@@ -406,12 +285,10 @@ class Tracking6D:
                   self.config.input_frames)
 
             if self.config.write_results:
-                self.write_results.write_results(frame_i=frame_i, active_keyframes=self.active_keyframes)
+                self.results_writer.write_results(frame_i=frame_i)
 
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
-
-            self.active_keyframes.remove_edges([(0, frame_i), (frame_i - 1, frame_i)])
 
         self.glomap_wrapper.run_glomap()
 
@@ -468,19 +345,6 @@ class Tracking6D:
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
             process_flow_arc(flow_source_frame, flow_target_frame, mode='short')
 
-        # if self.config.long_flow_model is not None:
-        #     long_flow_arc = (self.flow_tracks_inits[-1], frame_i)
-        #     if long_flow_arc not in short_flow_arcs:
-        #         flow_source_frame, flow_target_frame = long_flow_arc
-        #         self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-        #         process_flow_arc(flow_source_frame, flow_target_frame, mode='long')
-            # unique_flow_tracks_inits = sorted(list(set(self.flow_tracks_inits)))
-            # if len(unique_flow_tracks_inits) > 1:
-            #     preprev_init = unique_flow_tracks_inits[-2]
-            #     if (preprev_init, frame_i) not in self.data_graph.G.edges:
-            #         self.data_graph.add_new_arc(preprev_init, frame_i)
-            #         process_flow_arc(preprev_init, frame_i, mode='long')
-
     def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
 
         if self.config.gt_flow_source == 'GenerateSynthetic':
@@ -532,125 +396,3 @@ class Tracking6D:
             raise ValueError("'gt_flow_source' must be either 'GenerateSynthetic' or 'FlowNetwork'")
 
         return observed_flow, occlusion, uncertainty
-
-
-    def log_inference_results(self, best_loss, epoch, frame_losses, joint_loss, losses, encoder_result, frame_i,
-                              write_all=False):
-
-        frame_data = self.data_graph.get_frame_data(frame_i)
-        frame_data.quaternions_during_optimization.append(encoder_result.quaternions.detach().clone())
-        frame_data.translations_during_optimization.append(encoder_result.translations.detach().clone())
-
-        joint_loss = joint_loss.detach().clone()
-
-        frame_losses.append(float(joint_loss))
-        self.write_into_tensorboard_logs(joint_loss, losses, epoch)
-        if "model" in losses:
-            model_loss = losses["model"].mean().item()
-        else:
-            model_loss = losses["silh"].mean().item()
-        if self.config.verbose and (epoch % self.config.training_print_status_frequency == 0 or write_all):
-            print("Epoch {:4d}".format(epoch + 1), end=" ")
-            for ls in losses:
-                print(", {} {:.3f}".format(ls, losses[ls].mean().item()), end=" ")
-            print("; joint {:.3f}".format(joint_loss.item()), end='')
-            print("; best {:.3f}".format(best_loss),
-                  f'lr: {self.optimizer_positional_parameters.param_groups[0]["lr"]}')
-        return model_loss
-
-    def infer_model(self, observations: FrameObservation, flow_observations: FlowObservation, keyframes, flow_frames,
-                    flow_arcs, encoder_type) -> InferenceResult:
-
-        if encoder_type == 'rgb':
-            encoder = self.rgb_encoder
-        elif encoder_type == 'gt_encoder':
-            encoder = self.gt_encoder
-        elif encoder_type == 'deep_features':
-            encoder = self.encoder
-        else:
-            raise ValueError("Unknown encoder")
-
-        encoder_result, encoder_result_flow_frames = encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
-
-        flow_arcs_indices = [(flow_frames.index(pair[0]), keyframes.index(pair[1])) for pair in flow_arcs]
-        flow_arcs_indices_sorted = self.sort_flow_arcs_indices(flow_arcs_indices)
-
-        inference_result = infer_normalized_renderings(self.rendering, self.encoder.face_features, encoder_result,
-                                                       encoder_result_flow_frames, flow_arcs_indices_sorted,
-                                                       self.image_shape.width, self.image_shape.height)
-
-        renders, rendered_silhouettes, rendered_flow_result = inference_result
-
-        if encoder_type == 'rgb':
-            loss_function = self.rgb_loss_function
-            observed_images = observations.observed_image
-        else:  # 'deep_features'
-            loss_function = self.loss_function
-            observed_images = observations.observed_image_features
-
-        loss_result = loss_function.forward(rendered_images=renders, observed_images=observed_images,
-                                            rendered_silhouettes=rendered_silhouettes,
-                                            observed_silhouettes=observations.observed_segmentation,
-                                            rendered_flow=rendered_flow_result.theoretical_flow,
-                                            observed_flow=flow_observations.observed_flow,
-                                            observed_flow_segmentation=flow_observations.observed_flow_segmentation,
-                                            rendered_flow_segmentation=rendered_flow_result.rendered_flow_segmentation,
-                                            observed_flow_occlusion=flow_observations.observed_flow_occlusion,
-                                            rendered_flow_occlusion=rendered_flow_result.rendered_flow_occlusion,
-                                            observed_flow_uncertainties=flow_observations.observed_flow_uncertainty,
-                                            keyframes_encoder_result=encoder_result)
-
-        result = InferenceResult(encoder_result, loss_result, renders, rendered_flow_result)
-
-        return result
-
-    @staticmethod
-    def sort_flow_arcs_indices(flow_arcs_indices):
-        flow_arcs_indices_sorted = sorted(flow_arcs_indices)
-        return flow_arcs_indices_sorted
-
-    def write_into_tensorboard_logs(self, jloss, losses, sgd_iter):
-        dict_tensorboard_values1 = {
-            k + '_loss': float(v) for k, v in losses.items()
-        }
-        dict_tensorboard_values2 = {
-            "joint_loss": float(jloss),
-            'loss_laplacian_weight': self.config.loss_laplacian_weight,
-            'loss_tv_weight': self.config.loss_tv_weight,
-            'loss_iou_weight': self.config.loss_iou_weight,
-            'loss_dist_weight': self.config.loss_dist_weight,
-            'loss_q_weight': self.config.loss_q_weight,
-            'loss_t_weight': self.config.loss_t_weight,
-            'loss_rgb_weight': self.config.loss_rgb_weight,
-            'loss_flow_weight': self.config.loss_flow_weight,
-            'non_positional_params_lr': self.optimizer_non_positional_parameters.param_groups[0]['lr'],
-            'positional_params_lr': self.optimizer_positional_parameters.param_groups[0]['lr']
-        }
-        dict_tensorboard_values = {**dict_tensorboard_values1, **dict_tensorboard_values2}
-        self.write_results.write_into_tensorboard_log(sgd_iter, dict_tensorboard_values)
-
-    def rgb_apply(self, keyframes, flow_frames, flow_arcs, observations: FrameObservation,
-                  flow_observations: FlowObservation):
-        start_time = time.time()
-
-        model_state = self.rgb_encoder.state_dict()
-        self.rgb_encoder.load_state_dict(model_state)
-
-        observations = observations
-        flow_observations = flow_observations
-
-        print("Texture optimization")
-        epoch = 0
-        for epoch in range(self.config.rgb_iters):
-            infer_result = self.infer_model(observations, flow_observations, keyframes=keyframes,
-                                            flow_frames=flow_frames, flow_arcs=flow_arcs, encoder_type='rgb')
-
-            encoder_result, loss_result, renders, rendered_flow_result = infer_result
-            loss_result: LossResult = loss_result
-
-            joint_loss = loss_result.loss.mean()
-            self.rgb_optimizer.zero_grad()
-            joint_loss.backward(retain_graph=True)
-            self.rgb_optimizer.step()
-
-        print(f'Elapsed time in seconds: {time.time() - start_time} for total of {epoch + 1} epochs.')
