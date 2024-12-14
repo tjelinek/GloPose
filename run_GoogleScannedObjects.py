@@ -68,6 +68,8 @@ def main():
 
         run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
+        return
+
 
 if __name__ == "__main__":
     main()
