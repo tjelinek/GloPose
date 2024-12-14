@@ -353,8 +353,9 @@ class WriteResults:
         self.visualize_3d_camera_space(frame_i)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
-            self.log_poses_into_rerun(frame_i)
-            self.visualize_flow_with_matching_rerun(frame_i)
+            # self.log_poses_into_rerun(frame_i)
+            # self.visualize_flow_with_matching_rerun(frame_i)
+            pass
 
         if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
             if self.tracking_config.analyze_ransac_matching_errors:
@@ -362,7 +363,8 @@ class WriteResults:
 
             if (self.tracking_config.analyze_ransac_matchings and
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
-                self.analyze_ransac_matchings(frame_i)
+                # self.analyze_ransac_matchings(frame_i)
+                pass
 
     def visualize_3d_camera_space(self, frame_i: int):
 
@@ -620,9 +622,6 @@ class WriteResults:
                 self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
 
     def analyze_ransac_matchings(self, frame_i):
-
-        if frame_i % 10 == 0:
-            return
 
         ransac_stats = self.measure_ransac_stats(frame_i)
 
@@ -1203,7 +1202,7 @@ class WriteResults:
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
         data_graph_camera = self.data_graph.get_frame_data(frame_i)
-        new_flow_arcs = [(data_graph_camera.long_jump_source, frame_i)]
+        new_flow_arcs = []
 
         for new_flow_arcs in sorted(new_flow_arcs):
             source_frame = new_flow_arcs[0]
