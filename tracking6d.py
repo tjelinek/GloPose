@@ -418,41 +418,10 @@ class Tracking6D:
             if self.config.write_results:
                 self.write_results.write_results(frame_i=frame_i, active_keyframes=self.active_keyframes)
 
-            current_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i - 1]].quaternion
-            closest_node, angular_dist = self.pose_icosphere.get_closest_reference(current_pose)
-
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
 
             self.active_keyframes.remove_edges([(0, frame_i), (frame_i - 1, frame_i)])
-            if angular_dist >= 1.1 * self.config.icosphere_trust_region_degrees:  # Need to add a new frame
-
-                self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
-                self.encoder.quaternion_offsets[frame_i + 1:] = self.encoder.quaternion_offsets[frame_i]
-
-                # self.pose_icosphere.insert_new_reference(new_frame_observation, obj_pose, frame_i)
-
-                self.flow_tracks_inits.append(frame_i)
-
-            else:
-                self.active_keyframes.remove_frames(self.flow_tracks_inits[:])
-
-                self.active_keyframes.add_new_keyframe_observation(closest_node.observation,
-                                                                   closest_node.keyframe_idx_observed)
-
-                self.encoder.quaternion_offsets[frame_i + 1:] = closest_node.quaternion.q
-
-                self.flow_tracks_inits.append(closest_node.keyframe_idx_observed)
-
-            if self.active_keyframes.G.number_of_nodes() > self.config.max_keyframes:
-                if self.config.max_keyframes <= 1:
-                    nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:]
-                else:
-                    nodes_to_remove = sorted(list(self.active_keyframes.G.nodes))[1:-self.config.max_keyframes]
-
-                self.active_keyframes.remove_frames(nodes_to_remove)
-
-                print(f"Removed nodes {nodes_to_remove}")
 
         self.glomap_wrapper.run_glomap()
 
