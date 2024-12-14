@@ -1,0 +1,78 @@
+from pathlib import Path
+from typing import List
+
+import torch
+import torchvision
+from romatch import roma_outdoor
+from romatch.models.model_zoo import roma_model
+
+from data_structures.data_graph import DataGraph
+
+
+class FlowProvider:
+
+    def __init__(self, data_graph: DataGraph, device):
+        self.device = device
+        self.data_graph = data_graph
+        self.flow_model: roma_model = None
+
+    def _init_flow_model(self):
+        self.flow_model: roma_model = roma_outdoor(device=self.device)
+
+    def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
+        if self.flow_model is None:
+            self._init_flow_model()
+
+        source_image_tensor = self.data_graph.get_frame_data(source_image_idx).frame_observation.observed_image
+        target_image_tensor = self.data_graph.get_frame_data(target_image_idx).frame_observation.observed_image
+
+        source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
+        target_image_roma = torchvision.transforms.functional.to_pil_image(target_image_tensor.squeeze())
+
+        warp, certainty = self.flow_model.match(source_image_roma, target_image_roma, device=self.device)
+        if sample:
+            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+
+        return warp, certainty
+
+    def add_flows_into_datagraph(self, flow_source_frame, flow_target_frame):
+
+        warp, certainty = self.next_flow_roma(flow_source_frame, flow_target_frame, sample=10000)
+
+        edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
+
+        edge_data.flow_warp = warp
+        edge_data.flow_certainty = certainty
+
+
+class PrecomputedFlowProvider(FlowProvider):
+
+    def __init__(self, data_graph: DataGraph, device, saved_flow_paths: Path, image_files_paths: List):
+        super().__init__(data_graph, device)
+        self.flow_model: roma_model = roma_outdoor(device=device)
+
+        self.saved_flow_paths = saved_flow_paths
+        self.warps_path = saved_flow_paths / 'warps'
+        self.certainties_path = saved_flow_paths / 'certainties'
+
+        self.image_names_sorted = sorted(Path(p) for p in image_files_paths)
+
+    def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
+
+        assert source_image_idx < len(self.image_names_sorted)
+        assert target_image_idx < len(self.image_names_sorted)
+
+        src_image_name = Path(self.image_names_sorted[source_image_idx])
+        target_image_name = Path(self.image_names_sorted[target_image_idx])
+        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+
+        warp_filename = self.warps_path / saved_filename
+        certainty_filename = self.certainties_path / saved_filename
+
+        warp = torch.load(warp_filename).to(self.device)
+        certainty = torch.load(certainty_filename).to(self.device)
+
+        if sample:
+            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+
+        return warp, certainty
