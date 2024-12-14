@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
-from data_providers.frame_provider import PrecomputedTracker, BaseTracker
+from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.glomap import GlomapWrapper
