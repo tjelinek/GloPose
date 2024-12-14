@@ -13,7 +13,6 @@ class TrackerConfig:
 
     # General settings
     device = 'cuda'
-    tracker_type: str = 'd3s'
     features: str = 'deep'
     features_channels = 64
     verbose: bool = True
@@ -40,7 +39,6 @@ class TrackerConfig:
     input_frames: int = 0
     max_keyframes: int = 1
     all_frames_keyframes: bool = False
-    fmo_steps: int = 1
 
     # Mesh settings
     mesh_size: int = 11
@@ -53,11 +51,6 @@ class TrackerConfig:
     camera_up: Tuple[float] = (0, 1, 0)
     max_width: int = 500
     image_downsample: float = 1.0
-
-    # Learning rates
-    learning_rate: float = 0.1
-    quaternion_learning_rate_coef: float = 1.0
-    translation_learning_rate_coef: float = 1.0
 
     # Tracking settings
     tran_init: Tuple[float] = None  # (0., 0., 0.)
@@ -76,20 +69,14 @@ class TrackerConfig:
     loss_t_weight: float = 1.0
     loss_rgb_weight: float = 1.0
     loss_flow_weight: float = 10.0
-    loss_fl_obs_and_rend_weight: float = None
-    loss_fl_not_obs_rend_weight: float = None
-    loss_fl_obs_not_rend_weight: float = None
     occlusion_coef_threshold = 0.95  # Above this value, points will be considered as occluded
     segmentation_mask_threshold = 0.99
 
     # Additional settings
     sigmainv: float = 7000
     factor: float = 1
-    mask_iou_th: float = 0
-    rotation_divide: int = 8
     sequence: str = None
     experiment_name: str = None
-    max_rendering_batch_size: int = 4
 
     # Ground truths
     initial_mesh_path: str = 'prototypes/sphere.obj'
@@ -167,10 +154,6 @@ class TrackerConfig:
 
     ransac_confidences_from_occlusion: bool = False
 
-    levenberg_marquardt_implementation: str = 'custom'  # Either 'custom' or 'ceres'
-    use_custom_jacobian: bool = False
-    flow_sgd: bool = True
-    flow_sgd_n_samples: int = 100
     roma_sample_size: int = 10000
 
     # Icosphere templates
@@ -178,5 +161,5 @@ class TrackerConfig:
     icosphere_trust_region_degrees = 20
 
     flow_reliability_threshold: float = 0.5
-
+    frame_filter_when_lost_algorithm = None
     frame_reconstruction_algorithm: str = 'glomap'
