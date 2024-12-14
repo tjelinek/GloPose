@@ -247,7 +247,6 @@ class Tracking6D:
         initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
 
         self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, 0)
-        self.glomap_wrapper.dump_frame_node_for_glomap(0)
 
         for frame_i in range(1, self.config.input_frames):
 
@@ -277,7 +276,26 @@ class Tracking6D:
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
 
-        self.glomap_wrapper.run_glomap_from_image_list()
+        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.pose_icosphere.reference_poses]
+        images_paths = []
+        segmentation_paths = []
+        matching_pairs = []
+        for node_idx in pose_icosphere_node_idxs:
+            self.glomap_wrapper.dump_frame_node_for_glomap(node_idx)
+            frame_data = self.data_graph.get_frame_data(node_idx)
+
+            images_paths.append(frame_data.image_save_path)
+            segmentation_paths.append(frame_data.segmentation_save_path)
+
+        for u, v in self.data_graph.G.edges:
+            arc_data = self.data_graph.get_edge_observations(u, v)
+            if arc_data.is_match_reliable and u in pose_icosphere_node_idxs and v in pose_icosphere_node_idxs:
+                u_index = pose_icosphere_node_idxs.index(u)
+                v_index = pose_icosphere_node_idxs.index(v)
+                matching_pairs.append((u_index, v_index))
+
+        time.sleep(1)
+        self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths, matching_pairs)
 
         return
 

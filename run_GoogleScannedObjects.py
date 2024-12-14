@@ -53,7 +53,7 @@ def main():
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
         # gt_rotations = torch.deg2rad(scenarios.generate_rotations_z(5).rotations).cuda().to(torch.float32)
-        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)[::4]
+        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)[::8]
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
         if config.augment_gt_track:

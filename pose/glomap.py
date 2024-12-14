@@ -1,8 +1,9 @@
+import copy
 import select
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import h5py
 import imageio
@@ -62,8 +63,11 @@ class GlomapWrapper:
         segmentation_save_path = self.colmap_seg_path / f'segment_{frame_idx}.png'
         imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
 
+        frame_data.image_save_path = copy.deepcopy(node_save_path)
+        frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
+
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]]):
+                                   matching_pairs: List[Tuple[int, int]], datagraph_cache: Optional[DataGraph] = None):
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
@@ -71,15 +75,7 @@ class GlomapWrapper:
         dtype = torch.float16 if 'cuda' in str(device) else torch.float32
         matcher = roma_outdoor(device, amp_dtype=dtype)
 
-        output_path = self.colmap_output_path
         database_path = self.colmap_db_path
-
-        base_image_path = output_path / 'images'
-        base_image_path.mkdir(exist_ok=True, parents=True)
-
-        for i, image_path in enumerate(images):
-            destination = base_image_path / image_path.name
-            images[i] = destination
 
         image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
         segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
@@ -180,7 +176,7 @@ class GlomapWrapper:
             for img_key, keypoints in keypoints_data.items():
                 f_kp[str(img_key)] = keypoints.numpy(force=True)
 
-        import_into_colmap(base_image_path, self.feature_dir, database_path, img_ext, single_camera)
+        import_into_colmap(self.colmap_image_path, self.feature_dir, database_path, img_ext, single_camera)
 
         self.run_glomap()
 
