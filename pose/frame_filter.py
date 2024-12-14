@@ -5,7 +5,7 @@ from typing import Callable, List, Tuple
 import torch
 from kornia.geometry import PinholeCamera
 
-from data_providers.flow_provider import FlowProvider
+from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
@@ -24,7 +24,7 @@ class FrameFilterAlgorithms(Enum):
 class FrameFilter:
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, camera: PinholeCamera,
-                 flow_provider: FlowProvider):
+                 flow_provider: RoMaFlowProviderDirect):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
@@ -33,7 +33,7 @@ class FrameFilter:
         self.image_width: int = int(camera.width.item())
         self.image_height: int = int(camera.height.item())
 
-        self.flow_provider: FlowProvider = flow_provider
+        self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
         when_lost_algorithms = {
             FrameFilterAlgorithms.ALL_KFS: self.matching_to_all_kfs_getting_lost_procedure,

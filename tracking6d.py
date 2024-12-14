@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Optional, NamedTuple, List, Callable, Union
 
 from auxiliary_scripts.image_utils import get_shape, ImageShape
+from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.epipolar_pose_estimator import EpipolarPoseEstimator
+from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from data_structures.data_graph import DataGraph
 from auxiliary_scripts.logging import WriteResults
@@ -188,6 +190,11 @@ class Tracking6D:
                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
                                           rgb_encoder=self.rgb_encoder, data_graph=self.data_graph,
                                           pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
+
+        self.flow_provider = RoMaFlowProviderDirect(self.data_graph, self.config.device)
+
+        self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.pinhole_params,
+                                        self.flow_provider)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))

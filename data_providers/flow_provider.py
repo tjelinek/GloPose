@@ -9,7 +9,7 @@ from romatch.models.model_zoo import roma_model
 from data_structures.data_graph import DataGraph
 
 
-class FlowProvider:
+class RoMaFlowProviderDirect:
 
     def __init__(self, data_graph: DataGraph, device):
         self.device = device
@@ -45,7 +45,7 @@ class FlowProvider:
         edge_data.flow_certainty = certainty
 
 
-class PrecomputedFlowProvider(FlowProvider):
+class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
     def __init__(self, data_graph: DataGraph, device, saved_flow_paths: Path, image_files_paths: List):
         super().__init__(data_graph, device)
