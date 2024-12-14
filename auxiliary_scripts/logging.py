@@ -156,6 +156,7 @@ class WriteResults:
                     rrb.Spatial3DView(
                         origin=RerunAnnotations.space_visualization,
                         name='3D Space',
+                        background=[255, 255, 255]
                     ),
                     rrb.Grid(
                         contents=[
