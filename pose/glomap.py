@@ -10,7 +10,6 @@ import numpy as np
 import pycolmap
 import torch
 from PIL import Image
-from kornia.geometry import PinholeCamera
 from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
