@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
-from auxiliary_scripts.flow_provider import RoMaFlowProvider
+from data_providers.flow_wrappers import RoMaFlowProvider
 from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph

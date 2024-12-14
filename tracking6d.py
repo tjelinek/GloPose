@@ -6,8 +6,8 @@ import kaolin
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
-from auxiliary_scripts.flow_provider import (FlowProvider, MFTFlowProvider,
-                                             RoMaFlowProvider)
+from data_providers.flow_wrappers import (FlowProvider, MFTFlowProvider,
+                                          RoMaFlowProvider)
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
