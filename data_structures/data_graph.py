@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, List, Set
 
 import networkx as nx
@@ -38,7 +39,10 @@ class CommonFrameData:
 
     # Sources
     reliable_sources: Set[int] = field(default_factory=set)
-    is_source_reliable: bool = True
+
+    # Glomap
+    image_save_path: Path = None
+    segmentation_save_path: Path = None
 
     # Timings
     pose_estimation_time: float = None
@@ -62,6 +66,7 @@ class CrossFrameData:
     ransac_inliers_mask: torch.Tensor = None
     ransac_inlier_ratio: float = None
     reliability_score: float = 0.0
+    is_match_reliable: bool = False
 
     # RANSAC
     ransac_inliers: torch.Tensor = None
