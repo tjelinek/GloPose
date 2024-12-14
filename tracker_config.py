@@ -123,15 +123,6 @@ class TrackerConfig:
 
     matching_target_to_backview: bool = False
 
-    # Optimization
-    allow_break_sgd_after = 30
-    break_sgd_after_iters_with_no_change = 20
-    optimize_non_positional_params_after = 70
-    levenberg_marquardt_max_ter = 15
-    use_lr_scheduler = False
-    lr_scheduler_patience = 5
-    run_main_optimization_loop: bool = False
-
     # Optical flow settings
     add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
     # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
