@@ -277,7 +277,7 @@ class Tracking6D:
             if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
                 self.long_flow_provider.need_to_init = True
 
-        self.glomap_wrapper.run_glomap()
+        self.glomap_wrapper.run_glomap_from_image_list()
 
         return
 

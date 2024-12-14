@@ -3,6 +3,7 @@ from time import time
 from typing import List, Tuple
 
 import torch
+from kornia.geometry import Se3
 
 from auxiliary_scripts.image_utils import ImageShape
 from data_providers.flow_provider import RoMaFlowProviderDirect
@@ -77,7 +78,8 @@ class FrameFilter:
             datagraph_node.is_source_reliable = False
             cam_frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
 
-            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, new_node_frame_idx)
+            mock_pose = Se3.identity(1, device=self.config.device)
+            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, mock_pose, new_node_frame_idx)
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
         datagraph_node.long_jump_source = source
@@ -144,3 +146,7 @@ class FrameFilter:
 
             self.data_graph.add_new_arc(source_frame, target_frame)
         self.flow_provider.add_flows_into_datagraph(source_frame, target_frame)
+
+        reliability = self.flow_reliability(source_frame, target_frame)
+        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+        edge_data.is_match_reliable = reliability > self.config.flow_reliability_threshold
