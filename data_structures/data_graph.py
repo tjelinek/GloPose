@@ -30,7 +30,7 @@ class CommonFrameData:
     quaternions_during_optimization: List = field(default_factory=list)
 
     # Long short jumps
-    long_jump_source: int = None
+    long_jump_source: int = 0
     short_jump_source: int = None
     predicted_object_se3_long_jump: Se3 = Se3.identity(1, 'cuda')
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
@@ -54,6 +54,8 @@ class CrossFrameData:
     # Optical Flow observations
     synthetic_flow_result: SyntheticFlowObservation = None
     observed_flow: FlowObservation = None
+    flow_warp: torch.Tensor = None
+    flow_certainty: torch.Tensor = None
 
     # Points and reliability
     src_pts_yx: torch.Tensor = None

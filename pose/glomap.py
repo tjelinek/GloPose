@@ -26,7 +26,7 @@ from tracker_config import TrackerConfig
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageShape, pinhole_params: PinholeCamera, pose_icosphere: PoseIcosphere):
+                 image_shape: ImageShape, pose_icosphere: PoseIcosphere):
         self.write_folder = write_folder
         self.config = tracking_config
         self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
@@ -43,7 +43,6 @@ class GlomapWrapper:
         self.image_height = image_shape.height
 
         self.data_graph = data_graph
-        self.pinhole_params = pinhole_params
         self.pose_icosphere = pose_icosphere
 
         self.colmap_db_path = self.colmap_base_path / 'database.db'

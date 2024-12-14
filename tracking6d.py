@@ -1,4 +1,3 @@
-import copy
 import time
 from pathlib import Path
 from typing import Optional, List, Callable, Union
@@ -15,13 +14,12 @@ from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
-from data_structures.keyframe_buffer import KeyframeBuffer, FlowObservation
+from data_structures.keyframe_buffer import FlowObservation
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
 from models.encoder import Encoder
 from models.initial_mesh import generate_face_features
 from models.rendering import RenderingKaolin
-from pose.epipolar_pose_estimator import EpipolarPoseEstimator
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
@@ -68,9 +66,6 @@ class Tracking6D:
         self.gt_rotations: Optional[torch.Tensor] = gt_rotations
         self.gt_translations: Optional[torch.Tensor] = gt_translations
 
-        # Keyframes
-        self.active_keyframes: Optional[KeyframeBuffer] = None
-
         # Data graph
         self.data_graph: Optional[DataGraph] = None
 
@@ -92,7 +87,6 @@ class Tracking6D:
         self.image_shape: Optional[ImageShape] = None
         self.write_folder = Path(write_folder)
         self.config = config
-        self.config_copy = copy.deepcopy(self.config)
         self.device = 'cuda'
 
         iface_features, ivertices = self.initialize_mesh()
@@ -129,8 +123,6 @@ class Tracking6D:
             else:
                 raise ValueError('Unknown value of "segmentation_tracker"')
 
-        self.active_keyframes = KeyframeBuffer()
-
         if self.config.camera_intrinsics is None:
             camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None]
         else:
@@ -147,12 +139,8 @@ class Tracking6D:
                                             orig_image_width, orig_image_height)
         self.pinhole_params.scale_(self.config.image_downsample)
 
-        self.epipolar_pose_estimator = EpipolarPoseEstimator(self.config, self.data_graph, self.rendering,
-                                                             self.gt_encoder, self.encoder, self.pose_icosphere,
-                                                             self.pinhole_params, self.roma_flow_provider)
-
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.pinhole_params, self.pose_icosphere)
+                                            self.pose_icosphere)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, rendering=self.rendering,
@@ -162,7 +150,7 @@ class Tracking6D:
 
         self.flow_provider = RoMaFlowProviderDirect(self.data_graph, self.config.device)
 
-        self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.pinhole_params,
+        self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.image_shape,
                                         self.flow_provider)
 
         if self.config.verbose:
@@ -270,9 +258,8 @@ class Tracking6D:
             self.data_graph.get_frame_data(frame_i).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj,
                                                                                                 Se3_world_to_cam)
 
-            next_tracker_frame = frame_i  # Index of a frame
-
-            new_frame_observation = self.tracker.next(next_tracker_frame)
+            # Index of a frame
+            new_frame_observation = self.tracker.next(frame_i)
             self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
 
             start = time.time()
@@ -297,13 +284,11 @@ class Tracking6D:
     @torch.no_grad()
     def add_new_flows(self, frame_i):
 
-        def process_flow_arc(flow_source_frame, flow_target_frame, mode=None):
-            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame,
-                                                                         mode=mode)
+        def process_flow_arc(flow_source_frame, flow_target_frame):
+            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
 
             # Determine the appropriate renderer and keyframes based on the backview flag
             renderer = self.rendering
-            active_keyframes = self.active_keyframes
 
             # Render the flow
             synthetic_flow = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame, flow_target_frame)
@@ -323,11 +308,6 @@ class Tracking6D:
                                                flow_source_frames=[flow_source_frame],
                                                flow_target_frames=[flow_target_frame])
 
-            # Add new flow to active keyframes
-            if flow_source_frame not in self.active_keyframes.G.nodes:
-                self.active_keyframes.add_new_keyframe_observation(frame_observation, flow_source_frame)
-            active_keyframes.add_new_flow_observation(flow_observation, flow_source_frame, flow_target_frame)
-
             # Update the edge data with synthetic flow results
             edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
             edge_data.synthetic_flow_result = synthetic_flow_cpu
@@ -343,9 +323,9 @@ class Tracking6D:
         for flow_arc in short_flow_arcs:
             flow_source_frame, flow_target_frame = flow_arc
             self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-            process_flow_arc(flow_source_frame, flow_target_frame, mode='short')
+            process_flow_arc(flow_source_frame, flow_target_frame)
 
-    def next_gt_flow(self, flow_source_frame, flow_target_frame, mode='short'):
+    def next_gt_flow(self, flow_source_frame, flow_target_frame):
 
         if self.config.gt_flow_source == 'GenerateSynthetic':
             keyframes = [flow_target_frame]
@@ -372,23 +352,11 @@ class Tracking6D:
             target_image = target_frame_obs.observed_image.float() * 255
             template_image = source_frame_obs.observed_image.float() * 255
 
-            if mode == 'long':
-                assert (flow_target_frame == max(self.active_keyframes.keyframes))
-
-                if self.long_flow_provider.need_to_init and self.flow_tracks_inits[-1] == flow_source_frame:
-                    self.long_flow_provider.init(template_image)
-                    self.long_flow_provider.need_to_init = False
-
-                observed_flow, occlusion, uncertainty = self.long_flow_provider.next_flow(template_image, target_image)
-
-            elif mode == 'short':
-                if isinstance(self.short_flow_model, MFTFlowProvider):
-                    self.short_flow_model.init(template_image)
-                    self.short_flow_model.need_to_init = False
-                observed_flow, occlusion, uncertainty = self.short_flow_model.next_flow(template_image,
-                                                                                        target_image)
-            else:
-                raise ValueError("Unknown mode")
+            if isinstance(self.short_flow_model, MFTFlowProvider):
+                self.short_flow_model.init(template_image)
+                self.short_flow_model.need_to_init = False
+            observed_flow, occlusion, uncertainty = self.short_flow_model.next_flow(template_image,
+                                                                                    target_image)
 
             observed_flow = flow_image_coords_to_unit_coords(observed_flow)
 

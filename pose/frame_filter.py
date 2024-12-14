@@ -3,8 +3,8 @@ from time import time
 from typing import List, Tuple
 
 import torch
-from kornia.geometry import PinholeCamera
 
+from auxiliary_scripts.image_utils import ImageShape
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from data_structures.pose_icosphere import PoseIcosphere
@@ -23,15 +23,15 @@ class FrameFilterAlgorithms(Enum):
 
 class FrameFilter:
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, camera: PinholeCamera,
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageShape,
                  flow_provider: RoMaFlowProviderDirect):
 
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.pose_icosphere: PoseIcosphere = pose_icosphere
 
-        self.image_width: int = int(camera.width.item())
-        self.image_height: int = int(camera.height.item())
+        self.image_width: int = int(image_shape.width)
+        self.image_height: int = int(image_shape.height)
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
@@ -40,9 +40,12 @@ class FrameFilter:
 
         start_time = time()
 
-        preceding_frame_node = self.data_graph.get_frame_data(frame_i - 1)
+        preceding_frame_idx = frame_i - 1
+        preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
         preceding_source = preceding_frame_node.long_jump_source
-        edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_node)
+        self.add_new_flow(preceding_source, preceding_frame_idx)
+
+        edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
         reliable_flows = set()
         if edge_data.is_match_reliable and frame_i > 1:
             source = preceding_source
@@ -119,8 +122,9 @@ class FrameFilter:
 
     def flow_reliability(self, source_idx: int, target_idx: int) -> float:
 
+        dev = self.config.device
         source_datagraph_node = self.data_graph.get_frame_data(source_idx)
-        fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze()
+        fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
         flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
 
         H_A, W_A = self.image_height, self.image_width
@@ -139,4 +143,4 @@ class FrameFilter:
         if (source_frame, target_frame) not in self.data_graph.G.edges:
 
             self.data_graph.add_new_arc(source_frame, target_frame)
-            self.flow_provider.add_flows_into_datagraph(source_frame, target_frame)
+        self.flow_provider.add_flows_into_datagraph(source_frame, target_frame)
