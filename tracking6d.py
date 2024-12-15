@@ -297,8 +297,10 @@ class Tracking6D:
                 matching_pairs.append((u_index, v_index))
 
         time.sleep(1)
-        self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths, matching_pairs)
+        reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
+                                                                        matching_pairs)
 
+        self.results_writer.visualize_colmap_track(frame_i, reconstruction)
         return
 
     @torch.no_grad()
