@@ -228,25 +228,27 @@ class Tracking6D:
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
+        frame_i = 0
+
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
         Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
 
-        self.data_graph.add_new_frame(0)
-        self.data_graph.get_frame_data(0).gt_rot_axis_angle = self.gt_rotations[0]
-        self.data_graph.get_frame_data(0).gt_translation = self.gt_translations[0]
-        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[0]]), self.gt_translations[[0]])
-        self.data_graph.get_frame_data(0).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
+        self.data_graph.add_new_frame(frame_i)
+        self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[frame_i]
+        self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[frame_i]
+        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]), self.gt_translations[[frame_i]])
+        self.data_graph.get_frame_data(frame_i).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
 
-        initial_predicted_quat = Quaternion.from_axis_angle(self.gt_rotations[[0]])
-        initial_predicted_Se3 = Se3(initial_predicted_quat, self.gt_translations[[0]])
-        self.data_graph.get_frame_data(0).predicted_object_se3_long_jump = initial_predicted_Se3
+        initial_predicted_quat = Quaternion.from_axis_angle(self.gt_rotations[[frame_i]])
+        initial_predicted_Se3 = Se3(initial_predicted_quat, self.gt_translations[[frame_i]])
+        self.data_graph.get_frame_data(frame_i).predicted_object_se3_long_jump = initial_predicted_Se3
 
-        template_frame_observation = self.tracker.next(0)
-        self.data_graph.get_frame_data(0).frame_observation = template_frame_observation.send_to_device('cpu')
+        template_frame_observation = self.tracker.next(frame_i)
+        self.data_graph.get_frame_data(frame_i).frame_observation = template_frame_observation.send_to_device('cpu')
 
-        initial_pose = self.encoder.get_se3_at_frame_vectorized()[[0]]
+        initial_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
 
-        self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, 0)
+        self.pose_icosphere.insert_new_reference(template_frame_observation, initial_pose, frame_i)
 
         for frame_i in range(1, self.config.input_frames):
 
