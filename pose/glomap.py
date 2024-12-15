@@ -3,7 +3,7 @@ import select
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import h5py
 import imageio
@@ -67,7 +67,8 @@ class GlomapWrapper:
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]], datagraph_cache: Optional[DataGraph] = None):
+                                   matching_pairs: List[Tuple[int, int]], datagraph_cache: Optional[DataGraph] = None)\
+            -> pycolmap.Reconstruction:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
@@ -184,13 +185,13 @@ class GlomapWrapper:
         print(path_to_rec)
         from time import sleep
         sleep(1)  # Wait for the rec to be written
-        rec_gt = pycolmap.Reconstruction(path_to_rec)
+        reconstruction = pycolmap.Reconstruction(path_to_rec)
         try:
-            print(rec_gt.summary())
+            print(reconstruction.summary())
         except Exception as e:
             print(e)
-        poses = [np.eye(4)] * len(images)
-        return poses, rec_gt
+
+        return reconstruction
 
     def run_glomap(self, mapper: str = 'glomap'):
 
