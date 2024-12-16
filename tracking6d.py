@@ -254,7 +254,7 @@ class Tracking6D:
 
             start = time.time()
 
-            self.add_new_flows(frame_i)
+            # self.add_new_flows(frame_i)
 
             self.frame_filter.filter_frames(frame_i)
 
