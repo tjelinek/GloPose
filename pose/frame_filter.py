@@ -47,15 +47,27 @@ class FrameFilter:
         self.add_new_flow(preceding_source, preceding_frame_idx)
 
         edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
-        reliable_flows = set()
         if edge_data.is_match_reliable and frame_i > 1:
             source = preceding_source
+            reliable_flows = {source}
         elif frame_i > 1:
-            reliable_flows, source = self.matching_to_last_to_newest_getting_lost_procedure(frame_i, reliable_flows,
-                                                                                            preceding_source)
+            reliable_flows, best_source = self.match_to_all_keyframes(frame_i)
+            if best_source is None:
+                reliable_flows, best_source = self.match_to_frames_from_last_kf(frame_i, preceding_source)
+
+                if best_source is None:
+                    source = preceding_source
+                else:
+                    source = best_source
+                    cam_frame_data = self.data_graph.get_frame_data(best_source)
+
+                    mock_pose = Se3.identity(1, device=self.config.device)
+                    self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, mock_pose, best_source)
+            else:
+                source = best_source
         else:
             source = 0
-
+            reliable_flows = set()
         flow_arc_long_jump = (source, frame_i)
 
         self.add_new_flow(source, frame_i)
@@ -71,55 +83,52 @@ class FrameFilter:
         flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
         datagraph_long_edge.reliability_score = flow_reliability
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
-        new_node_frame_idx = max(long_jump_source + 1, frame_i - 1)
-        nodes_in_icosphere = {pose.keyframe_idx_observed for pose in self.pose_icosphere.reference_poses}
-
-        if flow_reliability < self.config.flow_reliability_threshold and new_node_frame_idx not in nodes_in_icosphere:
-            datagraph_node.is_source_reliable = False
-            cam_frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
-
-            mock_pose = Se3.identity(1, device=self.config.device)
-            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, mock_pose, new_node_frame_idx)
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
         datagraph_node.long_jump_source = source
 
-    def matching_to_all_kfs_getting_lost_procedure(self, frame_i, reliable_flows, preceding_source):
+    def match_to_all_keyframes(self, frame_i):
         best_source: int = 0
         best_source_reliability: float = 0.
+        reliable_flows = set()
+
         for node in self.pose_icosphere.reference_poses:
             source_node_idx = node.keyframe_idx_observed
 
             self.add_new_flow(source_node_idx, frame_i)
             flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
-            flow_reliability = self.flow_reliability(source_node_idx, frame_i)
-            flow_edge_data.reliability_score = flow_reliability
+            flow_reliability = flow_edge_data.reliability_score
 
             if flow_reliability > best_source_reliability:
                 best_source = source_node_idx
                 best_source_reliability = flow_reliability
                 reliable_flows |= {source_node_idx}
         source = best_source
+
+        if best_source_reliability < self.config.flow_reliability_threshold:
+            return None, None
         return reliable_flows, source
 
-    def matching_to_last_to_newest_getting_lost_procedure(self, frame_i, reliable_flows, preceding_source):
+    def match_to_frames_from_last_kf(self, frame_i, preceding_source):
         best_source: int = 0
         best_source_reliability: float = 0.
+        reliable_flows = set()
 
         nodes: List[Tuple[int, CommonFrameData]] = [(i, self.data_graph.get_frame_data(i)) for i in range(preceding_source, frame_i)]
 
         for source_node_idx, node in nodes:
-
             self.add_new_flow(source_node_idx, frame_i)
             flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
-            flow_reliability = self.flow_reliability(source_node_idx, frame_i)
-            flow_edge_data.reliability_score = flow_reliability
+            flow_reliability = flow_edge_data.reliability_score
 
             if flow_reliability > best_source_reliability:
                 best_source = source_node_idx
                 best_source_reliability = flow_reliability
                 reliable_flows |= {source_node_idx}
         source = best_source
+
+        if best_source_reliability < self.config.flow_reliability_threshold:
+            return None, None
         return reliable_flows, source
 
     def flow_reliability(self, source_idx: int, target_idx: int) -> float:
@@ -149,4 +158,5 @@ class FrameFilter:
 
         reliability = self.flow_reliability(source_frame, target_frame)
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+        edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability > self.config.flow_reliability_threshold
