@@ -289,6 +289,7 @@ class Tracking6D:
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                         matching_pairs)
 
+        self.glomap_wrapper.normalize_reconstruction(reconstruction)
         self.results_writer.visualize_colmap_track(frame_i, reconstruction)
         return
 
