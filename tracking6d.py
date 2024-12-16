@@ -280,7 +280,7 @@ class Tracking6D:
 
         for u, v in self.data_graph.G.edges:
             arc_data = self.data_graph.get_edge_observations(u, v)
-            if arc_data.is_match_reliable and u in pose_icosphere_node_idxs and v in pose_icosphere_node_idxs:
+            if arc_data.is_match_reliable and u in pose_icosphere_node_idxs and v in pose_icosphere_node_idxs and u != v:
                 u_index = pose_icosphere_node_idxs.index(u)
                 v_index = pose_icosphere_node_idxs.index(v)
                 matching_pairs.append((u_index, v_index))
