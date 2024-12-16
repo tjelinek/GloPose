@@ -193,6 +193,47 @@ class GlomapWrapper:
 
         return reconstruction
 
+    def normalize_reconstruction(self, reconstruction: pycolmap.Reconstruction) -> pycolmap.Reconstruction:
+        reconstruction = copy.deepcopy(reconstruction)
+
+        gt_reconstruction = pycolmap.Reconstruction()
+
+        gt_cam_params = self.data_graph.get_frame_data(0).gt_pinhole_params
+
+        gt_w = int(gt_cam_params.width.item())
+        gt_h = int(gt_cam_params.height.item())
+        fx = gt_cam_params.fx.item()
+        fy = gt_cam_params.fy.item()
+
+        gt_reconstruction_cam_id = 1
+        cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, gt_w / 2.0, gt_h / 2.0]))
+        gt_reconstruction.add_camera(cam)
+
+        tgt_image_names = []
+        tgt_3d_locations = []
+
+        for n in self.data_graph.G.nodes:
+            node_data = self.data_graph.get_frame_data(n)
+
+            cam_pose_Se3 = node_data.gt_pose_cam
+            cam_pose_q_xyzw = cam_pose_Se3.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
+            cam_pose_t = cam_pose_Se3.t.squeeze().numpy(force=True).astype(np.float64)
+
+            image_name = f'node_{n}.png'
+
+            gt_image = pycolmap.Image(name=image_name, image_id=n, camera_id=gt_reconstruction_cam_id)
+            gt_cam_pose = pycolmap.Rigid3d(rotation=cam_pose_q_xyzw, translation=cam_pose_t)
+            gt_image.cam_from_world = gt_cam_pose
+            gt_reconstruction.add_image(gt_image)
+
+            tgt_image_names.append(image_name)
+            tgt_3d_locations.append(cam_pose_t)
+
+        reconstruction.align_poses(gt_reconstruction)
+        sim3d = pycolmap.align_reconstructions_via_proj_centers(gt_reconstruction, reconstruction, 100.)
+
+        return reconstruction
+
     def run_glomap(self, mapper: str = 'glomap'):
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
