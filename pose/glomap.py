@@ -3,7 +3,7 @@ import select
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 
 import h5py
 import imageio
@@ -226,11 +226,11 @@ class GlomapWrapper:
             gt_cam_pose = pycolmap.Rigid3d(rotation=cam_pose_q_xyzw, translation=cam_pose_t)
             gt_image.cam_from_world = gt_cam_pose
             gt_reconstruction.add_image(gt_image)
+            gt_reconstruction.register_image(n)
 
             tgt_image_names.append(image_name)
             tgt_3d_locations.append(cam_pose_t)
 
-        reconstruction.align_poses(gt_reconstruction)
         sim3d = pycolmap.align_reconstructions_via_proj_centers(gt_reconstruction, reconstruction, 100.)
 
         return reconstruction
