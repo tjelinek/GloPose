@@ -179,11 +179,12 @@ class GlomapWrapper:
 
         import_into_colmap(self.colmap_image_path, self.feature_dir, database_path, img_ext, single_camera)
 
+        from time import sleep
+        sleep(1)
         self.run_glomap()
 
         path_to_rec = self.colmap_output_path / '0'
         print(path_to_rec)
-        from time import sleep
         sleep(1)  # Wait for the rec to be written
         reconstruction = pycolmap.Reconstruction(path_to_rec)
         try:
