@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from typing import Tuple, List, Any
 
+import pycolmap
 import torch
 import imageio
 import rerun as rr
@@ -156,6 +157,11 @@ class WriteResults:
                     rrb.Spatial3DView(
                         origin=RerunAnnotations.space_visualization,
                         name='3D Space',
+                        background=[255, 255, 255]
+                    ),
+                    rrb.Spatial3DView(
+                        origin=RerunAnnotations.colmap_visualization,
+                        name='COLMAP',
                         background=[255, 255, 255]
                     ),
                     rrb.Grid(
@@ -366,6 +372,102 @@ class WriteResults:
                     frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
                 # self.analyze_ransac_matchings(frame_i)
                 pass
+
+    def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
+        rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
+
+        points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
+        points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
+        rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors))
+
+        all_frames_from_0 = range(0, frame_i + 1)
+        n_poses = len(all_frames_from_0)
+
+        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params.extrinsics)
+        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
+
+        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
+        gt_rotations_rad = torch.deg2rad(gt_rotations)
+
+        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
+        gt_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
+        gt_t_cam = gt_cam_se3.translation.numpy(force=True)
+
+        cmap_gt = plt.get_cmap('Reds')
+        gradient = np.linspace(1., 0.5, self.tracking_config.input_frames)
+        colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
+
+        strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
+
+        strips_radii_factor = (max(torch.max(torch.cat([translations, gt_translations]).norm(dim=1)).item(), 5.) / 5.)
+        strips_radii = [0.01 * strips_radii_factor] * n_poses
+
+        rr.log(RerunAnnotations.colmap_gt_camera_track,
+               rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
+                               colors=colors_gt,
+                               radii=strips_radii))
+
+        datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
+        template_frame_idx = datagraph_camera_node.long_jump_source
+
+        datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
+
+        template_node_Se3 = datagraph_template_node.predicted_object_se3_total
+        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+        #
+        # rr.log(RerunAnnotations.space_predicted_closest_keypoint,
+        #        rr.LineStrips3D(strips=[[pred_t_cam[-1],
+        #                                 template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+        #                        colors=[[255, 0, 0]],
+        #                        radii=[0.025 * strips_radii_factor]))
+        #
+        # if len(datagraph_camera_node.reliable_sources) > 1:
+        #     for reliable_template_idx in datagraph_camera_node.reliable_sources:
+        #         datagraph_template_node = self.data_graph.get_frame_data(reliable_template_idx)
+        #
+        #         template_node_Se3 = datagraph_template_node.predicted_object_se3_total
+        #         template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+        #
+        #         rr.log(f'{RerunAnnotations.space_predicted_reliable_templates}/{reliable_template_idx}',
+        #                rr.LineStrips3D(strips=[[pred_t_cam[-1],
+        #                                         template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+        #                                colors=[[255, 255, 0]],
+        #                                radii=[0.025 * strips_radii_factor]))
+        #
+        # for i, icosphere_node in enumerate(self.pose_icosphere.reference_poses):
+        #
+        #     if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits:
+        #         template_idx = len(self.logged_flow_tracks_inits)
+        #
+        #         template = icosphere_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
+        #
+        #         self.logged_flow_tracks_inits.append(icosphere_node.keyframe_idx_observed)
+        #         template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
+        #                                           f'{template_idx}')
+        #         rr.log(template_image_grid_annotation, rr.Image(template))
+        #
+        #         for template_annotation in self.template_fields:
+        #             rr.log(template_annotation, rr.Scalar(0.0))
+        #
+        #         node_Se3 = Se3(icosphere_node.quaternion, icosphere_node.translation)
+        #         node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
+        #         node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
+        #
+        #         rr.log(
+        #             f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+        #             rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
+        #                            rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
+        #         )
+        #
+        #         rr.log(
+        #             f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
+        #             rr.Pinhole(
+        #                 resolution=[self.image_width, self.image_height],
+        #                 focal_length=[float(self.pinhole_params.fx.item()),
+        #                               float(self.pinhole_params.fy.item())],
+        #                 camera_xyz=rr.ViewCoordinates.RUB,
+        #             ),
+        #         )
 
     def visualize_3d_camera_space(self, frame_i: int):
 
