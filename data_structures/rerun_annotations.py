@@ -6,6 +6,7 @@ axes = ['x', 'y', 'z']
 class RerunAnnotations:
     # Observations
     space_visualization: Final[str] = '/3d_space'
+    colmap_visualization: Final[str] = '/3d_colmap'
     space_gt_mesh: Final[str] = '/3d_space/gt_mesh'
     space_gt_camera_pose: Final[str] = '/3d_space/gt_camera_pose'
     space_predicted_camera_pose: Final[str] = '/3d_space/predicted_camera_pose'
@@ -14,6 +15,13 @@ class RerunAnnotations:
     space_predicted_camera_keypoints: Final[str] = '/3d_space/predicted_camera_keypoints'
     space_predicted_closest_keypoint: Final[str] = '/3d_space/predicted_closest_keypoint'
     space_predicted_reliable_templates: Final[str] = '/3d_space/predicted_reliable_templates'
+
+    # COLMAP
+    colmap_pointcloud: Final[str] = '/3d_colmap/pointcloud'
+    colmap_gt_camera_pose: Final[str] = '/3d_colmap/gt_camera_pose'
+    colmap_gt_camera_track: Final[str] = '/3d_colmap/gt_camera_track'
+    colmap_predicted_camera_keypoints: Final[str] = '/3d_colmap/predicted_camera_keypoints'
+    colmap_predicted_reliable_templates: Final[str] = '/3d_colmap/predicted_reliable_templates'
 
     template_image_frontview: Final[str] = '/observations/template_image_frontview'
 
