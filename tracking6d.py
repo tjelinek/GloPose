@@ -294,11 +294,16 @@ class Tracking6D:
 
     def init_datagraph_frame(self, Se3_world_to_cam, frame_i):
         self.data_graph.add_new_frame(frame_i)
-        self.data_graph.get_frame_data(frame_i).gt_rot_axis_angle = self.gt_rotations[frame_i]
-        self.data_graph.get_frame_data(frame_i).gt_translation = self.gt_translations[frame_i]
+
+        frame_node = self.data_graph.get_frame_data(frame_i)
+        frame_node.gt_rot_axis_angle = self.gt_rotations[frame_i]
+        frame_node.gt_translation = self.gt_translations[frame_i]
+
         gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]), self.gt_translations[[frame_i]])
-        self.data_graph.get_frame_data(frame_i).gt_pose_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj,
-                                                                                            Se3_world_to_cam)
+        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
+        frame_node.gt_pose_cam = gt_Se3_cam
+
+        frame_node.gt_pinhole_params = self.pinhole_params
 
     @torch.no_grad()
     def add_new_flows(self, frame_i):
