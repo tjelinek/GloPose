@@ -6,7 +6,6 @@ import torch.nn as nn
 from kornia.geometry import normalize_quaternion, So3, Se3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
-from pytorch3d.transforms import quaternion_multiply
 
 from utils import mesh_normalize
 
@@ -111,10 +110,12 @@ class Encoder(nn.Module):
         self.translation = torch.nn.Parameter(translations)
 
     def get_total_rotation_at_frame_vectorized(self):
-        offset_initial_quaternion = quaternion_multiply(normalize_quaternion(self.quaternion_offsets),
-                                                        normalize_quaternion(self.quaternion))
+        q_so3 = So3(Quaternion(self.quaternion))
+        q_so3_offset = So3(Quaternion(self.quaternion_offsets))
 
-        total_rotation_quaternion = normalize_quaternion(offset_initial_quaternion)
+        offset_initial_quaternion = q_so3_offset * q_so3
+
+        total_rotation_quaternion = normalize_quaternion(offset_initial_quaternion.q.q)
 
         return total_rotation_quaternion
 
