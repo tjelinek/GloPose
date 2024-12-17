@@ -231,7 +231,9 @@ class GlomapWrapper:
             tgt_image_names.append(image_name)
             tgt_3d_locations.append(cam_pose_t)
 
-        sim3d = pycolmap.align_reconstructions_via_proj_centers(gt_reconstruction, reconstruction, 100.)
+        sim3d = pycolmap.align_reconstructions_via_proj_centers(reconstruction, gt_reconstruction, 1.)
+
+        reconstruction.transform(sim3d)
 
         return reconstruction
 
