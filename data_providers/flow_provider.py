@@ -47,15 +47,21 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, saved_flow_paths: Path, image_files_paths: List):
+    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, image_files_paths: List,
+                 allow_missing: bool = True):
         super().__init__(data_graph, device)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
-        self.saved_flow_paths = saved_flow_paths
-        self.warps_path = saved_flow_paths / 'warps'
-        self.certainties_path = saved_flow_paths / 'certainties'
+        self.saved_flow_paths = cache_dir
+        self.warps_path = cache_dir / 'warps'
+        self.certainties_path = cache_dir / 'certainties'
+
+        self.warps_path.mkdir(exist_ok=True, parents=True)
+        self.certainties_path.mkdir(exist_ok=True, parents=True)
 
         self.image_names_sorted = sorted(Path(p) for p in image_files_paths)
+
+        self.allow_missing: bool = allow_missing
 
     def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
 
@@ -69,8 +75,14 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         warp_filename = self.warps_path / saved_filename
         certainty_filename = self.certainties_path / saved_filename
 
-        warp = torch.load(warp_filename).to(self.device)
-        certainty = torch.load(certainty_filename).to(self.device)
+        if (not warp_filename.exists() or not certainty_filename.exists()) and self.allow_missing:
+            warp, certainty = super().next_flow_roma(source_image_idx, target_image_idx)
+
+            torch.save(warp, warp_filename)
+            torch.save(certainty, certainty_filename)
+        else:
+            warp = torch.load(warp_filename).to(self.device)
+            certainty = torch.load(certainty_filename).to(self.device)
 
         if sample:
             warp, certainty = self.flow_model.sample(warp, certainty, sample)

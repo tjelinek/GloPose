@@ -19,6 +19,7 @@ class TrackerConfig:
     matching_visualization_type = 'matching'  # Either 'dots' or 'matching'
 
     # Visualization
+
     write_results: bool = True
     write_to_rerun_rather_than_disk: bool = True
     write_results_frequency: int = 1
@@ -75,6 +76,7 @@ class TrackerConfig:
     # Additional settings
     sigmainv: float = 7000
     factor: float = 1
+    dataset: str = None
     sequence: str = None
     experiment_name: str = None
 

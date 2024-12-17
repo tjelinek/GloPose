@@ -1,7 +1,6 @@
 import glob
 import numpy as np
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -54,11 +53,13 @@ def main():
 
         experiment_name = args.experiment
 
-        config.experiment_name = experiment_name
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
         config.gt_track_path = gt_tracking_path
+
+        config.experiment_name = experiment_name
         config.sequence = sequence
+        config.dataset = dataset
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
@@ -75,8 +76,13 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
+        skip_frames = 1
         gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
         gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
+        images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
+
+        gt_rotations = gt_rotations[::skip_frames]
+        images_paths = images_paths[::skip_frames]
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
         config.input_frames = gt_rotations.shape[0]

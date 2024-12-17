@@ -44,16 +44,23 @@ def main():
 
         experiment_name = args.experiment
 
-        config.experiment_name = experiment_name
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
         # config.gt_track_path = gt_tracking_path
-        config.sequence = sequence
 
+        config.experiment_name = experiment_name
+        config.sequence = sequence
+        config.dataset = dataset
+
+        skip_frames = 1
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
         # gt_rotations = torch.deg2rad(scenarios.generate_rotations_z(5).rotations).cuda().to(torch.float32)
-        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)[::8]
+        gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
+        images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
+
+        gt_rotations = gt_rotations[::skip_frames]
+        images_paths = images_paths[::skip_frames]
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
         if config.augment_gt_track:
@@ -66,7 +73,8 @@ def main():
 
         config.input_frames = gt_rotations.shape[0]
 
-        run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations,
+                                 images_paths=images_paths)
 
         return
 

@@ -11,7 +11,7 @@ from data_providers.flow_wrappers import (FlowProvider, MFTFlowProvider,
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
-from data_providers.flow_provider import RoMaFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FlowObservation
@@ -148,7 +148,10 @@ class Tracking6D:
                                            data_graph=self.data_graph,
                                            pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
 
-        self.flow_provider = RoMaFlowProviderDirect(self.data_graph, self.config.device)
+        self.cache_folder: Path = (Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence /
+                                   config.experiment_name)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
+                                                               images_paths)
 
         self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.image_shape,
                                         self.flow_provider)
