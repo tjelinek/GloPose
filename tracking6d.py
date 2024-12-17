@@ -149,7 +149,7 @@ class Tracking6D:
                                            pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
 
         self.cache_folder: Path = (Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence /
-                                   config.experiment_name)
+                                   f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
                                                                images_paths)
 
