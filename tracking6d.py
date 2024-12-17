@@ -278,11 +278,12 @@ class Tracking6D:
             images_paths.append(frame_data.image_save_path)
             segmentation_paths.append(frame_data.segmentation_save_path)
 
-        for u, v in self.data_graph.G.edges:
-            arc_data = self.data_graph.get_edge_observations(u, v)
-            if arc_data.is_match_reliable and u in pose_icosphere_node_idxs and v in pose_icosphere_node_idxs and u != v:
-                u_index = pose_icosphere_node_idxs.index(u)
-                v_index = pose_icosphere_node_idxs.index(v)
+        for frame1_idx, frame2_idx in self.data_graph.G.edges:
+            arc_data = self.data_graph.get_edge_observations(frame1_idx, frame2_idx)
+            if (arc_data.is_match_reliable and frame1_idx in pose_icosphere_node_idxs and frame2_idx in pose_icosphere_node_idxs
+                    and frame1_idx != frame2_idx and (frame1_idx, frame2_idx) not in matching_pairs):
+                u_index = pose_icosphere_node_idxs.index(frame1_idx)
+                v_index = pose_icosphere_node_idxs.index(frame2_idx)
                 matching_pairs.append((u_index, v_index))
 
         time.sleep(1)
