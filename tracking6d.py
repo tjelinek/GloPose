@@ -249,7 +249,8 @@ class Tracking6D:
                 self.pose_icosphere.insert_new_reference(new_frame_observation, initial_pose, frame_i)
 
             else:
-                self.frame_filter.filter_frames(frame_i)
+                if self.config.matcher == 'RoMa':
+                    self.frame_filter.filter_frames(frame_i)
 
                 self.results_writer.write_results(frame_i=frame_i)
 
