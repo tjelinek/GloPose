@@ -181,7 +181,7 @@ class GlomapWrapper:
 
         from time import sleep
         sleep(1)
-        self.run_glomap()
+        self.run_mapper()
 
         path_to_rec = self.colmap_output_path / '0'
         print(path_to_rec)
@@ -237,7 +237,7 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def run_glomap(self, mapper: str = 'glomap'):
+    def run_mapper(self, mapper: str = 'pycolmap'):
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
         self.colmap_output_path.mkdir(exist_ok=True, parents=True)
