@@ -291,7 +291,7 @@ class Tracking6D:
         else:
             raise ValueError(f'Unknown matcher {self.config.matcher}')
 
-        self.glomap_wrapper.normalize_reconstruction(reconstruction)
+        reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
         self.results_writer.visualize_colmap_track(frame_i, reconstruction)
         return
 
