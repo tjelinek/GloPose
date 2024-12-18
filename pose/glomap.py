@@ -310,14 +310,13 @@ class GlomapWrapper:
         else:
             raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 
-    def estimate_camera_poses_sift(self, keyframes: List[Union[Path, str]], segmentations: List[Union[Path, str]],
-                                   matching_pairs=None, options=default_opts(), progress=None):
+    def estimate_camera_poses_sift(self, keyframes: List[Path], segmentations: List[Path], matching_pairs=None):
 
         current_temp_dir = self.config.sift_cache
         current_temp_dir_images = current_temp_dir / 'images'
         Path.mkdir(current_temp_dir_images, exist_ok=True)
         
-        feature_dir = self.config.features
+        feature_dir = self.feature_dir
         device = self.config.device
         database_path = self.colmap_db_path
         
@@ -328,9 +327,9 @@ class GlomapWrapper:
             
         detect_sift(keyframes_single_dir,
                     segmentations,
-                    options['num_feats'],
+                    self.config.sift_filter_num_feats,
                     device=self.config.device,
-                    feature_dir=feature_dir, progress=progress)
+                    feature_dir=feature_dir)
         if matching_pairs is None:
             index_pairs = get_exhaustive_image_pairs(keyframes_single_dir)
         else:
