@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional
 
 import cv2
 import h5py
@@ -24,8 +25,8 @@ def sift_to_rootsift(x: torch.Tensor, eps=1e-6) -> torch.Tensor:
     return torch.nn.functional.normalize(x, p=2, dim=-1, eps=eps)
 
 
-def detect_sift(img_fnames,
-                segmentations=None,
+def detect_sift(img_fnames: List[Path],
+                segmentations: Optional[List[Path]]=None,
                 num_feats=2048,
                 device=torch.device('cpu'),
                 feature_dir='.featureout'):
@@ -38,12 +39,12 @@ def detect_sift(img_fnames,
         for i, img_path in tqdm(enumerate(img_fnames)):
 
             if segmentations is not None:
-                seg = cv2.imread(segmentations[i], cv2.IMREAD_GRAYSCALE)
+                seg = cv2.imread(str(segmentations[i]), cv2.IMREAD_GRAYSCALE)
             else:
                 seg = None
-            img1 = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+            img1 = cv2.cvtColor(cv2.imread(str(img_path)), cv2.COLOR_BGR2RGB)
             hw1 = torch.tensor(img1.shape[:2], device=device)
-            img_fname = img_path.split('/')[-1]
+            img_fname = img_path.name
             key = img_fname
             kpts1, descs1 = sift.detectAndCompute(img1, seg)
             lafs1 = laf_from_opencv_SIFT_kpts(kpts1)
