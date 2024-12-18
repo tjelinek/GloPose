@@ -222,9 +222,9 @@ class Tracking6D:
         return iface_features, ivertices
 
     def initialize_flow_model(self):
-
-        self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
-        self.short_flow_model = self.roma_flow_provider
+        pass
+        # self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
+        # self.short_flow_model = self.roma_flow_provider
 
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
