@@ -251,8 +251,7 @@ class Tracking6D:
             else:
                 self.frame_filter.filter_frames(frame_i)
 
-                if self.config.write_results:
-                    self.results_writer.write_results(frame_i=frame_i)
+                self.results_writer.write_results(frame_i=frame_i)
 
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
