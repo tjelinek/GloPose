@@ -151,6 +151,12 @@ class FrameFilter:
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
 
+        sufficient_fg_pixels = fg_certainties.numel() > self.config.min_number_of_fg_pixels
+        sufficient_reliable_matches = (fg_certainties_above_threshold.numel() >
+                                       self.config.min_number_of_reliable_matches)
+
+        reliability *= float(sufficient_reliable_matches) * float(sufficient_fg_pixels)
+
         return reliability.item()
 
     def add_new_flow(self, source_frame, target_frame):
