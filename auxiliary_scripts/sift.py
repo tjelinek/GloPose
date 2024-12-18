@@ -17,6 +17,7 @@ from auxiliary_scripts.colmap.h5_to_db import add_keypoints, add_matches
 temp_dir = Path("/mnt/personal/jelint19/cache/sift_cache")
 os.makedirs(temp_dir, exist_ok=True)
 
+
 def sift_to_rootsift(x: torch.Tensor, eps=1e-6) -> torch.Tensor:
     x = torch.nn.functional.normalize(x, p=1, dim=-1, eps=eps)
     x.clip_(min=eps).sqrt_()
@@ -27,7 +28,7 @@ def detect_sift(img_fnames,
                 segmentations=None,
                 num_feats=2048,
                 device=torch.device('cpu'),
-                feature_dir='.featureout', resize_to=(800, 600), progress=None):
+                feature_dir='.featureout'):
     sift = cv2.SIFT_create(num_feats, edgeThreshold=-1000, contrastThreshold=-1000)
     if not os.path.isdir(feature_dir):
         os.makedirs(feature_dir)
@@ -53,19 +54,7 @@ def detect_sift(img_fnames,
             f_laf[key] = lafs1.detach().cpu().numpy()
             f_kp[key] = kpts
             f_desc[key] = descs1
-            if progress is not None:
-                progress(i / len(img_fnames), "SIFT Detection")
     return
-
-
-def get_unique_idxs(A):
-    # https://stackoverflow.com/questions/72001505/how-to-get-unique-elements-and-their-firstly-appeared-indices-of-a-pytorch-tenso
-    unique, idx, counts = torch.unique(A, dim=0, sorted=True, return_inverse=True, return_counts=True)
-    _, ind_sorted = torch.sort(idx, stable=True)
-    cum_sum = counts.cumsum(0)
-    cum_sum = torch.cat((torch.tensor([0], device=cum_sum.device), cum_sum[:-1]))
-    first_indicies = ind_sorted[cum_sum]
-    return first_indicies
 
 
 def match_features(img_fnames,
@@ -137,6 +126,7 @@ def import_into_colmap(img_dir,
     db.commit()
     return
 
+
 def default_opts():
     opts = {"feature_dir": '.featureout',
             "database_path": 'colmap.db',
@@ -163,8 +153,7 @@ def default_sift_keyframe_opts():
     return opts
 
 
-def get_keyframes_and_segmentations_sift(input_images, segmentations, options=None,
-                                         progress=None):
+def get_keyframes_and_segmentations_sift(input_images, segmentations, options=None):
     if options is None:
         options = default_sift_keyframe_opts()
 
@@ -181,7 +170,7 @@ def get_keyframes_and_segmentations_sift(input_images, segmentations, options=No
                 segmentations,
                 options['num_feats'],
                 device=options['device'],
-                feature_dir=options['feature_dir'], resize_to=options['resize_to'], progress=progress)
+                feature_dir=options['feature_dir'])
     matcher = K.feature.match_adalam
     feature_dir = options['feature_dir']
     device = options['device']
@@ -204,8 +193,6 @@ def get_keyframes_and_segmentations_sift(input_images, segmentations, options=No
         we_stepped_back = False
         while not done:
             idx2 = idx2 + 1
-            if progress is not None:
-                progress(idx2 / len(keyframes_single_dir), "Estimating keyframes")
             is_last_frame = idx2 == len(keyframes_single_dir) - 1
             if idx2 >= len(keyframes_single_dir):
                 break

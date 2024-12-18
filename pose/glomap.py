@@ -330,7 +330,7 @@ class GlomapWrapper:
                     segmentations,
                     options['num_feats'],
                     device=self.config.device,
-                    feature_dir=feature_dir, resize_to=self.config.resize_to, progress=progress)
+                    feature_dir=feature_dir, progress=progress)
         if matching_pairs is None:
             index_pairs = get_exhaustive_image_pairs(keyframes_single_dir)
         else:
