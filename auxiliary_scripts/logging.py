@@ -414,6 +414,41 @@ class WriteResults:
 
         template_node_Se3 = datagraph_template_node.predicted_object_se3_total
         template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+
+        import re
+        for image_id, image in colmap_reconstruction.images.items():
+            image_frame_id = int(re.search(r'\d+', image.name).group())
+
+            image_t_cam = torch.tensor(image.cam_from_world.translation)
+            image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
+            image_q_cam_wxyz = image_q_cam_xyzw[[3, 0, 1, 2]]
+            image_Se3_cam = Se3(Quaternion(image_q_cam_wxyz), image_t_cam)
+
+            rr.log(
+                f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
+                rr.Transform3D(translation=image_t_cam,
+                               rotation=rr.Quaternion(xyzw=image_q_cam_xyzw))
+            )
+
+            rr.log(
+                f'{RerunAnnotations.space_predicted_camera_keypoints}/{image_id}',
+                rr.Pinhole(
+                    resolution=[self.image_width, self.image_height],
+                    focal_length=[float(self.pinhole_params.fx.item()),
+                                  float(self.pinhole_params.fy.item())],
+                    camera_xyz=rr.ViewCoordinates.RUB,
+                ),
+            )
+
+            frame_data = self.data_graph.get_frame_data(image_frame_id)
+            img_rgb = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0)
+            rr.log(
+                f'{RerunAnnotations.space_predicted_camera_keypoints}/{image_id}',
+                rr.Image(img_rgb)
+            )
+
+            breakpoint()
+        breakpoint()
         #
         # rr.log(RerunAnnotations.space_predicted_closest_keypoint,
         #        rr.LineStrips3D(strips=[[pred_t_cam[-1],
