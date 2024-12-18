@@ -277,8 +277,14 @@ class Tracking6D:
 
         time.sleep(1)
         print(matching_pairs)
-        reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                        matching_pairs)
+        if self.config.matcher == 'RoMa':
+            reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
+                                                                            matching_pairs)
+        elif self.config.matcher == 'SIFT':
+            reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
+                                                                                 matching_pairs)
+        else:
+            raise ValueError(f'Unknown matcher {self.config.matcher}')
 
         self.glomap_wrapper.normalize_reconstruction(reconstruction)
         self.results_writer.visualize_colmap_track(frame_i, reconstruction)
