@@ -1,7 +1,5 @@
 import cv2
 import torch
-from kornia_moons.feature import *
-from kornia_moons.viz import *
 
 import pycolmap
 import os
@@ -10,25 +8,18 @@ import numpy as np
 import kornia as K
 import kornia.feature as KF
 from tqdm import tqdm
-# from fastprogress import progress_bar
-import matplotlib.pyplot as plt
-from dm.h5_to_db import add_keypoints, add_matches, COLMAPDatabase
 import subprocess
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Union
 from datetime import datetime
 import shutil
 
-temp_dir = Path("temp")
+from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
+from auxiliary_scripts.colmap.h5_to_db import add_keypoints, add_matches
+
+temp_dir = Path("/mnt/personal/jelint19/cache/sift_cache")
 os.makedirs(temp_dir, exist_ok=True)
-
-
-def load_torch_image(fname, device=torch.device('cpu')):
-    img = K.image_to_tensor(cv2.imread(fname), False).float() / 255.
-    img = K.color.bgr_to_rgb(img.to(device))
-    return img
-
 
 def sift_to_rootsift(x: torch.Tensor, eps=1e-6) -> torch.Tensor:
     x = torch.nn.functional.normalize(x, p=1, dim=-1, eps=eps)
