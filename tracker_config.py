@@ -155,8 +155,12 @@ class TrackerConfig:
 
     # SIFT options
     resize_to: Tuple[int, int] = (800, 600)
-    num_feats: int = 8192
-    sift_matcher: str = 'adalam'
-    min_matches: int = 100
-    good_to_add_matches: int = 450
+    sift_filter_num_feats: int = 8192
+    sift_filter_sift_matcher: str = 'adalam'
+    sift_filter_min_matches: int = 100
+    sift_filter_good_to_add_matches: int = 450
     sift_cache: Path = None
+
+    sift_mapping_num_feats = 8192,
+    sift_mapping_min_matches = 15,
+    sift_mapping_single_camera = True
