@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -151,3 +152,11 @@ class TrackerConfig:
     frame_filter_when_lost_algorithm = None
     frame_reconstruction_algorithm: str = 'glomap'
     matcher: str = 'RoMa'
+
+    # SIFT options
+    resize_to: Tuple[int, int] = (800, 600)
+    num_feats: int = 8192
+    sift_matcher: str = 'adalam'
+    min_matches: int = 100
+    good_to_add_matches: int = 450
+    sift_cache: Path = None
