@@ -1,19 +1,15 @@
-import cv2
-import torch
-
-import pycolmap
 import os
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+import cv2
 import h5py
-import numpy as np
 import kornia as K
 import kornia.feature as KF
-from tqdm import tqdm
-import subprocess
+import torch
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
-from pathlib import Path
-from typing import List, Union
-from datetime import datetime
-import shutil
+from tqdm import tqdm
 
 from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
 from auxiliary_scripts.colmap.h5_to_db import add_keypoints, add_matches
@@ -141,48 +137,6 @@ def import_into_colmap(img_dir,
     db.commit()
     return
 
-
-def run_reconstruction_glomap(image_dir, output_path='glomap_rec', database_path='colmap.db'):
-    pycolmap.match_exhaustive(database_path)
-    glomap_command = [
-        "glomap",
-        "mapper",
-        "--database_path", database_path,
-        "--output_path", output_path,
-        "--image_path", image_dir,
-        "--TrackEstablishment.min_num_view_per_track", str(2),
-    ]
-    subprocess.run(glomap_command, check=True, capture_output=True, text=True)
-    return
-
-
-def run_reconstruction_colmap(image_dir, output_path='colmap_rec', database_path='colmap.db'):
-    pycolmap.match_exhaustive(database_path)
-    colmap_command = [
-        "colmap",
-        "mapper",
-        "--database_path", database_path,
-        "--output_path", output_path,
-        "--image_path", image_dir,
-        "--Mapper.tri_ignore_two_view_tracks", str(0),
-        "--log_to_stderr", str(1),
-    ]
-    subprocess.run(colmap_command, check=True, capture_output=True, text=True)
-    return
-
-
-def run_reconstruction_pycolmap(image_dir, output_path='colmap_rec', database_path='colmap.db'):
-    pycolmap.match_exhaustive(database_path)
-    op2 = Path(output_path)
-    opts = pycolmap.IncrementalPipelineOptions()
-    opts.triangulation.ignore_two_view_tracks = False
-    maps = pycolmap.incremental_mapping(Path(database_path), Path(image_dir), op2, options=opts)
-    if len(maps) > 0:
-        maps[0].write(op2)
-        print(maps[0].summary())
-    return
-
-
 def default_opts():
     opts = {"feature_dir": '.featureout',
             "database_path": 'colmap.db',
@@ -209,8 +163,11 @@ def default_sift_keyframe_opts():
     return opts
 
 
-def get_keyframes_and_segmentations_sift(input_images, segmentations, options=default_sift_keyframe_opts(),
+def get_keyframes_and_segmentations_sift(input_images, segmentations, options=None,
                                          progress=None):
+    if options is None:
+        options = default_sift_keyframe_opts()
+
     print("Detection features")
     current_time = datetime.now().strftime("%Y%m%d%H%M%S")
     current_temp_dir = temp_dir / f"temp_{current_time}"
@@ -317,53 +274,3 @@ def get_keyframes_and_segmentations_sift(input_images, segmentations, options=de
     keyframes = [keyframes_single_dir[i] for i in selected_keyframe_idxs]
     keysegs = [segmentations[i] for i in selected_keyframe_idxs]
     return keyframes, keysegs, matching_pairs_new_idxs
-
-
-def estimate_camera_poses_sift(keyframes: List[Union[Path, str]], segmentations: List[Union[Path, str]],
-                               matching_pairs=None, options=default_opts(), progress=None):
-    print("Detection features")
-    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    current_temp_dir = temp_dir / f"temp_{current_time}"
-    current_temp_dir_images = current_temp_dir / 'images'
-    os.makedirs(str(current_temp_dir_images), exist_ok=True)
-    keyframes_single_dir = []
-    for img in keyframes:
-        shutil.copy(img, current_temp_dir_images / Path(img).name)
-        keyframes_single_dir.append(str(current_temp_dir_images / Path(img).name))
-    detect_sift(keyframes_single_dir,
-                segmentations,
-                options['num_feats'],
-                device=options['device'],
-                feature_dir=options['feature_dir'], resize_to=options['resize_to'], progress=progress)
-    if matching_pairs is None:
-        index_pairs = get_exhaustive_image_pairs(keyframes_single_dir)
-    else:
-        index_pairs = matching_pairs
-    print("Natching features")
-    match_features(keyframes_single_dir, index_pairs, feature_dir=options['feature_dir'], device=options['device'],
-                   alg='adalam', progress=progress)
-    dirname = os.path.dirname(keyframes_single_dir[0])  # Assume all images are in the same directory
-    print("Dirname", dirname)
-    import_into_colmap(dirname, feature_dir=options['feature_dir'], database_path=options['database_path'],
-                       img_ext=options['img_ext'])
-    print("Reconstruction")
-    if progress is not None:
-        progress(0.2, "Reconstruction")
-    os.makedirs(options['output_path'], exist_ok=True)
-    if options['mapper'] == 'glomap':
-        run_reconstruction_glomap(dirname, options['output_path'], options['database_path'])
-    else:
-        run_reconstruction_pycolmap(dirname, options['output_path'], options['database_path'])
-        # run_reconstruction_colmap(dirname, options['output_path'], options['database_path'])
-
-    path_to_rec = f'{options["output_path"]}/0/'
-    print(path_to_rec)
-    from time import sleep
-    sleep(1)  # Wait for the rec to be written
-    rec_gt = pycolmap.Reconstruction(path_to_rec)
-    try:
-        print(rec_gt.summary())
-    except Exception as e:
-        print(e)
-    poses = [np.eye(4)] * len(keyframes)
-    return poses, rec_gt

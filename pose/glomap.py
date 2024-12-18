@@ -1,9 +1,11 @@
 import copy
+import os
 import select
+import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 import h5py
 import imageio
@@ -17,6 +19,7 @@ from tqdm import tqdm
 
 from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
 from auxiliary_scripts.image_utils import ImageShape
+from auxiliary_scripts.sift import detect_sift, get_exhaustive_image_pairs, default_opts, match_features
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
@@ -181,7 +184,7 @@ class GlomapWrapper:
 
         from time import sleep
         sleep(1)
-        self.run_mapper()
+        self.run_mapper(self.config.mapper)
 
         path_to_rec = self.colmap_output_path / '0'
         print(path_to_rec)
@@ -306,6 +309,55 @@ class GlomapWrapper:
                 print(maps[0].summary())
         else:
             raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
+
+    def estimate_camera_poses_sift(self, keyframes: List[Union[Path, str]], segmentations: List[Union[Path, str]],
+                                   matching_pairs=None, options=default_opts(), progress=None):
+
+        current_temp_dir = self.config.sift_cache
+        current_temp_dir_images = current_temp_dir / 'images'
+        Path.mkdir(current_temp_dir_images, exist_ok=True)
+        
+        feature_dir = self.config.features
+        device = self.config.device
+        database_path = self.colmap_db_path
+        
+        keyframes_single_dir = []
+        for img in keyframes:
+            shutil.copy(img, current_temp_dir_images / Path(img).name)
+            keyframes_single_dir.append(str(current_temp_dir_images / Path(img).name))
+            
+        detect_sift(keyframes_single_dir,
+                    segmentations,
+                    options['num_feats'],
+                    device=self.config.device,
+                    feature_dir=feature_dir, resize_to=self.config.resize_to, progress=progress)
+        if matching_pairs is None:
+            index_pairs = get_exhaustive_image_pairs(keyframes_single_dir)
+        else:
+            index_pairs = matching_pairs
+        print("Matching features")
+        
+        match_features(keyframes_single_dir, index_pairs, feature_dir=feature_dir, device=device,
+                       alg='adalam')
+        dirname = os.path.dirname(keyframes_single_dir[0])  # Assume all images are in the same directory
+        print("Dirname", dirname)
+
+        import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path, img_ext='png')
+        print("Reconstruction")
+
+        self.run_mapper(self.config.mapper)
+
+        path_to_rec = self.colmap_output_path / '0'
+
+        from time import sleep
+        sleep(1)  # Wait for the rec to be written
+        reconstruction = pycolmap.Reconstruction(path_to_rec)
+        try:
+            print(reconstruction.summary())
+        except Exception as e:
+            print(e)
+        
+        return reconstruction
 
 
 def get_match_points_indices(keypoints, match_pts):
