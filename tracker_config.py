@@ -23,17 +23,12 @@ class TrackerConfig:
     write_results: bool = True
     write_to_rerun_rather_than_disk: bool = True
     write_results_frequency: int = 1
-    visualize_loss_landscape: bool = False
     plot_mft_flow_kde_error_plot: bool = True
-    dump_correspondences: bool = False
-    save_3d_model: bool = False
     analyze_ransac_matchings: bool = True
     analyze_ransac_matching_errors: bool = False
     visualize_outliers_distribution: bool = False
 
     analyze_ransac_matchings_frequency: int = 5
-    loss_landscape_visualization_frequency: int = 18
-    training_print_status_frequency = 20
     mft_flow_kde_error_plot_frequency: int = 10
 
     # Frame and keyframe settings
@@ -42,7 +37,6 @@ class TrackerConfig:
     all_frames_keyframes: bool = False
 
     # Mesh settings
-    mesh_size: int = 11
     mesh_normalize: bool = False
     texture_size: int = 1000
     use_lights: bool = False
@@ -58,16 +52,12 @@ class TrackerConfig:
     rot_init: Tuple[float] = None   # (0., 0., 0.)
     camera_intrinsics: np.ndarray = None
     camera_extrinsics: np.ndarray = None
-    iterations: int = 100
-    rgb_iters: int = 10
 
     # Loss function coefficients
     loss_laplacian_weight: float = 1000.0
     loss_tv_weight: float = 0.001
     loss_iou_weight: float = 1.0
     loss_dist_weight: float = 0
-    loss_q_weight: float = 1.0
-    loss_t_weight: float = 1.0
     loss_rgb_weight: float = 1.0
     loss_flow_weight: float = 10.0
     occlusion_coef_threshold = 0.95  # Above this value, points will be considered as occluded
@@ -75,7 +65,6 @@ class TrackerConfig:
 
     # Additional settings
     sigmainv: float = 7000
-    factor: float = 1
     dataset: str = None
     sequence: str = None
     experiment_name: str = None
@@ -87,8 +76,6 @@ class TrackerConfig:
 
     gt_texture_path: str = None
     optimize_texture: bool = False
-    # Either 'sgd' for stochastic gradient descent learning or 'sticking' for using the rendered texture uv coordinates
-    texture_estimation: str = 'sgd'
 
     gt_track_path: str = None
     augment_gt_track: bool = False
@@ -99,14 +86,12 @@ class TrackerConfig:
     segmentation_tracker: str = 'precomputed'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
-    short_flow_model: str = 'MFT'  # 'RAFT' 'GMA'
     # long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
     long_flow_model: str = 'MFT'
     # long_flow_model: str = 'MFT_Synth'
     MFT_synth_add_noise: bool = False
     MFT_synth_noise_sigma: float = 0.3
     MFT_synth_noise_mu: float = 0.0
-    MFT_short_backbone_cfg: str = 'MFT_RoMa_direct_cfg'
     MFT_backbone_cfg: str = 'MFT_RoMa_direct_cfg'
     # MFT_backbone_cfg = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
 
@@ -165,3 +150,4 @@ class TrackerConfig:
     flow_reliability_threshold: float = 0.5
     frame_filter_when_lost_algorithm = None
     frame_reconstruction_algorithm: str = 'glomap'
+    matcher: str = 'RoMa'
