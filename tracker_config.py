@@ -150,7 +150,7 @@ class TrackerConfig:
 
     flow_reliability_threshold: float = 0.5
     frame_filter_when_lost_algorithm = None
-    frame_reconstruction_algorithm: str = 'glomap'
+    mapper: str = 'pycolmap'
     matcher: str = 'RoMa'
 
     # SIFT options
