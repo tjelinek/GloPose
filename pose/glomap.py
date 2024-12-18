@@ -310,35 +310,26 @@ class GlomapWrapper:
         else:
             raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 
-    def estimate_camera_poses_sift(self, keyframes: List[Path], segmentations: List[Path], matching_pairs=None):
+    def run_glomap_from_image_list_sift(self, keyframes: List[Path], segmentations: List[Path], matching_pairs=None):
 
-        current_temp_dir = self.config.sift_cache
-        current_temp_dir_images = current_temp_dir / 'images'
-        Path.mkdir(current_temp_dir_images, exist_ok=True)
-        
         feature_dir = self.feature_dir
         device = self.config.device
         database_path = self.colmap_db_path
-        
-        keyframes_single_dir = []
-        for img in keyframes:
-            shutil.copy(img, current_temp_dir_images / Path(img).name)
-            keyframes_single_dir.append(str(current_temp_dir_images / Path(img).name))
-            
-        detect_sift(keyframes_single_dir,
+
+        detect_sift(keyframes,
                     segmentations,
                     self.config.sift_filter_num_feats,
                     device=self.config.device,
                     feature_dir=feature_dir)
         if matching_pairs is None:
-            index_pairs = get_exhaustive_image_pairs(keyframes_single_dir)
+            index_pairs = get_exhaustive_image_pairs(keyframes)
         else:
             index_pairs = matching_pairs
         print("Matching features")
         
-        match_features(keyframes_single_dir, index_pairs, feature_dir=feature_dir, device=device,
+        match_features(keyframes, index_pairs, feature_dir=feature_dir, device=device,
                        alg='adalam')
-        dirname = os.path.dirname(keyframes_single_dir[0])  # Assume all images are in the same directory
+        dirname = os.path.dirname(keyframes[0])  # Assume all images are in the same directory
         print("Dirname", dirname)
 
         import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path, img_ext='png')
