@@ -148,7 +148,10 @@ class TrackerConfig:
     icosphere_use_gt_long_jumps: bool = True
     icosphere_trust_region_degrees = 20
 
+    min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
+    min_number_of_reliable_matches: float = 50
+
     frame_filter_when_lost_algorithm = None
     mapper: str = 'pycolmap'
     matcher: str = 'RoMa'

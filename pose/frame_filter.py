@@ -46,6 +46,9 @@ class FrameFilter:
         preceding_source = preceding_frame_node.long_jump_source
         self.add_new_flow(preceding_source, preceding_frame_idx)
 
+        # for preceding_frame in range(frame_i):
+        #     self.add_new_flow(preceding_frame, frame_i)
+
         edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
         if edge_data.is_match_reliable and frame_i > 1:
             source = preceding_source
@@ -144,7 +147,7 @@ class FrameFilter:
         src_pts_yx_int = src_pts_yx.int()
         in_segmentation_mask = fg_segmentation_mask[src_pts_yx_int[:, 0], src_pts_yx_int[:, 1]].bool()
         fg_certainties = flow_arc_node.flow_certainty[in_segmentation_mask]
-        fg_certainties_above_threshold = fg_certainties > self.config.flow_reliability_threshold
+        fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
 
