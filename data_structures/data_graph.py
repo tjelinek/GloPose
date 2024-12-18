@@ -41,6 +41,10 @@ class CommonFrameData:
     # Sources
     reliable_sources: Set[int] = field(default_factory=set)
 
+    # Filename
+    image_filename: Path = None
+    segmentation_filename: Path = None
+
     # Glomap
     image_save_path: Path = None
     segmentation_save_path: Path = None

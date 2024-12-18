@@ -1,11 +1,10 @@
 import copy
 import os
 import select
-import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple
 
 import h5py
 import imageio
@@ -19,7 +18,8 @@ from tqdm import tqdm
 
 from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
 from auxiliary_scripts.image_utils import ImageShape
-from auxiliary_scripts.sift import detect_sift, get_exhaustive_image_pairs, default_opts, match_features
+from auxiliary_scripts.sift import detect_sift, get_exhaustive_image_pairs, match_features
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
@@ -29,9 +29,13 @@ from tracker_config import TrackerConfig
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageShape, pose_icosphere: PoseIcosphere):
+                 image_shape: ImageShape, pose_icosphere: PoseIcosphere,
+                 flow_provider: PrecomputedRoMaFlowProviderDirect):
         self.write_folder = write_folder
         self.config = tracking_config
+
+        self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
+
         self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
 
         self.colmap_image_path = self.colmap_base_path / 'images'
@@ -60,18 +64,27 @@ class GlomapWrapper:
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze([0, 1]).permute(1, 2, 0).to(device)
 
-        node_save_path = self.colmap_image_path / f'node_{frame_idx}.png'
+        if frame_data.image_filename is not None:
+            image_filename = frame_data.image_filename
+        else:
+            image_filename = f'node_{frame_idx}.png'
+
+        if frame_data.segmentation_filename is not None:
+            seg_filename = frame_data.segmentation_filename
+        else:
+            seg_filename = f'segment_{frame_idx}.png'
+
+        node_save_path = self.colmap_image_path / image_filename
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
 
-        segmentation_save_path = self.colmap_seg_path / f'segment_{frame_idx}.png'
+        segmentation_save_path = self.colmap_seg_path / seg_filename
         imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
 
         frame_data.image_save_path = copy.deepcopy(node_save_path)
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]], datagraph_cache: Optional[DataGraph] = None)\
-            -> pycolmap.Reconstruction:
+                                   matching_pairs: List[Tuple[int, int]]) -> pycolmap.Reconstruction:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
@@ -121,7 +134,11 @@ class GlomapWrapper:
             if len(img2_seg_roma_size.shape) > 2:
                 img2_seg_roma_size = img2_seg_roma_size.mean(dim=0)
 
-            warp, certainty = matcher.match(img1_PIL, img2_PIL, device=device)
+            result = self.flow_provider.cached_flow_from_filenames(img1_path.name, img2_path.name)
+            if result is None:
+                warp, certainty = matcher.match(img1_PIL, img2_PIL, device=device)
+            else:
+                warp, certainty = result
 
             certainty = certainty.clone()
             certainty[:, :roma_w] *= img1_seg_roma_size.mT.squeeze().bool().float()

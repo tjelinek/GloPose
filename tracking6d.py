@@ -44,6 +44,10 @@ class Tracking6D:
         self.gt_texture = gt_texture
         self.gt_texture_features = None
 
+        # Paths
+        self.images_paths: Optional[List[Path]] = images_paths
+        self.segmentation_paths: Optional[List[Path]] = segmentation_paths
+
         # Features
         self.feat: Optional[Callable] = None
         self.feat_rgb = None
@@ -146,13 +150,16 @@ class Tracking6D:
                                            data_graph=self.data_graph,
                                            pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
 
-        self.cache_folder: Path = (Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence /
-                                   f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
+        self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
+                                   #f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
                                                                images_paths)
 
         self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.image_shape,
                                         self.flow_provider)
+
+        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
+                                            self.pose_icosphere, self.flow_provider)
 
         if self.config.verbose:
             print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))

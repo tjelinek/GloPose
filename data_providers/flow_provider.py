@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 import torch
 import torchvision
@@ -90,3 +90,20 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             warp, certainty = self.flow_model.sample(warp, certainty, sample)
 
         return warp, certainty
+
+    def cached_flow_from_filenames(self, src_image_name: Union[str, Path], target_image_name: Union[str, Path]):
+
+        src_image_name = Path(src_image_name)
+        target_image_name = Path(target_image_name)
+        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+
+        warp_filename = self.warps_path / saved_filename
+        certainty_filename = self.certainties_path / saved_filename
+
+        if warp_filename.exists() and certainty_filename.exists():
+            warp = torch.load(warp_filename).to(self.device)
+            certainty = torch.load(certainty_filename).to(self.device)
+            return warp, certainty
+
+        return None
+
