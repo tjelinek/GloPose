@@ -141,9 +141,6 @@ class Tracking6D:
                                             orig_image_width, orig_image_height)
         self.pinhole_params.scale_(self.config.image_downsample)
 
-        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.pose_icosphere)
-
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, rendering=self.rendering,
                                            gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
@@ -310,6 +307,12 @@ class Tracking6D:
         frame_node.gt_pose_cam = gt_Se3_cam
 
         frame_node.gt_pinhole_params = self.pinhole_params
+
+        if self.images_paths is not None:
+            frame_node.image_filename = self.images_paths[frame_i].name
+
+        if self.segmentation_paths is not None:
+            frame_node.segmentation_filename = self.segmentation_paths[frame_i].name
 
     @torch.no_grad()
     def add_new_flows(self, frame_i):
