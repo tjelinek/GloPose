@@ -251,11 +251,11 @@ class Tracking6D:
             else:
                 self.frame_filter.filter_frames(frame_i)
 
-                print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
-                      self.config.input_frames)
-
                 if self.config.write_results:
                     self.results_writer.write_results(frame_i=frame_i)
+
+            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
+                  self.config.input_frames)
 
         pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.pose_icosphere.reference_poses]
         images_paths = []
