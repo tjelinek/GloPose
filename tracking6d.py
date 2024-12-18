@@ -243,8 +243,6 @@ class Tracking6D:
 
             start = time.time()
 
-            # self.add_new_flows(frame_i)
-
             if frame_i == 0:
                 initial_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
 
