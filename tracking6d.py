@@ -288,6 +288,7 @@ class Tracking6D:
                 matching_pairs.append((u_index, v_index))
 
         time.sleep(1)
+        print(matching_pairs)
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                         matching_pairs)
 
