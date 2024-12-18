@@ -1294,10 +1294,20 @@ class WriteResults:
         last_datagraph_node = self.data_graph.get_frame_data(frame_i)
         last_frame_observation = last_datagraph_node.frame_observation
 
-        new_image_path = self.observations_path / Path(f'gt_img_{frame_i}.png')
+        new_image_path = self.observations_path / Path(f'image_{frame_i}.png')
+        new_segment_path = self.segmentation_path / Path(f'seg_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
 
+        self.observations_path.mkdir(exist_ok=True, parents=True)
+        self.segmentation_path.mkdir(exist_ok=True, parents=True)
+
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
+
+        image_255 = (last_observed_image * 255).to(torch.uint8)
+        seg = last_frame_observation.observed_segmentation.squeeze().unsqueeze(0).repeat(3, 1, 1).permute(1, 2, 0).cpu()
+        seg_255 = (seg * 255.).to(torch.uint8)
+        imageio.imwrite(new_image_path, image_255)
+        imageio.imwrite(new_segment_path, seg_255)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame_i)
