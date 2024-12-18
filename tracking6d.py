@@ -234,19 +234,7 @@ class Tracking6D:
         T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
         Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
 
-        self.init_datagraph_frame(Se3_world_to_cam, frame_i)
-
-        frame = self.data_graph.get_frame_data(frame_i)
-        frame.predicted_object_se3_long_jump = frame.gt_pose_cam
-
-        new_frame_observation = self.tracker.next(frame_i)
-        frame.frame_observation = new_frame_observation.send_to_device('cpu')
-
-        initial_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
-
-        self.pose_icosphere.insert_new_reference(new_frame_observation, initial_pose, frame_i)
-
-        for frame_i in range(1, self.config.input_frames):
+        for frame_i in range(0, self.config.input_frames):
 
             self.init_datagraph_frame(Se3_world_to_cam, frame_i)
 
@@ -257,16 +245,19 @@ class Tracking6D:
 
             # self.add_new_flows(frame_i)
 
-            self.frame_filter.filter_frames(frame_i)
+            if frame_i == 0:
+                initial_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
 
-            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
-                  self.config.input_frames)
+                self.pose_icosphere.insert_new_reference(new_frame_observation, initial_pose, frame_i)
 
-            if self.config.write_results:
-                self.results_writer.write_results(frame_i=frame_i)
+            else:
+                self.frame_filter.filter_frames(frame_i)
 
-            if self.long_flow_provider is not None and 'direct' in self.config.MFT_backbone_cfg:
-                self.long_flow_provider.need_to_init = True
+                print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
+                      self.config.input_frames)
+
+                if self.config.write_results:
+                    self.results_writer.write_results(frame_i=frame_i)
 
         pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.pose_icosphere.reference_poses]
         images_paths = []
