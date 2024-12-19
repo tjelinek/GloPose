@@ -164,7 +164,16 @@ def main():
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pixel_ver',
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_pixel_ver',
         # 'base_config'
-        'glotracker/glotracker_roma'
+        'glotracker/glotracker_roma',
+        'glotracker/glotracker_roma_c05_fg_025_m50',
+        'glotracker/glotracker_roma_c095_fg_025_m250',
+        'glotracker/glotracker_roma_c099_fg_02_m200',
+        'glotracker/glotracker_roma_c09_fg_05_m100',
+        'glotracker/glotracker_roma_c08_fg_025_m250',
+        'glotracker/glotracker_roma_c095_fg_075_m1000',
+        'glotracker/glotracker_roma_c09_fg_02_m500',
+        'glotracker/glotracker_roma_c09_fg_05_m250',
+
     ]
 
     sequences = {
