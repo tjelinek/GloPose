@@ -280,6 +280,8 @@ class Tracking6D:
                 v_index = pose_icosphere_node_idxs.index(frame2_idx)
                 matching_pairs.append((u_index, v_index))
 
+        assert len(pose_icosphere_node_idxs) > 2
+
         time.sleep(1)
         print(matching_pairs)
         if self.config.matcher == 'RoMa':
