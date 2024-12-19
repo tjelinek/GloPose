@@ -150,8 +150,7 @@ class TrackerConfig:
 
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
-    min_number_of_reliable_matches: int = 50
-    min_number_of_fg_pixels: int = 250
+    min_number_of_reliable_matches: int = 0
 
     frame_filter_when_lost_algorithm = None
     mapper: str = 'pycolmap'
