@@ -142,20 +142,19 @@ class FrameFilter:
         flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
 
         H_A, W_A = self.image_height, self.image_width
-        src_pts_yx, dst_pts_yx = roma_warp_to_pixel_coordinates(flow_arc_node.flow_warp, H_A, W_A, H_A, W_A)
+        src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(flow_arc_node.flow_warp, H_A, W_A, H_A, W_A)
 
-        src_pts_yx_int = src_pts_yx.int()
-        in_segmentation_mask = fg_segmentation_mask[src_pts_yx_int[:, 0], src_pts_yx_int[:, 1]].bool()
+        src_pts_xy_int = src_pts_xy.int()
+        in_segmentation_mask = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
         fg_certainties = flow_arc_node.flow_certainty[in_segmentation_mask]
         fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
 
-        sufficient_fg_pixels = fg_certainties.numel() > self.config.min_number_of_fg_pixels
         sufficient_reliable_matches = (fg_certainties_above_threshold.numel() >
                                        self.config.min_number_of_reliable_matches)
 
-        reliability *= float(sufficient_reliable_matches) * float(sufficient_fg_pixels)
+        reliability *= float(sufficient_reliable_matches)
 
         return reliability.item()
 
