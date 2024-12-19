@@ -1,4 +1,4 @@
-glotracker_roma_c05_fg_025_m50_fgmr_01.pyfrom tracker_config import TrackerConfig
+from tracker_config import TrackerConfig
 
 
 def get_config() -> TrackerConfig:
@@ -7,5 +7,9 @@ def get_config() -> TrackerConfig:
     cfg.optimize_shape = False
 
     cfg.matcher = 'RoMa'
+
+    cfg.min_roma_certainty_threshold = 0.95
+    cfg.flow_reliability_threshold = 0.75
+    cfg.min_number_of_reliable_matches = 1000
 
     return cfg
