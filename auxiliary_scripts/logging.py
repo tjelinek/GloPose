@@ -417,8 +417,6 @@ class WriteResults:
 
         import re
         for image_id, image in colmap_reconstruction.images.items():
-            image_frame_id = int(re.search(r'\d+', image.name).group())
-
             image_t_cam = torch.tensor(image.cam_from_world.translation)
             image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
             image_q_cam_wxyz = image_q_cam_xyzw[[3, 0, 1, 2]]
