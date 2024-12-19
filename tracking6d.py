@@ -295,7 +295,70 @@ class Tracking6D:
 
         reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
         self.results_writer.visualize_colmap_track(frame_i, reconstruction)
+
+        self.evaluate_reconstruction(reconstruction)
+
         return
+
+    def evaluate_reconstruction(self, reconstruction, csv_output_path: Optional[Path] = None):
+        """
+        Evaluate the reconstruction and save statistics to a CSV file.
+
+        Parameters:
+            reconstruction: The reconstructed data.
+            csv_output_path: Path to the output CSV file.
+        """
+        import pandas as pd
+        import os
+
+        stats = []
+
+        if csv_output_path is None:
+            csv_output_path = self.write_folder.parent.parent / 'stats.csv'
+
+        images_paths_to_frame_index = {str(self.images_paths[i].name): i for i in range(len(self.images_paths))}
+
+        for image in reconstruction.images.values():
+            image_frame_id = images_paths_to_frame_index[image.name]
+
+            t_cam_pred = torch.tensor(image.cam_from_world.translation)
+            q_cam_xyzw_pred = torch.tensor(image.cam_from_world.rotation.quat)
+            q_cam_wxyz_pred = q_cam_xyzw_pred[[3, 0, 1, 2]]
+            Se3_cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
+
+            frame_data = self.data_graph.get_frame_data(image_frame_id)
+            Se3_cam_gt = frame_data.gt_pose_cam
+
+            # Ground-truth rotation and translation
+            gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
+            gt_translation = Se3_cam_gt.translation.tolist()
+
+            pred_rotation = Se3_cam_pred.rotation.matrix().tolist()
+            pred_translation = Se3_cam_pred.translation.tolist()
+
+            # Add stats for the current image frame
+            stats.append({
+                'dataset': self.config.dataset,
+                'sequence': self.config.sequence,
+                'image_frame_id': image_frame_id,
+                'gt_rotation': gt_rotation,
+                'gt_translation': gt_translation,
+                'pred_rotation': pred_rotation,
+                'pred_translation': pred_translation
+            })
+
+        # Convert stats to a Pandas DataFrame
+        stats_df = pd.DataFrame(stats)
+
+        # If the CSV file exists, append; otherwise, create a new one
+        if os.path.exists(csv_output_path):
+            existing_df = pd.read_csv(csv_output_path)
+            filtered_df = existing_df[~((existing_df['dataset'] == self.config.dataset) &
+                                        (existing_df['sequence'] == self.config.sequence))]
+            updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+            updated_df.to_csv(csv_output_path, index=False)
+        else:
+            stats_df.to_csv(csv_output_path, index=False)
 
     def init_datagraph_frame(self, Se3_world_to_cam, frame_i):
         self.data_graph.add_new_frame(frame_i)
