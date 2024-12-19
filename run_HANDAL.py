@@ -42,6 +42,7 @@ def main():
         config.gt_mesh_path = gt_mesh_path
         config.gt_track_path = None
         config.sequence = sequence
+        config.dataset = dataset
         config.image_downsample = 0.5
 
         # config.camera_position = (-5.0, -5.0, -5.0)
