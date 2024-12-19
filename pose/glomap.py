@@ -4,7 +4,7 @@ import select
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import h5py
 import imageio
@@ -30,11 +30,11 @@ class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
                  image_shape: ImageShape, pose_icosphere: PoseIcosphere,
-                 flow_provider: PrecomputedRoMaFlowProviderDirect):
+                 flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
         self.write_folder = write_folder
         self.config = tracking_config
 
-        self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
+        self.flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = flow_provider
 
         self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
 
@@ -134,8 +134,10 @@ class GlomapWrapper:
             if len(img2_seg_roma_size.shape) > 2:
                 img2_seg_roma_size = img2_seg_roma_size.mean(dim=0)
 
-            result = self.flow_provider.cached_flow_from_filenames(img1_path.name, img2_path.name)
-            if result is None:
+            result = None
+            if self.flow_provider is not None:
+                result = self.flow_provider.cached_flow_from_filenames(img1_path.name, img2_path.name)
+            if result is None or True:
                 warp, certainty = matcher.match(img1_PIL, img2_PIL, device=device)
             else:
                 warp, certainty = result
