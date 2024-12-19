@@ -374,7 +374,7 @@ class WriteResults:
                 pass
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
-        rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
+        rr.set_time_sequence(RerunAnnotations.space_visualization, 0)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
