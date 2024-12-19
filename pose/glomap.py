@@ -242,8 +242,7 @@ class GlomapWrapper:
             cam_pose_q_xyzw = cam_pose_Se3.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
             cam_pose_t = cam_pose_Se3.t.squeeze().numpy(force=True).astype(np.float64)
 
-            image_name = f'node_{n}.png'
-
+            image_name = node_data.image_filename
             gt_image = pycolmap.Image(name=image_name, image_id=n, camera_id=gt_reconstruction_cam_id)
             gt_cam_pose = pycolmap.Rigid3d(rotation=cam_pose_q_xyzw, translation=cam_pose_t)
             gt_image.cam_from_world = gt_cam_pose
