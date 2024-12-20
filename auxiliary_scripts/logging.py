@@ -1,7 +1,8 @@
 from collections import defaultdict
 
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Optional
 
+import networkx as nx
 import pycolmap
 import torch
 import imageio
@@ -38,10 +39,14 @@ from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, 
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere):
+                 deep_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere, images_paths,
+                 segmentation_paths):
 
         self.image_height = shape.height
         self.image_width = shape.width
+
+        self.images_paths: Optional[List] = images_paths
+        self.segmentation_paths: Optional[List] = segmentation_paths
 
         self.pinhole_params: PinholeCamera = pinhole_params
 
@@ -415,12 +420,20 @@ class WriteResults:
         template_node_Se3 = datagraph_template_node.predicted_object_se3_total
         template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
 
-        import re
+        image_id_to_poses = {}
+        image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
+
+        G_reliable = nx.Graph()
+
         for image_id, image in colmap_reconstruction.images.items():
+            frame_index = self.images_paths.index(Path(image.name))
+
             image_t_cam = torch.tensor(image.cam_from_world.translation)
             image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
             image_q_cam_wxyz = image_q_cam_xyzw[[3, 0, 1, 2]]
             image_Se3_cam = Se3(Quaternion(image_q_cam_wxyz), image_t_cam)
+
+            image_id_to_poses[image_id] = image_t_cam
 
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
@@ -434,14 +447,37 @@ class WriteResults:
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
                 rr.Pinhole(resolution=[camera_params.width, camera_params.height],
                            focal_length=[camera_params.params[0], camera_params.params[0]],
-                           camera_xyz=None # rr.ViewCoordinates.RUB
+                           camera_xyz=None  # rr.ViewCoordinates.RUB
                            ),
             )
 
-            # frame_data = self.data_graph.get_frame_data(image_frame_id)
-            # image = frame_data.frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
-            # rr.log(f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
-            #        rr.Image(image))
+            frame_node = self.data_graph.get_frame_data(frame_index)
+
+            for reliable_node_idx in frame_node.reliable_sources:
+                reliable_node_data = self.data_graph.get_frame_data(reliable_node_idx)
+                reliable_node_name = Path(reliable_node_data.image_filename).name
+
+                reliable_node_image_id = image_name_to_image_id[reliable_node_name]
+
+                G_reliable.add_edge(image_id, reliable_node_image_id)
+
+        strips = []
+        for im_id1, im_id2 in G_reliable.edges:
+            im1_t = image_id_to_poses[im_id1]
+            im2_t = image_id_to_poses[im_id2]
+
+            strips.append([im1_t, im2_t])
+
+        rr.log(
+            RerunAnnotations.colmap_predicted_line_strips_reliable,
+            rr.LineStrips3D(
+                strips,
+                colors=[[255, 0, 0] ] * len(strips),
+                radii=[0.005] * len(strips),
+            )
+        )
+
+
 
     def visualize_3d_camera_space(self, frame_i: int):
 

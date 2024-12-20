@@ -144,8 +144,9 @@ class Tracking6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, rendering=self.rendering,
                                            gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
-                                           data_graph=self.data_graph,
-                                           pinhole_params=self.pinhole_params, pose_icosphere=self.pose_icosphere)
+                                           data_graph=self.data_graph, pinhole_params=self.pinhole_params,
+                                           pose_icosphere=self.pose_icosphere, images_paths=self.images_paths,
+                                           segmentation_paths=self.segmentation_paths)
 
         self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
                                    #f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
