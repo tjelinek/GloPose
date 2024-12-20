@@ -22,6 +22,7 @@ class RerunAnnotations:
     colmap_gt_camera_track: Final[str] = '/3d_colmap/gt_camera_track'
     colmap_predicted_camera_poses: Final[str] = '/3d_colmap/predicted_camera_keypoints'
     colmap_predicted_reliable_templates: Final[str] = '/3d_colmap/predicted_reliable_templates'
+    colmap_predicted_line_strips_reliable: Final[str] = '/3d_colmap/line_strips_reliable'
 
     template_image_frontview: Final[str] = '/observations/template_image_frontview'
 
