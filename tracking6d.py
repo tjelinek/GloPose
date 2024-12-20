@@ -295,6 +295,7 @@ class Tracking6D:
             raise ValueError(f'Unknown matcher {self.config.matcher}')
 
         reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
+        self.write_gt_poses()
         self.results_writer.visualize_colmap_track(frame_i, reconstruction)
 
         self.evaluate_reconstruction(reconstruction)
@@ -360,6 +361,39 @@ class Tracking6D:
             updated_df.to_csv(csv_output_path, index=False)
         else:
             stats_df.to_csv(csv_output_path, index=False)
+
+    def write_gt_poses(self):
+        import pandas as pd
+
+        stats = []
+
+        csv_output_path = self.write_folder.parent.parent / 'gt_poses.csv'
+
+        for node_idx in sorted(self.data_graph.G.nodes):
+
+            node_data = self.data_graph.get_frame_data(node_idx)
+
+            Se3_cam_gt = node_data.gt_pose_cam
+
+            # Ground-truth rotation and translation
+            gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
+            gt_translation = Se3_cam_gt.translation.tolist()
+
+            image_name = str(node_data.image_filename)
+
+            # Add stats for the current image frame
+            stats.append({
+                'dataset': self.config.dataset,
+                'sequence': self.config.sequence,
+                'frame_name': image_name,
+                'gt_R_w2c': gt_rotation,
+                'gt_t_Rw2c': gt_translation,
+            })
+
+        # Convert stats to a Pandas DataFrame
+        stats_df = pd.DataFrame(stats)
+
+        stats_df.to_csv(csv_output_path, index=False)
 
     def init_datagraph_frame(self, Se3_world_to_cam, frame_i):
         self.data_graph.add_new_frame(frame_i)
