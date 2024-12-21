@@ -380,7 +380,6 @@ class Tracking6D:
             gt_translation = Se3_cam_gt.translation.tolist()
 
             image_name = str(node_data.image_filename)
-
             # Add stats for the current image frame
             stats.append({
                 'dataset': self.config.dataset,
@@ -388,6 +387,7 @@ class Tracking6D:
                 'frame_name': image_name,
                 'gt_R_w2c': gt_rotation,
                 'gt_t_Rw2c': gt_translation,
+                'gt_cam_K': node_data.gt_pinhole_params.camera_matrix.numpy(force=True).tolist(),
             })
 
         # Convert stats to a Pandas DataFrame
