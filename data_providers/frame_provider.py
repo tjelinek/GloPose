@@ -25,7 +25,7 @@ class BaseTracker(ABC):
         self.downsample_factor = perc
         self.max_width = max_width
         self.feature_extractor = feature_extractor
-        self.shape = None
+        self.image_shape: Optional[ImageShape] = None
         self.device = device
 
     @abstractmethod
@@ -33,9 +33,9 @@ class BaseTracker(ABC):
         pass
 
     def process_segm(self, img):
-        segment = cv2.resize(img, self.shape[1::-1]).astype(np.float64)
-        width = int(self.shape[1] * self.downsample_factor)
-        height = int(self.shape[0] * self.downsample_factor)
+        segment = cv2.resize(img, self.image_shape[1::-1]).astype(np.float64)
+        width = int(self.image_shape[1] * self.downsample_factor)
+        height = int(self.image_shape[0] * self.downsample_factor)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
 
         segm = transforms.ToTensor()(segment)
@@ -60,7 +60,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         self.gt_encoder: Encoder = gt_encoder
         self.renderer = renderer
         self.gt_texture = gt_texture
-        self.shape = (tracker_config.max_width, tracker_config.max_width)
+        self.image_shape = ImageShape(tracker_config.max_width, tracker_config.max_width)
 
     @staticmethod
     def binary_segmentation_from_rendered_segmentation(rendered_segmentations: torch.Tensor):
@@ -97,11 +97,11 @@ class PrecomputedTracker(BaseTracker, ABC):
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
 
-        self.shape = get_shape(images_paths[0], self.downsample_factor)
+        self.image_shape = get_shape(images_paths[0], self.downsample_factor)
         self.images_paths: List[Path] = images_paths
         self.segmentations_paths: List[Path] = segmentations_paths
 
-        self.resize_transform = transforms.Resize((self.shape.height, self.shape.width),
+        self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
                                                   interpolation=InterpolationMode.NEAREST)
 
     def next_image(self, frame_i):
