@@ -14,9 +14,7 @@ from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
-from data_structures.keyframe_buffer import FlowObservation
 from data_structures.pose_icosphere import PoseIcosphere
-from flow import flow_image_coords_to_unit_coords, normalize_rendered_flows
 from models.encoder import Encoder
 from models.initial_mesh import generate_face_features
 from models.rendering import RenderingKaolin
@@ -413,87 +411,3 @@ class Tracking6D:
 
         if self.segmentation_paths is not None:
             frame_node.segmentation_filename = self.segmentation_paths[frame_i].name
-
-    @torch.no_grad()
-    def add_new_flows(self, frame_i):
-
-        def process_flow_arc(flow_source_frame, flow_target_frame):
-            observed_flow, occlusions, uncertainties = self.next_gt_flow(flow_source_frame, flow_target_frame)
-
-            # Determine the appropriate renderer and keyframes based on the backview flag
-            renderer = self.rendering
-
-            # Render the flow
-            synthetic_flow = renderer.render_flow_for_frame(self.gt_encoder, flow_source_frame, flow_target_frame)
-
-            # Convert synthetic flow results to CPU
-            synthetic_flow_cpu = synthetic_flow.send_to_device('cpu')
-
-            # Get the observed segmentation for the flow source frame
-            frame_observation = (self.data_graph.get_frame_data(flow_source_frame).
-                                 frame_observation.send_to_device('cuda'))
-            segment = frame_observation.observed_segmentation
-
-            flow_observation = FlowObservation(observed_flow=observed_flow,
-                                               observed_flow_segmentation=segment,
-                                               observed_flow_uncertainty=uncertainties,
-                                               observed_flow_occlusion=occlusions,
-                                               flow_source_frames=[flow_source_frame],
-                                               flow_target_frames=[flow_target_frame])
-
-            # Update the edge data with synthetic flow results
-            edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
-            edge_data.synthetic_flow_result = synthetic_flow_cpu
-            edge_data.observed_flow = flow_observation.send_to_device('cpu')
-
-        if self.config.add_flow_arcs_strategy == 'single-previous':
-            short_flow_arcs = {(frame_i - 1, frame_i)}
-        elif self.config.add_flow_arcs_strategy is None:
-            short_flow_arcs = set()
-        else:
-            raise ValueError("Invalid value for 'add_flow_arcs_strategy'.")
-
-        for flow_arc in short_flow_arcs:
-            flow_source_frame, flow_target_frame = flow_arc
-            self.data_graph.add_new_arc(flow_source_frame, flow_target_frame)
-            process_flow_arc(flow_source_frame, flow_target_frame)
-
-    def next_gt_flow(self, flow_source_frame, flow_target_frame):
-
-        if self.config.gt_flow_source == 'GenerateSynthetic':
-            keyframes = [flow_target_frame]
-            flow_frames = [flow_source_frame]
-            flow_arcs_indices = [(0, 0)]
-
-            encoder_result, enc_flow = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
-
-            renderer = self.rendering
-
-            observed_renderings = renderer.compute_theoretical_flow(encoder_result, enc_flow, flow_arcs_indices)
-
-            observed_flow = observed_renderings.theoretical_flow.detach()
-            observed_flow = normalize_rendered_flows(observed_flow, self.rendering.width, self.rendering.height,
-                                                     self.image_shape.width, self.image_shape.height)
-            occlusion = observed_renderings.rendered_flow_occlusion.detach()
-            uncertainty = torch.zeros_like(occlusion)
-
-        elif self.config.gt_flow_source == 'FlowNetwork':
-
-            source_frame_obs = self.data_graph.get_frame_data(flow_source_frame).frame_observation
-            target_frame_obs = self.data_graph.get_frame_data(flow_target_frame).frame_observation
-
-            target_image = target_frame_obs.observed_image.float() * 255
-            template_image = source_frame_obs.observed_image.float() * 255
-
-            if isinstance(self.short_flow_model, MFTFlowProvider):
-                self.short_flow_model.init(template_image)
-                self.short_flow_model.need_to_init = False
-            observed_flow, occlusion, uncertainty = self.short_flow_model.next_flow(template_image,
-                                                                                    target_image)
-
-            observed_flow = flow_image_coords_to_unit_coords(observed_flow)
-
-        else:
-            raise ValueError("'gt_flow_source' must be either 'GenerateSynthetic' or 'FlowNetwork'")
-
-        return observed_flow, occlusion, uncertainty
