@@ -30,17 +30,14 @@ from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
 from utils import normalize_vertices
 from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
-from models.rendering import RenderingKaolin
-from models.encoder import Encoder
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)
 
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, rendering, gt_encoder,
-                 deep_encoder, data_graph: DataGraph, pinhole_params, pose_icosphere: PoseIcosphere, images_paths,
-                 segmentation_paths):
+    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, data_graph: DataGraph,
+                 pinhole_params, pose_icosphere: PoseIcosphere, images_paths, segmentation_paths):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -51,10 +48,6 @@ class WriteResults:
         self.pinhole_params: PinholeCamera = pinhole_params
 
         self.data_graph: DataGraph = data_graph
-
-        self.rendering: RenderingKaolin = rendering
-        self.gt_encoder: Encoder = gt_encoder
-        self.deep_encoder: Encoder = deep_encoder
 
         self.pose_icosphere: PoseIcosphere = pose_icosphere
 
@@ -649,29 +642,6 @@ class WriteResults:
             ti = 3 * fi + 1
             file.write("f {}/{} {}/{} {}/{}\n".format(fc[0], ti, fc[1], ti + 1, fc[2], ti + 2))
         file.close()
-
-    def save_3d_model(self, frame_i, tex, faces: torch.Tensor, detached_result):
-
-        mesh_i_th_path = self.exported_mesh_path / f'mesh_{frame_i}.obj'
-        tex_path = self.exported_mesh_path / 'tex_deep.png'
-        tex_i_th_path = self.exported_mesh_path / f'tex_{frame_i}.png'
-        model_path = self.exported_mesh_path / 'model.mtl'
-        model_i_th_path = self.exported_mesh_path / f"model_{frame_i}.mtl"
-
-        self.write_obj_mesh(detached_result.vertices[0].numpy(force=True), faces,
-                            self.deep_encoder.face_features[0].numpy(force=True), mesh_i_th_path,
-                            str(model_i_th_path.name))
-
-        torchvision.utils.save_image(detached_result.texture_maps[:, :3], tex_path)
-        torchvision.utils.save_image(tex, tex_i_th_path)
-
-        with open(model_path, "r") as file:
-            lines = file.readlines()
-        # Replace the last line
-        lines[-1] = f"map_Kd tex_{frame_i}.png\n"
-        # Write the result to a new file
-        with open(model_i_th_path, "w") as file:
-            file.writelines(lines)
 
     def measure_ransac_stats(self, frame_i):
         correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
