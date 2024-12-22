@@ -4,7 +4,8 @@ from typing import Any, List, Set
 
 import networkx as nx
 import torch
-from kornia.geometry import Se3, PinholeCamera
+from kornia.geometry import Se3
+from kornia.image import ImageSize
 
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
 from models.encoder import EncoderResult
@@ -21,6 +22,7 @@ class CommonFrameData:
     gt_translation: torch.Tensor = None
     gt_pose_cam: Se3 = None
     gt_pinhole_K: torch.Tensor = None
+    image_shape: ImageSize = None
 
     # Intermediate output data
     encoder_result: EncoderResult = None

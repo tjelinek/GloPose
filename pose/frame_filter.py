@@ -4,8 +4,8 @@ from typing import List, Tuple
 
 import torch
 from kornia.geometry import Se3
+from kornia.image import ImageSize
 
-from auxiliary_scripts.image_utils import ImageShape
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from data_structures.pose_icosphere import PoseIcosphere
@@ -24,7 +24,7 @@ class FrameFilterAlgorithms(Enum):
 
 class FrameFilter:
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageShape,
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageSize,
                  flow_provider: RoMaFlowProviderDirect):
 
         self.config: TrackerConfig = config
