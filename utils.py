@@ -1,6 +1,7 @@
 import importlib
 import sys
 from pathlib import Path
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -213,7 +214,6 @@ def unpad_image(image, pad_h, pad_w):
 
 
 def pinhole_intrinsics_to_tensor(intrinsics: PinholeIntrinsics) -> torch.Tensor:
-
     intrinsics_tensor = torch.Tensor([[intrinsics.focal_x, 0., intrinsics.x0],
                                       [0., intrinsics.focal_y, intrinsics.y0],
                                       [0., 0., 1.]])
@@ -221,3 +221,29 @@ def pinhole_intrinsics_to_tensor(intrinsics: PinholeIntrinsics) -> torch.Tensor:
         intrinsics_tensor = intrinsics_tensor
 
     return intrinsics_tensor
+
+
+def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Extracts fx, fy, cx, cy from a 3x3 camera intrinsics matrix.
+
+    Args:
+        intrinsics (np.ndarray): A 3x3 camera intrinsics matrix.
+
+    Returns:
+        tuple: (fx, fy, cx, cy) where:
+            - fx: Focal length along the x-axis (pixels)
+            - fy: Focal length along the y-axis (pixels)
+            - cx: Principal point x-coordinate (pixels)
+            - cy: Principal point y-coordinate (pixels)
+    """
+    if intrinsics.shape[-2:] != (3, 3):
+        raise ValueError("Intrinsics matrix must be 3x3")
+
+    fx = intrinsics[..., 0, 0]
+    fy = intrinsics[..., 1, 1]
+    cx = intrinsics[..., 0, 2]
+    cy = intrinsics[..., 1, 2]
+
+    return fx, fy, cx, cy
