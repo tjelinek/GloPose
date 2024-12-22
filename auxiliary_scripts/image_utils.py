@@ -4,9 +4,11 @@ from pathlib import Path
 import cv2
 import imageio
 import numpy as np
+import torch
 from scipy.ndimage import uniform_filter
 from torch.nn import functional as F
 from torchvision import transforms
+from PIL import Image, ExifTags
 
 ImageShape = namedtuple('ImageShape', ['width', 'height'])
 
@@ -62,3 +64,47 @@ def overlay_occlusion(image: np.ndarray, occlusion_mask: np.ndarray, alpha: floa
     overlay_image = (1 - occlusion_mask[..., np.newaxis]) * image + occlusion_mask[..., np.newaxis] * white_overlay
 
     return overlay_image.astype(image.dtype)
+
+
+def get_intrinsics_from_exif(image_path: Path, err_on_default=False) -> torch.tensor:
+    image = Image.open(image_path)
+    max_size = max(image.size)
+    width, height = image.size
+
+    exif = image.getexif()
+    focal = None
+    sensor_width_mm = None
+    focal_35mm = None
+    focal_mm = None
+
+    if exif is not None:
+        for tag, value in exif.items():
+            tag_name = ExifTags.TAGS.get(tag, None)
+            if tag_name == 'FocalLength':
+                focal_mm = float(value[0]) / float(value[1])  # Handle rational values
+            elif tag_name == 'FocalLengthIn35mmFilm':
+                focal_35mm = float(value)
+            elif tag_name == 'SensorWidth':
+                sensor_width_mm = float(value)
+
+        # If FocalLengthIn35mmFilm is available, use it as a fallback
+        if focal_35mm and sensor_width_mm:
+            focal = focal_35mm / 35.0 * max_size
+        elif focal_mm and sensor_width_mm:
+            focal = focal_mm * (width / sensor_width_mm)
+
+    if focal is None:
+        if err_on_default:
+            raise RuntimeError("Failed to find focal length in EXIF data")
+
+        # Fallback to a prior focal length approximation
+        FOCAL_PRIOR = 1.2
+        focal = FOCAL_PRIOR * max_size
+
+    # Compute intrinsics
+    fx = focal
+    fy = focal  # Assuming square pixels
+    cx = width / 2
+    cy = height / 2
+
+    return torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
