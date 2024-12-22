@@ -20,7 +20,7 @@ class CommonFrameData:
     gt_rot_axis_angle: torch.Tensor = None
     gt_translation: torch.Tensor = None
     gt_pose_cam: Se3 = None
-    gt_pinhole_params: PinholeCamera = None
+    gt_pinhole_K: torch.Tensor = None
 
     # Intermediate output data
     encoder_result: EncoderResult = None

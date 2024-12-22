@@ -221,7 +221,7 @@ class GlomapWrapper:
 
         gt_reconstruction = pycolmap.Reconstruction()
 
-        gt_cam_params = self.data_graph.get_frame_data(0).gt_pinhole_params
+        gt_cam_params = self.data_graph.get_frame_data(0).gt_pinhole_K
 
         gt_w = int(gt_cam_params.width.item())
         gt_h = int(gt_cam_params.height.item())

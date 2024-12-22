@@ -1,13 +1,12 @@
 import time
 from pathlib import Path
-from typing import Optional, List, Callable, Union
+from typing import Optional, List, Callable
 
 import kaolin
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
-from data_providers.flow_wrappers import (FlowProvider, MFTFlowProvider,
-                                          RoMaFlowProvider)
+from data_providers.flow_wrappers import RoMaFlowProvider
 from auxiliary_scripts.image_utils import get_shape, ImageShape
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
@@ -17,17 +16,17 @@ from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from models.encoder import Encoder
 from models.initial_mesh import generate_face_features
-from models.rendering import RenderingKaolin
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, homogenize_3x3_camera_intrinsics
+from utils import normalize_vertices
 
 
 class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
-                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None):
+                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
+                 gt_Se3_world_to_cam: Se3 = None):
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
@@ -36,8 +35,6 @@ class Tracking6D:
         self.last_encoder_result_rgb = None
 
         # Rendering and mesh related
-        self.rendering: Optional[RenderingKaolin] = None
-        self.faces = None
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
         self.gt_texture = gt_texture
         self.gt_texture_features = None
@@ -54,8 +51,6 @@ class Tracking6D:
         self.feature_extractor = None
 
         # Optical flow
-        self.short_flow_model: Optional[Union[FlowProvider, MFTFlowProvider]] = None
-        self.long_flow_provider: Optional[MFTFlowProvider] = None
         self.roma_flow_provider: Optional[RoMaFlowProvider] = None
 
         # Ground truth related
@@ -67,6 +62,13 @@ class Tracking6D:
 
         self.gt_rotations: Optional[torch.Tensor] = gt_rotations
         self.gt_translations: Optional[torch.Tensor] = gt_translations
+        self.gt_Se3_world_to_cam: Optional[Se3] = gt_Se3_world_to_cam
+        self.world_to_cam: Optional[Se3] = None
+        if self.gt_Se3_world_to_cam is None:
+            self.world_to_cam: Optional[Se3] = Se3(Quaternion.identity(1),
+                                                   torch.tensor([[0., 0., 1.]])).to(config.device)
+        else:
+            self.world_to_cam = self.gt_Se3_world_to_cam
 
         # Data graph
         self.data_graph: Optional[DataGraph] = None
@@ -102,20 +104,17 @@ class Tracking6D:
         else:
             self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
 
-        torch.backends.cudnn.benchmark = True
-        self.initialize_renderer()
         self.initialize_encoders(iface_features, ivertices)
-
-        if self.config.gt_flow_source != 'GenerateSynthetic':  # This provides a significant speed-up for debugging
-            self.initialize_flow_model()
 
         self.data_graph = DataGraph()
 
         if self.config.generate_synthetic_observations_if_possible:
             assert self.gt_translations is not None and self.gt_rotations is not None
+            assert gt_mesh is not None
+            assert self.gt_texture is not None
 
-            self.tracker = SyntheticDataGeneratingTracker(self.config, self.rendering, self.gt_encoder, self.gt_texture,
-                                                          self.feat)
+            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_encoder, self.gt_texture, self.feat,
+                                                          gt_mesh)
 
         else:
             if self.config.segmentation_tracker == 'precomputed':
@@ -123,28 +122,11 @@ class Tracking6D:
             else:
                 raise ValueError('Unknown value of "segmentation_tracker"')
 
-        if self.config.camera_intrinsics is None:
-            camera_intrinsics = homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None]
-        else:
-            camera_intrinsics = homogenize_3x3_camera_intrinsics(torch.from_numpy(self.config.camera_intrinsics).cuda())[None]
-            assert camera_intrinsics.shape == homogenize_3x3_camera_intrinsics(self.rendering.camera_intrinsics)[None].shape
-        if self.config.camera_extrinsics is None:
-            camera_extrinsics = self.rendering.camera_transformation_matrix_Se3().matrix()
-        else:
-            camera_extrinsics = torch.from_numpy(self.config.camera_extrinsics).cuda()[None]
-
-        orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
-        orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()
-        self.pinhole_params = PinholeCamera(camera_intrinsics, camera_extrinsics,
-                                            orig_image_width, orig_image_height)
-        self.pinhole_params.scale_(self.config.image_downsample)
-
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
-                                           tracking_config=self.config, rendering=self.rendering,
-                                           gt_encoder=self.gt_encoder, deep_encoder=self.encoder,
-                                           data_graph=self.data_graph, pinhole_params=self.pinhole_params,
+                                           tracking_config=self.config, data_graph=self.data_graph,
                                            pose_icosphere=self.pose_icosphere, images_paths=self.images_paths,
-                                           segmentation_paths=self.segmentation_paths)
+                                           segmentation_paths=self.segmentation_paths,
+                                           Se3_world_to_cam=self.world_to_cam)
 
         self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
                                    #f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
@@ -156,13 +138,6 @@ class Tracking6D:
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.pose_icosphere, self.flow_provider)
-
-        if self.config.verbose:
-            print('Total params {}'.format(sum(p.numel() for p in self.encoder.parameters())))
-
-    def initialize_renderer(self):
-        self.rendering = RenderingKaolin(self.config, self.faces, self.image_shape.width,
-                                         self.image_shape.height).to(self.device)
 
     def initialize_encoders(self, iface_features, ivertices):
         self.encoder = Encoder(self.config, ivertices, iface_features, self.image_shape.width,
@@ -224,22 +199,14 @@ class Tracking6D:
             iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
         return iface_features, ivertices
 
-    def initialize_flow_model(self):
-        pass
-        # self.roma_flow_provider = RoMaFlowProvider(self.config.MFT_backbone_cfg, config=self.config)
-        # self.short_flow_model = self.roma_flow_provider
-
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
 
         frame_i = 0
 
-        T_world_to_cam = self.rendering.camera_transformation_matrix_4x4()
-        Se3_world_to_cam = Se3.from_matrix(T_world_to_cam)
-
         for frame_i in range(0, self.config.input_frames):
 
-            self.init_datagraph_frame(Se3_world_to_cam, frame_i)
+            self.init_datagraph_frame(frame_i)
 
             new_frame_observation = self.tracker.next(frame_i)
             self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
@@ -385,7 +352,7 @@ class Tracking6D:
                 'frame_name': image_name,
                 'gt_R_w2c': gt_rotation,
                 'gt_t_Rw2c': gt_translation,
-                'gt_cam_K': node_data.gt_pinhole_params.camera_matrix.numpy(force=True).tolist(),
+                'gt_cam_K': node_data.gt_pinhole_K.camera_matrix.numpy(force=True).tolist(),
             })
 
         # Convert stats to a Pandas DataFrame
@@ -393,7 +360,7 @@ class Tracking6D:
 
         stats_df.to_csv(csv_output_path, index=False)
 
-    def init_datagraph_frame(self, Se3_world_to_cam, frame_i):
+    def init_datagraph_frame(self, frame_i):
         self.data_graph.add_new_frame(frame_i)
 
         frame_node = self.data_graph.get_frame_data(frame_i)
@@ -401,10 +368,23 @@ class Tracking6D:
         frame_node.gt_translation = self.gt_translations[frame_i]
 
         gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]), self.gt_translations[[frame_i]])
+
+        if self.gt_Se3_world_to_cam is not None:
+            Se3_world_to_cam = self.gt_Se3_world_to_cam
+        else:
+            Se3_world_to_cam = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]])).to(self.device)
         gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 
-        frame_node.gt_pinhole_params = self.pinhole_params
+        # camera_intrinsics = homogenize_3x3_camera_intrinsics(self.tracker.get_intrinsics_for_frame(frame_i)[None])
+        # orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
+        # orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()
+        # pinhole_params = PinholeCamera(camera_intrinsics, camera_extrinsics,
+        #                                     orig_image_width, orig_image_height)
+        # pinhole_params.scale_(self.config.image_downsample)
+
+        camera_intrinsics = self.tracker.get_intrinsics_for_frame(frame_i)
+        frame_node.gt_pinhole_K = camera_intrinsics
 
         if self.images_paths is not None:
             frame_node.image_filename = self.images_paths[frame_i].name

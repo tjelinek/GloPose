@@ -78,7 +78,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         return rendered_segment_discrete
 
     def get_intrinsics_for_frame(self, frame_i: int) -> torch.Tensor:
-        return homogenize_3x3_camera_intrinsics(self.renderer.camera_intrinsics)[None].to(self.device)
+        return self.renderer.camera_intrinsics.to(self.device)
 
     def next(self, frame_id, **kwargs):
         keyframes = [frame_id]

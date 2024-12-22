@@ -12,7 +12,7 @@ import numpy as np
 import seaborn as sns
 import torchvision
 from PIL import Image
-from kornia.geometry import Se3, Quaternion, PinholeCamera
+from kornia.geometry import Se3, Quaternion
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -28,7 +28,7 @@ from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
-from utils import normalize_vertices
+from utils import normalize_vertices, extract_intrinsics_from_tensor
 from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)
@@ -37,15 +37,13 @@ from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, 
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 pinhole_params, pose_icosphere: PoseIcosphere, images_paths, segmentation_paths):
+                 pose_icosphere: PoseIcosphere, images_paths, segmentation_paths, Se3_world_to_cam: Se3):
 
         self.image_height = shape.height
         self.image_width = shape.width
 
         self.images_paths: Optional[List] = images_paths
         self.segmentation_paths: Optional[List] = segmentation_paths
-
-        self.pinhole_params: PinholeCamera = pinhole_params
 
         self.data_graph: DataGraph = data_graph
 
@@ -61,6 +59,8 @@ class WriteResults:
         self.segmentation_path = self.write_folder / Path('segments')
         self.ransac_path = self.write_folder / Path('ransac')
         self.exported_mesh_path = self.write_folder / Path('3d_model')
+
+        self.Se3_world_to_cam: Se3 = Se3_world_to_cam
 
         self.init_directories()
 
@@ -381,8 +381,7 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params.extrinsics)
-        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
+        T_world_to_cam_se3_batched = Se3.from_matrix(self.Se3_world_to_cam.matrix().repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
         gt_rotations_rad = torch.deg2rad(gt_rotations)
@@ -411,7 +410,7 @@ class WriteResults:
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
         template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, self.Se3_world_to_cam)
 
         image_id_to_poses = {}
         image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
@@ -479,7 +478,7 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3 = Se3.from_matrix(self.pinhole_params.extrinsics)
+        T_world_to_cam_se3 = self.Se3_world_to_cam
         T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
@@ -608,13 +607,15 @@ class WriteResults:
                     rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
                                    rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
                 )
+                frame_data = self.data_graph.get_frame_data(icosphere_node.keyframe_idx_observed)
+                fx, fy, cx, cy = extract_intrinsics_from_tensor(frame_data.gt_pinhole_K)
 
                 rr.log(
                     f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
                     rr.Pinhole(
                         resolution=[self.image_width, self.image_height],
-                        focal_length=[float(self.pinhole_params.fx.item()),
-                                      float(self.pinhole_params.fy.item())],
+                        focal_length=[float(fx.item()),
+                                      float(fy.item())],
                         camera_xyz=rr.ViewCoordinates.RUB,
                     ),
                 )
@@ -1090,7 +1091,7 @@ class WriteResults:
 
         gt_obj_ref_to_last = get_relative_gt_obj_rotation(long_jump_source, frame_i, self.data_graph)
 
-        Se3_world_to_cam = Se3.from_matrix(self.pinhole_params.extrinsics)
+        Se3_world_to_cam = self.Se3_world_to_cam
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
 
         pred_cam_RANSAC_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac
