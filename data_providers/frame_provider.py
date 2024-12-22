@@ -1,9 +1,9 @@
-import sys
 from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import Callable, List, Optional
 
 import cv2
+import kaolin
 import torch
 import imageio
 import numpy as np
@@ -13,11 +13,12 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 import torch.nn.functional as F
 
-from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape
+from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape, ImageShape, get_intrinsics_from_exif
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
+from utils import homogenize_3x3_camera_intrinsics
 
 
 class BaseTracker(ABC):
@@ -30,6 +31,10 @@ class BaseTracker(ABC):
 
     @abstractmethod
     def next(self, frame) -> FrameObservation:
+        pass
+
+    @abstractmethod
+    def get_intrinsics_for_frame(self, frame_i: int) -> torch.Tensor:
         pass
 
     def process_segm(self, img):
@@ -54,19 +59,26 @@ class BaseTracker(ABC):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, tracker_config: TrackerConfig, renderer: RenderingKaolin, gt_encoder: Encoder, gt_texture,
-                 feature_extractor):
+    def __init__(self, tracker_config: TrackerConfig, gt_encoder: Encoder, gt_texture,
+                 feature_extractor, gt_mesh: kaolin.rep.SurfaceMesh):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
         self.gt_encoder: Encoder = gt_encoder
-        self.renderer = renderer
         self.gt_texture = gt_texture
         self.image_shape = ImageShape(tracker_config.max_width, tracker_config.max_width)
+        self.device = tracker_config.device
+
+        faces = gt_mesh.faces
+        self.renderer = RenderingKaolin(tracker_config, faces, self.image_shape.width,
+                                        self.image_shape.height).to(self.device)
 
     @staticmethod
     def binary_segmentation_from_rendered_segmentation(rendered_segmentations: torch.Tensor):
         rendered_segment_discrete: torch.Tensor = torch.logical_not(torch.lt(rendered_segmentations, 1.0))
         rendered_segment_discrete = rendered_segment_discrete.to(rendered_segmentations.dtype)
         return rendered_segment_discrete
+
+    def get_intrinsics_for_frame(self, frame_i: int) -> torch.Tensor:
+        return homogenize_3x3_camera_intrinsics(self.renderer.camera_intrinsics)[None].to(self.device)
 
     def next(self, frame_id, **kwargs):
         keyframes = [frame_id]
@@ -91,7 +103,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         return frame_observation
 
 
-class PrecomputedTracker(BaseTracker, ABC):
+class PrecomputedTracker(BaseTracker):
 
     def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
                  segmentations_paths: List[Path]):
@@ -111,6 +123,9 @@ class PrecomputedTracker(BaseTracker, ABC):
         image_downsampled = F.interpolate(image_perm, scale_factor=self.downsample_factor, mode='bilinear',
                                           align_corners=False)[None]
         return image_downsampled
+
+    def get_intrinsics_for_frame(self, frame_i):
+        return get_intrinsics_from_exif(self.images_paths[frame_i]).to(self.device)
 
     def next_segmentation(self, frame_i, **kwargs):
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_i])
