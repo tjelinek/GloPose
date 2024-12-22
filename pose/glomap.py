@@ -12,24 +12,25 @@ import numpy as np
 import pycolmap
 import torch
 from PIL import Image
+from kornia.image import ImageSize
 from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
 
 from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
-from auxiliary_scripts.image_utils import ImageShape
 from auxiliary_scripts.sift import detect_sift, get_exhaustive_image_pairs, match_features
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
+from utils import extract_intrinsics_from_tensor
 
 
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageShape, pose_icosphere: PoseIcosphere,
+                 image_shape: ImageSize, pose_icosphere: PoseIcosphere,
                  flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
         self.write_folder = write_folder
         self.config = tracking_config
@@ -221,15 +222,16 @@ class GlomapWrapper:
 
         gt_reconstruction = pycolmap.Reconstruction()
 
-        gt_cam_params = self.data_graph.get_frame_data(0).gt_pinhole_K
+        gt_K = self.data_graph.get_frame_data(0).gt_pinhole_K
+        fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
 
-        gt_w = int(gt_cam_params.width.item())
-        gt_h = int(gt_cam_params.height.item())
-        fx = gt_cam_params.fx.item()
-        fy = gt_cam_params.fy.item()
+        gt_w = int(self.image_width)
+        gt_h = int(self.image_height)
+        fx = fx.item()
+        fy = fy.item()
 
         gt_reconstruction_cam_id = 1
-        cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, gt_w / 2.0, gt_h / 2.0]))
+        cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, cx, cy]))
         gt_reconstruction.add_camera(cam)
 
         tgt_image_names = []
@@ -279,9 +281,9 @@ class GlomapWrapper:
                 command = [
                     "colmap",
                     "mapper",
-                    "--database_path", (self.colmap_db_path),
-                    "--output_path", (self.colmap_output_path),
-                    "--image_path", (self.colmap_image_path),
+                    "--database_path", str(self.colmap_db_path),
+                    "--output_path", str(self.colmap_output_path),
+                    "--image_path", str(self.colmap_image_path),
                     "--Mapper.tri_ignore_two_view_tracks", str(0),
                     "--log_to_stderr", str(1),
                 ]

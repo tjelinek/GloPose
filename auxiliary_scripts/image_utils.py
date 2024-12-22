@@ -5,19 +5,17 @@ import cv2
 import imageio
 import numpy as np
 import torch
+from kornia.image import ImageSize
 from scipy.ndimage import uniform_filter
 from torch.nn import functional as F
 from torchvision import transforms
 from PIL import Image, ExifTags
 
-ImageShape = namedtuple('ImageShape', ['width', 'height'])
-
-
-def get_shape(image_path: Path, image_downsample: float=1.0) -> ImageShape:
+def get_shape(image_path: Path, image_downsample: float=1.0) -> ImageSize:
     image = imageio.v3.imread(image_path)
 
-    return ImageShape(width=int(image_downsample * image.shape[1]),
-                      height=int(image_downsample * image.shape[0]))
+    return ImageSize(width=int(image_downsample * image.shape[1]),
+                     height=int(image_downsample * image.shape[0]))
 
 
 def pad_image(image):

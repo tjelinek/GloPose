@@ -5,9 +5,10 @@ from typing import Optional, List, Callable
 import kaolin
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
+from kornia.image import ImageSize
 
 from data_providers.flow_wrappers import RoMaFlowProvider
-from auxiliary_scripts.image_utils import get_shape, ImageShape
+from auxiliary_scripts.image_utils import get_shape
 from auxiliary_scripts.logging import WriteResults
 from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
@@ -30,9 +31,6 @@ class Tracking6D:
         # Encoders and related components
         self.encoder: Optional[Encoder] = None
         self.gt_encoder: Optional[Encoder] = None
-        self.rgb_encoder: Optional[Encoder] = None
-        self.last_encoder_result = None
-        self.last_encoder_result_rgb = None
 
         # Rendering and mesh related
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
@@ -88,7 +86,7 @@ class Tracking6D:
         self.logged_sgd_translations = []
         self.logged_sgd_quaternions = []
 
-        self.image_shape: Optional[ImageShape] = None
+        self.image_shape: Optional[ImageSize] = None
         self.write_folder = Path(write_folder)
         self.config = config
         self.device = 'cuda'
@@ -99,8 +97,8 @@ class Tracking6D:
             self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
         if self.config.generate_synthetic_observations_if_possible:
-            self.image_shape = ImageShape(width=int(self.config.image_downsample * self.config.max_width),
-                                          height=int(self.config.image_downsample * self.config.max_width))
+            self.image_shape = ImageSize(width=int(self.config.image_downsample * self.config.max_width),
+                                         height=int(self.config.image_downsample * self.config.max_width))
         else:
             self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
 

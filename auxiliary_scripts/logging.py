@@ -13,6 +13,7 @@ import seaborn as sns
 import torchvision
 from PIL import Image
 from kornia.geometry import Se3, Quaternion
+from kornia.image import ImageSize
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
@@ -22,7 +23,7 @@ from pathlib import Path
 from kornia.geometry.conversions import quaternion_to_axis_angle
 
 from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
-from auxiliary_scripts.image_utils import ImageShape, overlay_occlusion
+from auxiliary_scripts.image_utils import overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
@@ -36,7 +37,7 @@ from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, 
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape: ImageShape, tracking_config: TrackerConfig, data_graph: DataGraph,
+    def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph,
                  pose_icosphere: PoseIcosphere, images_paths, segmentation_paths, Se3_world_to_cam: Se3):
 
         self.image_height = shape.height

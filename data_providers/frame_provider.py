@@ -7,13 +7,14 @@ import kaolin
 import torch
 import imageio
 import numpy as np
+from kornia.image import ImageSize
 from segment_anything import sam_model_registry, SamPredictor
 
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 import torch.nn.functional as F
 
-from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape, ImageShape, get_intrinsics_from_exif
+from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape, get_intrinsics_from_exif
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
@@ -26,7 +27,7 @@ class BaseTracker(ABC):
         self.downsample_factor = perc
         self.max_width = max_width
         self.feature_extractor = feature_extractor
-        self.image_shape: Optional[ImageShape] = None
+        self.image_shape: Optional[ImageSize] = None
         self.device = device
 
     @abstractmethod
@@ -64,7 +65,7 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
         self.gt_encoder: Encoder = gt_encoder
         self.gt_texture = gt_texture
-        self.image_shape = ImageShape(tracker_config.max_width, tracker_config.max_width)
+        self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
         self.device = tracker_config.device
 
         faces = gt_mesh.faces
