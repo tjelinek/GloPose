@@ -7,7 +7,7 @@ from kornia.losses import total_variation
 
 from models.encoder import EncoderResult
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import erode_segment_mask2
+from utils.general import erode_segment_mask2
 
 
 class LossResult(NamedTuple):

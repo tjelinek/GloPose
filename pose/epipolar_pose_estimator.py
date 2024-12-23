@@ -6,7 +6,7 @@ import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_providers.flow_wrappers import RoMaFlowProvider
-from auxiliary_scripts.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
+from utils.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_angular_difference, \
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
@@ -19,8 +19,8 @@ from pose.essential_matrix_pose_estimation import (filter_inliers_using_ransac, 
                                                    estimate_pose_using_8pt_algorithm)
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy, \
-    get_foreground_and_segment_mask
+from utils.general import (erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points,
+                           tensor_index_to_coordinates_xy, get_foreground_and_segment_mask)
 
 
 class EpipolarPoseEstimator:

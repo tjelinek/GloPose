@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw
 import torch
 import torchvision.transforms as T
 
-from auxiliary_scripts.utils import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
+from utils.general import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 from visualizations import flow_viz
 
 

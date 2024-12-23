@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from auxiliary_scripts.utils import pad_to_multiple, unpad_image
+from utils.general import pad_to_multiple, unpad_image
 
 sys.path.append('repositories/Depth-Anything-V2/')
 from repositories.DepthAnythingV2.depth_anything_v2.dpt import DepthAnythingV2

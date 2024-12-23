@@ -1,6 +1,6 @@
 from kornia.geometry import Quaternion, Se3
 
-from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
+from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 
 

@@ -14,12 +14,12 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 import torch.nn.functional as F
 
-from auxiliary_scripts.image_utils import resize_and_filter_image, get_shape, get_intrinsics_from_exif
+from utils.image_utils import resize_and_filter_image, get_shape, get_intrinsics_from_exif
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import normalize_vertices
+from utils.general import normalize_vertices
 
 
 class BaseTracker(ABC):

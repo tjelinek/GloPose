@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import torch
 from kornia.geometry import Quaternion, Se3
 
-from auxiliary_scripts.math_utils import quaternion_minimal_angular_difference
+from utils.math_utils import quaternion_minimal_angular_difference
 from data_structures.keyframe_buffer import FrameObservation
 
 

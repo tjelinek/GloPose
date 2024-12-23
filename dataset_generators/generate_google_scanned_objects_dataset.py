@@ -8,7 +8,7 @@ from dataclasses import replace
 from dataset_generators.generator_utils import (generate_rotating_and_translating_textured_object,
                                                 prepare_scenarios_for_kubric)
 from dataset_generators.scenarios import generate_rotations_z
-from auxiliary_scripts.utils import load_config
+from utils.general import load_config
 from main_settings import dataset_folder
 
 warnings.filterwarnings("ignore")

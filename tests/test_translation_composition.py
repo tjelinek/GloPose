@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from kornia.geometry import (Quaternion, rotation_matrix_to_axis_angle, Se3)
 
-from auxiliary_scripts.math_utils import (Se3_last_cam_to_world_from_Se3_obj, Se3_obj_from_epipolar_Se3_cam)
+from utils.math_utils import (Se3_last_cam_to_world_from_Se3_obj, Se3_obj_from_epipolar_Se3_cam)
 from dataset_generators import scenarios
 from dataset_generators.track_augmentation import modify_rotations
 from flow import flow_unit_coords_to_image_coords, source_to_target_coords_world_coord_system
@@ -13,7 +13,7 @@ from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from pose.essential_matrix_pose_estimation import estimate_pose_zaragoza
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import normalize_vertices, get_not_occluded_foreground_points, erode_segment_mask2, \
+from utils.general import normalize_vertices, get_not_occluded_foreground_points, erode_segment_mask2, \
     tensor_index_to_coordinates_xy
 
 sequence_len = 30

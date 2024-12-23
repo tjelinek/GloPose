@@ -22,15 +22,15 @@ from matplotlib.patches import ConnectionPatch, Patch
 from pathlib import Path
 from kornia.geometry.conversions import quaternion_to_axis_angle
 
-from auxiliary_scripts.data_utils import load_texture, load_mesh_using_trimesh
-from auxiliary_scripts.image_utils import overlay_occlusion
+from utils.data_utils import load_texture, load_mesh_using_trimesh
+from utils.image_utils import overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
-from auxiliary_scripts.utils import normalize_vertices, extract_intrinsics_from_tensor
-from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
+from utils.general import normalize_vertices, extract_intrinsics_from_tensor
+from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)
 

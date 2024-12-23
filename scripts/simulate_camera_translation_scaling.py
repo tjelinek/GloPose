@@ -5,8 +5,8 @@ import rerun.blueprint as rrb
 import torch
 from kornia.geometry import Se3, Quaternion
 
-from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
-from auxiliary_scripts.utils import homogenize_3x4_transformation_matrix
+from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
+from utils.general import homogenize_3x4_transformation_matrix
 
 camera_trans = torch.tensor([[3.14, -5.0, -2.81]]).cpu().to(torch.float32)
 camera_up = torch.tensor([[0, 0, 1]]).cpu().to(torch.float32)

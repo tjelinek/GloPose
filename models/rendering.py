@@ -12,7 +12,7 @@ from data_structures.keyframe_buffer import SyntheticFlowObservation
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
-from auxiliary_scripts.utils import homogenize_3x4_transformation_matrix, pinhole_intrinsics_to_tensor
+from utils.general import homogenize_3x4_transformation_matrix, pinhole_intrinsics_to_tensor
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',

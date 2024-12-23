@@ -17,14 +17,14 @@ from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
 
-from auxiliary_scripts.colmap.h5_to_db import import_into_colmap
-from auxiliary_scripts.sift import detect_sift, get_exhaustive_image_pairs, match_features
+from utils.colmap.h5_to_db import import_into_colmap
+from utils.sift import detect_sift, get_exhaustive_image_pairs, match_features
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import extract_intrinsics_from_tensor
+from utils.general import extract_intrinsics_from_tensor
 
 
 class GlomapWrapper:

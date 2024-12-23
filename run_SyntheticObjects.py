@@ -9,8 +9,8 @@ import torch
 from dataset_generators import scenarios
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
-from auxiliary_scripts.data_utils import load_gt_data
-from auxiliary_scripts.utils import load_config
+from utils.data_utils import load_gt_data
+from utils.general import load_config
 
 
 def main():

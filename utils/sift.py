@@ -12,8 +12,8 @@ import torch
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from tqdm import tqdm
 
-from auxiliary_scripts.colmap.colmap_database import COLMAPDatabase
-from auxiliary_scripts.colmap.h5_to_db import add_keypoints, add_matches
+from utils.colmap.colmap_database import COLMAPDatabase
+from utils.colmap.h5_to_db import add_keypoints, add_matches
 
 temp_dir = Path("/mnt/personal/jelint19/cache/sift_cache")
 os.makedirs(temp_dir, exist_ok=True)

@@ -8,9 +8,9 @@ from kornia.geometry import Quaternion, Se3, PinholeCamera
 from kornia.image import ImageSize
 
 from data_providers.flow_wrappers import RoMaFlowProvider
-from auxiliary_scripts.image_utils import get_shape
-from auxiliary_scripts.logging import WriteResults
-from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj
+from utils.image_utils import get_shape
+from utils.logging import WriteResults
+from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
@@ -19,7 +19,7 @@ from models.initial_mesh import generate_face_features
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from auxiliary_scripts.utils import normalize_vertices
+from utils.general import normalize_vertices
 
 
 class Tracking6D:
