@@ -7,7 +7,7 @@ from kornia.geometry import normalize_quaternion, So3, Se3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 
-from utils import mesh_normalize
+from auxiliary_scripts.utils import mesh_normalize
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
                                              'lights'])

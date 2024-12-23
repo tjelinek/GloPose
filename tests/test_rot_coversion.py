@@ -6,7 +6,7 @@ from kornia.geometry import axis_angle_to_rotation_matrix, rotation_matrix_to_ax
 from auxiliary_scripts.math_utils import Se3_epipolar_cam_from_Se3_obj, Se3_obj_from_epipolar_Se3_cam
 from dataset_generators import scenarios
 from dataset_generators.track_augmentation import modify_rotations
-from utils import homogenize_3x4_transformation_matrix
+from auxiliary_scripts.utils import homogenize_3x4_transformation_matrix
 
 for camera_up_idx in range(3):
     scenario = scenarios.generate_rotations_xyz(5.0)

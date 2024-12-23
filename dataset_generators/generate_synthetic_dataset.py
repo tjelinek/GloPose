@@ -7,7 +7,7 @@ import dataset_generators.scenarios
 from dataset_generators.generator_utils import prepare_scenarios_for_kubric, \
     generate_rotating_and_translating_textured_object
 from main_settings import dataset_folder
-from utils import load_config
+from auxiliary_scripts.utils import load_config
 
 warnings.filterwarnings("ignore")
 

@@ -5,7 +5,7 @@ from dataset_generators.track_augmentation import modify_rotations
 from main_settings import tmp_folder, dataset_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
 from auxiliary_scripts.data_utils import load_mesh, load_texture
-from utils import load_config
+from auxiliary_scripts.utils import load_config
 from pathlib import Path
 
 
@@ -19,10 +19,10 @@ def main():
         sequences = [
             # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
             # 'Twinlab_Nitric_Fuel',
-            'Squirrel',
+            # 'Squirrel',
             # 'STACKING_BEAR',
             # 'Schleich_Allosaurus',
-            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
             # 'SCHOOL_BUS',
             'Sootheze_Cold_Therapy_Elephant',
             # 'TOP_TEN_HI',

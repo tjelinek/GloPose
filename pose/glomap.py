@@ -24,7 +24,7 @@ from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
-from utils import extract_intrinsics_from_tensor
+from auxiliary_scripts.utils import extract_intrinsics_from_tensor
 
 
 class GlomapWrapper:

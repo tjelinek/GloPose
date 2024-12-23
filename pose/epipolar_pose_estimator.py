@@ -19,7 +19,7 @@ from pose.essential_matrix_pose_estimation import (filter_inliers_using_ransac, 
                                                    estimate_pose_using_8pt_algorithm)
 from pose.pnp_pose_estimation import estimate_pose_using_PnP_solver
 from tracker_config import TrackerConfig
-from utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy, \
+from auxiliary_scripts.utils import erode_segment_mask2, dilate_mask, get_not_occluded_foreground_points, tensor_index_to_coordinates_xy, \
     get_foreground_and_segment_mask
 
 

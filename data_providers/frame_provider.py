@@ -19,7 +19,7 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-from utils import normalize_vertices
+from auxiliary_scripts.utils import normalize_vertices
 
 
 class BaseTracker(ABC):

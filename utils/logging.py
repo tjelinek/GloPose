@@ -29,7 +29,7 @@ from data_structures.pose_icosphere import PoseIcosphere
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
-from utils import normalize_vertices, extract_intrinsics_from_tensor
+from auxiliary_scripts.utils import normalize_vertices, extract_intrinsics_from_tensor
 from auxiliary_scripts.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)

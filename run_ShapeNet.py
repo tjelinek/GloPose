@@ -7,7 +7,7 @@ from auxiliary_scripts.data_utils import load_texture
 from dataset_generators import scenarios
 from main_settings import tmp_folder
 from runtime_utils import run_tracking_on_sequence, parse_args
-from utils import load_config
+from auxiliary_scripts.utils import load_config
 from pathlib import Path
 
 

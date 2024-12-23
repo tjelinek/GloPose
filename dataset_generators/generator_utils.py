@@ -15,7 +15,7 @@ from pathlib import Path
 from dataset_generators.scenarios import MovementScenario
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
-from utils import normalize_vertices
+from auxiliary_scripts.utils import normalize_vertices
 from flow import visualize_flow_with_images
 
 

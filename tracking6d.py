@@ -19,7 +19,7 @@ from models.initial_mesh import generate_face_features
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from utils import normalize_vertices
+from auxiliary_scripts.utils import normalize_vertices
 
 
 class Tracking6D:

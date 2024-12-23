@@ -13,7 +13,7 @@ from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from pose.essential_matrix_pose_estimation import estimate_pose_zaragoza
 from tracker_config import TrackerConfig
-from utils import normalize_vertices, get_not_occluded_foreground_points, erode_segment_mask2, \
+from auxiliary_scripts.utils import normalize_vertices, get_not_occluded_foreground_points, erode_segment_mask2, \
     tensor_index_to_coordinates_xy
 
 sequence_len = 30
