@@ -15,7 +15,6 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
-from models.encoder import Encoder
 from models.initial_mesh import generate_face_features
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
@@ -29,8 +28,6 @@ class Tracking6D:
                  gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
                  gt_Se3_world_to_cam: Se3 = None):
         # Encoders and related components
-        self.encoder: Optional[Encoder] = None
-        self.gt_encoder: Optional[Encoder] = None
 
         # Rendering and mesh related
         self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
@@ -102,8 +99,6 @@ class Tracking6D:
         else:
             self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
 
-        self.initialize_encoders(iface_features, ivertices)
-
         self.data_graph = DataGraph()
 
         if self.config.generate_synthetic_observations_if_possible:
@@ -111,8 +106,8 @@ class Tracking6D:
             assert gt_mesh is not None
             assert self.gt_texture is not None
 
-            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_encoder, self.gt_texture, self.feat,
-                                                          gt_mesh)
+            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_texture, self.feat, gt_mesh,
+                                                          self.gt_rotations, gt_translations)
 
         else:
             if self.config.segmentation_tracker == 'precomputed':
@@ -136,42 +131,6 @@ class Tracking6D:
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.pose_icosphere, self.flow_provider)
-
-    def initialize_encoders(self, iface_features, ivertices):
-        self.encoder = Encoder(self.config, ivertices, iface_features, self.image_shape.width,
-                               self.image_shape.height, self.config.features_channels).to(self.device)
-
-        if not self.config.optimize_texture and self.gt_texture is not None:
-            self.encoder.texture_map = torch.nn.Parameter(self.gt_texture_features)
-            self.encoder.texture_map.requires_grad = False
-
-        self.encoder.train()
-
-        if not self.config.optimize_pose:
-            if self.gt_rotations is not None and self.gt_translations is not None:
-                assert self.gt_rotations.shape == torch.Size((self.config.input_frames, 3))
-                assert self.gt_translations.shape == torch.Size((self.config.input_frames, 3))
-                self.encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
-
-                # Do not optimize the poses
-                for param in [self.encoder.quaternion, self.encoder.translation]:
-                    param.detach_()
-            else:
-                raise ValueError("Required not to optimize pose even though no ground truth "
-                                 "rotations and translations are provided.")
-
-        #  Ground truth encoder for synthetic data generation
-        self.gt_encoder = Encoder(self.config, ivertices, iface_features,
-                                  self.image_shape.width, self.image_shape.height, 3).to(self.device)
-        for name, param in self.gt_encoder.named_parameters():
-            if isinstance(param, torch.Tensor):
-                param.detach_()
-
-        if self.gt_rotations is not None and self.gt_translations is not None:
-            self.gt_encoder.set_encoder_poses(self.gt_rotations, self.gt_translations)
-
-        if self.gt_texture is not None:
-            self.gt_encoder.gt_texture = self.gt_texture
 
     def initialize_feature_extractor(self):
         self.feat = lambda x: x
@@ -212,7 +171,7 @@ class Tracking6D:
             start = time.time()
 
             if frame_i == 0:
-                initial_pose = self.encoder.get_se3_at_frame_vectorized()[[frame_i]]
+                initial_pose = Se3.identity(1)
 
                 self.pose_icosphere.insert_new_reference(new_frame_observation, initial_pose, frame_i)
 
@@ -350,7 +309,7 @@ class Tracking6D:
                 'frame_name': image_name,
                 'gt_R_w2c': gt_rotation,
                 'gt_t_Rw2c': gt_translation,
-                'gt_cam_K': node_data.gt_pinhole_K.camera_matrix.numpy(force=True).tolist(),
+                'gt_cam_K': node_data.gt_pinhole_K.numpy(force=True).tolist(),
             })
 
         # Convert stats to a Pandas DataFrame
@@ -365,12 +324,13 @@ class Tracking6D:
         frame_node.gt_rot_axis_angle = self.gt_rotations[frame_i]
         frame_node.gt_translation = self.gt_translations[frame_i]
 
-        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]), self.gt_translations[[frame_i]])
+        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]),
+                         self.gt_translations[[frame_i]]).cpu()
 
         if self.gt_Se3_world_to_cam is not None:
             Se3_world_to_cam = self.gt_Se3_world_to_cam
         else:
-            Se3_world_to_cam = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]])).to(self.device)
+            Se3_world_to_cam = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]]))
         gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 

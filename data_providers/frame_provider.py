@@ -19,7 +19,7 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import Encoder
 from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
-from utils import homogenize_3x3_camera_intrinsics
+from utils import normalize_vertices
 
 
 class BaseTracker(ABC):
@@ -40,8 +40,8 @@ class BaseTracker(ABC):
 
     def process_segm(self, img):
         segment = cv2.resize(img, self.image_shape[1::-1]).astype(np.float64)
-        width = int(self.image_shape[1] * self.downsample_factor)
-        height = int(self.image_shape[0] * self.downsample_factor)
+        width = int(self.image_shape.width * self.downsample_factor)
+        height = int(self.image_shape.height * self.downsample_factor)
         segment = cv2.resize(segment, dsize=(width, height), interpolation=cv2.INTER_CUBIC)
 
         segm = transforms.ToTensor()(segment)
@@ -60,17 +60,31 @@ class BaseTracker(ABC):
 
 class SyntheticDataGeneratingTracker(BaseTracker):
 
-    def __init__(self, tracker_config: TrackerConfig, gt_encoder: Encoder, gt_texture,
-                 feature_extractor, gt_mesh: kaolin.rep.SurfaceMesh):
+    def __init__(self, tracker_config: TrackerConfig, gt_texture,
+                 feature_extractor, gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
+                 gt_translations: torch.Tensor):
         super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
-        self.gt_encoder: Encoder = gt_encoder
-        self.gt_texture = gt_texture
         self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
         self.device = tracker_config.device
 
         faces = gt_mesh.faces
+        self.gt_texture = gt_texture
+
+        self._init_gt_encoder(gt_mesh, gt_rotations, gt_translations, tracker_config)
+
         self.renderer = RenderingKaolin(tracker_config, faces, self.image_shape.width,
                                         self.image_shape.height).to(self.device)
+
+    def _init_gt_encoder(self, gt_mesh, gt_rotations, gt_translations, tracker_config):
+        ivertices = normalize_vertices(gt_mesh.vertices).numpy()
+        iface_features = gt_mesh.uvs[gt_mesh.face_uvs_idx].numpy()
+        self.gt_encoder = Encoder(tracker_config, ivertices, iface_features,
+                                  self.image_shape.width, self.image_shape.height, 3).to(self.device)
+        for name, param in self.gt_encoder.named_parameters():
+            if isinstance(param, torch.Tensor):
+                param.detach_()
+        self.gt_encoder.set_encoder_poses(gt_rotations, gt_translations)
+        self.gt_encoder.gt_texture = self.gt_texture
 
     @staticmethod
     def binary_segmentation_from_rendered_segmentation(rendered_segmentations: torch.Tensor):

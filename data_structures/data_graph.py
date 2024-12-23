@@ -54,6 +54,11 @@ class CommonFrameData:
     # Timings
     pose_estimation_time: float = None
 
+    def __setattr__(self, name, value):
+        if isinstance(value, torch.Tensor):
+            value = value.cpu()  # Move the tensor to CPU
+        super().__setattr__(name, value)
+
 
 @dataclass
 class CrossFrameData:
@@ -96,6 +101,11 @@ class CrossFrameData:
     # Camera scaling
     camera_scale_per_axis_gt: torch.Tensor = None
     camera_scale_estimated: float = None
+
+    def __setattr__(self, name, value):
+        if isinstance(value, torch.Tensor):
+            value = value.cpu()  # Move the tensor to CPU
+        super().__setattr__(name, value)
 
 
 @dataclass

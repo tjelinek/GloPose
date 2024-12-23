@@ -146,7 +146,7 @@ class FrameFilter:
 
         src_pts_xy_int = src_pts_xy.int()
         in_segmentation_mask = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
-        fg_certainties = flow_arc_node.flow_certainty[in_segmentation_mask]
+        fg_certainties = flow_arc_node.flow_certainty.to(dev)[in_segmentation_mask]
         fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
