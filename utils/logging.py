@@ -1195,10 +1195,11 @@ class WriteResults:
             gt_rotations.append(gt_rotation)
             gt_translations.append(gt_translation)
 
-        rotations = torch.stack(rotations)
-        translations = torch.stack(translations)
-        gt_rotations = torch.stack(gt_rotations)
-        gt_translations = torch.stack(gt_translations)
+        device = self.tracking_config.device
+        rotations = torch.stack(rotations).to(device)
+        translations = torch.stack(translations).to(device)
+        gt_rotations = torch.stack(gt_rotations).to(device)
+        gt_translations = torch.stack(gt_translations).to(device)
 
         return gt_rotations, gt_translations, rotations, translations
 
