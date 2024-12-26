@@ -373,6 +373,8 @@ class WriteResults:
                 pass
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
+        device = self.tracking_config.device
+
         rr.set_time_sequence(RerunAnnotations.space_visualization, 0)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -382,12 +384,12 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3_batched = Se3.from_matrix(self.Se3_world_to_cam.matrix().repeat(n_poses, 1, 1))
+        T_world_to_cam_se3_batched = Se3.from_matrix(self.Se3_world_to_cam.matrix().repeat(n_poses, 1, 1)).to(device)
 
         gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
         gt_rotations_rad = torch.deg2rad(gt_rotations)
 
-        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
+        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations).to(device)
         gt_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
         gt_t_cam = gt_cam_se3.translation.numpy(force=True)
 
