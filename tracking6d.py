@@ -1,25 +1,22 @@
 import time
 from pathlib import Path
-from typing import Optional, List, Callable
+from typing import Optional, List
 
-import kaolin
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 from kornia.image import ImageSize
 
-from data_providers.flow_wrappers import RoMaFlowProvider
-from utils.image_utils import get_shape
-from utils.logging import WriteResults
-from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
+from data_providers.flow_wrappers import RoMaFlowProvider
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
-from models.initial_mesh import generate_face_features
 from pose.frame_filter import FrameFilter
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from utils.general import normalize_vertices
+from utils.image_utils import get_shape
+from utils.logging import WriteResults
+from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 
 
 class Tracking6D:
@@ -27,23 +24,13 @@ class Tracking6D:
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
                  gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
                  gt_Se3_world_to_cam: Se3 = None):
-        # Encoders and related components
 
         # Rendering and mesh related
-        self.gt_mesh_prototype: Optional[kaolin.rep.SurfaceMesh] = gt_mesh
         self.gt_texture = gt_texture
-        self.gt_texture_features = None
 
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
-
-        # Features
-        self.feat: Optional[Callable] = None
-        self.feat_rgb = None
-
-        # Feature extraction
-        self.feature_extractor = None
 
         # Optical flow
         self.roma_flow_provider: Optional[RoMaFlowProvider] = None
@@ -72,26 +59,18 @@ class Tracking6D:
         self.pinhole_params: Optional[PinholeCamera] = None
 
         # Flow tracks
-        self.flow_tracks_inits = [0]
-        self.pose_icosphere: Optional[PoseIcosphere] = PoseIcosphere()
+        self.keyframe_database: Optional[PoseIcosphere] = PoseIcosphere()
 
         # Tracker
         self.tracker: Optional[BaseTracker] = None
 
         # Other utilities and flags
         self.results_writer = None
-        self.logged_sgd_translations = []
-        self.logged_sgd_quaternions = []
 
         self.image_shape: Optional[ImageSize] = None
         self.write_folder = Path(write_folder)
         self.config = config
         self.device = 'cuda'
-
-        iface_features, ivertices = self.initialize_mesh()
-        self.initialize_feature_extractor()
-        if self.gt_texture is not None:
-            self.gt_texture_features = self.feat(self.gt_texture[None])[0].detach()
 
         if self.config.generate_synthetic_observations_if_possible:
             self.image_shape = ImageSize(width=int(self.config.image_downsample * self.config.max_width),
@@ -106,55 +85,31 @@ class Tracking6D:
             assert gt_mesh is not None
             assert self.gt_texture is not None
 
-            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_texture, self.feat, gt_mesh,
+            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_texture, gt_mesh,
                                                           self.gt_rotations, gt_translations)
 
         else:
             if self.config.segmentation_tracker == 'precomputed':
-                self.tracker = PrecomputedTracker(self.config, self.feat, images_paths, segmentation_paths)
+                self.tracker = PrecomputedTracker(self.config, images_paths, segmentation_paths)
             else:
                 raise ValueError('Unknown value of "segmentation_tracker"')
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, data_graph=self.data_graph,
-                                           pose_icosphere=self.pose_icosphere, images_paths=self.images_paths,
+                                           pose_icosphere=self.keyframe_database, images_paths=self.images_paths,
                                            segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.world_to_cam)
 
         self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
-                                   #f'{config.experiment_name}_{self.image_shape.width}x{self.image_shape.height}px')
+
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
                                                                images_paths)
 
-        self.frame_filter = FrameFilter(self.config, self.data_graph, self.pose_icosphere, self.image_shape,
+        self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
                                         self.flow_provider)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.pose_icosphere, self.flow_provider)
-
-    def initialize_feature_extractor(self):
-        self.feat = lambda x: x
-
-    def initialize_mesh(self):
-        if not self.config.optimize_shape and self.gt_mesh_prototype is not None:
-            ivertices = normalize_vertices(self.gt_mesh_prototype.vertices).numpy()
-            self.faces = self.gt_mesh_prototype.faces
-            iface_features = self.gt_mesh_prototype.uvs[self.gt_mesh_prototype.face_uvs_idx].numpy()
-        elif self.config.initial_mesh_path is not None:
-            path = self.config.initial_mesh_path
-            print("Loading mesh located at", path)
-            mesh = kaolin.io.obj.import_mesh(path, with_materials=True)
-            ivertices = normalize_vertices(mesh.vertices).numpy()
-            self.faces = mesh.faces.numpy()
-            iface_features = generate_face_features(ivertices, self.faces)
-        else:
-            path = Path('./prototypes/sphere.obj')
-            print("Loading mesh located at", path)
-            mesh = kaolin.io.obj.import_mesh(str(path), with_materials=True)
-            ivertices = normalize_vertices(mesh.vertices).numpy()
-            self.faces = mesh.faces.numpy()
-            iface_features = mesh.uvs[mesh.face_uvs_idx].numpy()
-        return iface_features, ivertices
+                                            self.keyframe_database, self.flow_provider)
 
     def run_tracking(self):
         # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
@@ -173,7 +128,7 @@ class Tracking6D:
             if frame_i == 0:
                 initial_pose = Se3.identity(1)
 
-                self.pose_icosphere.insert_new_reference(new_frame_observation, initial_pose, frame_i)
+                self.keyframe_database.insert_new_reference(new_frame_observation, initial_pose, frame_i)
 
             else:
                 if self.config.matcher == 'RoMa':
@@ -184,7 +139,7 @@ class Tracking6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
-        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.pose_icosphere.reference_poses]
+        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.keyframe_database.reference_poses]
         images_paths = []
         segmentation_paths = []
         matching_pairs = []

@@ -23,10 +23,10 @@ from utils.general import normalize_vertices
 
 
 class BaseTracker(ABC):
-    def __init__(self, perc, max_width, feature_extractor, device=torch.device('cuda')):
+    def __init__(self, perc, max_width, feature_extractor=None, device=torch.device('cuda')):
         self.downsample_factor = perc
         self.max_width = max_width
-        self.feature_extractor = feature_extractor
+        self.feature_extractor = feature_extractor if feature_extractor is not None else lambda x: x
         self.image_shape: Optional[ImageSize] = None
         self.device = device
 
@@ -61,9 +61,9 @@ class BaseTracker(ABC):
 class SyntheticDataGeneratingTracker(BaseTracker):
 
     def __init__(self, tracker_config: TrackerConfig, gt_texture,
-                 feature_extractor, gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
+                 gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
                  gt_translations: torch.Tensor):
-        super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
+        super().__init__(tracker_config.image_downsample, tracker_config.max_width)
         self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
         self.device = tracker_config.device
 
@@ -120,9 +120,9 @@ class SyntheticDataGeneratingTracker(BaseTracker):
 
 class PrecomputedTracker(BaseTracker):
 
-    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
+    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path],
                  segmentations_paths: List[Path]):
-        super().__init__(tracker_config.image_downsample, tracker_config.max_width, feature_extractor)
+        super().__init__(tracker_config.image_downsample, tracker_config.max_width)
 
         self.image_shape = get_shape(images_paths[0], self.downsample_factor)
         self.images_paths: List[Path] = images_paths
