@@ -350,23 +350,18 @@ class FrameFilterSift(FrameFilter):
 
         sift = cv2.SIFT_create(self.config.sift_filter_num_feats, edgeThreshold=-1000, contrastThreshold=-1000)
 
-        if segmentations is not None:
-            seg = cv2.imread(segmentations[i], cv2.IMREAD_GRAYSCALE)
+        if segmentation is not None:
+            segmentation_np = to_pil_image(image)
         else:
-            seg = None
+            segmentation_np = None
 
-        to_pil_image(tensor)
-        img1 = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-        kpts1, descs1 = sift.detectAndCompute(img1, seg)
+        image_np = to_pil_image(image)
+        kpts1, descs1 = sift.detectAndCompute(image_np, segmentation_np)
         lafs1 = laf_from_opencv_SIFT_kpts(kpts1)
         descs1 = sift_to_rootsift(torch.from_numpy(descs1)).to(device)
         desc_dim = descs1.shape[-1]
         kpts = get_laf_center(lafs1).reshape(-1, 2).detach().cpu().numpy()
         descs1 = descs1.reshape(-1, desc_dim).detach().cpu().numpy()
 
-        f_laf[key] = lafs1.detach().cpu().numpy()
-        f_kp[key] = kpts
-        f_desc[key] = descs1
-
-        return
+        return lafs1, kpts, descs1
 
