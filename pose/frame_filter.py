@@ -347,3 +347,34 @@ class FrameFilterSift(FrameFilter):
         descriptors = descriptors.reshape(-1, desc_dim).detach().cpu().numpy()
 
         return lafs, keypoints, descriptors
+
+    def compute_sift_reliability(self, frame_idx1: int, frame_idx2: int):
+
+        frame1_data = self.data_graph.get_frame_data(frame_idx1)
+        frame2_data = self.data_graph.get_frame_data(frame_idx2)
+        edge_data = self.data_graph.get_edge_observations(frame_idx1, frame_idx2)
+
+        frame1_image = frame1_data.frame_observation.observed_image.squeeze()
+        frame1_segmentation = frame2_data.frame_observation.observed_segmentation.squeeze()
+
+        frame2_image = frame2_data.frame_observation.observed_image.squeeze()
+        frame2_segmentation = frame2_data.frame_observation.observed_segmentation.squeeze()
+
+        hw1 = tuple(frame1_image.shape[-2:])
+        hw2 = tuple(frame2_image.shape[-2:])
+
+        lafs_img1, keypoints_img1, descriptors_img1 = self.detect_sift(frame1_image, frame1_segmentation)
+        lafs_img2, keypoints_img2, descriptors_img2 = self.detect_sift(frame2_image, frame2_segmentation)
+
+        with torch.inference_mode():
+            dists, idxs = match_adalam(descriptors_img1, descriptors_img2,
+                                       lafs_img1, lafs_img2,  # Adalam takes into account also geometric information
+                                       hw1=hw1, hw2=hw2)
+
+        num_matches = len(idxs)
+
+        edge_data.num_matches = num_matches
+
+        return num_matches
+
+
