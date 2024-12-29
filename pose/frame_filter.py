@@ -180,38 +180,72 @@ class FrameFilterSift(FrameFilter):
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
 
-        start_time = time()
-
-        idx = frame_i - 1
-        preceding_frame_node = self.data_graph.get_frame_data(idx)
-        source1 = preceding_frame_node.long_jump_source
-        result = idx, source1
-        preceding_frame_idx, preceding_source = result
+        preceding_frame_idx = frame_i - 1
+        preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
+        preceding_source = preceding_frame_node.long_jump_source
 
         self.add_new_flow(preceding_source, preceding_frame_idx)
 
-        # for preceding_frame in range(frame_i):
-        #     self.add_new_flow(preceding_frame, frame_i)
+        print("Detection features")
+        keyframes_single_dir = []
+
+        device = self.config.device
+        selected_keyframe_idxs = [0]
+        matching_pairs_original_idx = []
+        print("Now matching to add keyframes")
+        max_matches = self.config.sift_filter_good_to_add_matches
+        min_matches = self.config.sift_filter_min_matches
+
+        idx1 = selected_keyframe_idxs[-1]
+
+        done = False
+        idx2 = idx1
+        we_stepped_back = False
+
+        while not done:
+            idx2 = idx2 + 1
+            if idx2 >= frame_i:
+                break
+
+            num_matches = self.compute_sift_reliability(idx1, idx2)
+
+            if num_matches >= max_matches:
+                if we_stepped_back:
+                    print(f"Step back was good, adding idx1={idx1}")
+                    selected_keyframe_idxs.append(idx1)
+                    we_stepped_back = False
+                continue
+            if (num_matches <= max_matches) and (num_matches >= min_matches):
+                print("Adding keyframe")
+                selected_keyframe_idxs.append(idx2)
+                selected_keyframe_idxs.append(idx1)
+                matching_pairs_original_idx.append((idx1, idx2))
+                idx1 = idx2
+
+                frame1_observation = self.data_graph.get_frame_data(idx1).frame_observation
+                frame2_observation = self.data_graph.get_frame_data(idx2).frame_observation
+
+                if not self.pose_icosphere.contains_node(idx1):
+                    self.pose_icosphere.insert_new_reference(frame1_observation, Se3.identity(1), idx1)
+                if not self.pose_icosphere.contains_node(idx2):
+                    self.pose_icosphere.insert_new_reference(frame2_observation, Se3.identity(1), idx2)
+
+            if num_matches < min_matches:  # try going back
+                print("Too few matches, going back")
+                idx1 = max(0, idx2 - 1)
+                we_stepped_back = True
+                if (idx1 <= 0):
+                    done = True
+                elif (idx1 in selected_keyframe_idxs):
+                    print(f"We cannot match {idx2}, skipping it")
+                    idx2 += 1
 
         edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
         if edge_data.is_match_reliable and frame_i > 1:
             source = preceding_source
             reliable_flows = {source}
         elif frame_i > 1:
-            reliable_flows, best_source = self.match_to_all_keyframes(frame_i)
-            if best_source is None:
-                reliable_flows, best_source = self.match_to_frames_from_last_kf(frame_i, preceding_source)
-
-                if best_source is None:
-                    source = preceding_source
-                else:
-                    source = best_source
-                    cam_frame_data = self.data_graph.get_frame_data(best_source)
-
-                    mock_pose = Se3.identity(1, device=self.config.device)
-                    self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, mock_pose, best_source)
-            else:
-                source = best_source
+            pass
         else:
             source = 0
             reliable_flows = set()
@@ -233,99 +267,6 @@ class FrameFilterSift(FrameFilter):
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
         datagraph_node.long_jump_source = source
-
-    def filter_frames(self, frame_i: int):
-        print("Detection features")
-        keyframes_single_dir = []
-
-        device = self.config.device
-        selected_keyframe_idxs = [0]
-        matching_pairs_original_idx = []
-        print("Now matching to add keyframes")
-        max_matches = self.config.sift_filter_good_to_add_matches
-        min_matches = self.config.sift_filter_min_matches
-
-        idx1 = selected_keyframe_idxs[-1]
-        fname1 = keyframes_single_dir[idx1]
-        key1 = fname1.split('/')[-1]
-
-        lafs_img1, keypoints_img1, descriptors_img1 = self.detect_sift(image1, segmentation1)
-
-        img1 = cv2.imread(fname1)
-        hw1 = img1.shape[:2]
-        done = False
-        idx2 = idx1
-        we_stepped_back = False
-        while not done:
-            idx2 = idx2 + 1
-            is_last_frame = idx2 == len(keyframes_single_dir) - 1
-            if idx2 >= len(keyframes_single_dir):
-                break
-            fname2 = keyframes_single_dir[idx2]
-            key2 = fname2.split('/')[-1]
-
-            lafs_img2, keypoints_img2, descriptors_img2 = self.detect_sift(image2, segmentation2)
-            img2 = cv2.imread(fname2)
-            hw2 = img2.shape[:2]
-            with torch.inference_mode():
-                dists, idxs = match_adalam(descriptors_img1, descriptors_img2,
-                                           lafs_img1, lafs_img2,  # Adalam takes into account also geometric information
-                                           hw1=hw1, hw2=hw2)
-            num_matches = len(idxs)
-
-            if num_matches >= max_matches:
-                if (not we_stepped_back):
-                    print("Too many matches, skipping")
-                    if (len(selected_keyframe_idxs) == 1) and is_last_frame:
-                        # We need at least two keyframes
-                        selected_keyframe_idxs.append(idx1)
-                        matching_pairs_original_idx.append((idx1, idx2))
-                        selected_keyframe_idxs.append(idx2)
-                        break
-                elif is_last_frame:
-                    print("Last frame, adding")
-                    selected_keyframe_idxs.append(idx1)
-                    matching_pairs_original_idx.append((idx1, idx2))
-                    selected_keyframe_idxs.append(idx2)
-                    break
-                else:
-                    print(f"Step back was good, adding idx1={idx1}")
-                    selected_keyframe_idxs.append(idx1)
-                    we_stepped_back = False
-                continue
-            if (len(idxs) <= max_matches) and (len(idxs) >= min_matches):
-                print("Adding keyframe")
-                selected_keyframe_idxs.append(idx2)
-                selected_keyframe_idxs.append(idx1)
-                matching_pairs_original_idx.append((idx1, idx2))
-                idx1 = idx2
-                key1, lafs_img1, descriptors_img1, hw1 = key2, lafs_img2, descriptors_img2, hw2
-            if len(idxs) < min_matches:  # try going back
-                print("Too few matches, going back")
-                idx1 = idx2 - 1
-                we_stepped_back = True
-                if (idx1 <= 0):
-                    done = True
-                elif (idx1 in selected_keyframe_idxs):
-                    print(f"We cannot match {idx2}, skipping it")
-                    idx2 += 1
-                else:
-                    fname1 = keyframes_single_dir[idx1]
-                    key1 = fname1.split('/')[-1]
-                    lafs_img1 = torch.from_numpy(f_laf[key1][...]).to(device)
-                    descriptors_img1 = torch.from_numpy(f_desc[key1][...]).to(device)
-                    img1 = cv2.imread(fname1)
-                    hw1 = img1.shape[:2]
-        matching_pairs_new_idxs = []
-        selected_keyframe_idxs = sorted(list(set(selected_keyframe_idxs)))
-        print(f'{selected_keyframe_idxs=}')
-        print(f'{matching_pairs_original_idx=}')
-
-        for idx1, idx2 in matching_pairs_original_idx:
-            matching_pairs_new_idxs.append((selected_keyframe_idxs.index(idx1), selected_keyframe_idxs.index(idx2)))
-        keyframes = [keyframes_single_dir[i] for i in selected_keyframe_idxs]
-        keysegs = [segmentations[i] for i in selected_keyframe_idxs]
-        return keyframes, keysegs, matching_pairs_new_idxs
 
     def detect_sift(self, image: torch.Tensor, segmentation: Optional[torch.Tensor] = None):
 
