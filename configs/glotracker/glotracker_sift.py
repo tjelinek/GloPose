@@ -6,6 +6,6 @@ def get_config() -> TrackerConfig:
 
     cfg.optimize_shape = False
 
-    cfg.matcher = 'SIFT'
+    cfg.frame_filter = 'SIFT'
 
     return cfg

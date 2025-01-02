@@ -152,9 +152,8 @@ class TrackerConfig:
     flow_reliability_threshold: float = 0.5
     min_number_of_reliable_matches: int = 0
 
-    frame_filter_when_lost_algorithm = None
     mapper: str = 'pycolmap'
-    matcher: str = 'RoMa'
+    frame_filter: str = 'SIFT'
 
     # SIFT options
     resize_to: Tuple[int, int] = (800, 600)

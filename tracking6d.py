@@ -11,7 +11,7 @@ from data_providers.flow_wrappers import RoMaFlowProvider
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
-from pose.frame_filter import FrameFilter
+from pose.frame_filter import FrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
 from utils.image_utils import get_shape
@@ -105,8 +105,11 @@ class Tracking6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
                                                                images_paths)
 
-        self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
-                                        self.flow_provider)
+        if self.config.frame_filter == 'RoMa':
+            self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
+                                            self.flow_provider)
+        elif self.config.frame_filter == 'SIFT':
+            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_database, self.image_shape)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.keyframe_database, self.flow_provider)
@@ -159,14 +162,14 @@ class Tracking6D:
 
         time.sleep(1)
         print(matching_pairs)
-        if self.config.matcher == 'RoMa':
+        if self.config.frame_filter == 'RoMa':
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                             matching_pairs)
-        elif self.config.matcher == 'SIFT':
+        elif self.config.frame_filter == 'SIFT':
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
                                                                                  matching_pairs)
         else:
-            raise ValueError(f'Unknown matcher {self.config.matcher}')
+            raise ValueError(f'Unknown matcher {self.config.frame_filter}')
 
         reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
         self.write_gt_poses()

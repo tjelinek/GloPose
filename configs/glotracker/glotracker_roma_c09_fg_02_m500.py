@@ -6,7 +6,7 @@ def get_config() -> TrackerConfig:
 
     cfg.optimize_shape = False
 
-    cfg.matcher = 'RoMa'
+    cfg.frame_filter = 'RoMa'
 
     cfg.min_roma_certainty_threshold = 0.9
     cfg.flow_reliability_threshold = 0.2

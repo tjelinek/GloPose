@@ -6,6 +6,6 @@ def get_config() -> TrackerConfig:
 
     cfg.optimize_shape = False
 
-    cfg.matcher = 'RoMa'
+    cfg.frame_filter = 'RoMa'
 
     return cfg
