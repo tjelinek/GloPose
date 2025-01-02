@@ -58,7 +58,7 @@ def detect_sift(img_fnames: List[Path],
     return
 
 
-def match_features(img_fnames,
+def match_features(img_fnames: List[Path],
                    index_pairs,
                    feature_dir='.featureout',
                    device=torch.device('cpu'),
@@ -80,12 +80,12 @@ def match_features(img_fnames,
             for i, pair_idx in tqdm(enumerate(index_pairs)):
                 idx1, idx2 = pair_idx
                 fname1, fname2 = img_fnames[idx1], img_fnames[idx2]
-                key1, key2 = fname1.split('/')[-1], fname2.split('/')[-1]
+                key1, key2 = fname1.name, fname2.name
                 lafs1 = torch.from_numpy(f_laf[key1][...]).to(device)
                 lafs2 = torch.from_numpy(f_laf[key2][...]).to(device)
                 desc1 = torch.from_numpy(f_desc[key1][...]).to(device)
                 desc2 = torch.from_numpy(f_desc[key2][...]).to(device)
-                img1, img2 = cv2.imread(fname1), cv2.imread(fname2)
+                img1, img2 = cv2.imread(str(fname1)), cv2.imread(str(fname2))
                 hw1, hw2 = img1.shape[:2], img2.shape[:2]
                 dists, idxs = matcher(desc1, desc2,
                                       lafs1, lafs2,  # Adalam takes into account also geometric information
