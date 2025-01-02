@@ -102,6 +102,9 @@ class CrossFrameData:
     camera_scale_per_axis_gt: torch.Tensor = None
     camera_scale_estimated: float = None
 
+    # SIFT
+    num_matches: int = None
+
     def __setattr__(self, name, value):
         if isinstance(value, torch.Tensor):
             value = value.cpu()  # Move the tensor to CPU
