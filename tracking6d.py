@@ -126,13 +126,10 @@ class Tracking6D:
             start = time.time()
 
             if frame_i == 0:
-                initial_pose = Se3.identity(1)
-
-                self.keyframe_database.insert_new_reference(new_frame_observation, initial_pose, frame_i)
+                self.keyframe_database.insert_new_reference(new_frame_observation, frame_i)
 
             else:
-                if self.config.matcher == 'RoMa':
-                    self.frame_filter.filter_frames(frame_i)
+                self.frame_filter.filter_frames(frame_i)
 
                 self.results_writer.write_results(frame_i=frame_i)
 

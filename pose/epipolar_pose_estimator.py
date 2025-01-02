@@ -216,7 +216,7 @@ class EpipolarPoseEstimator:
             pose: Se3 = Se3(Quaternion.from_axis_angle(frame_data.gt_rot_axis_angle[None]),
                             frame_data.gt_translation[None])
             cam_frame_data = self.data_graph.get_frame_data(new_node_frame_idx)
-            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, pose, new_node_frame_idx)
+            self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, new_node_frame_idx)
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
 
