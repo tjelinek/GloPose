@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -14,92 +14,89 @@ from data_structures.data_graph import DataGraph
 from utils.sift import sift_to_rootsift
 
 
-class RoMaFlowProviderDirect:
+class SIFTMatchingProvider:
 
-    def __init__(self, data_graph: DataGraph, device):
+    def __init__(self, data_graph: DataGraph, num_sift_features: int, device: str):
         self.device = device
         self.data_graph = data_graph
 
-    def detect_sift_features_datagraph(self, source_image_idx, num_features: int, device: Optional[str] = 'cpu'):
+        self.num_sift_features: int = num_sift_features
+
+    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu'):
 
         frame_data = self.data_graph.get_frame_data(source_image_idx)
 
         frame1_image = frame_data.frame_observation.observed_image.squeeze()
         frame1_segmentation = frame_data.frame_observation.observed_segmentation.squeeze()
 
-        return detect_sift_features(frame1_image, num_features, frame1_segmentation, device)
+        return detect_sift_features(frame1_image, self.num_sift_features, frame1_segmentation, device)
 
-    def add_flows_into_datagraph(self, flow_source_frame, flow_target_frame):
-        edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
-        if edge_data.flow_warp is None or edge_data.flow_certainty is None:
-            warp, certainty = self.detect_sift_features_datagraph(flow_source_frame, flow_target_frame, sample=10000)
-        else:
-            warp, certainty = edge_data.flow_warp, edge_data.flow_certainty
-            # TODO handle sampling when reading from datagraph
+    def match_images_sift(self, source_image_idx: int, target_image_idx: int, device: Optional[str] = 'cpu'):
 
-        edge_data.flow_warp = warp
-        edge_data.flow_certainty = certainty
+        frame1_data = self.data_graph.get_frame_data(source_image_idx)
+        frame2_data = self.data_graph.get_frame_data(target_image_idx)
+
+        image1 = frame1_data.frame_observation.observed_image.squeeze()
+
+        image2 = frame2_data.frame_observation.observed_image.squeeze()
+
+        lafs1, keypoints1, descriptors1 = self.detect_sift_features(source_image_idx, device)
+        lafs2, keypoints2, descriptors2 = self.detect_sift_features(target_image_idx, device)
+
+        hw1 = tuple(image1.shape[-2:])
+        hw2 = tuple(image2.shape[-2:])
+
+        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
+
+        return dists, idxs
 
 
-class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
+class PrecomputedSIFTMatchingProvider(SIFTMatchingProvider):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, image_files_paths: List,
-                 allow_missing: bool = True):
-        super().__init__(data_graph, device)
+    def __init__(self, data_graph: DataGraph, num_sift_features: int, cache_dir: Path, allow_missing: bool = True, device: Optional[str] = 'cpu'):
+        super().__init__(data_graph, num_sift_features, device)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
         self.saved_flow_paths = cache_dir
-        self.warps_path = cache_dir / 'warps'
-        self.certainties_path = cache_dir / 'certainties'
 
-        self.warps_path.mkdir(exist_ok=True, parents=True)
-        self.certainties_path.mkdir(exist_ok=True, parents=True)
+        # Features
+        self.lafs_path = cache_dir / 'sift_lafs'
+        self.keypoints_path = cache_dir / 'sift_keypoints'
+        self.descriptors_path = cache_dir / 'sift_descriptors'
 
-        self.image_names = [Path(p) for p in image_files_paths]
+        self.lafs_path.mkdir(exist_ok=True, parents=True)
+        self.keypoints_path.mkdir(exist_ok=True, parents=True)
+        self.descriptors_path.mkdir(exist_ok=True, parents=True)
+
+        # Matching
+        self.matching_dists_paths = cache_dir / 'sift_matching_dists'
+        self.matching_indices_paths = cache_dir / 'sift_matching_indices'
+
+        self.matching_dists_paths.mkdir(exist_ok=True, parents=True)
+        self.matching_indices_paths.mkdir(exist_ok=True, parents=True)
 
         self.allow_missing: bool = allow_missing
 
-    def detect_sift_features_datagraph(self, source_image_idx: int, target_image_idx: int, sample=None):
+    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu'):
 
-        assert source_image_idx < len(self.image_names)
-        assert target_image_idx < len(self.image_names)
+        image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
 
-        src_image_name = Path(self.image_names[source_image_idx])
-        target_image_name = Path(self.image_names[target_image_idx])
-        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+        lafs_path = self.lafs_path / f'{image_name.stem}.pt'
+        keypoints_path = self.keypoints_path / f'{image_name.stem}.pt'
+        descriptors_path = self.descriptors_path / f'{image_name.stem}.pt'
 
-        warp_filename = self.warps_path / saved_filename
-        certainty_filename = self.certainties_path / saved_filename
-
-        if (not warp_filename.exists() or not certainty_filename.exists()) and self.allow_missing:
-            warp, certainty = super().detect_sift_features_datagraph(source_image_idx, target_image_idx)
-
-            torch.save(warp, warp_filename)
-            torch.save(certainty, certainty_filename)
+        if lafs_path.exists() and keypoints_path.exists() and descriptors_path.exists():
+            lafs = torch.load(lafs_path).to(device)
+            keypoints = torch.load(keypoints_path)
+            descriptors = torch.load(descriptors_path)
         else:
-            warp = torch.load(warp_filename).to(self.device)
-            certainty = torch.load(certainty_filename).to(self.device)
+            lafs, keypoints, descriptors = super().detect_sift_features(source_image_idx, device)
 
-        if sample:
-            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+            torch.save(lafs, lafs_path)
+            torch.save(keypoints, keypoints_path)
+            torch.save(descriptors, descriptors_path)
 
-        return warp, certainty
-
-    def cached_flow_from_filenames(self, src_image_name: Union[str, Path], target_image_name: Union[str, Path]):
-
-        src_image_name = Path(src_image_name)
-        target_image_name = Path(target_image_name)
-        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
-
-        warp_filename = self.warps_path / saved_filename
-        certainty_filename = self.certainties_path / saved_filename
-
-        if warp_filename.exists() and certainty_filename.exists():
-            warp = torch.load(warp_filename).to(self.device)
-            certainty = torch.load(certainty_filename).to(self.device)
-            return warp, certainty
-
-        return None
+        return lafs, keypoints, descriptors
 
 
 def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: Optional[torch.Tensor] = None,

@@ -1,20 +1,15 @@
 from time import time
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
-import cv2
-import numpy as np
 import torch
-from kornia.feature import get_laf_center, match_adalam
 from kornia.image import ImageSize
-from kornia_moons.feature import laf_from_opencv_SIFT_kpts
-from torchvision.transforms.functional import to_pil_image
 
 from data_providers.flow_provider import RoMaFlowProviderDirect
+from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from data_structures.pose_icosphere import PoseIcosphere
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
-from utils.sift import sift_to_rootsift
 
 
 class BaseFrameFilter:
@@ -169,12 +164,14 @@ class FrameFilter(BaseFrameFilter):
         edge_data.is_match_reliable = reliability > self.config.flow_reliability_threshold
 
 
-class FrameFilterSift(FrameFilter):
+class FrameFilterSift(BaseFrameFilter):
 
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageSize,
-                 flow_provider: RoMaFlowProviderDirect):
+                 sift_matcher: SIFTMatchingProvider):
 
-        super().__init__(config, data_graph, pose_icosphere, image_shape, flow_provider)
+        super().__init__(config, data_graph, pose_icosphere, image_shape)
+
+        self.sift_matcher: SIFTMatchingProvider = sift_matcher
 
     @torch.no_grad()
     def filter_frames(self, current_frame_idx: int):
@@ -186,13 +183,10 @@ class FrameFilterSift(FrameFilter):
 
         keyframe_idx = preceding_frame_node.long_jump_source
 
-        self.add_new_flow(keyframe_idx, preceding_frame_idx)
-
         print("Detection features")
 
         reliable_sources = set()
 
-        device = self.config.device
         selected_keyframe_idxs = self.pose_icosphere.get_keyframe_indices()
 
         more_than_enough_matches = self.config.sift_filter_good_to_add_matches
@@ -242,8 +236,6 @@ class FrameFilterSift(FrameFilter):
 
         flow_frames_idxs = (keyframe_idx, current_frame_idx)
 
-        self.add_new_flow(keyframe_idx, current_frame_idx)
-
         long_jump_source, long_jump_target = flow_frames_idxs
 
         duration = time() - start_time
@@ -253,59 +245,19 @@ class FrameFilterSift(FrameFilter):
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_sources)
         datagraph_node.long_jump_source = keyframe_idx
 
-    def detect_sift(self, image: torch.Tensor, segmentation: Optional[torch.Tensor] = None):
+    def compute_sift_reliability(self, frame_idx1: int, frame_idx2: int):
 
         device = self.config.device
 
-        sift = cv2.SIFT_create(self.config.sift_filter_num_feats, edgeThreshold=-1000, contrastThreshold=-1000)
+        dists, idxs = self.sift_matcher.match_images_sift(frame_idx1, frame_idx2, device)
 
-        if segmentation is not None:
-            segmentation_np = np.array(to_pil_image(segmentation))
-        else:
-            segmentation_np = None
+        num_matches = len(idxs)
 
-        image_rgb = np.array(to_pil_image(image))
-        image_cv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-
-        keypoints, descriptors = sift.detectAndCompute(image_cv, segmentation_np)
-        lafs = laf_from_opencv_SIFT_kpts(keypoints)
-        descriptors = sift_to_rootsift(torch.from_numpy(descriptors)).to(device)
-        desc_dim = descriptors.shape[-1]
-        keypoints = get_laf_center(lafs).reshape(-1, 2).to(device)
-        descriptors = descriptors.reshape(-1, desc_dim).to(device)
-
-        return lafs, keypoints, descriptors
-
-    def compute_sift_reliability(self, frame_idx1: int, frame_idx2: int):
-
-        frame1_data = self.data_graph.get_frame_data(frame_idx1)
-        frame2_data = self.data_graph.get_frame_data(frame_idx2)
         if not self.data_graph.G.has_edge(frame_idx1, frame_idx2):
             self.data_graph.add_new_arc(frame_idx1, frame_idx2)
         edge_data = self.data_graph.get_edge_observations(frame_idx1, frame_idx2)
-
-        frame1_image = frame1_data.frame_observation.observed_image.squeeze()
-        frame1_segmentation = frame2_data.frame_observation.observed_segmentation.squeeze()
-
-        frame2_image = frame2_data.frame_observation.observed_image.squeeze()
-        frame2_segmentation = frame2_data.frame_observation.observed_segmentation.squeeze()
-
-        hw1 = tuple(frame1_image.shape[-2:])
-        hw2 = tuple(frame2_image.shape[-2:])
-
-        lafs_img1, keypoints_img1, descriptors_img1 = self.detect_sift(frame1_image, frame1_segmentation)
-        lafs_img2, keypoints_img2, descriptors_img2 = self.detect_sift(frame2_image, frame2_segmentation)
-
-        with torch.inference_mode():
-            dists, idxs = match_adalam(descriptors_img1, descriptors_img2,
-                                       lafs_img1, lafs_img2,  # Adalam takes into account also geometric information
-                                       hw1=hw1, hw2=hw2)
-
-        num_matches = len(idxs)
 
         edge_data.num_matches = num_matches
         edge_data.is_match_reliable = num_matches >= self.config.sift_filter_min_matches
 
         return num_matches
-
-

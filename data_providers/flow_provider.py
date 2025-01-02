@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 import torch
 import torchvision
@@ -49,8 +49,7 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, image_files_paths: List,
-                 allow_missing: bool = True):
+    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True):
         super().__init__(data_graph, device)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
@@ -61,17 +60,12 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         self.warps_path.mkdir(exist_ok=True, parents=True)
         self.certainties_path.mkdir(exist_ok=True, parents=True)
 
-        self.image_names = [Path(p) for p in image_files_paths]
-
         self.allow_missing: bool = allow_missing
 
     def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
 
-        assert source_image_idx < len(self.image_names)
-        assert target_image_idx < len(self.image_names)
-
-        src_image_name = Path(self.image_names[source_image_idx])
-        target_image_name = Path(self.image_names[target_image_idx])
+        src_image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
+        target_image_name = self.data_graph.get_frame_data(target_image_idx).image_filename
         saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
 
         warp_filename = self.warps_path / saved_filename

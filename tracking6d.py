@@ -9,6 +9,7 @@ from kornia.image import ImageSize
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.flow_wrappers import RoMaFlowProvider
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
+from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.pose_icosphere import PoseIcosphere
 from pose.frame_filter import FrameFilter, FrameFilterSift
@@ -109,7 +110,10 @@ class Tracking6D:
             self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
                                             self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
-            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_database, self.image_shape)
+            sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph, self.config.sift_filter_num_feats,
+                                                           self.cache_folder, device=self.config.device)
+            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_database, self.image_shape,
+                                                sift_matcher)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
                                             self.keyframe_database, self.flow_provider)
@@ -300,7 +304,7 @@ class Tracking6D:
         frame_node.gt_pinhole_K = camera_intrinsics
 
         if self.images_paths is not None:
-            frame_node.image_filename = self.images_paths[frame_i].name
+            frame_node.image_filename = Path(self.images_paths[frame_i].name)
 
         if self.segmentation_paths is not None:
-            frame_node.segmentation_filename = self.segmentation_paths[frame_i].name
+            frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i].name)
