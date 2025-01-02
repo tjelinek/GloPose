@@ -2,9 +2,9 @@ from time import time
 from typing import List, Tuple, Optional
 
 import cv2
+import numpy as np
 import torch
 from kornia.feature import get_laf_center, match_adalam
-from kornia.geometry import Se3
 from kornia.image import ImageSize
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
@@ -64,8 +64,7 @@ class FrameFilter(BaseFrameFilter):
                     source = best_source
                     cam_frame_data = self.data_graph.get_frame_data(best_source)
 
-                    mock_pose = Se3.identity(1, device=self.config.device)
-                    self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, mock_pose, best_source)
+                    self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, best_source)
             else:
                 source = best_source
         else:
@@ -178,95 +177,81 @@ class FrameFilterSift(FrameFilter):
         super().__init__(config, data_graph, pose_icosphere, image_shape, flow_provider)
 
     @torch.no_grad()
-    def filter_frames(self, frame_i: int):
+    def filter_frames(self, current_frame_idx: int):
 
-        preceding_frame_idx = frame_i - 1
+        start_time = time()
+
+        preceding_frame_idx = current_frame_idx - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
-        preceding_source = preceding_frame_node.long_jump_source
 
-        self.add_new_flow(preceding_source, preceding_frame_idx)
+        keyframe_idx = preceding_frame_node.long_jump_source
+
+        self.add_new_flow(keyframe_idx, preceding_frame_idx)
 
         print("Detection features")
-        keyframes_single_dir = []
+
+        reliable_sources = set()
 
         device = self.config.device
-        selected_keyframe_idxs = [0]
-        matching_pairs_original_idx = []
-        print("Now matching to add keyframes")
-        max_matches = self.config.sift_filter_good_to_add_matches
+        selected_keyframe_idxs = self.pose_icosphere.get_keyframe_indices()
+
+        more_than_enough_matches = self.config.sift_filter_good_to_add_matches
         min_matches = self.config.sift_filter_min_matches
 
-        idx1 = selected_keyframe_idxs[-1]
-
-        done = False
-        idx2 = idx1
+        reliable_keyframe_found = False
         we_stepped_back = False
 
-        while not done:
-            idx2 = idx2 + 1
-            if idx2 >= frame_i:
-                break
+        while not reliable_keyframe_found:
 
-            num_matches = self.compute_sift_reliability(idx1, idx2)
+            num_matches = self.compute_sift_reliability(keyframe_idx, current_frame_idx)
 
-            if num_matches >= max_matches:
+            if num_matches >= more_than_enough_matches:
                 if we_stepped_back:
-                    print(f"Step back was good, adding idx1={idx1}")
-                    selected_keyframe_idxs.append(idx1)
+                    print(f"Step back was good, adding keyframe_idx={keyframe_idx}")
+                    selected_keyframe_idxs.append(keyframe_idx)
+
+                    if not self.pose_icosphere.contains_node(keyframe_idx):
+                        keyframe_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
+                        self.pose_icosphere.insert_new_reference(keyframe_observation, keyframe_idx)
                     we_stepped_back = False
-                continue
-            if (num_matches <= max_matches) and (num_matches >= min_matches):
+
+                reliable_keyframe_found = True
+
+            if (num_matches <= more_than_enough_matches) and (num_matches >= min_matches):
                 print("Adding keyframe")
-                selected_keyframe_idxs.append(idx2)
-                selected_keyframe_idxs.append(idx1)
-                matching_pairs_original_idx.append((idx1, idx2))
-                idx1 = idx2
 
-                frame1_observation = self.data_graph.get_frame_data(idx1).frame_observation
-                frame2_observation = self.data_graph.get_frame_data(idx2).frame_observation
+                frame1_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
+                frame2_observation = self.data_graph.get_frame_data(current_frame_idx).frame_observation
 
-                if not self.pose_icosphere.contains_node(idx1):
-                    self.pose_icosphere.insert_new_reference(frame1_observation, Se3.identity(1), idx1)
-                if not self.pose_icosphere.contains_node(idx2):
-                    self.pose_icosphere.insert_new_reference(frame2_observation, Se3.identity(1), idx2)
+                if not self.pose_icosphere.contains_node(keyframe_idx):
+                    self.pose_icosphere.insert_new_reference(frame1_observation, keyframe_idx)
+                if not self.pose_icosphere.contains_node(current_frame_idx):
+                    self.pose_icosphere.insert_new_reference(frame2_observation, current_frame_idx)
+
+                reliable_keyframe_found = True
 
             if num_matches < min_matches:  # try going back
                 print("Too few matches, going back")
-                idx1 = max(0, idx2 - 1)
+                keyframe_idx = max(0, current_frame_idx - 1)
                 we_stepped_back = True
-                if (idx1 <= 0):
-                    done = True
-                elif (idx1 in selected_keyframe_idxs):
-                    print(f"We cannot match {idx2}, skipping it")
-                    idx2 += 1
+                if (keyframe_idx <= 0):
+                    reliable_keyframe_found = True
+                elif (keyframe_idx in selected_keyframe_idxs):
+                    print(f"We cannot match {current_frame_idx}, skipping it")
+                    return
 
-        edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
-        if edge_data.is_match_reliable and frame_i > 1:
-            source = preceding_source
-            reliable_flows = {source}
-        elif frame_i > 1:
-            pass
-        else:
-            source = 0
-            reliable_flows = set()
-        flow_arc_long_jump = (source, frame_i)
+        flow_frames_idxs = (keyframe_idx, current_frame_idx)
 
-        self.add_new_flow(source, frame_i)
+        self.add_new_flow(keyframe_idx, current_frame_idx)
 
-        long_jump_source, long_jump_target = flow_arc_long_jump
+        long_jump_source, long_jump_target = flow_frames_idxs
 
         duration = time() - start_time
-        datagraph_node = self.data_graph.get_frame_data(frame_i)
+        datagraph_node = self.data_graph.get_frame_data(current_frame_idx)
         datagraph_node.pose_estimation_time = duration
 
-        datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
-
-        flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
-        datagraph_long_edge.reliability_score = flow_reliability
-        print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
-
-        datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
-        datagraph_node.long_jump_source = source
+        datagraph_node.reliable_sources |= ({long_jump_source} | reliable_sources)
+        datagraph_node.long_jump_source = keyframe_idx
 
     def detect_sift(self, image: torch.Tensor, segmentation: Optional[torch.Tensor] = None):
 
@@ -275,17 +260,19 @@ class FrameFilterSift(FrameFilter):
         sift = cv2.SIFT_create(self.config.sift_filter_num_feats, edgeThreshold=-1000, contrastThreshold=-1000)
 
         if segmentation is not None:
-            segmentation_np = to_pil_image(image)
+            segmentation_np = np.array(to_pil_image(segmentation))
         else:
             segmentation_np = None
 
-        image_np = to_pil_image(image)
-        keypoints, descriptors = sift.detectAndCompute(image_np, segmentation_np)
+        image_rgb = np.array(to_pil_image(image))
+        image_cv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+        keypoints, descriptors = sift.detectAndCompute(image_cv, segmentation_np)
         lafs = laf_from_opencv_SIFT_kpts(keypoints)
         descriptors = sift_to_rootsift(torch.from_numpy(descriptors)).to(device)
         desc_dim = descriptors.shape[-1]
-        keypoints = get_laf_center(lafs).reshape(-1, 2).detach().cpu().numpy()
-        descriptors = descriptors.reshape(-1, desc_dim).detach().cpu().numpy()
+        keypoints = get_laf_center(lafs).reshape(-1, 2).to(device)
+        descriptors = descriptors.reshape(-1, desc_dim).to(device)
 
         return lafs, keypoints, descriptors
 
@@ -293,6 +280,8 @@ class FrameFilterSift(FrameFilter):
 
         frame1_data = self.data_graph.get_frame_data(frame_idx1)
         frame2_data = self.data_graph.get_frame_data(frame_idx2)
+        if not self.data_graph.G.has_edge(frame_idx1, frame_idx2):
+            self.data_graph.add_new_arc(frame_idx1, frame_idx2)
         edge_data = self.data_graph.get_edge_observations(frame_idx1, frame_idx2)
 
         frame1_image = frame1_data.frame_observation.observed_image.squeeze()
@@ -315,6 +304,7 @@ class FrameFilterSift(FrameFilter):
         num_matches = len(idxs)
 
         edge_data.num_matches = num_matches
+        edge_data.is_match_reliable = num_matches >= self.config.sift_filter_min_matches
 
         return num_matches
 
