@@ -1,9 +1,8 @@
-from typing import List, Tuple, Callable, Optional
+from typing import List, Tuple
 
 from dataclasses import dataclass
 
-import torch
-from kornia.geometry import Quaternion, Se3
+from kornia.geometry import Quaternion
 
 from utils.math_utils import quaternion_minimal_angular_difference
 from data_structures.keyframe_buffer import FrameObservation
@@ -11,8 +10,8 @@ from data_structures.keyframe_buffer import FrameObservation
 
 @dataclass
 class IcosphereNode:
-    quaternion: Quaternion
-    translation: torch.Tensor
+    # quaternion: Quaternion
+    # translation: torch.Tensor
     observation: FrameObservation
     keyframe_idx_observed: int
 
@@ -22,12 +21,11 @@ class PoseIcosphere:
     def __init__(self):
         self.reference_poses: List[IcosphereNode] = []
 
-    def insert_new_reference(self, template_observation: FrameObservation, pose: Se3, keyframe_idx_observed: int):
-        pose_quat_shape = pose.quaternion.q.shape
-        assert len(pose_quat_shape) == 2 and pose_quat_shape[1] == 4
+    def insert_new_reference(self, template_observation: FrameObservation, keyframe_idx_observed: int):
+        # pose_quat_shape = pose.quaternion.q.shape
+        # assert len(pose_quat_shape) == 2 and pose_quat_shape[1] == 4
 
-        node = IcosphereNode(quaternion=pose.quaternion, translation=pose.translation,
-                             observation=template_observation, keyframe_idx_observed=keyframe_idx_observed)
+        node = IcosphereNode(observation=template_observation, keyframe_idx_observed=keyframe_idx_observed)
 
         self.reference_poses.append(node)
 
@@ -45,3 +43,11 @@ class PoseIcosphere:
 
         closest_template = self.reference_poses[min_index]
         return closest_template, min_angle
+
+    def contains_node(self, frame_idx):
+
+        node_indices = [node.keyframe_idx_observed for node in self.reference_poses]
+        return frame_idx in node_indices
+
+    def get_keyframe_indices(self) -> List[int]:
+        return [node.keyframe_idx_observed for node in self.reference_poses]
