@@ -605,7 +605,10 @@ class WriteResults:
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
 
-                node_Se3 = Se3(icosphere_node.quaternion.to(dev), icosphere_node.translation.to(dev))
+                template_frame_data = self.data_graph.get_frame_data(icosphere_node.keyframe_idx_observed)
+                pose = Se3.identity(1, device=dev)
+                # node_Se3 = Se3(q, t)
+                node_Se3 = pose
                 node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
                 node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
 
