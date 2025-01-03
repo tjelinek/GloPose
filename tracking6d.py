@@ -53,7 +53,7 @@ class Tracking6D:
         self.pinhole_params: Optional[PinholeCamera] = None
 
         # Flow tracks
-        self.keyframe_database: Optional[PoseIcosphere] = PoseIcosphere()
+        self.keyframe_graph: Optional[KeyframeGraph] = KeyframeGraph()
 
         # Tracker
         self.tracker: Optional[BaseTracker] = None
