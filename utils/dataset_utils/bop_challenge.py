@@ -8,7 +8,7 @@ from PIL import Image
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_structures.keyframe_buffer import FrameObservation
-from data_structures.pose_icosphere import PoseIcosphere
+from data_structures.keyframe_graph import KeyframeGraph
 
 
 def bop_t_to_torch_tensor(json_t_value: list[float]) -> torch.Tensor:
@@ -32,7 +32,7 @@ def get_bop_image_tensor(rgb_path: Path) -> torch.Tensor:
     return rgb_image_tensor
 
 
-def perform_onboarding(sequence_path: Path) -> PoseIcosphere:
+def perform_onboarding(sequence_path: Path) -> KeyframeGraph:
     scene_gt_json_path = sequence_path / 'scene_gt.json'
     scene_cam_json_path = sequence_path / 'scene_camera.json'
     rgb_folder_path = sequence_path / 'rgb/'
@@ -47,7 +47,7 @@ def perform_onboarding(sequence_path: Path) -> PoseIcosphere:
     Se3_obj_to_cam = get_Se3_world_to_cam_from_bop_json(scene_gt_json_data)
     pinhole_params = get_pinhole_params(scene_cam_json_path)
 
-    pose_icosphere = PoseIcosphere(30)
+    pose_icosphere = KeyframeGraph(30)
 
     for json_item, rgb_path, segmentation_path in zip(scene_gt_json_data.items(), rgb_image_paths_sorted,
                                                       segmentation_paths_sorted):

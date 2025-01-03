@@ -25,7 +25,7 @@ from kornia.geometry.conversions import quaternion_to_axis_angle
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.image_utils import overlay_occlusion
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
-from data_structures.pose_icosphere import PoseIcosphere
+from data_structures.keyframe_graph import KeyframeGraph
 from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
 from data_structures.data_graph import DataGraph
@@ -38,7 +38,7 @@ from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, 
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 pose_icosphere: PoseIcosphere, images_paths, segmentation_paths, Se3_world_to_cam: Se3):
+                 pose_icosphere: KeyframeGraph, images_paths, segmentation_paths, Se3_world_to_cam: Se3):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -48,7 +48,7 @@ class WriteResults:
 
         self.data_graph: DataGraph = data_graph
 
-        self.pose_icosphere: PoseIcosphere = pose_icosphere
+        self.keyframe_graph: KeyframeGraph = pose_icosphere
 
         self.logged_flow_tracks_inits: List = list()
 
@@ -590,14 +590,14 @@ class WriteResults:
                                        colors=[[255, 255, 0]],
                                        radii=[0.025 * strips_radii_factor]))
 
-        for i, icosphere_node in enumerate(self.pose_icosphere.reference_poses):
+        for i, keyframe_node in enumerate(self.keyframe_graph.reference_poses):
 
-            if icosphere_node.keyframe_idx_observed not in self.logged_flow_tracks_inits:
+            if keyframe_node.keyframe_idx_observed not in self.logged_flow_tracks_inits:
                 template_idx = len(self.logged_flow_tracks_inits)
 
-                template = icosphere_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
+                template = keyframe_node.observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
-                self.logged_flow_tracks_inits.append(icosphere_node.keyframe_idx_observed)
+                self.logged_flow_tracks_inits.append(keyframe_node.keyframe_idx_observed)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
                 rr.log(template_image_grid_annotation, rr.Image(template))
@@ -605,7 +605,7 @@ class WriteResults:
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
 
-                template_frame_data = self.data_graph.get_frame_data(icosphere_node.keyframe_idx_observed)
+                template_frame_data = self.data_graph.get_frame_data(keyframe_node.keyframe_idx_observed)
                 pose = Se3.identity(1, device=dev)
                 # node_Se3 = Se3(q, t)
                 node_Se3 = pose
@@ -617,7 +617,7 @@ class WriteResults:
                     rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
                                    rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
                 )
-                frame_data = self.data_graph.get_frame_data(icosphere_node.keyframe_idx_observed)
+                frame_data = self.data_graph.get_frame_data(keyframe_node.keyframe_idx_observed)
                 fx, fy, cx, cy = extract_intrinsics_from_tensor(frame_data.gt_pinhole_K)
 
                 rr.log(

@@ -7,11 +7,10 @@ from kornia.geometry import Quaternion, Se3, PinholeCamera
 from kornia.image import ImageSize
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
-from data_providers.flow_wrappers import RoMaFlowProvider
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
-from data_structures.pose_icosphere import PoseIcosphere
+from data_structures.keyframe_graph import KeyframeGraph
 from pose.frame_filter import FrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig

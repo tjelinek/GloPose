@@ -7,16 +7,17 @@ from kornia.image import ImageSize
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
-from data_structures.pose_icosphere import PoseIcosphere
+from data_structures.keyframe_graph import KeyframeGraph
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 
 
 class BaseFrameFilter:
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageSize):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph: KeyframeGraph,
+                 image_shape: ImageSize):
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
-        self.pose_icosphere: PoseIcosphere = pose_icosphere
+        self.keyframe_graph: KeyframeGraph = keyframe_graph
 
         self.image_width: int = int(image_shape.width)
         self.image_height: int = int(image_shape.height)
@@ -24,10 +25,10 @@ class BaseFrameFilter:
 
 class FrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageSize,
-                 flow_provider: RoMaFlowProviderDirect):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph: KeyframeGraph,
+                 image_shape: ImageSize, flow_provider: RoMaFlowProviderDirect):
 
-        super().__init__(config, data_graph, pose_icosphere, image_shape)
+        super().__init__(config, data_graph, keyframe_graph, image_shape)
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
@@ -59,7 +60,7 @@ class FrameFilter(BaseFrameFilter):
                     source = best_source
                     cam_frame_data = self.data_graph.get_frame_data(best_source)
 
-                    self.pose_icosphere.insert_new_reference(cam_frame_data.frame_observation, best_source)
+                    self.keyframe_graph.insert_new_reference(cam_frame_data.frame_observation, best_source)
             else:
                 source = best_source
         else:
@@ -89,7 +90,7 @@ class FrameFilter(BaseFrameFilter):
         best_source_reliability: float = 0.
         reliable_flows = set()
 
-        for node in self.pose_icosphere.reference_poses:
+        for node in self.keyframe_graph.reference_poses:
             source_node_idx = node.keyframe_idx_observed
 
             self.add_new_flow(source_node_idx, frame_i)
@@ -166,10 +167,10 @@ class FrameFilter(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, pose_icosphere, image_shape: ImageSize,
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph, image_shape: ImageSize,
                  sift_matcher: SIFTMatchingProvider):
 
-        super().__init__(config, data_graph, pose_icosphere, image_shape)
+        super().__init__(config, data_graph, keyframe_graph, image_shape)
 
         self.sift_matcher: SIFTMatchingProvider = sift_matcher
 
@@ -187,7 +188,7 @@ class FrameFilterSift(BaseFrameFilter):
 
         reliable_sources = set()
 
-        selected_keyframe_idxs = self.pose_icosphere.get_keyframe_indices()
+        selected_keyframe_idxs = self.keyframe_graph.get_keyframe_indices()
 
         more_than_enough_matches = self.config.sift_filter_good_to_add_matches
         min_matches = self.config.sift_filter_min_matches
@@ -204,9 +205,9 @@ class FrameFilterSift(BaseFrameFilter):
                     print(f"Step back was good, adding keyframe_idx={keyframe_idx}")
                     selected_keyframe_idxs.append(keyframe_idx)
 
-                    if not self.pose_icosphere.contains_node(keyframe_idx):
+                    if not self.keyframe_graph.contains_node(keyframe_idx):
                         keyframe_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
-                        self.pose_icosphere.insert_new_reference(keyframe_observation, keyframe_idx)
+                        self.keyframe_graph.insert_new_reference(keyframe_observation, keyframe_idx)
                     we_stepped_back = False
 
                 reliable_keyframe_found = True
@@ -217,10 +218,10 @@ class FrameFilterSift(BaseFrameFilter):
                 frame1_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
                 frame2_observation = self.data_graph.get_frame_data(current_frame_idx).frame_observation
 
-                if not self.pose_icosphere.contains_node(keyframe_idx):
-                    self.pose_icosphere.insert_new_reference(frame1_observation, keyframe_idx)
-                if not self.pose_icosphere.contains_node(current_frame_idx):
-                    self.pose_icosphere.insert_new_reference(frame2_observation, current_frame_idx)
+                if not self.keyframe_graph.contains_node(keyframe_idx):
+                    self.keyframe_graph.insert_new_reference(frame1_observation, keyframe_idx)
+                if not self.keyframe_graph.contains_node(current_frame_idx):
+                    self.keyframe_graph.insert_new_reference(frame2_observation, current_frame_idx)
 
                 reliable_keyframe_found = True
 

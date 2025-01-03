@@ -10,7 +10,7 @@ from utils.math_utils import Se3_obj_from_epipolar_Se3_cam, quaternion_minimal_a
     Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
-from data_structures.pose_icosphere import PoseIcosphere
+from data_structures.keyframe_graph import KeyframeGraph
 from flow import get_correct_correspondence_mask_world_system, source_to_target_coords_world_coord_system
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, BaseFlowObservation
 from models.encoder import Encoder
@@ -33,7 +33,7 @@ class EpipolarPoseEstimator:
         self.rendering: RenderingKaolin = rendering
         self.encoder: Encoder = encoder
         self.gt_encoder: Encoder = gt_encoder
-        self.pose_icosphere: PoseIcosphere = pose_icosphere
+        self.pose_icosphere: KeyframeGraph = pose_icosphere
 
         self.image_width: int = int(camera.width.item())
         self.image_height: int = int(camera.height.item())
