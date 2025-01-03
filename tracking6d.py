@@ -90,7 +90,7 @@ class Tracking6D:
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, data_graph=self.data_graph,
-                                           pose_icosphere=self.keyframe_database, images_paths=self.images_paths,
+                                           pose_icosphere=self.keyframe_graph, images_paths=self.images_paths,
                                            segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.world_to_cam)
 
@@ -99,43 +99,22 @@ class Tracking6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder)
 
         if self.config.frame_filter == 'RoMa':
-            self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
+            self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_graph, self.image_shape,
                                             self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
             sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph, self.config.sift_filter_num_feats,
                                                            self.cache_folder, device=self.config.device)
-            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_database, self.image_shape,
+            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_graph, self.image_shape,
                                                 sift_matcher)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.keyframe_database, self.flow_provider)
+                                            self.keyframe_graph, self.flow_provider)
 
-    def run_tracking(self):
-        # We canonically adapt the bboxes so that their keys are their order number, ordered from 1
+    def run_filtering_with_reconstruction(self):
 
-        frame_i = 0
+        self.filter_frames()
 
-        for frame_i in range(0, self.config.input_frames):
-
-            self.init_datagraph_frame(frame_i)
-
-            new_frame_observation = self.tracker.next(frame_i)
-            self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
-
-            start = time.time()
-
-            if frame_i == 0:
-                self.keyframe_database.insert_new_reference(new_frame_observation, frame_i)
-
-            else:
-                self.frame_filter.filter_frames(frame_i)
-
-                self.results_writer.write_results(frame_i=frame_i)
-
-            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
-                  self.config.input_frames)
-
-        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.keyframe_database.reference_poses]
+        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.keyframe_graph.reference_poses]
         images_paths = []
         segmentation_paths = []
         matching_pairs = []
@@ -158,6 +137,38 @@ class Tracking6D:
 
         time.sleep(1)
         print(matching_pairs)
+
+        reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
+
+        self.write_gt_poses()
+        self.results_writer.visualize_colmap_track(len(self.images_paths) - 1, reconstruction)
+
+        self.evaluate_reconstruction(reconstruction)
+
+        return
+
+    def filter_frames(self):
+        for frame_i in range(0, self.config.input_frames):
+
+            self.init_datagraph_frame(frame_i)
+
+            new_frame_observation = self.tracker.next(frame_i)
+            self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
+
+            start = time.time()
+
+            if frame_i == 0:
+                self.keyframe_graph.insert_new_reference(new_frame_observation, frame_i)
+
+            else:
+                self.frame_filter.filter_frames(frame_i)
+
+                self.results_writer.write_results(frame_i=frame_i)
+
+            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
+                  self.config.input_frames)
+
+    def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs):
         if self.config.frame_filter == 'RoMa':
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                             matching_pairs)
@@ -166,14 +177,9 @@ class Tracking6D:
                                                                                  matching_pairs)
         else:
             raise ValueError(f'Unknown matcher {self.config.frame_filter}')
-
         reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
-        self.write_gt_poses()
-        self.results_writer.visualize_colmap_track(frame_i, reconstruction)
 
-        self.evaluate_reconstruction(reconstruction)
-
-        return
+        return reconstruction
 
     def evaluate_reconstruction(self, reconstruction, csv_output_path: Optional[Path] = None):
         """
