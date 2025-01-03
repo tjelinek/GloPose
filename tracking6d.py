@@ -26,15 +26,9 @@ class Tracking6D:
                  gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
                  gt_Se3_world_to_cam: Se3 = None):
 
-        # Rendering and mesh related
-        self.gt_texture = gt_texture
-
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
-
-        # Optical flow
-        self.roma_flow_provider: Optional[RoMaFlowProvider] = None
 
         # Ground truth related
         assert torch.all(gt_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
@@ -82,11 +76,11 @@ class Tracking6D:
         self.data_graph = DataGraph()
 
         if self.config.generate_synthetic_observations_if_possible:
-            assert self.gt_translations is not None and self.gt_rotations is not None
+            assert gt_translations is not None and gt_rotations is not None
             assert gt_mesh is not None
-            assert self.gt_texture is not None
+            assert gt_texture is not None
 
-            self.tracker = SyntheticDataGeneratingTracker(self.config, self.gt_texture, gt_mesh,
+            self.tracker = SyntheticDataGeneratingTracker(self.config, gt_texture, gt_mesh,
                                                           self.gt_rotations, gt_translations)
 
         else:
@@ -103,8 +97,7 @@ class Tracking6D:
 
         self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder,
-                                                               images_paths)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder)
 
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_database, self.image_shape,
