@@ -28,7 +28,7 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, gt_textu
 
     sfb = Tracking6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, gt_rotations=gt_rotations,
                      gt_translations=gt_translations, images_paths=images_paths, segmentation_paths=segmentation_paths)
-    sfb.run_tracking()
+    sfb.run_filtering_with_reconstruction()
 
     del sfb
     gc.collect()

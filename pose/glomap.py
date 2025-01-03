@@ -21,7 +21,6 @@ from utils.colmap.h5_to_db import import_into_colmap
 from utils.sift import detect_sift, get_exhaustive_image_pairs, match_features
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
-from data_structures.keyframe_graph import KeyframeGraph
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 from utils.general import extract_intrinsics_from_tensor
@@ -30,8 +29,7 @@ from utils.general import extract_intrinsics_from_tensor
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageSize, keyframe_graph: KeyframeGraph,
-                 flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
+                 image_shape: ImageSize, flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
         self.write_folder = write_folder
         self.config = tracking_config
 
@@ -51,7 +49,6 @@ class GlomapWrapper:
         self.image_height = image_shape.height
 
         self.data_graph = data_graph
-        self.keyframe_graph = keyframe_graph
 
         self.colmap_db_path = self.colmap_base_path / 'database.db'
         self.colmap_output_path = self.colmap_base_path / 'output'

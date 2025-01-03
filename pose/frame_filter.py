@@ -1,34 +1,36 @@
 from time import time
 from typing import List, Tuple
 
+import networkx as nx
 import torch
 from kornia.image import ImageSize
 
 from data_providers.flow_provider import RoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
-from data_structures.keyframe_graph import KeyframeGraph
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 
 
 class BaseFrameFilter:
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph: KeyframeGraph,
-                 image_shape: ImageSize):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, image_shape: ImageSize):
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
-        self.keyframe_graph: KeyframeGraph = keyframe_graph
+        self.keyframe_graph: nx.DiGraph = nx.DiGraph()
 
         self.image_width: int = int(image_shape.width)
         self.image_height: int = int(image_shape.height)
 
+    def get_keyframe_graph(self) -> nx.DiGraph:
+        return self.keyframe_graph
 
-class FrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph: KeyframeGraph,
+class RoMaFrameFilter(BaseFrameFilter):
+
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph,
                  image_shape: ImageSize, flow_provider: RoMaFlowProviderDirect):
 
-        super().__init__(config, data_graph, keyframe_graph, image_shape)
+        super().__init__(config, data_graph, image_shape)
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
@@ -58,9 +60,8 @@ class FrameFilter(BaseFrameFilter):
                     source = preceding_source
                 else:
                     source = best_source
-                    cam_frame_data = self.data_graph.get_frame_data(best_source)
 
-                    self.keyframe_graph.insert_new_reference(cam_frame_data.frame_observation, best_source)
+                    self.keyframe_graph.add_node(best_source)
             else:
                 source = best_source
         else:
@@ -90,8 +91,7 @@ class FrameFilter(BaseFrameFilter):
         best_source_reliability: float = 0.
         reliable_flows = set()
 
-        for node in self.keyframe_graph.reference_poses:
-            source_node_idx = node.keyframe_idx_observed
+        for source_node_idx in self.keyframe_graph.nodes:
 
             self.add_new_flow(source_node_idx, frame_i)
             flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
@@ -167,10 +167,10 @@ class FrameFilter(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, keyframe_graph, image_shape: ImageSize,
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, image_shape: ImageSize,
                  sift_matcher: SIFTMatchingProvider):
 
-        super().__init__(config, data_graph, keyframe_graph, image_shape)
+        super().__init__(config, data_graph, image_shape)
 
         self.sift_matcher: SIFTMatchingProvider = sift_matcher
 
@@ -178,6 +178,10 @@ class FrameFilterSift(BaseFrameFilter):
     def filter_frames(self, current_frame_idx: int):
 
         start_time = time()
+
+        if current_frame_idx == 0:
+            self.keyframe_graph.add_node(current_frame_idx)
+            return
 
         preceding_frame_idx = current_frame_idx - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
@@ -188,7 +192,7 @@ class FrameFilterSift(BaseFrameFilter):
 
         reliable_sources = set()
 
-        selected_keyframe_idxs = self.keyframe_graph.get_keyframe_indices()
+        selected_keyframe_idxs = list(self.keyframe_graph.nodes())
 
         more_than_enough_matches = self.config.sift_filter_good_to_add_matches
         min_matches = self.config.sift_filter_min_matches
@@ -205,9 +209,9 @@ class FrameFilterSift(BaseFrameFilter):
                     print(f"Step back was good, adding keyframe_idx={keyframe_idx}")
                     selected_keyframe_idxs.append(keyframe_idx)
 
-                    if not self.keyframe_graph.contains_node(keyframe_idx):
-                        keyframe_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
-                        self.keyframe_graph.insert_new_reference(keyframe_observation, keyframe_idx)
+                    if not self.keyframe_graph.has_node(keyframe_idx):
+
+                        self.keyframe_graph.add_node(keyframe_idx)
                     we_stepped_back = False
 
                 reliable_keyframe_found = True
@@ -215,13 +219,10 @@ class FrameFilterSift(BaseFrameFilter):
             if (num_matches <= more_than_enough_matches) and (num_matches >= min_matches):
                 print("Adding keyframe")
 
-                frame1_observation = self.data_graph.get_frame_data(keyframe_idx).frame_observation
-                frame2_observation = self.data_graph.get_frame_data(current_frame_idx).frame_observation
-
-                if not self.keyframe_graph.contains_node(keyframe_idx):
-                    self.keyframe_graph.insert_new_reference(frame1_observation, keyframe_idx)
-                if not self.keyframe_graph.contains_node(current_frame_idx):
-                    self.keyframe_graph.insert_new_reference(frame2_observation, current_frame_idx)
+                if not self.keyframe_graph.has_node(keyframe_idx):
+                    self.keyframe_graph.add_node(keyframe_idx)
+                if not self.keyframe_graph.has_node(current_frame_idx):
+                    self.keyframe_graph.add_node(current_frame_idx)
 
                 reliable_keyframe_found = True
 
@@ -229,9 +230,9 @@ class FrameFilterSift(BaseFrameFilter):
                 print("Too few matches, going back")
                 keyframe_idx = max(0, current_frame_idx - 1)
                 we_stepped_back = True
-                if (keyframe_idx <= 0):
+                if keyframe_idx <= 0:
                     reliable_keyframe_found = True
-                elif (keyframe_idx in selected_keyframe_idxs):
+                elif keyframe_idx in selected_keyframe_idxs:
                     print(f"We cannot match {current_frame_idx}, skipping it")
                     return
 

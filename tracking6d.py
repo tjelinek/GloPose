@@ -10,8 +10,7 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
-from data_structures.keyframe_graph import KeyframeGraph
-from pose.frame_filter import FrameFilter, FrameFilterSift
+from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
 from utils.image_utils import get_shape
@@ -52,9 +51,6 @@ class Tracking6D:
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
 
-        # Flow tracks
-        self.keyframe_graph: Optional[KeyframeGraph] = KeyframeGraph()
-
         # Tracker
         self.tracker: Optional[BaseTracker] = None
 
@@ -90,7 +86,7 @@ class Tracking6D:
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, data_graph=self.data_graph,
-                                           pose_icosphere=self.keyframe_graph, images_paths=self.images_paths,
+                                           images_paths=self.images_paths,
                                            segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.world_to_cam)
 
@@ -99,41 +95,41 @@ class Tracking6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder)
 
         if self.config.frame_filter == 'RoMa':
-            self.frame_filter = FrameFilter(self.config, self.data_graph, self.keyframe_graph, self.image_shape,
-                                            self.flow_provider)
+            self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.image_shape,
+                                                self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
             sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph, self.config.sift_filter_num_feats,
                                                            self.cache_folder, device=self.config.device)
-            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.keyframe_graph, self.image_shape,
+            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.image_shape,
                                                 sift_matcher)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.keyframe_graph, self.flow_provider)
+                                            self.flow_provider)
 
     def run_filtering_with_reconstruction(self):
 
         self.filter_frames()
 
-        pose_icosphere_node_idxs = [p.keyframe_idx_observed for p in self.keyframe_graph.reference_poses]
+        keyframe_graph = self.frame_filter.get_keyframe_graph()
+
+        keyframe_nodes_idxs = list(sorted(keyframe_graph.nodes()))
+
         images_paths = []
         segmentation_paths = []
         matching_pairs = []
-        for node_idx in pose_icosphere_node_idxs:
+        for node_idx in keyframe_nodes_idxs:
             self.glomap_wrapper.dump_frame_node_for_glomap(node_idx)
             frame_data = self.data_graph.get_frame_data(node_idx)
 
             images_paths.append(frame_data.image_save_path)
             segmentation_paths.append(frame_data.segmentation_save_path)
 
-        for frame1_idx, frame2_idx in self.data_graph.G.edges:
-            arc_data = self.data_graph.get_edge_observations(frame1_idx, frame2_idx)
-            if (arc_data.is_match_reliable and frame1_idx in pose_icosphere_node_idxs and frame2_idx in pose_icosphere_node_idxs
-                    and frame1_idx != frame2_idx and (frame1_idx, frame2_idx) not in matching_pairs):
-                u_index = pose_icosphere_node_idxs.index(frame1_idx)
-                v_index = pose_icosphere_node_idxs.index(frame2_idx)
-                matching_pairs.append((u_index, v_index))
+        for frame1_idx, frame2_idx in keyframe_graph.edges:
+            u_index = keyframe_nodes_idxs.index(frame1_idx)
+            v_index = keyframe_nodes_idxs.index(frame2_idx)
+            matching_pairs.append((u_index, v_index))
 
-        assert len(pose_icosphere_node_idxs) > 2
+        assert len(keyframe_nodes_idxs) > 2
 
         time.sleep(1)
         print(matching_pairs)
@@ -157,13 +153,9 @@ class Tracking6D:
 
             start = time.time()
 
-            if frame_i == 0:
-                self.keyframe_graph.insert_new_reference(new_frame_observation, frame_i)
+            self.frame_filter.filter_frames(frame_i)
 
-            else:
-                self.frame_filter.filter_frames(frame_i)
-
-                self.results_writer.write_results(frame_i=frame_i)
+            self.results_writer.write_results(frame_i=frame_i)
 
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
