@@ -20,6 +20,45 @@ from utils.general import normalize_vertices
 from utils.image_utils import get_shape, get_intrinsics_from_exif
 
 
+class SyntheticDataProvider:
+
+    def __init__(self, tracker_config: TrackerConfig, gt_texture,
+                 gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
+                 gt_translations: torch.Tensor):
+        super().__init__(tracker_config.image_downsample)
+        self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
+        self.device = tracker_config.device
+
+        faces = gt_mesh.faces
+        self.gt_texture = gt_texture
+
+        self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, self.image_shape, gt_rotations,
+                                          gt_translations, tracker_config, self.device)
+
+        self.renderer = RenderingKaolin(tracker_config, faces, self.image_shape.width,
+                                        self.image_shape.height).to(self.device)
+
+    def next(self, frame_id) -> FrameObservation:
+        keyframes = [frame_id]
+        flow_frames = [frame_id]
+
+        encoder_result, _ = self.gt_encoder.frames_and_flow_frames_inference(keyframes, flow_frames)
+
+        rendering_result = self.renderer.forward(encoder_result.translations, encoder_result.quaternions,
+                                                 encoder_result.vertices, self.gt_encoder.face_features,
+                                                 self.gt_texture, encoder_result.lights)
+
+        image = rendering_result.rendered_image
+        segment = rendering_result.rendered_image_segmentation
+
+        image = image.detach().to(self.device)
+        segment = segment.detach().to(self.device)
+
+        frame_observation = FrameObservation(observed_image=image, observed_segmentation=segment)
+
+        return frame_observation
+
+
 class FrameProvider(ABC):
     def __init__(self, perc, max_width, device=torch.device('cuda')):
         self.downsample_factor = perc
