@@ -162,13 +162,21 @@ class PrecomputedTracker(BaseTracker):
         return frame_observation
 
 
-class PrecomputedTrackerSegmentAnythingAbstract(PrecomputedTracker):
+class PrecomputedTrackerSegmentAnything2(PrecomputedTracker):
 
     def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
                  segmentations_paths: List[Path]):
         super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
 
         self.predictor: Optional[SamPredictor] = None
+
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_hiera_large.pt")
+        model_cfg = Path("repositories/SAM2/sam2_configs/sam2_hiera_l.yaml")
+        model_cfg = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_configs/sam2_hiera_l.yaml")
+        self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
 
     def next_segmentation(self, frame_i, **kwargs):
         image = self.next_image(frame_i)
@@ -183,30 +191,3 @@ class PrecomputedTrackerSegmentAnythingAbstract(PrecomputedTracker):
             masks = torch.from_numpy(masks).cuda().to(torch.float32)
 
         return masks[None, None]
-
-
-class PrecomputedTrackerSegmentAnything(PrecomputedTrackerSegmentAnythingAbstract):
-
-    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
-                 segmentations_paths: List[Path]):
-        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
-
-        weights_path = "/mnt/personal/jelint19/weights/SegmentAnything/sam_vit_h_4b8939.pth"
-        sam = sam_model_registry["vit_h"](checkpoint=weights_path).cuda()
-        self.predictor = SamPredictor(sam)
-
-
-class PrecomputedTrackerSegmentAnything2(PrecomputedTrackerSegmentAnything):
-
-    def __init__(self, tracker_config: TrackerConfig, feature_extractor: Callable, images_paths: List[Path],
-                 segmentations_paths: List[Path]):
-        super().__init__(tracker_config, feature_extractor, images_paths, segmentations_paths)
-
-        from sam2.build_sam import build_sam2
-        from sam2.sam2_image_predictor import SAM2ImagePredictor
-
-        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_hiera_large.pt")
-        model_cfg = Path("repositories/SAM2/sam2_configs/sam2_hiera_l.yaml")
-        model_cfg = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_configs/sam2_hiera_l.yaml")
-        breakpoint()
-        self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
