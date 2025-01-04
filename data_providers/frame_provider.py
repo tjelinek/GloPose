@@ -23,10 +23,9 @@ from utils.general import normalize_vertices
 
 
 class BaseTracker(ABC):
-    def __init__(self, perc, max_width, feature_extractor=None, device=torch.device('cuda')):
+    def __init__(self, perc, max_width, device=torch.device('cuda')):
         self.downsample_factor = perc
         self.max_width = max_width
-        self.feature_extractor = feature_extractor if feature_extractor is not None else lambda x: x
         self.image_shape: Optional[ImageSize] = None
         self.device = device
 
@@ -109,11 +108,9 @@ class SyntheticDataGeneratingTracker(BaseTracker):
         segment = rendering_result.rendered_image_segmentation
 
         image = image.detach().to(self.device)
-        image_feat = self.feature_extractor(image).detach()
         segment = segment.detach().to(self.device)
 
-        frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
-                                             observed_segmentation=segment)
+        frame_observation = FrameObservation(observed_image=image, observed_segmentation=segment)
 
         return frame_observation
 
@@ -153,11 +150,9 @@ class PrecomputedTracker(BaseTracker):
 
     def next(self, frame_i, **kwargs):
         image = self.next_image(frame_i)
-        image_feat = self.feature_extractor(image).detach()
         segmentation = self.next_segmentation(frame_i)
 
-        frame_observation = FrameObservation(observed_image=image, observed_image_features=image_feat,
-                                             observed_segmentation=segmentation)
+        frame_observation = FrameObservation(observed_image=image, observed_segmentation=segmentation)
 
         return frame_observation
 
