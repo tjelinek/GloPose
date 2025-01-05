@@ -88,12 +88,7 @@ class TrackerConfig:
     MFT_backbone_cfg: str = 'MFT_RoMa_direct_cfg'
     # MFT_backbone_cfg = 'MFTIQ_SYNTHETIC_bs3_bce_200k_kubric_binary_cfg'
 
-    matching_target_to_backview: bool = False
-
     # Optical flow settings
-    add_flow_arcs_strategy: str = 'single-previous'  # One of 'all-previous', 'single-previous' and 'absolute'
-    # The 'all-previous' strategy for current frame i adds arcs (j, i) forall frames j < i, while 'single-previous' adds
-    # only arc (i - 1, i).N
     segmentation_mask_erosion_iters: int = 3
     # Pre-initialization method: One of 'levenberg-marquardt', 'gradient_descent', 'coordinate_descent',
     #                                   'essential_matrix_decomposition' or None
@@ -101,42 +96,8 @@ class TrackerConfig:
 
     # RANSAC settings
     ransac_inlier_filter: str = 'pygcransac'  # 'magsac++', 'ransac', '8point', 'pygcransac', 'pnp_ransac'
-    ransac_inlier_pose_method: str = 'zaragoza'  # 'zaragoza', '8point', 'numerical_E_optimization'
-    ransac_refine_E_numerically: bool = False
-
-    long_short_flow_chaining_pixel_level_verification: bool = False
-
-    ransac_outlier_threshold: float = 0.01
-    ransac_min_iters: int = 10000
-    ransac_confidence: float = 0.9999
-
-    ransac_use_gt_occlusions_and_segmentation: bool = False
-    ransac_dilate_occlusion: bool = False
-    ransac_erode_segmentation: bool = False
-
-    ransac_sample_points: bool = True
-    ransac_sampled_points_number: int = 100
-
-    ransac_feed_only_inlier_flow: bool = False
-    ransac_feed_only_inlier_flow_epe_threshold: float = 1.0
-
-    ransac_replace_mft_flow_with_gt_flow: bool = False
-    ransac_feed_gt_flow_percentage: float = 0.75
-    ransac_feed_gt_flow_add_gaussian_noise: bool = False
-    ransac_feed_gt_flow_add_gaussian_noise_use_mft_errors: bool = False
-    ransac_feed_gt_flow_add_gaussian_noise_sigma: float = 2.5
-    ransac_feed_gt_flow_add_gaussian_noise_mean: float = 0.5
-
-    ransac_distant_pixels_sampling: bool = False
-    ransac_distant_pixels_sample_size: int = 1000
-
-    ransac_confidences_from_occlusion: bool = False
 
     roma_sample_size: int = 10000
-
-    # Icosphere templates
-    icosphere_use_gt_long_jumps: bool = True
-    icosphere_trust_region_degrees = 20
 
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5

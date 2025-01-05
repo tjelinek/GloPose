@@ -1,37 +1,35 @@
 from collections import defaultdict
-
+from pathlib import Path
 from typing import Tuple, List, Any, Optional
 
-import networkx as nx
-import pycolmap
-import torch
 import imageio
+import networkx as nx
+import numpy as np
+import pycolmap
 import rerun as rr
 import rerun.blueprint as rrb
-import numpy as np
-import seaborn as sns
+import torch
 import torchvision
 from PIL import Image
 from kornia.geometry import Se3, Quaternion
+from kornia.geometry.conversions import quaternion_to_axis_angle
 from kornia.image import ImageSize
 from matplotlib import pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib.patches import ConnectionPatch, Patch
-from pathlib import Path
-from kornia.geometry.conversions import quaternion_to_axis_angle
 
-from utils.data_utils import load_texture, load_mesh_using_trimesh
-from utils.image_utils import overlay_occlusion
+from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.rerun_annotations import RerunAnnotations
-from tracker_config import TrackerConfig
-from data_structures.data_graph import DataGraph
-from utils.general import normalize_vertices, extract_intrinsics_from_tensor
-from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords, source_coords_to_target_coords_np)
+from tracker_config import TrackerConfig
+from utils.data_utils import load_texture, load_mesh_using_trimesh
+from utils.general import normalize_vertices, extract_intrinsics_from_tensor
+from utils.image_utils import overlay_occlusion
+from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 
 
 class WriteResults:
@@ -359,15 +357,6 @@ class WriteResults:
             # self.log_poses_into_rerun(frame_i)
             # self.visualize_flow_with_matching_rerun(frame_i)
             pass
-
-        if self.tracking_config.preinitialization_method == 'essential_matrix_decomposition':
-            if self.tracking_config.analyze_ransac_matching_errors:
-                self.analyze_ransac_matchings_errors(frame_i)
-
-            if (self.tracking_config.analyze_ransac_matchings and
-                    frame_i % self.tracking_config.analyze_ransac_matchings_frequency == 0):
-                # self.analyze_ransac_matchings(frame_i)
-                pass
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
         device = self.tracking_config.device
@@ -700,17 +689,6 @@ class WriteResults:
 
         return results
 
-    def analyze_ransac_matchings_errors(self, frame_i):
-
-        if (frame_i >= 5 and frame_i % 5 == 0) or frame_i >= self.tracking_config.input_frames:
-
-            front_results = self.measure_ransac_stats(frame_i)
-
-            mft_flow_gt_flow_difference_front = front_results.pop('mft_flow_gt_flow_difference')
-
-            if self.tracking_config.plot_mft_flow_kde_error_plot:
-                self.plot_distribution_of_inliers_errors(mft_flow_gt_flow_difference_front)
-
     def analyze_ransac_matchings(self, frame_i):
 
         ransac_stats = self.measure_ransac_stats(frame_i)
@@ -726,37 +704,7 @@ class WriteResults:
             metric_val: float = ransac_stats[metric][-1]
             rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
 
-    def plot_distribution_of_inliers_errors(self, mft_flow_gt_flow_differences):
-        sns.set(style="whitegrid")
-
-        frame = len(mft_flow_gt_flow_differences) - 1
-
-        if frame + 1 % self.tracking_config.mft_flow_kde_error_plot_frequency != 0:
-            return
-
-        fig, ax = plt.subplots(figsize=(10, 10))
-
-        gt_rotation: np.ndarray = (torch.rad2deg(self.data_graph.get_frame_data(frame).gt_rot_axis_angle)[0].
-                                   numpy(force=True))
-        gt_rotation = np.round(gt_rotation, 2)
-
-        data_tensor: torch.Tensor = mft_flow_gt_flow_differences[frame].numpy(force=True)
-
-        sns.kdeplot(
-            x=data_tensor[:, 1], y=data_tensor[:, 0],
-            thresh=0, levels=20, fill=False, cmap="mako", ax=ax
-        )
-        ax.set_xlabel("X Axis Error [px]")
-        ax.set_ylabel("Y Axis Error [px]")
-        ax.set_title(f'Distribution of MFT Errors,\nFrame {frame} (gt rotation [X, Y, Z] {gt_rotation})')
-
-        # Adjust layout for better fit and display the plot
-        plt.savefig(self.ransac_path / f'inliers_errors_frame_{frame}.svg')
-        plt.close()
-
     def visualize_flow_with_matching(self, frame_i):
-        if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
-            return
 
         dpi = 600
 
@@ -848,8 +796,6 @@ class WriteResults:
                             dpi=dpi, bbox_inches='tight')
 
     def visualize_flow_with_matching_rerun(self, frame_i):
-        if self.tracking_config.preinitialization_method != 'essential_matrix_decomposition':
-            return
 
         datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
         new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
