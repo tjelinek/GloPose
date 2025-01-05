@@ -15,15 +15,12 @@ class TrackerConfig:
     # General settings
     device = 'cuda'
     features: str = 'deep'
-    features_channels = 64
     verbose: bool = True
     matching_visualization_type = 'matching'  # Either 'dots' or 'matching'
 
     # Visualization
 
-    write_results: bool = True
     write_to_rerun_rather_than_disk: bool = True
-    write_results_frequency: int = 1
     plot_mft_flow_kde_error_plot: bool = True
     analyze_ransac_matchings: bool = True
     analyze_ransac_matching_errors: bool = False
@@ -34,8 +31,6 @@ class TrackerConfig:
 
     # Frame and keyframe settings
     input_frames: int = 0
-    max_keyframes: int = 1
-    all_frames_keyframes: bool = False
 
     # Mesh settings
     mesh_normalize: bool = False
@@ -71,20 +66,17 @@ class TrackerConfig:
     experiment_name: str = None
 
     # Ground truths
-    initial_mesh_path: str = 'prototypes/sphere.obj'
     gt_mesh_path: str = None
     optimize_shape: bool = False
 
     gt_texture_path: str = None
-    optimize_texture: bool = False
 
     gt_track_path: str = None
     augment_gt_track: bool = False
-    optimize_pose: bool = True
 
     # Input Data
     generate_synthetic_observations_if_possible: bool = True
-    segmentation_tracker: str = 'precomputed'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
+    segmentation_tracker: str = 'SAM2'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     # long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None
@@ -121,8 +113,6 @@ class TrackerConfig:
     ransac_use_gt_occlusions_and_segmentation: bool = False
     ransac_dilate_occlusion: bool = False
     ransac_erode_segmentation: bool = False
-
-    ransac_use_dust3r: bool = False
 
     ransac_sample_points: bool = True
     ransac_sampled_points_number: int = 100
