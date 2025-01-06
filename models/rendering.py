@@ -4,7 +4,6 @@ from typing import Tuple
 import kaolin
 import torch
 import torch.nn as nn
-from kaolin.render.camera import PinholeIntrinsics
 from kornia.geometry import Se3
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
@@ -59,9 +58,9 @@ class RenderingKaolin(nn.Module):
 
         self.register_buffer('camera_rot', camera_rot)
 
-        self.intrinsics: PinholeIntrinsics = (
-            PinholeIntrinsics.from_fov(width, height, self.fov, x0=width / 2, y0=height / 2,
-                                       fov_direction=kaolin.render.camera.CameraFOV.VERTICAL))
+        self.intrinsics = (
+            kaolin.render.camera.PinholeIntrinsics.from_fov(width, height, self.fov, x0=width / 2, y0=height / 2,
+                                                            fov_direction=kaolin.render.camera.CameraFOV.VERTICAL))
 
         camera_intrinsics = pinhole_intrinsics_to_tensor(self.intrinsics).cuda()
 
