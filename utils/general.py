@@ -6,7 +6,6 @@ from typing import Tuple
 import cv2
 import numpy as np
 import torch
-from kaolin.render.camera import PinholeIntrinsics
 from kornia.morphology import erosion, dilation
 from skimage.measure import label, regionprops
 import torch.nn.functional as F
@@ -211,16 +210,6 @@ def unpad_image(image, pad_h, pad_w):
     if pad_w > 0:
         image = image[:, :, :-pad_w]
     return image
-
-
-def pinhole_intrinsics_to_tensor(intrinsics: PinholeIntrinsics) -> torch.Tensor:
-    intrinsics_tensor = torch.Tensor([[intrinsics.focal_x, 0., intrinsics.x0],
-                                      [0., intrinsics.focal_y, intrinsics.y0],
-                                      [0., 0., 1.]])
-    if len(intrinsics_tensor.shape) == 2:
-        intrinsics_tensor = intrinsics_tensor
-
-    return intrinsics_tensor
 
 
 def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\

@@ -11,7 +11,7 @@ from data_structures.keyframe_buffer import SyntheticFlowObservation
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
-from utils.general import homogenize_3x4_transformation_matrix, pinhole_intrinsics_to_tensor
+from utils.general import homogenize_3x4_transformation_matrix
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',
@@ -515,3 +515,13 @@ def infer_normalized_renderings(renderer: RenderingKaolin, encoder_face_features
     flow_result = flow_result._replace(theoretical_flow=normalized_theoretical_flow)
 
     return rendering, rendering_mask, flow_result
+
+
+def pinhole_intrinsics_to_tensor(intrinsics: kaolin.render.camera.PinholeIntrinsics) -> torch.Tensor:
+    intrinsics_tensor = torch.Tensor([[intrinsics.focal_x, 0., intrinsics.x0],
+                                      [0., intrinsics.focal_y, intrinsics.y0],
+                                      [0., 0., 1.]])
+    if len(intrinsics_tensor.shape) == 2:
+        intrinsics_tensor = intrinsics_tensor
+
+    return intrinsics_tensor
