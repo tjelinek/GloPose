@@ -61,27 +61,11 @@ class Tracking6D:
         self.config = config
         self.device = 'cuda'
 
-        if self.config.generate_synthetic_observations_if_possible:
-            self.image_shape = ImageSize(width=int(self.config.image_downsample * self.config.max_width),
-                                         height=int(self.config.image_downsample * self.config.max_width))
-        else:
-            self.image_shape = get_shape(images_paths[0], self.config.image_downsample)
-
         self.data_graph = DataGraph()
 
-        if self.config.generate_synthetic_observations_if_possible:
-            assert gt_translations is not None and gt_rotations is not None
-            assert gt_mesh is not None
-            assert gt_texture is not None
-
-            self.tracker = SyntheticDataGeneratingTracker(self.config, gt_texture, gt_mesh,
-                                                          self.gt_rotations, gt_translations)
-
-        else:
-            if self.config.segmentation_tracker == 'precomputed':
-                self.tracker = PrecomputedTracker(self.config, images_paths, segmentation_paths)
-            else:
-                raise ValueError('Unknown value of "segmentation_tracker"')
+        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_rotations,
+                                   gt_translations=gt_translations, initial_segmentation=initial_segmentation)
+        self.image_shape = self.tracker.get_image_size()
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, data_graph=self.data_graph,
