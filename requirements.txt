@@ -1,0 +1,13 @@
+torch>=2.5.1
+torchvision>=0.20.1
+kornia-moons>=0.2.9
+kornia
+imageio
+networkx
+h5py
+numpy
+pycolmap
+pillow
+-e git+https://github.com/facebookresearch/sam2.git@2b90b9f5ceec907a1c18123530e92e794ad901a4#egg=SAM_2
+-e git+https://github.com/Parskatt/RoMa.git@370117431ffc5dc000fb46f6e581b74bdb2c3ff8#egg=romatch
+-e git+https://github.com/NVIDIAGameWorks/kaolin@ba9824e394b074099fbae7d5218e68c6362e9ecf#egg=kaolin
