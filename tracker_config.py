@@ -76,7 +76,8 @@ class TrackerConfig:
 
     # Input Data
     generate_synthetic_observations_if_possible: bool = True
-    segmentation_tracker: str = 'SAM2'  # 'precomputed', 'SAM', 'SAM2' or 'XMem'
+    frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
+    segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2' or 'synthetic'
 
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     # long_flow_model: str = 'MFT_IQ'   # 'MFT', 'MFT_IQ', 'MFT_SynthFlow' None

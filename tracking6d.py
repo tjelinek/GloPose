@@ -7,13 +7,12 @@ from kornia.geometry import Quaternion, Se3, PinholeCamera
 from kornia.image import ImageSize
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
-from data_providers.frame_provider import PrecomputedTracker, BaseTracker, SyntheticDataGeneratingTracker
+from data_providers.frame_provider import BaseTracker
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from utils.image_utils import get_shape
 from utils.logging import WriteResults
 from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 
@@ -22,7 +21,7 @@ class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
                  gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
-                 gt_Se3_world_to_cam: Se3 = None):
+                 gt_Se3_world_to_cam: Se3 = None, initial_segmentation: torch.Tensor = None):
 
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
