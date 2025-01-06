@@ -212,6 +212,12 @@ class BaseTracker:
         elif config.segmentation_provider == 'precomputed':
             PrecomputedSegmentationProvider(config, **kwargs)
         elif config.segmentation_provider == 'SAM2':
+            assert 'initial_segmentation' in kwargs
+            if config.frame_provider == 'synthetic' and kwargs['initial_segmentation'] is not None:
+                synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
+                next_observation = synthetic_segment_provider.next(0)
+                initial_segmentation = next_observation.observed_segmentation.squeeze()
+                kwargs['initial_segmentation'] = initial_segmentation
             SAM2SegmentationProvider(config, **kwargs)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
