@@ -3,10 +3,8 @@ import math
 from pathlib import Path
 from typing import Iterable, Dict, Tuple, cast
 
-import kaolin
 import torch
 import trimesh
-from kaolin.io.utils import mesh_handler_naive_triangulate
 from torchvision import transforms
 
 import imageio
@@ -24,9 +22,12 @@ def load_texture(texture_path: Path, texture_size: int) -> torch.Tensor:
     return texture
 
 
-def load_mesh(mesh_path: Path) -> kaolin.rep.SurfaceMesh:
-    gt_mesh_prototype = kaolin.io.obj.import_mesh(str(mesh_path), with_materials=True,
-                                                  heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
+def load_mesh(mesh_path: Path):
+    import kaolin
+    from kaolin.io.utils import mesh_handler_naive_triangulate
+
+    gt_mesh_prototype: kaolin.rep.SurfaceMesh = kaolin.io.obj.import_mesh(str(mesh_path), with_materials=True,
+                                                            heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
 
     return gt_mesh_prototype
 
