@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 import torch
 from kornia.morphology import erosion, dilation
-from skimage.measure import label, regionprops
 import torch.nn.functional as F
 
 from tracker_config import TrackerConfig
@@ -65,23 +64,7 @@ def imread(name):
     elif img.shape[2] == 3:
         return img[:, :, [2, 1, 0]] / 255
     else:
-        return img[:, :, [2, 1, 0, 3]] / 65535
-
-
-def fmo_detect_maxarea(I, B):
-    dI = (np.sum(np.abs(I - B), 2) > 0.1).astype(float)
-    labeled = label(dI)
-    regions = regionprops(labeled)
-    ind = -1
-    maxarea = 0
-    for ki in range(len(regions)):
-        if regions[ki].area > maxarea:
-            ind = ki
-            maxarea = regions[ki].area
-    if ind == -1:
-        return [], 0
-    bbox = np.array(regions[ind].bbox).astype(int)
-    return bbox, regions[ind].minor_axis_length
+        return img[:, :, [2, 1, 0, 3]] / 6553
 
 
 def crop_resize(Is, bbox, res):
