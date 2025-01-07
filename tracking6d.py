@@ -21,7 +21,8 @@ class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
                  gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
-                 gt_Se3_world_to_cam: Se3 = None, initial_segmentation: torch.Tensor = None):
+                 gt_Se3_world_to_cam: Se3 = None, initial_image: torch.Tensor = None,
+                 initial_segmentation: torch.Tensor = None):
 
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
@@ -64,7 +65,9 @@ class Tracking6D:
         self.data_graph = DataGraph()
 
         self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_rotations,
-                                   gt_translations=gt_translations, initial_segmentation=initial_segmentation)
+                                   gt_translations=gt_translations, initial_segmentation=initial_segmentation,
+                                   initial_image=initial_image, images_paths=images_paths,
+                                   segmentation_paths=segmentation_paths)
         self.image_shape = self.tracker.get_image_size()
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
