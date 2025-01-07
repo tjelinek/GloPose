@@ -197,7 +197,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             out_obj_ids, out_mask_logits = self.predictor.track(image_sam_format)
 
         obj_seg_mask = out_mask_logits[0, 0] > 0
-        obj_seg_mask_formatted = obj_seg_mask[None, None, None]
+        obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
         return obj_seg_mask_formatted
 
 
