@@ -39,6 +39,9 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         start_time = time()
 
+        if frame_i == 0:
+            self.keyframe_graph.add_node(0)
+            return
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
         preceding_source = preceding_frame_node.long_jump_source
@@ -83,7 +86,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         datagraph_long_edge.reliability_score = flow_reliability
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
 
-        datagraph_node.reliable_sources |= ({long_jump_source} | reliable_flows)
+        datagraph_node.reliable_sources = ({long_jump_source} | reliable_flows)
         datagraph_node.long_jump_source = source
 
     def match_to_all_keyframes(self, frame_i):
