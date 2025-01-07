@@ -1,8 +1,10 @@
 import numpy as np
 import torch
 import time
+import torchvision.transforms as transforms
 from pathlib import Path
 
+from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
 from main_settings import tmp_folder, dataset_folder
@@ -43,7 +45,8 @@ def main():
         config.gt_mesh_path = gt_mesh_path
         config.gt_track_path = None
         config.sequence = sequence
-        config.image_downsample = 0.5
+        config.dataset = dataset
+        config.image_downsample = 1.0
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
@@ -106,9 +109,20 @@ def main():
         config.camera_intrinsics = cam_intrinsics_list[0]
         config.camera_extrinsics = T_cam_to_obj.numpy(force=True)
 
+        config.segmentation_provider = 'SAM2'
+        config.frame_provider = 'precomputed'
+
+        first_segment = Image.open(gt_segmentations_list[0])
+        transform = transforms.ToTensor()
+        first_segment_tensor = transform(first_segment)[1].squeeze()  # Green channel is the obj segmentation
+
+        first_image = Image.open(gt_images_list[0])
+        first_image_tensor = transform(first_image).squeeze()
+
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
                                  gt_translations=translations_array, images_paths=gt_images_list,
-                                 segmentation_paths=gt_segmentations_list)
+                                 segmentation_paths=gt_segmentations_list, initial_segmentation=first_segment_tensor,
+                                 initial_image=first_image_tensor)
 
 
 if __name__ == "__main__":
