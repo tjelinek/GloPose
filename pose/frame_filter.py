@@ -41,6 +41,8 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         if frame_i == 0:
             self.keyframe_graph.add_node(0)
+            self.data_graph.get_frame_data(0).reliable_sources = {0}
+            self.data_graph.get_frame_data(0).long_jump_source = 0
             return
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
@@ -130,7 +132,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         source = best_source
 
         if best_source_reliability < self.config.flow_reliability_threshold:
-            return None, None
+            return set(), None
         return reliable_flows, source
 
     def flow_reliability(self, source_idx: int, target_idx: int) -> float:
