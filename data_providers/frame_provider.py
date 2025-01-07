@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import List, Optional
 
 import imageio
-import kaolin
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -14,7 +13,6 @@ from torchvision.transforms import InterpolationMode
 
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
-from models.rendering import RenderingKaolin
 from tracker_config import TrackerConfig
 from utils.image_utils import get_shape, get_intrinsics_from_exif
 
@@ -22,8 +20,10 @@ from utils.image_utils import get_shape, get_intrinsics_from_exif
 class SyntheticDataProvider:
 
     def __init__(self, tracker_config: TrackerConfig, gt_texture,
-                 gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
+                 gt_mesh, gt_rotations: torch.Tensor,
                  gt_translations: torch.Tensor):
+        from models.rendering import RenderingKaolin
+
         self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
         self.device = tracker_config.device
 
@@ -78,9 +78,8 @@ class FrameProvider(ABC):
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
     def __init__(self, tracker_config: TrackerConfig, gt_texture,
-                 gt_mesh: kaolin.rep.SurfaceMesh, gt_rotations: torch.Tensor,
+                 gt_mesh, gt_rotations: torch.Tensor,
                  gt_translations: torch.Tensor):
-
         FrameProvider.__init__(self, tracker_config.image_downsample, tracker_config.device)
         SyntheticDataProvider.__init__(self, tracker_config, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
@@ -95,7 +94,7 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
 class PrecomputedFrameProvider(FrameProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path]):
+    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path], **kwargs):
         super().__init__(tracker_config.image_downsample)
 
         self.image_shape = get_shape(images_paths[0], self.downsample_factor)
@@ -118,7 +117,7 @@ class PrecomputedFrameProvider(FrameProvider):
 
 ##############################
 class SegmentationProvider(ABC):
-    def __init__(self, downsample_factor, device=torch.device('cuda')):
+    def __init__(self, downsample_factor, device='cuda'):
         self.downsample_factor = downsample_factor
         self.image_shape: Optional[ImageSize] = None
         self.device = device
@@ -130,7 +129,7 @@ class SegmentationProvider(ABC):
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, gt_texture, gt_mesh: kaolin.rep.SurfaceMesh,
+    def __init__(self, tracker_config: TrackerConfig, gt_texture, gt_mesh,
                  gt_rotations: torch.Tensor, gt_translations: torch.Tensor):
         SegmentationProvider.__init__(self, tracker_config.image_downsample, tracker_config.device)
         SyntheticDataProvider.__init__(self, tracker_config, gt_texture, gt_mesh, gt_rotations, gt_translations)
@@ -142,8 +141,7 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path],
-                 segmentations_paths: List[Path]):
+    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path], segmentations_paths: List[Path]):
         super().__init__(tracker_config.image_downsample, tracker_config.device)
 
         self.image_shape = get_shape(images_paths[0], self.downsample_factor)
@@ -164,31 +162,43 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor):
+    def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor,
+                 initial_image: torch.Tensor, **kwargs):
         super().__init__(tracker_config.image_downsample, tracker_config.device)
 
         assert initial_segmentation is not None
 
         self.predictor: Optional[SamPredictor] = None
 
-        from sam2.build_sam import build_sam2
-        from sam2.sam2_image_predictor import SAM2ImagePredictor
+        from sam2.build_sam import build_sam2, build_sam2_video_predictor, build_sam2_camera_predictor
 
-        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_hiera_large.pt")
-        model_cfg = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2_configs/sam2_hiera_l.yaml")
-        self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
+        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
+        model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
+        # self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
+        self.predictor = build_sam2_camera_predictor(model_cfg, str(checkpoint), device=self.device)
 
-    def next_segmentation(self, frame_i, image):
-        image_np = image.squeeze().permute(1, 2, 0).numpy(force=True)
+        initial_image_sam_format = self._image_to_sam(initial_image)
+        self.predictor.load_first_frame(initial_image_sam_format)
 
-        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-            self.predictor.set_image(image_np)
-            prompts = torch.nonzero(gt_mask.squeeze()).numpy(force=True)
-            point_labels = np.ones_like(prompts[:, 0])
-            masks, _, _ = self.predictor.predict(prompts, point_labels, multimask_output=False)
-            masks = torch.from_numpy(masks).cuda().to(torch.float32)
+        initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
+        _, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(0, 0, initial_mask_sam_format)
 
-        return masks[None, None]
+    @staticmethod
+    def _image_to_sam(image: torch.Tensor) -> np.ndarray:
+        return image.squeeze().permute(1, 2, 0).numpy(force=True)
+
+    @staticmethod
+    def _mask_to_sam_prompt(mask: torch.Tensor) -> np.ndarray:
+        return mask.squeeze().to(torch.bool).numpy(force=True)
+
+    def next_segmentation(self, frame_i, image) -> torch.Tensor:
+        with torch.inference_mode(), torch.autocast(self.device, dtype=torch.bfloat16):
+            image_sam_format = self._image_to_sam(image)
+            out_obj_ids, out_mask_logits = self.predictor.track(image_sam_format)
+
+        obj_seg_mask = out_mask_logits[0, 0] > 0
+        obj_seg_mask_formatted = obj_seg_mask[None, None, None]
+        return obj_seg_mask_formatted
 
 
 class BaseTracker:
@@ -196,21 +206,21 @@ class BaseTracker:
         self.downsample_factor = config.image_downsample
         self.image_shape: Optional[ImageSize] = None
         self.device = config.device
-        
+
         self.frame_provider: FrameProvider
         self.segmentation_provider: SegmentationProvider
-        
+
         if config.frame_provider == 'synthetic':
             self.frame_provider = SyntheticFrameProvider(config, **kwargs)
         elif config.frame_provider == 'precomputed':
             self.frame_provider = PrecomputedFrameProvider(config, **kwargs)
         else:
             raise ValueError(f"Unknown value of 'frame_provider': {config.frame_provider}")
-        
+
         if config.segmentation_provider == 'synthetic':
             self.segmentation_provider = SyntheticSegmentationProvider(config, **kwargs)
         elif config.segmentation_provider == 'precomputed':
-            PrecomputedSegmentationProvider(config, **kwargs)
+            self.segmentation_provider = PrecomputedSegmentationProvider(config, **kwargs)
         elif config.segmentation_provider == 'SAM2':
             assert 'initial_segmentation' in kwargs
             if config.frame_provider == 'synthetic' and kwargs['initial_segmentation'] is not None:
@@ -218,7 +228,7 @@ class BaseTracker:
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
-            SAM2SegmentationProvider(config, **kwargs)
+            self.segmentation_provider = SAM2SegmentationProvider(config, **kwargs)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
