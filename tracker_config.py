@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Tuple
 
@@ -102,7 +102,7 @@ class TrackerConfig:
     # RANSAC settings
     ransac_inlier_filter: str = 'pygcransac'  # 'magsac++', 'ransac', '8point', 'pygcransac', 'pnp_ransac'
 
-    roma_matcher_config: BaseRomaConfig = BaseRomaConfig()
+    roma_matcher_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
@@ -112,7 +112,7 @@ class TrackerConfig:
     frame_filter: str = 'SIFT'
 
     # SIFT options
-    sift_matcher_config: BaseSiftConfig = BaseSiftConfig()
+    sift_matcher_config: BaseSiftConfig = field(default_factory=BaseSiftConfig)
     sift_filter_min_matches: int = 100
     sift_filter_good_to_add_matches: int = 450
     sift_cache: Path = None
