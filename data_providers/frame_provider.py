@@ -2,6 +2,7 @@ from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import List, Optional
 
+import cv2
 import imageio
 import numpy as np
 import torch
@@ -160,7 +161,7 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
         return segmentation_resized
 
 
-class SAM2SegmentationProvider(SegmentationProvider):
+class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
     def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor,
                  initial_image: torch.Tensor, **kwargs):
@@ -200,6 +201,72 @@ class SAM2SegmentationProvider(SegmentationProvider):
         obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
         return obj_seg_mask_formatted
 
+class SAM2SegmentationProvider(SegmentationProvider):
+
+    def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor,
+                 initial_image: torch.Tensor, **kwargs):
+        super().__init__(tracker_config.image_downsample, tracker_config.device)
+
+        assert initial_segmentation is not None
+
+        self.predictor: Optional[SamPredictor] = None
+
+        from sam2.build_sam import build_sam2, build_sam2_video_predictor
+
+        images_paths = kwargs['images_paths']
+        saved_imgs_dir = self.save_images_as_jpeg(images_paths, tracker_config.write_folder / 'sam2_imgs')
+
+        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
+        model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
+        self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
+
+        state = self.predictor.init_state(str(saved_imgs_dir[0].parent))
+
+        initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
+        _, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0, initial_mask_sam_format)
+
+        self.past_predictions = {0: (out_obj_ids, out_mask_logits)}
+        for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
+            self.past_predictions[out_frame_idx] = (out_obj_ids, out_mask_logits)
+
+    @staticmethod
+    def save_images_as_jpeg(image_paths, output_path: Path) -> List[Path]:
+        output_path.mkdir(exist_ok=True)
+
+        saved_img_dirs = []
+        for idx, image_path in enumerate(image_paths):
+            img = cv2.imread(image_path)
+            if img is None:
+                print(f"Warning: Unable to read {image_path}, skipping.")
+                continue
+
+            # Construct the output file name with zero-padded numbering
+            output_file = output_path / f"{image_path.stem}.JPEG"
+
+            # Save the image in JPEG format
+            cv2.imwrite(str(output_file), img)
+            saved_img_dirs.append(output_file)
+
+        return saved_img_dirs
+
+    @staticmethod
+    def _image_to_sam(image: torch.Tensor) -> np.ndarray:
+        return image.squeeze().permute(1, 2, 0).numpy(force=True)
+
+    @staticmethod
+    def _mask_to_sam_prompt(mask: torch.Tensor) -> np.ndarray:
+        return mask.squeeze().to(torch.bool).numpy(force=True)
+
+    def next_segmentation(self, frame_i, image) -> torch.Tensor:
+
+        if frame_i in self.past_predictions.keys():
+            out_obj_ids, out_mask_logits = self.past_predictions[frame_i]
+        else:
+            raise ValueError("Not predicted")
+
+        obj_seg_mask = out_mask_logits[0, 0] > 0
+        obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
+        return obj_seg_mask_formatted
 
 class BaseTracker:
     def __init__(self, config: TrackerConfig, **kwargs):
