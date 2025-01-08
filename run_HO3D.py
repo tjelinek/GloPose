@@ -53,6 +53,7 @@ def main():
         else:
             write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
 
+        config.write_folder = write_folder
         t0 = time.time()
 
         sequence_folder = Path(dataset_folder) / 'HO3D' / 'train' / sequence

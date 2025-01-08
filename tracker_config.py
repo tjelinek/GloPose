@@ -28,6 +28,7 @@ class TrackerConfig:
 
     analyze_ransac_matchings_frequency: int = 5
     mft_flow_kde_error_plot_frequency: int = 10
+    write_folder: Path = None
 
     # Frame and keyframe settings
     input_frames: int = 0
