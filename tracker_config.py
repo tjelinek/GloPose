@@ -11,10 +11,6 @@ from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfi
 @dataclass
 class TrackerConfig:
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
     # General settings
     device = 'cuda'
     features: str = 'deep'
