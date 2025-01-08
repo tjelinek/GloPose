@@ -171,6 +171,8 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
         self.predictor: Optional[SamPredictor] = None
 
+        import sys
+        sys.path.append('repositories/segment-anything-2-real-time')
         from sam2.build_sam import build_sam2, build_sam2_video_predictor, build_sam2_camera_predictor
 
         checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
@@ -200,6 +202,7 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
         obj_seg_mask = out_mask_logits[0, 0] > 0
         obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
         return obj_seg_mask_formatted
+
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
