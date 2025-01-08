@@ -102,7 +102,6 @@ class TrackerConfig:
     # RANSAC settings
     ransac_inlier_filter: str = 'pygcransac'  # 'magsac++', 'ransac', '8point', 'pygcransac', 'pnp_ransac'
 
-
     roma_matcher_config: BaseRomaConfig = BaseRomaConfig()
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.95
