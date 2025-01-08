@@ -76,16 +76,20 @@ class Tracking6D:
                                            segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.world_to_cam)
 
-        self.cache_folder: Path = Path('/mnt/personal/jelint19/cache/flow_cache') / config.dataset / config.sequence
+        cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
+                                   config.roma_matcher_config.config_name / config.dataset / config.sequence)
+        cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
+                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, self.cache_folder)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
 
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.image_shape,
                                                 self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
-            sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph, self.config.sift_filter_num_feats,
-                                                           self.cache_folder, device=self.config.device)
+            sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph,
+                                                           self.config.sift_matcher_config.sift_filter_num_feats,
+                                                           cache_folder_SIFT, device=self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.image_shape,
                                                 sift_matcher)
 

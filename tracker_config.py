@@ -4,6 +4,9 @@ from typing import Tuple
 
 import numpy as np
 
+from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
+from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
+
 
 @dataclass
 class TrackerConfig:
@@ -99,8 +102,9 @@ class TrackerConfig:
     # RANSAC settings
     ransac_inlier_filter: str = 'pygcransac'  # 'magsac++', 'ransac', '8point', 'pygcransac', 'pnp_ransac'
 
-    roma_sample_size: int = 10000
 
+    roma_matcher_config: BaseRomaConfig = BaseRomaConfig()
+    roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
     min_number_of_reliable_matches: int = 0
@@ -109,9 +113,7 @@ class TrackerConfig:
     frame_filter: str = 'SIFT'
 
     # SIFT options
-    resize_to: Tuple[int, int] = (800, 600)
-    sift_filter_num_feats: int = 8192
-    sift_filter_sift_matcher: str = 'adalam'
+    sift_matcher_config: BaseSiftConfig = BaseSiftConfig()
     sift_filter_min_matches: int = 100
     sift_filter_good_to_add_matches: int = 450
     sift_cache: Path = None

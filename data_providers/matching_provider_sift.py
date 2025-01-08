@@ -53,7 +53,8 @@ class SIFTMatchingProvider:
 
 class PrecomputedSIFTMatchingProvider(SIFTMatchingProvider):
 
-    def __init__(self, data_graph: DataGraph, num_sift_features: int, cache_dir: Path, allow_missing: bool = True, device: Optional[str] = 'cpu'):
+    def __init__(self, data_graph: DataGraph, num_sift_features: int, cache_dir: Path, allow_missing: bool = True,
+                 device: Optional[str] = 'cpu'):
         super().__init__(data_graph, num_sift_features, device)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
