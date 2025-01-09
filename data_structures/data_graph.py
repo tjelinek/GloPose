@@ -66,8 +66,8 @@ class CrossFrameData:
     # Optical Flow observations
     synthetic_flow_result: SyntheticFlowObservation = None
     observed_flow: FlowObservation = None
-    flow_warp: torch.Tensor = None
-    flow_certainty: torch.Tensor = None
+    roma_flow_warp: torch.Tensor = None  # [W, H] format
+    roma_flow_certainty: torch.Tensor = None  # [W, H] format
 
     # Points and reliability
     src_pts_yx: torch.Tensor = None

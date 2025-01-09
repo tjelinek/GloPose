@@ -37,14 +37,14 @@ class RoMaFlowProviderDirect:
 
     def add_flows_into_datagraph(self, flow_source_frame, flow_target_frame):
         edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
-        if edge_data.flow_warp is None or edge_data.flow_certainty is None:
+        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
             warp, certainty = self.next_flow_roma(flow_source_frame, flow_target_frame, sample=10000)
         else:
-            warp, certainty = edge_data.flow_warp, edge_data.flow_certainty
+            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
             # TODO handle sampling when reading from datagraph
 
-        edge_data.flow_warp = warp
-        edge_data.flow_certainty = certainty
+        edge_data.roma_flow_warp = warp
+        edge_data.roma_flow_certainty = certainty
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):

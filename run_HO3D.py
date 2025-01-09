@@ -114,10 +114,12 @@ def main():
         config.frame_provider = 'precomputed'
 
         first_segment = Image.open(gt_segmentations_list[0])
-        transform = transforms.ToTensor()
-        first_segment_tensor = transform(first_segment)[1].squeeze()  # Green channel is the obj segmentation
-
         first_image = Image.open(gt_images_list[0])
+
+        first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
+
+        transform = transforms.ToTensor()
+        first_segment_tensor = transform(first_segment_resized)[1].squeeze()  # Green channel is the obj segmentation
         first_image_tensor = transform(first_image).squeeze()
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,

@@ -2,11 +2,11 @@ from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import List, Optional
 
-import cv2
 import imageio
 import numpy as np
 import torch
 import torch.nn.functional as F
+from PIL import Image
 from kornia.image import ImageSize
 from segment_anything import SamPredictor
 from torchvision import transforms
@@ -169,6 +169,7 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
         assert initial_segmentation is not None
 
+        self.image_shape = ImageSize(width=initial_segmentation.shape[-1], height=initial_segmentation.shape[-2])
         self.predictor: Optional[SamPredictor] = None
 
         import sys
@@ -212,6 +213,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         assert initial_segmentation is not None
 
+        self.image_shape = ImageSize(width=initial_image.shape[-1], height=initial_image.shape[-2])
         self.predictor: Optional[SamPredictor] = None
 
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
@@ -232,23 +234,17 @@ class SAM2SegmentationProvider(SegmentationProvider):
         for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
             self.past_predictions[out_frame_idx] = (out_obj_ids, out_mask_logits)
 
-    @staticmethod
-    def save_images_as_jpeg(image_paths, output_path: Path) -> List[Path]:
+    def save_images_as_jpeg(self, image_paths, output_path: Path) -> List[Path]:
         output_path.mkdir(exist_ok=True)
 
         saved_img_dirs = []
-        for idx, image_path in enumerate(image_paths):
-            img = cv2.imread(image_path)
-            if img is None:
-                print(f"Warning: Unable to read {image_path}, skipping.")
-                continue
+        for image_path in image_paths:
+            with Image.open(image_path) as img:
+                img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
 
-            # Construct the output file name with zero-padded numbering
-            output_file = output_path / f"{image_path.stem}.JPEG"
-
-            # Save the image in JPEG format
-            cv2.imwrite(str(output_file), img)
-            saved_img_dirs.append(output_file)
+                output_file = output_path / f"{image_path.stem}.JPEG"
+                img.convert("RGB").save(output_file, format="JPEG")
+                saved_img_dirs.append(output_file)
 
         return saved_img_dirs
 
@@ -269,6 +265,10 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         obj_seg_mask = out_mask_logits[0, 0] > 0
         obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
+
+        assert obj_seg_mask_formatted.shape[-2] == self.image_shape.height
+        assert obj_seg_mask_formatted.shape[-1] == self.image_shape.width
+
         return obj_seg_mask_formatted
 
 class BaseTracker:

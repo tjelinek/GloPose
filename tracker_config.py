@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
+from kornia.image import ImageSize
 
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
@@ -42,6 +43,7 @@ class TrackerConfig:
     camera_up: Tuple[float] = (0, 1, 0)
     max_width: int = 500
     image_downsample: float = 1.0
+    image_size: ImageSize = None
 
     # Tracking settings
     tran_init: Tuple[float] = None  # (0., 0., 0.)
