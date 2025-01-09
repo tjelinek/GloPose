@@ -73,8 +73,8 @@ def main():
 
         config.input_frames = gt_rotations.shape[0]
 
-        run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations,
-                                 images_paths=images_paths)
+        run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
+                                 gt_rotations=gt_rotations, gt_translations=gt_translations, images_paths=images_paths)
 
         return
 
