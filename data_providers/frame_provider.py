@@ -302,6 +302,30 @@ class BaseTracker:
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
+    def save_images_as_jpeg(self, output_path: Path, frame_provider: FrameProvider,
+                            images_paths: Optional[List[Path]] = None) -> List[Path]:
+        output_path.mkdir(exist_ok=True)
+        transform_to_pil = transforms.ToPILImage()
+
+        saved_img_paths = []
+        for frame_i in range(frame_provider.sequence_length):
+            img = frame_provider.next_image(frame_i).squeeze()
+
+            img = transform_to_pil(img)
+            img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
+
+            # Define the output file name
+            if images_paths is not None:
+                output_file = output_path / f"{images_paths[frame_i]}.JPEG"
+            else:
+                output_file = output_path / f"image_{frame_i:05d}.JPEG"
+
+            # Save the image in JPEG format
+            img.convert("RGB").save(output_file, format="JPEG")
+            saved_img_paths.append(output_file)
+
+        return saved_img_paths
+
     def next(self, frame_i) -> FrameObservation:
         image = self.frame_provider.next_image(frame_i)
 
