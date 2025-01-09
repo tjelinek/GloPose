@@ -24,6 +24,7 @@ class Tracking6D:
                  gt_Se3_world_to_cam: Se3 = None, initial_image: torch.Tensor = None,
                  initial_segmentation: torch.Tensor = None):
 
+        config.write_folder = write_folder
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
