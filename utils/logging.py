@@ -406,8 +406,9 @@ class WriteResults:
 
         G_reliable = nx.Graph()
 
+        all_image_names = [image_path.name for image_path in self.images_paths]
         for image_id, image in colmap_reconstruction.images.items():
-            frame_index = self.images_paths.index(Path(image.name))
+            frame_index = all_image_names.index(image.name)
 
             image_t_cam = torch.tensor(image.cam_from_world.translation)
             image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
@@ -436,11 +437,11 @@ class WriteResults:
 
             for reliable_node_idx in frame_node.reliable_sources:
                 reliable_node_data = self.data_graph.get_frame_data(reliable_node_idx)
-                reliable_node_name = Path(reliable_node_data.image_filename).name
+                reliable_node_name = reliable_node_data.image_filename.name
 
-                reliable_node_image_id = image_name_to_image_id[reliable_node_name]
-
-                G_reliable.add_edge(image_id, reliable_node_image_id)
+                if reliable_node_name in image_name_to_image_id:
+                    reliable_node_image_id = image_name_to_image_id[reliable_node_name]
+                    G_reliable.add_edge(image_id, reliable_node_image_id)
 
         strips = []
         for im_id1, im_id2 in G_reliable.edges:
