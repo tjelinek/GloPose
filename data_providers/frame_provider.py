@@ -20,21 +20,20 @@ from utils.image_utils import get_shape, get_intrinsics_from_exif
 
 class SyntheticDataProvider:
 
-    def __init__(self, tracker_config: TrackerConfig, gt_texture,
-                 gt_mesh, gt_rotations: torch.Tensor,
+    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
                  gt_translations: torch.Tensor):
         from models.rendering import RenderingKaolin
 
-        self.image_shape = ImageSize(tracker_config.max_width, tracker_config.max_width)
-        self.device = tracker_config.device
+        self.image_shape = ImageSize(config.max_width, config.max_width)
+        self.device = config.device
 
         faces = gt_mesh.faces
         self.gt_texture = gt_texture
 
         self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, self.image_shape, gt_rotations,
-                                          gt_translations, tracker_config, self.device)
+                                          gt_translations, config, self.device)
 
-        self.renderer = RenderingKaolin(tracker_config, faces, self.image_shape.width,
+        self.renderer = RenderingKaolin(config, faces, self.image_shape.width,
                                         self.image_shape.height).to(self.device)
 
     def next(self, frame_id) -> FrameObservation:
@@ -62,10 +61,11 @@ class SyntheticDataProvider:
 
 
 class FrameProvider(ABC):
-    def __init__(self, downsample_factor, device=torch.device('cuda')):
+    def __init__(self, downsample_factor, config: TrackerConfig, device=torch.device('cuda')):
         self.downsample_factor = downsample_factor
         self.image_shape: Optional[ImageSize] = None
         self.device = device
+        self.sequence_length: int = config.input_frames
 
     @abstractmethod
     def next_image(self, frame) -> torch.Tensor:
@@ -78,11 +78,11 @@ class FrameProvider(ABC):
 
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, gt_texture,
+    def __init__(self, config: TrackerConfig, gt_texture,
                  gt_mesh, gt_rotations: torch.Tensor,
-                 gt_translations: torch.Tensor):
-        FrameProvider.__init__(self, tracker_config.image_downsample, tracker_config.device)
-        SyntheticDataProvider.__init__(self, tracker_config, gt_texture, gt_mesh, gt_rotations, gt_translations)
+                 gt_translations: torch.Tensor, **kwargs):
+        FrameProvider.__init__(self, config.image_downsample, config, config.device)
+        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
     def next_image(self, frame_id):
         image = super().next(frame_id).observed_image
@@ -95,8 +95,8 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
 class PrecomputedFrameProvider(FrameProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path], **kwargs):
-        super().__init__(tracker_config.image_downsample)
+    def __init__(self, config: TrackerConfig, images_paths: List[Path], **kwargs):
+        super().__init__(config.image_downsample, config)
 
         self.image_shape = get_shape(images_paths[0], self.downsample_factor)
         self.images_paths: List[Path] = images_paths
@@ -130,10 +130,10 @@ class SegmentationProvider(ABC):
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, gt_texture, gt_mesh,
+    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh,
                  gt_rotations: torch.Tensor, gt_translations: torch.Tensor):
-        SegmentationProvider.__init__(self, tracker_config.image_downsample, tracker_config.device)
-        SyntheticDataProvider.__init__(self, tracker_config, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        SegmentationProvider.__init__(self, config.image_downsample, config.device)
+        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
     def next_segmentation(self, frame_id, **kwargs):
         segmentation = super().next(frame_id).observed_segmentation
@@ -142,8 +142,8 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, images_paths: List[Path], segmentations_paths: List[Path]):
-        super().__init__(tracker_config.image_downsample, tracker_config.device)
+    def __init__(self, config: TrackerConfig, images_paths: List[Path], segmentations_paths: List[Path]):
+        super().__init__(config.image_downsample, config.device)
 
         self.image_shape = get_shape(images_paths[0], self.downsample_factor)
         self.segmentations_paths: List[Path] = segmentations_paths
@@ -163,9 +163,9 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
 class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor,
+    def __init__(self, config: TrackerConfig, initial_segmentation: torch.Tensor,
                  initial_image: torch.Tensor, **kwargs):
-        super().__init__(tracker_config.image_downsample, tracker_config.device)
+        super().__init__(config.image_downsample, config.device)
 
         assert initial_segmentation is not None
 
@@ -207,9 +207,9 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, tracker_config: TrackerConfig, initial_segmentation: torch.Tensor,
+    def __init__(self, config: TrackerConfig, initial_segmentation: torch.Tensor,
                  initial_image: torch.Tensor, **kwargs):
-        super().__init__(tracker_config.image_downsample, tracker_config.device)
+        super().__init__(config.image_downsample, config.device)
 
         assert initial_segmentation is not None
 
