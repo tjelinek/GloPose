@@ -148,10 +148,10 @@ class Tracking6D:
                   self.config.input_frames)
 
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs):
-        if self.config.frame_filter == 'RoMa':
+        if self.config.reconstruction_matches == 'RoMa':
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                             matching_pairs)
-        elif self.config.frame_filter == 'SIFT':
+        elif self.config.reconstruction_matches == 'SIFT':
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
                                                                                  matching_pairs)
         else:

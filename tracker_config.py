@@ -108,6 +108,7 @@ class TrackerConfig:
 
     mapper: str = 'pycolmap'
     frame_filter: str = 'SIFT'
+    reconstruction_matches: str = 'RoMa'
 
     # SIFT options
     sift_matcher_config: BaseSiftConfig = field(default_factory=BaseSiftConfig)
