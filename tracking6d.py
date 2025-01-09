@@ -120,10 +120,7 @@ class Tracking6D:
             matching_pairs.append((u_index, v_index))
 
         assert len(keyframe_nodes_idxs) > 2
-
-        time.sleep(1)
         print(matching_pairs)
-
         reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
         self.write_gt_poses()
