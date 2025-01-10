@@ -19,7 +19,7 @@ def main():
         sequences = [
             # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
             # 'Twinlab_Nitric_Fuel',
-            # 'Squirrel',
+            'Squirrel',
             # 'STACKING_BEAR',
             # 'Schleich_Allosaurus',
             'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
