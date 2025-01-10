@@ -33,6 +33,81 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
+    def filter_frames_new(self, current_frame_idx: int):
+
+        start_time = time()
+
+        if current_frame_idx == 0:
+            self.keyframe_graph.add_node(current_frame_idx)
+            return
+
+        preceding_frame_idx = current_frame_idx - 1
+        preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
+
+        keyframe_idx = preceding_frame_node.long_jump_source
+
+        print("Detection features")
+
+        reliable_sources = set()
+
+        selected_keyframe_idxs = list(self.keyframe_graph.nodes())
+
+        good_reliability = self.config.flow_reliability_threshold
+        min_reliability = 0.5 * self.config.flow_reliability_threshold
+
+        reliable_keyframe_found = False
+        we_stepped_back = False
+
+        while not reliable_keyframe_found:
+
+            reliability = self.flow_reliability(keyframe_idx, current_frame_idx)
+
+            if reliability >= min_reliability:
+                self.keyframe_graph.add_edge(current_frame_idx, keyframe_idx)
+
+            if reliability >= good_reliability:
+                if we_stepped_back:
+                    print(f"Step back was good, adding keyframe_idx={keyframe_idx}")
+                    selected_keyframe_idxs.append(keyframe_idx)
+
+                    if not self.keyframe_graph.has_node(keyframe_idx):
+
+                        self.keyframe_graph.add_node(keyframe_idx)
+                    we_stepped_back = False
+
+                reliable_keyframe_found = True
+
+            if (reliability <= good_reliability) and (reliability >= min_reliability):
+                print("Adding keyframe")
+
+                if not self.keyframe_graph.has_node(keyframe_idx):
+                    self.keyframe_graph.add_node(keyframe_idx)
+                if not self.keyframe_graph.has_node(current_frame_idx):
+                    self.keyframe_graph.add_node(current_frame_idx)
+
+                reliable_keyframe_found = True
+
+            if reliability < min_reliability:  # try going back
+                print("Too few matches, going back")
+                keyframe_idx = max(0, current_frame_idx - 1)
+                we_stepped_back = True
+                if keyframe_idx <= 0:
+                    reliable_keyframe_found = True
+                elif keyframe_idx in selected_keyframe_idxs:
+                    print(f"We cannot match {current_frame_idx}, skipping it")
+                    return
+
+        flow_frames_idxs = (keyframe_idx, current_frame_idx)
+
+        long_jump_source, long_jump_target = flow_frames_idxs
+
+        duration = time() - start_time
+        datagraph_node = self.data_graph.get_frame_data(current_frame_idx)
+        datagraph_node.pose_estimation_time = duration
+
+        datagraph_node.reliable_sources |= ({long_jump_source} | reliable_sources)
+        datagraph_node.long_jump_source = keyframe_idx
+
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
 
@@ -65,7 +140,9 @@ class RoMaFrameFilter(BaseFrameFilter):
                     source = preceding_source
                 else:
                     source = best_source
+                    max_kf = max(self.keyframe_graph.nodes())
                     self.keyframe_graph.add_edge(source, frame_i)
+                    self.keyframe_graph.add_edge(max_kf, source)
 
                     self.keyframe_graph.add_node(best_source)
                 reliable_flows_sources |= reliable_flows_sources_prime
