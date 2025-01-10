@@ -3,10 +3,13 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from kaolin.rep import SurfaceMesh
 from kornia.geometry import normalize_quaternion, So3, Se3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
+from kornia.image import ImageSize
 
+from tracker_config import TrackerConfig
 from utils.general import mesh_normalize, normalize_vertices
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
@@ -181,7 +184,8 @@ class Encoder(nn.Module):
         return encoder_result, encoder_result_flow_frames
 
 
-def init_gt_encoder(gt_mesh, gt_texture, image_shape, gt_rotations, gt_translations, tracker_config, device) -> Encoder:
+def init_gt_encoder(gt_mesh: SurfaceMesh, gt_texture: torch.Tensor, image_shape: ImageSize, gt_rotations: torch.Tensor,
+                    gt_translations, tracker_config: TrackerConfig, device: str) -> Encoder:
     ivertices = normalize_vertices(gt_mesh.vertices).numpy()
     iface_features = gt_mesh.uvs[gt_mesh.face_uvs_idx].numpy()
     gt_encoder = Encoder(tracker_config, ivertices, iface_features,
