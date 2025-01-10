@@ -143,6 +143,9 @@ class RoMaFrameFilter(BaseFrameFilter):
         dev = self.config.device
         source_datagraph_node = self.data_graph.get_frame_data(source_idx)
         fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
+
+        if not self.data_graph.G.has_edge(source_idx, target_idx):
+            self.add_new_flow(source_idx, target_idx)
         flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
 
         H_A, W_A = self.image_size.height, self.image_size.width
