@@ -149,7 +149,12 @@ class RoMaFrameFilter(BaseFrameFilter):
         assert fg_segmentation_mask.shape[-2:] == (self.image_size.height, self.image_size.width)
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-        fg_certainties = flow_arc_node.roma_flow_certainty.to(dev)[in_segmentation_mask_yx]
+        if flow_arc_node.roma_flow_certainty.shape != in_segmentation_mask_yx.shape:
+            breakpoint()
+        try:
+            fg_certainties = flow_arc_node.roma_flow_certainty.to(dev)[in_segmentation_mask_yx]
+        except:
+            breakpoint()
         fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
