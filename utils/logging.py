@@ -346,11 +346,6 @@ class WriteResults:
         if not self.tracking_config.write_to_rerun_rather_than_disk:
             self.visualize_flow_with_matching(frame_i)
 
-        if self.tracking_config.visualize_outliers_distribution:
-            datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
-            new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
-            self.visualize_outliers_distribution(new_flow_arc)
-
         # self.visualize_3d_camera_space(frame_i)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
@@ -720,8 +715,8 @@ class WriteResults:
             axs: Any = axs
 
             flow_source_label = self.tracking_config.gt_flow_source
-            if flow_source_label == 'FlowNetwork':
-                flow_source_label = self.tracking_config.long_flow_model
+            # if flow_source_label == 'FlowNetwork':
+            #     flow_source_label = self.tracking_config.long_flow_model
 
             heading_text = (f"Frames {new_flow_arc}\n"
                             f"Flow: {flow_source_label}")
@@ -778,7 +773,7 @@ class WriteResults:
             flow_frontview_np = opt_flow.numpy(force=True)
 
             self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
-                                                     rend_flow_np, segmentation_mask, occlusion_mask,
+                                                     rend_flow_np, occlusion_mask,
                                                      arc_observation.ransac_inliers,
                                                      arc_observation.ransac_outliers)
 
@@ -851,78 +846,9 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx,
                                   RerunAnnotations.matching_correspondences_outliers)
 
-    def visualize_outliers_distribution(self, new_flow_arc):
-
-        new_flow_arc_data = self.data_graph.get_edge_observations(*new_flow_arc)
-        gt_flow = new_flow_arc_data.synthetic_flow_result.observed_flow
-
-        inlier_list = torch.nonzero(new_flow_arc_data.ransac_inliers_mask)[:, 0]
-        outlier_list = torch.nonzero(~new_flow_arc_data.ransac_inliers_mask)[:, 0]
-
-        src_pts_front = new_flow_arc_data.src_pts_yx
-        dst_pts_front = new_flow_arc_data.dst_pts_yx
-        dst_pts_gt_flow_front = source_coords_to_target_coords(src_pts_front, gt_flow)
-
-        src_pts_front_inliers = src_pts_front[inlier_list]
-        src_pts_front_outliers = src_pts_front[outlier_list]
-
-        dst_pts_front_inliers = src_pts_front[inlier_list]
-        dst_pts_front_outliers = dst_pts_front[outlier_list]
-        dst_pts_front_inliers_gt = dst_pts_gt_flow_front[inlier_list]
-        dst_pts_front_outliers_gt = dst_pts_gt_flow_front[outlier_list]
-
-        errors_inliers = dst_pts_front_inliers - dst_pts_front_inliers_gt
-        errors_outliers = dst_pts_front_outliers - dst_pts_front_outliers_gt
-
-        dst_pts_front_outliers_random = dst_pts_front_outliers[np.random.permutation(dst_pts_front_outliers.shape[0])]
-        errors_outliers_random = dst_pts_front_outliers_random - dst_pts_front_outliers_gt
-
-        if len(outlier_list) == 0 or len(inlier_list) == 0:
-            return
-
-        # Randomly select one inlier and its error
-        random_idx = np.random.choice(len(outlier_list))
-        matching_error = errors_outliers[random_idx]
-        matching_error_random = errors_outliers_random[random_idx]
-        # Compute cosine similarity and Euclidean distances
-        cosine_similarities = [
-            torch.nn.functional.cosine_similarity(matching_error.unsqueeze(0), err.unsqueeze(0), dim=1).item()
-            for err in errors_outliers]
-        error_magnitudes = torch.linalg.norm(errors_outliers, dim=1).numpy(force=True)
-        euclidean_distances = [torch.norm(src_pts_front[outlier_list[random_idx]] - src_pts_front[outlier_list[i]],
-                                          dim=0).item()
-                               for i in range(len(outlier_list))]
-
-        cosine_similarities_random = [
-            torch.nn.functional.cosine_similarity(matching_error_random.unsqueeze(0), err.unsqueeze(0), dim=1).item()
-            for err in errors_outliers_random]
-        error_magnitudes_random = torch.linalg.norm(errors_outliers_random, dim=1).numpy(force=True)
-
-        fig, ax = plt.subplots()
-        scatter = ax.scatter(euclidean_distances, cosine_similarities_random, c=error_magnitudes_random, cmap='Blues',
-                             alpha=0.2)
-        scatter = ax.scatter(euclidean_distances, cosine_similarities, c=error_magnitudes, cmap='Greys',
-                             alpha=0.4)
-
-        flow_source_text = self.tracking_config.gt_flow_source if self.tracking_config.gt_flow_source != 'FlowNetwork' \
-            else self.tracking_config.long_flow_model
-
-        legend_elements = [Patch(facecolor='grey', edgecolor='grey', label=f'{flow_source_text} Dense Matching'),
-                           Patch(facecolor='blue', edgecolor='blue', label='Random Matching Baseline'), ]
-
-        ax.legend(handles=legend_elements, loc='lower right', fontsize='small')
-
-        colorbar = plt.colorbar(scatter, ax=ax)
-        colorbar.set_label('Reprojection Error Magnitude [Pixels]')
-        ax.set_xlabel('Euclidean Distance from Randomly Selected Outlier')
-        ax.set_ylabel('Cosine Similarity to Random Outlier Reprojection Error')
-        ax.set_title(f'{flow_source_text} - RANSAC Outliers Error Correlations')
-        plt.savefig(self.ransac_path / f'outliers_spatial_correlation_frame_{new_flow_arc[1]}')
-        plt.close()
-
-    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, seg_mask,
-                                            occlusion, inliers, outliers):
-        matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
+    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, occlusion, inliers, outliers):
+        # matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
+        matching_text = f''
         if inliers is not None:
             inliers = inliers.numpy(force=True)  # Ensure shape is (2, N)
             self.draw_cross_axes_flow_matches(inliers, occlusion, flow_np, rendered_flow,
@@ -942,7 +868,7 @@ class WriteResults:
     def draw_cross_axes_flow_matches(self, source_coords, occlusion_mask, flow_np, flow_np_from_movement,
                                      axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
 
-        outlier_pixel_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
+        outlier_pixel_threshold = 1.0
 
         total_points = source_coords.shape[1]
 

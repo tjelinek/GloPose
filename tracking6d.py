@@ -273,13 +273,6 @@ class Tracking6D:
         gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 
-        # camera_intrinsics = homogenize_3x3_camera_intrinsics(self.tracker.get_intrinsics_for_frame(frame_i)[None])
-        # orig_image_width = torch.Tensor([self.image_shape.width / self.config.image_downsample]).cuda()
-        # orig_image_height = torch.Tensor([self.image_shape.height / self.config.image_downsample]).cuda()
-        # pinhole_params = PinholeCamera(camera_intrinsics, camera_extrinsics,
-        #                                     orig_image_width, orig_image_height)
-        # pinhole_params.scale_(self.config.image_downsample)
-
         camera_intrinsics = self.tracker.get_intrinsics_for_frame(frame_i)
         frame_node.gt_pinhole_K = camera_intrinsics
 

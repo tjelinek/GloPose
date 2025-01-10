@@ -1,7 +1,5 @@
 import copy
-import sys
 from bisect import insort
-from functools import reduce
 from typing import Tuple, List, TypeVar, get_origin, Optional
 from itertools import chain
 
@@ -12,10 +10,6 @@ import networkx as nx
 from dataclasses import dataclass, field, replace, is_dataclass
 
 from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
-
-sys.path.append('repositories/MFT_tracker')
-from repositories.MFT_tracker.MFT.results import FlowOUTrackingResult
-from repositories.MFT_tracker.MFT.MFTIQ import chain_results
 
 ObservationType = TypeVar('ObservationType', bound='Observation')
 FlowObservationType = TypeVar('FlowObservationType', bound='BaseFlowObservation')
@@ -170,55 +164,6 @@ class BaseFlowObservation(Observation):
 
         new_instance = replace(self, observed_flow=observed_flow_unit_coords, coordinate_system='unit')
         return new_instance
-
-    @staticmethod
-    def chain(*flow_observations: FlowObservationType) -> FlowObservationType:
-
-        unique_lengths = set(flow_observation.assert_same_length() for flow_observation in flow_observations)
-        assert len(unique_lengths) == 1 and next(iter(unique_lengths)) == 1
-
-        coordinate_system = flow_observations[0].coordinate_system
-        assert all(observation.coordinate_system == coordinate_system for observation in flow_observations)
-        # At the moment, implemented for single flow only
-
-        for prev_obs, next_obs in zip(flow_observations[:-2], flow_observations[1:]):
-            assert isinstance(prev_obs, FlowObservation)
-            assert isinstance(next_obs, FlowObservation)
-
-            assert prev_obs.flow_target_frames == next_obs.flow_source_frames
-
-        if coordinate_system == 'unit':
-            flow_observations_mft_type = [obs.cast_unit_coords_to_image_coords().to_mft_format()
-                                          for obs in flow_observations]
-        else:
-            flow_observations_mft_type = [obs.to_mft_format() for obs in flow_observations]
-
-        chained_flow_mft_type = reduce(chain_results, flow_observations_mft_type)
-
-        chained_flow: FlowObservationType = (
-            type(flow_observations[0])(observed_flow=chained_flow_mft_type.flow[None, None],
-                                       observed_flow_occlusion=chained_flow_mft_type.occlusion[None, None],
-                                       observed_flow_uncertainty=chained_flow_mft_type.sigma[None, None],
-                                       observed_flow_segmentation=flow_observations[0].observed_flow_segmentation,
-                                       coordinate_system='image'))
-
-        if coordinate_system == 'unit':
-            chained_flow = chained_flow.cast_image_coords_to_unit_coords()
-
-        return chained_flow
-
-    def to_mft_format(self) -> FlowOUTrackingResult:
-
-        flow_uncertainty = getattr(self, 'observed_flow_uncertainty', None)
-        if flow_uncertainty is not None:
-            flow_uncertainty = flow_uncertainty[0, 0]
-
-        # At the moment, implemented for single flow only
-        mft_format_observation = FlowOUTrackingResult(flow=self.observed_flow[0, 0],
-                                                      occlusion=self.observed_flow_occlusion[0, 0],
-                                                      sigma=flow_uncertainty)
-
-        return mft_format_observation
 
 
 @dataclass

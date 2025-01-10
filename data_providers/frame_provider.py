@@ -23,7 +23,7 @@ class SyntheticDataProvider:
                  gt_translations: torch.Tensor, **kwargs):
         from models.rendering import RenderingKaolin
 
-        self.image_shape = ImageSize(config.max_width, config.max_width)
+        self.image_shape: ImageSize = config.rendered_image_shape
         self.device = config.device
 
         faces = gt_mesh.faces
