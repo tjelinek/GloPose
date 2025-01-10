@@ -77,8 +77,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             torch.save(warp, warp_filename)
             torch.save(certainty, certainty_filename)
         else:
-            warp = torch.load(warp_filename).to(self.device)
-            certainty = torch.load(certainty_filename).to(self.device)
+            warp = torch.load(warp_filename, weights_only=True).to(self.device)
+            certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
 
         if sample:
             warp, certainty = self.flow_model.sample(warp, certainty, sample)
