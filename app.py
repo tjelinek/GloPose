@@ -193,6 +193,42 @@ def on_glotrack_click(input_images, segmentations, global_vars, mapper='colmap',
         raise ValueError(f"Unknown matcher {matcher}")
 
 
+def update_sequences(dataset):
+    sequences_map = {
+        "GoogleScannedObjects": [
+            "INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count",
+            "Twinlab_Nitric_Fuel",
+            "Squirrel",
+            "STACKING_BEAR",
+            "Schleich_Allosaurus",
+            "Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total",
+            "SCHOOL_BUS",
+            "Sootheze_Cold_Therapy_Elephant",
+            "TOP_TEN_HI",
+            "Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure",
+        ],
+        "SyntheticObjects": [
+            "Textured_Sphere_5_y",
+        ],
+        "HO3D": [
+            "ABF10", "BB10", "GPMF10", "GSF10", "MC1", "MDF10", "ND2", "ShSu12", "SiBF12", "SM3", "SMu41",
+            "ABF11", "BB11", "GPMF11", "GSF11", "MC2", "MDF11", "SB10", "ShSu13", "SiBF13", "SM4", "SMu42",
+            "ABF12", "BB12", "GPMF12", "GSF12", "MC4", "MDF12", "SB12", "ShSu14", "SiBF14", "SM5", "SS1",
+            "ABF13", "BB13", "GPMF13", "GSF13", "MC5", "MDF13", "SB14", "SiBF10", "SiS1", "SMu1", "SS2",
+            "ABF14", "BB14", "GPMF14", "GSF14", "MC6", "MDF14", "ShSu10", "SiBF11", "SM2", "SMu40", "SS3",
+        ],
+        "HANDAL": [
+            "000001",
+            "000002",
+            "000003",
+            "000004",
+            "000005",
+        ],
+        "Custom": []
+    }
+    return gr.update(choices=sequences_map.get(dataset, []), interactive=True)
+
+
 with gr.Blocks() as demo:
     stop_event = threading.Event()
 
@@ -206,10 +242,17 @@ with gr.Blocks() as demo:
         "matching_pairs": [], })
 
     with gr.Row():
-        precomputed_flow_input = gr.Textbox(label="Path to Precomputed Flow Folder",
-                                            placeholder="/path/to/precomputed_flow/folder",
-                                            value="/mnt/personal/jelint19/data/precomputed_flow/GoogleScannedObjects_box_textured"
-                                            )
+        with gr.Column():
+            dataset_input = gr.Dropdown(
+                label="Dataset",
+                choices=["Custom", "GoogleScannedObjects", "SyntheticObjects", "HO3D", "HANDAL"],
+                value="Custom",
+            )
+
+        with gr.Column():
+            sequence_input = gr.Dropdown(label="Sequence")
+
+        dataset_input.change(update_sequences, inputs=[dataset_input], outputs=[sequence_input])
 
     with gr.Row():
         input_gallery = gr.Gallery(label="Input Images")
