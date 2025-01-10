@@ -7,8 +7,7 @@ from pathlib import Path
 import torch
 
 from dataset_generators import scenarios
-from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence, parse_args
+from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.data_utils import load_gt_data
 from utils.general import load_config
 
@@ -48,7 +47,7 @@ def main():
             gt_texture_path = None
             gt_mesh_path = None
 
-        gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path(sequence) / Path('gt_tracking_log') / \
+        gt_tracking_path = config.default_data_folder / Path(dataset) / Path(sequence) / Path('gt_tracking_log') / \
                            Path('gt_tracking_log.csv')
 
         experiment_name = args.experiment
@@ -64,14 +63,14 @@ def main():
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
         else:
-            write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
+            write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         renderings_folder = 'renderings'
 
         t0 = time.time()
 
         files = np.array(
-            glob.glob(os.path.join(dataset_folder, dataset, sequence, renderings_folder, '*.*')))
+            glob.glob(os.path.join(config.default_data_folder, dataset, sequence, renderings_folder, '*.*')))
         files.sort()
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
@@ -86,7 +85,8 @@ def main():
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
         config.input_frames = gt_rotations.shape[0]
-        run_tracking_on_sequence(config, write_folder, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
+                                 gt_rotations=gt_rotations, gt_translations=gt_translations)
 
 
 if __name__ == "__main__":

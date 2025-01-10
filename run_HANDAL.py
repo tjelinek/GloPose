@@ -7,8 +7,7 @@ from pathlib import Path
 from kornia.geometry import rotation_matrix_to_axis_angle
 
 from utils.dataset_utils.bop_challenge import get_pinhole_params
-from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence, parse_args
+from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.general import load_config
 
 
@@ -53,11 +52,11 @@ def main():
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
         else:
-            write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
+            write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         t0 = time.time()
 
-        sequence_folder = Path(dataset_folder) / 'bop' / 'handal' / 'val' / sequence
+        sequence_folder = config.default_data_folder / 'bop' / 'handal' / 'val' / sequence
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
 

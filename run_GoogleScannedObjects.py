@@ -2,8 +2,7 @@ import torch
 
 from dataset_generators import scenarios
 from dataset_generators.track_augmentation import modify_rotations
-from main_settings import tmp_folder, dataset_folder
-from runtime_utils import run_tracking_on_sequence, parse_args
+from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.data_utils import load_mesh, load_texture
 from utils.general import load_config
 from pathlib import Path
@@ -36,7 +35,7 @@ def main():
         config.camera_position = (0, -5.0, 0)
         config.camera_up = (0, 0, 1)
 
-        gt_model_path = Path(dataset_folder) / Path(dataset) / Path('models') / Path(sequence)
+        gt_model_path = config.default_data_folder / Path(dataset) / Path('models') / Path(sequence)
         gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
         gt_mesh_path = gt_model_path / Path('meshes/model.obj')
         # gt_tracking_path = Path(dataset_folder) / Path(dataset) / Path('gt_tracking_log') / Path(sequence) / \
@@ -69,7 +68,7 @@ def main():
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
         else:
-            write_folder = Path(tmp_folder) / experiment_name / dataset / sequence
+            write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         config.input_frames = gt_rotations.shape[0]
 
