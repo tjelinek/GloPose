@@ -8,7 +8,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from kornia.image import ImageSize
-from segment_anything import SamPredictor
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
@@ -21,7 +20,7 @@ from utils.image_utils import get_shape, get_intrinsics_from_exif
 class SyntheticDataProvider:
 
     def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
-                 gt_translations: torch.Tensor):
+                 gt_translations: torch.Tensor, **kwargs):
         from models.rendering import RenderingKaolin
 
         self.image_shape = ImageSize(config.max_width, config.max_width)
@@ -118,9 +117,8 @@ class PrecomputedFrameProvider(FrameProvider):
 
 ##############################
 class SegmentationProvider(ABC):
-    def __init__(self, downsample_factor, device='cuda'):
-        self.downsample_factor = downsample_factor
-        self.image_shape: Optional[ImageSize] = None
+    def __init__(self, image_shape: ImageSize, device='cuda'):
+        self.image_shape: ImageSize = image_shape
         self.device = device
 
     @abstractmethod
@@ -130,9 +128,9 @@ class SegmentationProvider(ABC):
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
-    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh,
-                 gt_rotations: torch.Tensor, gt_translations: torch.Tensor):
-        SegmentationProvider.__init__(self, config.image_downsample, config.device)
+    def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
+                 gt_translations: torch.Tensor):
+        SegmentationProvider.__init__(self, image_shape, config.device)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
     def next_segmentation(self, frame_id, **kwargs):
@@ -142,10 +140,10 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, images_paths: List[Path], segmentations_paths: List[Path]):
-        super().__init__(config.image_downsample, config.device)
+    def __init__(self, config: TrackerConfig, image_shape: ImageSize, segmentations_paths: List[Path]):
+        super().__init__(image_shape, config.device)
 
-        self.image_shape = get_shape(images_paths[0], self.downsample_factor)
+        self.image_shape: ImageSize = image_shape
         self.segmentations_paths: List[Path] = segmentations_paths
 
         self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
@@ -163,13 +161,13 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
 class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, initial_segmentation: torch.Tensor,
+    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
                  initial_image: torch.Tensor, **kwargs):
-        super().__init__(config.image_downsample, config.device)
+        super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None
 
-        self.image_shape = ImageSize(width=initial_segmentation.shape[-1], height=initial_segmentation.shape[-2])
+        self.image_shape: ImageSize = image_shape
         self.predictor: Optional[SamPredictor] = None
 
         import sys
@@ -207,25 +205,21 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, initial_segmentation: torch.Tensor,
-                 initial_image: torch.Tensor, **kwargs):
-        super().__init__(config.image_downsample, config.device)
+    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor, **kwargs):
+        super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None
 
-        self.image_shape = ImageSize(width=initial_image.shape[-1], height=initial_image.shape[-2])
         self.predictor: Optional[SamPredictor] = None
 
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
-
         images_paths = kwargs['images_paths']
-        saved_imgs_dir = self.save_images_as_jpeg(images_paths, tracker_config.write_folder / 'sam2_imgs')
 
         checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
         model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
         self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-        state = self.predictor.init_state(str(saved_imgs_dir[0].parent))
+        state = self.predictor.init_state(str(images_paths[0].parent))
 
         initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
         _, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0, initial_mask_sam_format)
@@ -233,20 +227,6 @@ class SAM2SegmentationProvider(SegmentationProvider):
         self.past_predictions = {0: (out_obj_ids, out_mask_logits)}
         for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
             self.past_predictions[out_frame_idx] = (out_obj_ids, out_mask_logits)
-
-    def save_images_as_jpeg(self, image_paths, output_path: Path) -> List[Path]:
-        output_path.mkdir(exist_ok=True)
-
-        saved_img_dirs = []
-        for image_path in image_paths:
-            with Image.open(image_path) as img:
-                img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
-
-                output_file = output_path / f"{image_path.stem}.JPEG"
-                img.convert("RGB").save(output_file, format="JPEG")
-                saved_img_dirs.append(output_file)
-
-        return saved_img_dirs
 
     @staticmethod
     def _image_to_sam(image: torch.Tensor) -> np.ndarray:
@@ -271,6 +251,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         return obj_seg_mask_formatted
 
+
 class BaseTracker:
     def __init__(self, config: TrackerConfig, **kwargs):
         self.downsample_factor = config.image_downsample
@@ -287,18 +268,28 @@ class BaseTracker:
         else:
             raise ValueError(f"Unknown value of 'frame_provider': {config.frame_provider}")
 
+        self.image_shape: ImageSize = self.frame_provider.image_shape
+
         if config.segmentation_provider == 'synthetic':
-            self.segmentation_provider = SyntheticSegmentationProvider(config, **kwargs)
+            self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'precomputed':
-            self.segmentation_provider = PrecomputedSegmentationProvider(config, **kwargs)
+            self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
-            assert 'initial_segmentation' in kwargs
-            if config.frame_provider == 'synthetic' and kwargs['initial_segmentation'] is not None:
+            if config.frame_provider == 'synthetic':# and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
-            self.segmentation_provider = SAM2SegmentationProvider(config, **kwargs)
+                images_paths = kwargs['images_paths'] if 'images_paths' in kwargs else None
+                images_paths_for_sam = self.save_images_as_jpeg(config.write_folder / 'sam2_imgs', self.frame_provider,
+                                                                images_paths)
+                kwargs['images_paths'] = images_paths_for_sam
+            else:
+                assert 'initial_segmentation' in kwargs and kwargs['initial_segmentation'] is not None
+            initial_segmentation = kwargs['initial_segmentation']
+            del kwargs['initial_segmentation']
+            self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
+                                                                  **kwargs)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
@@ -316,9 +307,9 @@ class BaseTracker:
 
             # Define the output file name
             if images_paths is not None:
-                output_file = output_path / f"{images_paths[frame_i]}.JPEG"
+                output_file = output_path / f"{Path(images_paths[frame_i]).stem}.JPEG"
             else:
-                output_file = output_path / f"image_{frame_i:05d}.JPEG"
+                output_file = output_path / f"{frame_i:05d}.JPEG"
 
             # Save the image in JPEG format
             img.convert("RGB").save(output_file, format="JPEG")
