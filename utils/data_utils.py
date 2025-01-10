@@ -29,6 +29,10 @@ def load_mesh(mesh_path: Path):
     gt_mesh_prototype: kaolin.rep.SurfaceMesh = kaolin.io.obj.import_mesh(str(mesh_path), with_materials=True,
                                                             heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
 
+    gt_mesh_prototype.uvs[:, 1] = 1.0 - gt_mesh_prototype.uvs[:, 1]
+    # Fixing import that was changed in this commit
+    # https://github.com/NVIDIAGameWorks/kaolin/commit/9cf895aa9af7769ae6ef23e654c1a42bcf094988
+
     return gt_mesh_prototype
 
 
