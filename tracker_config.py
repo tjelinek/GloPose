@@ -104,6 +104,7 @@ class TrackerConfig:
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
+    min_flow_reliability: float = 0.25
     min_number_of_reliable_matches: int = 0
 
     mapper: str = 'pycolmap'
