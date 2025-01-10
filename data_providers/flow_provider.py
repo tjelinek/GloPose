@@ -95,8 +95,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         certainty_filename = self.certainties_path / saved_filename
 
         if warp_filename.exists() and certainty_filename.exists():
-            warp = torch.load(warp_filename).to(self.device)
-            certainty = torch.load(certainty_filename).to(self.device)
+            warp = torch.load(warp_filename, weights_only=True).to(self.device)
+            certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
             return warp, certainty
 
         return None
