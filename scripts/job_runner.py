@@ -46,9 +46,11 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def create_unused_folder(output_folder: Path):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder, exist_ok=True)
-        return output_folder
+    # if not os.path.exists(output_folder) or True:
+    #     os.makedirs(output_folder, exist_ok=True)
+    #     return output_folder
+    os.makedirs(output_folder, exist_ok=True)
+    return output_folder
 
     i = 1
     while os.path.exists(f"{output_folder}_{i}"):
@@ -164,7 +166,7 @@ def main():
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pixel_ver',
         # 'epipolar/mft/mft_roma_direct_ransac_zaragoza_pose_correspondence_sampling_pose_pixel_ver',
         # 'base_config'
-        'glotracker/glotracker_roma',
+        # 'glotracker/glotracker_roma',
         'glotracker/glotracker_roma_c05_fg_025_m50',
         'glotracker/glotracker_roma_c095_fg_025_m250',
         'glotracker/glotracker_roma_c099_fg_02_m200',
@@ -173,6 +175,7 @@ def main():
         'glotracker/glotracker_roma_c095_fg_075_m1000',
         'glotracker/glotracker_roma_c09_fg_02_m500',
         'glotracker/glotracker_roma_c09_fg_05_m250',
+        'glotracker/glotracker_roma_c095_fg_85_m500',
 
     ]
 
@@ -195,30 +198,30 @@ def main():
             # '6_Colored_Cube_5_z'
         ],
         Datasets.GoogleScannedObjects: [
-            'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
-            'Twinlab_Nitric_Fuel',
-            'Squirrel',
-            'STACKING_BEAR',
-            'Schleich_Allosaurus',
-            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
-            'SCHOOL_BUS',
-            'Sootheze_Cold_Therapy_Elephant',
-            'TOP_TEN_HI',
-            'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
+            # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
+            # 'Twinlab_Nitric_Fuel',
+            # 'Squirrel',
+            # 'STACKING_BEAR',
+            # 'Schleich_Allosaurus',
+            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            # 'SCHOOL_BUS',
+            # 'Sootheze_Cold_Therapy_Elephant',
+            # 'TOP_TEN_HI',
+            # 'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
         Datasets.HO3D: [
-            # 'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+            'ABF10', 'BB10', 'GPMF10',#'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
             # 'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
             # 'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
             # 'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
             # 'ABF14', #'BB14', 'GPMF14', #'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
         ],
         Datasets.HANDAL: [
-            '000001',
-            '000002',
-            '000003',
-            '000004',
-            '000005',
+            # '000001',
+            # '000002',
+            # '000003',
+            # '000004',
+            # '000005',
         ],
         # Datasets.photo360: [
         #     "09"
