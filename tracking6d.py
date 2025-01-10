@@ -65,10 +65,17 @@ class Tracking6D:
 
         self.data_graph = DataGraph()
 
+        cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
+                                   config.roma_matcher_config.config_name / config.dataset / config.sequence)
+        cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
+                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
+        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
+                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
+
         self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_rotations,
                                    gt_translations=gt_translations, initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths,
-                                   segmentation_paths=segmentation_paths)
+                                   segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
@@ -76,11 +83,6 @@ class Tracking6D:
                                            images_paths=self.images_paths,
                                            segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.world_to_cam)
-
-        cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
-                                   config.roma_matcher_config.config_name / config.dataset / config.sequence)
-        cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
-                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
 
