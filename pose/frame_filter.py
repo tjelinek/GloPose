@@ -294,11 +294,13 @@ class FrameFilterSift(BaseFrameFilter):
         while not reliable_keyframe_found:
 
             num_matches = self.compute_sift_reliability(keyframe_idx, current_frame_idx)
+            print(f'{num_matches}, {min_matches}, {more_than_enough_matches}')
 
             if num_matches >= self.config.sift_filter_min_matches:
                 self.keyframe_graph.add_edge(current_frame_idx, keyframe_idx)
 
             if num_matches >= more_than_enough_matches:
+                print(f'{keyframe_idx} has more than enough matches')
                 if we_stepped_back:
                     print(f"Step back was good, adding keyframe_idx={keyframe_idx}")
                     selected_keyframe_idxs.append(keyframe_idx)
