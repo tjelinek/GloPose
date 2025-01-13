@@ -205,15 +205,17 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor, **kwargs):
+    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor, images_paths: List[Path],
+                 sam2_cache_folder: Optional[Path] = None, **kwargs):
         super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None
 
         self.predictor: Optional[SamPredictor] = None
+        self.cache_folder: Path = sam2_cache_folder
+        self.cache_folder.mkdir(exist_ok=True, parents=True)
 
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
-        images_paths = kwargs['images_paths']
 
         checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
         model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
@@ -221,12 +223,25 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         state = self.predictor.init_state(str(images_paths[0].parent))
 
-        initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
-        _, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0, initial_mask_sam_format)
+        self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt') for img_path in images_paths]
+        if all(x.exists() for x in self.cache_paths):
+            self.cache_exists: bool = True
+        else:
+            self.cache_exists = False
 
-        self.past_predictions = {0: (out_obj_ids, out_mask_logits)}
-        for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
-            self.past_predictions[out_frame_idx] = (out_obj_ids, out_mask_logits)
+        if not self.cache_exists:
+            initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
+            out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
+                                                                                      initial_mask_sam_format)
+
+            self.past_predictions = {0: (out_obj_ids, out_mask_logits)}
+            for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
+                self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
+                torch.save((out_frame_idx, out_obj_ids, out_mask_logits), self.cache_paths[out_frame_idx])
+        else:
+            for cache_path in self.cache_paths:
+                out_frame_idx, out_obj_ids, out_mask_logits = torch.load(cache_path, only_weights=True)
+                self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
 
     @staticmethod
     def _image_to_sam(image: torch.Tensor) -> np.ndarray:
@@ -239,7 +254,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
     def next_segmentation(self, frame_i, image) -> torch.Tensor:
 
         if frame_i in self.past_predictions.keys():
-            out_obj_ids, out_mask_logits = self.past_predictions[frame_i]
+            out_frame_idx, out_obj_ids, out_mask_logits = self.past_predictions[frame_i]
         else:
             raise ValueError("Not predicted")
 
@@ -275,7 +290,7 @@ class BaseTracker:
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
-            if config.frame_provider == 'synthetic':# and kwargs['initial_segmentation'] is not None:
+            if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
