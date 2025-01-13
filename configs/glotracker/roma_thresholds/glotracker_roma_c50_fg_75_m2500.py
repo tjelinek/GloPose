@@ -6,8 +6,8 @@ def get_config() -> TrackerConfig:
 
     cfg.frame_filter = 'RoMa'
 
-    cfg.min_roma_certainty_threshold = 0.8
-    cfg.flow_reliability_threshold = 0.25
-    cfg.min_number_of_reliable_matches = 250
+    cfg.min_roma_certainty_threshold = 0.5
+    cfg.flow_reliability_threshold = 0.75
+    cfg.min_number_of_reliable_matches = 2500
 
     return cfg
