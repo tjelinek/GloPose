@@ -101,18 +101,16 @@ def main():
         'glotracker/roma_thresholds/glotracker_roma_c50_fg_50_m500',
         'glotracker/roma_thresholds/glotracker_roma_c50_fg_50_m1000',
         'glotracker/roma_thresholds/glotracker_roma_c50_fg_50_m2500',
-        'glotracker/sift_thresholds/glotracker_sift_min200_good50',
-        'glotracker/sift_thresholds/glotracker_sift_min200_good100',
-        'glotracker/sift_thresholds/glotracker_sift_min200_good200',
+        'glotracker/sift_thresholds/glotracker_sift_min50_good200',
+        'glotracker/sift_thresholds/glotracker_sift_min50_good400',
+        'glotracker/sift_thresholds/glotracker_sift_min50_good800',
+        'glotracker/sift_thresholds/glotracker_sift_min100_good200',
+        'glotracker/sift_thresholds/glotracker_sift_min100_good400',
+        'glotracker/sift_thresholds/glotracker_sift_min100_good800',
         'glotracker/sift_thresholds/glotracker_sift_min200_good400',
-        'glotracker/sift_thresholds/glotracker_sift_min400_good50',
-        'glotracker/sift_thresholds/glotracker_sift_min400_good100',
-        'glotracker/sift_thresholds/glotracker_sift_min400_good200',
-        'glotracker/sift_thresholds/glotracker_sift_min400_good400',
-        'glotracker/sift_thresholds/glotracker_sift_min800_good50',
-        'glotracker/sift_thresholds/glotracker_sift_min800_good100',
-        'glotracker/sift_thresholds/glotracker_sift_min800_good200',
-        'glotracker/sift_thresholds/glotracker_sift_min800_good400',
+        'glotracker/sift_thresholds/glotracker_sift_min200_good800',
+        'glotracker/sift_thresholds/glotracker_sift_min400_good800',
+
     ]
 
     sequences = {

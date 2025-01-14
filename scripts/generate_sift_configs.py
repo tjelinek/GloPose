@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 def generate_configs():
-    maxmatches = [50, 100, 200, 400]
-    minmatches = [200, 400, 800]
+    minmatches = [50, 100, 200, 400]
+    maxmatches = [200, 400, 800]
     config_base_folder = Path('configs')
     config_folder = Path('glotracker/sift_thresholds')
 
