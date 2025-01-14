@@ -342,7 +342,7 @@ class WriteResults:
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
         device = self.tracking_config.device
 
-        rr.set_time_sequence(RerunAnnotations.space_visualization, 0)
+        rr.set_time_sequence(RerunAnnotations.space_visualization, frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -431,14 +431,14 @@ class WriteResults:
 
             strips.append([im1_t, im2_t])
 
-        rr.log(
-            RerunAnnotations.colmap_predicted_line_strips_reliable,
-            rr.LineStrips3D(
-                strips,
-                colors=[[255, 0, 0] ] * len(strips),
-                radii=[0.005] * len(strips),
-            )
-        )
+        # rr.log(
+        #     RerunAnnotations.colmap_predicted_line_strips_reliable,
+        #     rr.LineStrips3D(
+        #         strips,
+        #         colors=[[255, 0, 0] ] * len(strips),
+        #         radii=[0.005] * len(strips),
+        #     )
+        # )
 
     def visualize_3d_camera_space(self, frame_i: int, keyframe_graph: nx.DiGraph):
 
