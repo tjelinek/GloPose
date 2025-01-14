@@ -324,7 +324,7 @@ class FrameFilterSift(BaseFrameFilter):
 
             if num_matches < min_matches:  # try going back
                 print("Too few matches, going back")
-                keyframe_idx = max(0, current_frame_idx - 1)
+                keyframe_idx = max(0, keyframe_idx - 1)
                 we_stepped_back = True
                 if keyframe_idx <= 0:
                     reliable_keyframe_found = True
