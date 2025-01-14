@@ -1,3 +1,4 @@
+import shutil
 from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import List, Optional
@@ -226,7 +227,6 @@ class SAM2SegmentationProvider(SegmentationProvider):
         self.past_predictions = {}
         if not self.cache_exists:
 
-
             checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
@@ -295,21 +295,27 @@ class BaseTracker:
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
+            need_to_clean_sam2_images = True
+            sam2_tmp_path = config.write_folder / 'sam2_imgs'
+
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
                 images_paths = kwargs['images_paths'] if 'images_paths' in kwargs else None
-                images_paths_for_sam = self.save_images_as_jpeg(config.write_folder / 'sam2_imgs', self.frame_provider,
-                                                                images_paths)
+                images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
                 kwargs['images_paths'] = images_paths_for_sam
+                need_to_clean_sam2_images = True
             else:
                 assert 'initial_segmentation' in kwargs and kwargs['initial_segmentation'] is not None
             initial_segmentation = kwargs['initial_segmentation']
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   **kwargs)
+
+            if need_to_clean_sam2_images:
+                shutil.rmtree(sam2_tmp_path)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
