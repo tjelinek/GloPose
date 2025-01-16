@@ -8,13 +8,13 @@ import cv2
 import os
 from hloc.utils import viz_3d
 import pycolmap
-from frame_filtering_wrapper import default_matchability_opts, get_keyframes_and_segmentations_roma
-from pose.glomap import run_glomap_from_image_list
-from sift_baseline import (estimate_camera_poses_sift,
-                           default_opts,
-                           default_sift_keyframe_opts,
-                           get_keyframes_and_segmentations_sift,
-                           get_exhaustive_image_pairs)
+# from frame_filtering_wrapper import default_matchability_opts, get_keyframes_and_segmentations_roma
+# from pose.glomap import run_glomap_from_image_list
+# from sift_baseline import (estimate_camera_poses_sift,
+#                            default_opts,
+#                            default_sift_keyframe_opts,
+#                            get_keyframes_and_segmentations_sift,
+#                            get_exhaustive_image_pairs)
 from datetime import datetime
 import shutil
 import torch
@@ -81,7 +81,7 @@ def get_keyframes_and_segmentations_passthrough(input_images, segmentations):
 
 def get_keyframes_and_segmentations(input_images, segmentations, global_vars, alg='passthrough', _skip_slider=1000,
                                     _too_little_slider=0, _matchability_slider=.5, _min_certainty_slider=.95,
-                                    _device_radio='cpu', precomputed_flow_dir=None, _matchability_radio=None,
+                                    _device_radio='cpu', _matchability_radio=None,
                                     progress=gr.Progress()):
     input_images = [img for (img, _) in input_images]
     segmentations = [seg for (seg, _) in segmentations]
@@ -99,8 +99,6 @@ def get_keyframes_and_segmentations(input_images, segmentations, global_vars, al
         opts['matchability_score'] = _matchability_slider
         opts['matchability_algorithm'] = _matchability_radio
         opts['roma_certainty'] = _min_certainty_slider
-        if precomputed_flow_dir != '':
-            opts['precomputed_flow_dir'] = Path(precomputed_flow_dir)
         k, s, mp = get_keyframes_and_segmentations_roma(input_images, segmentations, opts, progress=progress,
                                                         stop_event=stop_event)
     else:
@@ -134,7 +132,7 @@ def run_sift(input_images, segmentations, global_vars, mapper='colmap', num_feat
 
 
 def run_roma(input_images, segmentations, global_vars, mapper='colmap', num_features=1024, _device='cpu',
-             precomputed_flow_dir='', progress=gr.Progress()):
+             progress=gr.Progress()):
     keyframes = [Path(img) for (img, _) in input_images]
     segmentations = [Path(seg) for (seg, _) in segmentations]
 
@@ -158,8 +156,6 @@ def run_roma(input_images, segmentations, global_vars, mapper='colmap', num_feat
             "device": _device,
             "img_ext": '.png'}
 
-    if precomputed_flow_dir != '':
-        opts['precomputed_flow_dir'] = Path(precomputed_flow_dir)
     with torch.inference_mode():
         poses, colmap_rec = run_glomap_from_image_list(keyframes, segmentations, matching_pairs, options=opts,
                                                        progress=progress)
@@ -182,10 +178,10 @@ def ensure_same_dir(keyframes: List[Path]):
 
 
 def on_glotrack_click(input_images, segmentations, global_vars, mapper='colmap', matcher='RoMa',
-                      num_features=1024, device_radio_='cpu', progress=gr.Progress(), precomputed_flow_dir=''):
+                      num_features=1024, device_radio_='cpu', progress=gr.Progress()):
     if matcher == 'RoMa':
         return run_roma(input_images, segmentations, global_vars, mapper=mapper, num_features=num_features,
-                        _device=device_radio_, progress=progress, precomputed_flow_dir=precomputed_flow_dir)
+                        _device=device_radio_, progress=progress)
     elif matcher == 'SIFT':
         return run_sift(input_images, segmentations, global_vars, mapper=mapper, num_features=num_features,
                         _device='cpu', progress=progress)
@@ -300,12 +296,12 @@ with gr.Blocks() as demo:
     keyframes_button.click(get_keyframes_and_segmentations,
                            inputs=[input_gallery, segmentations_gallery, GLOBAL_VARS, keyframe_radio, skip_slider,
                                    too_little_slider, matchability_slider, reliability_slider, device_radio_filter,
-                                   precomputed_flow_input, matchability_radio],
+                                   matchability_radio],
                            outputs=[filtered_fallery, filtered_segmentations, GLOBAL_VARS])
 
     glotrack_button.click(on_glotrack_click, inputs=[filtered_fallery, filtered_segmentations,
                                                      GLOBAL_VARS, mapper_radio, matcher_radio, num_features,
-                                                     device_radio_matcher, precomputed_flow_input],
+                                                     device_radio_matcher],
                           outputs=vis_plot)
 
 demo.launch(share=True)
