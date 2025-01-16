@@ -28,7 +28,7 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-        if config.augment_gt_track or config.gt_flow_source == 'GenerateSynthetic':
+        if config.gt_flow_source == 'GenerateSynthetic':
             exit()
 
         gt_texture_path = None
@@ -37,9 +37,6 @@ def main():
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
-        config.gt_texture_path = gt_texture_path
-        config.gt_mesh_path = gt_mesh_path
-        config.gt_track_path = None
         config.sequence = sequence
         config.dataset = dataset
         config.image_downsample = 0.5

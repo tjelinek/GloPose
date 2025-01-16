@@ -47,14 +47,10 @@ def main():
             gt_texture_path = None
             gt_mesh_path = None
 
-        gt_tracking_path = config.default_data_folder / Path(dataset) / Path(sequence) / Path('gt_tracking_log') / \
-                           Path('gt_tracking_log.csv')
 
         experiment_name = args.experiment
-
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
-        config.gt_track_path = gt_tracking_path
 
         config.experiment_name = experiment_name
         config.sequence = sequence

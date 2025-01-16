@@ -31,18 +31,9 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-        if config.augment_gt_track or config.gt_flow_source == 'GenerateSynthetic':
-            exit()
-
-        gt_texture_path = None
-        gt_mesh_path = None
-
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
-        config.gt_texture_path = gt_texture_path
-        config.gt_mesh_path = gt_mesh_path
-        config.gt_track_path = None
         config.sequence = sequence
         config.dataset = dataset
         config.image_downsample = 1.0
@@ -75,8 +66,6 @@ def main():
             cam_intrinsics_list.append(data_dict['camMat'])
             gt_rotations.append(data_dict['objRot'].squeeze())
             gt_translations.append(data_dict['objTrans'])
-
-        config.generate_synthetic_observations_if_possible = False
 
         eerr0 = set(i for i in range(len(gt_rotations)) if len(gt_rotations[i].shape) < 1)
         eert0 = set(i for i in range(len(gt_rotations)) if len(gt_translations[i].shape) < 1)

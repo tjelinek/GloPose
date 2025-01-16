@@ -21,9 +21,9 @@ def main():
             'Squirrel',
             # 'STACKING_BEAR',
             # 'Schleich_Allosaurus',
-            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
             # 'SCHOOL_BUS',
-            'Sootheze_Cold_Therapy_Elephant',
+            # 'Sootheze_Cold_Therapy_Elephant',
             # 'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ]
@@ -61,9 +61,6 @@ def main():
         gt_rotations = gt_rotations[::skip_frames]
         images_paths = images_paths[::skip_frames]
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
-
-        if config.augment_gt_track:
-            gt_rotations, gt_translations = modify_rotations(gt_rotations, gt_translations)
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence

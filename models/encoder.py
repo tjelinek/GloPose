@@ -43,13 +43,7 @@ class Encoder(nn.Module):
 
         self.quaternion = nn.Parameter(quat.q)
 
-        # Lights initialization
-        if self.config.use_lights:
-            lights = torch.zeros(1, 3, 9)
-            lights[:, :, 0] = 0.5
-            self.lights = nn.Parameter(lights)
-        else:
-            self.lights = None
+        self.lights = None
 
         # Vertices initialization
         if self.config.optimize_shape:
