@@ -31,9 +31,6 @@ def main():
         if config.gt_flow_source == 'GenerateSynthetic':
             exit()
 
-        gt_texture_path = None
-        gt_mesh_path = None
-
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
@@ -93,8 +90,6 @@ def main():
         pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
-
-        config.generate_synthetic_observations_if_possible = False
 
         valid_indices = list(sorted(gt_segs.keys() & gt_images.keys() & gt_translations.keys() &
                                     gt_rotations.keys()))
