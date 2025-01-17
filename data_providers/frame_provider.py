@@ -295,7 +295,7 @@ class BaseTracker:
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
-            need_to_clean_sam2_images = True
+            need_to_clean_sam2_images = False
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
