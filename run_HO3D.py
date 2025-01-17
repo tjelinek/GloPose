@@ -118,6 +118,7 @@ def main():
                                  segmentation_paths=gt_segmentations_list, initial_segmentation=first_segment_tensor,
                                  initial_image=first_image_tensor)
 
+        exit()
 
 if __name__ == "__main__":
     main()
