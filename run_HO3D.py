@@ -88,7 +88,7 @@ def main():
         cam_to_obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
 
         Se3_cam_to_obj = Se3(Quaternion.from_axis_angle(cam_to_obj_rotations), cam_to_obj_translations)
-        Se3_cam_to_obj_1 = Se3_cam_to_obj[0]
+        Se3_cam_to_obj_1 = Se3_cam_to_obj[[0]]
         Se3_cam_to_obj_1_expanded = Se3.from_matrix(Se3_cam_to_obj_1.matrix().expand_as(Se3_cam_to_obj.matrix()))
 
         Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
