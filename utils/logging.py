@@ -375,7 +375,7 @@ class WriteResults:
                                radii=strips_radii))
 
         datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
-        template_frame_idx = datagraph_camera_node.long_jump_source
+        template_frame_idx = datagraph_camera_node.matching_source_keyframe
 
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
@@ -530,7 +530,7 @@ class WriteResults:
                                radii=strips_radii))
 
         datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
-        template_frame_idx = datagraph_camera_node.long_jump_source
+        template_frame_idx = datagraph_camera_node.matching_source_keyframe
 
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
@@ -626,7 +626,7 @@ class WriteResults:
         results = defaultdict(list)
 
         for i in range(1, frame_i + 1):
-            flow_arc_source = self.data_graph.get_frame_data(i).long_jump_source
+            flow_arc_source = self.data_graph.get_frame_data(i).matching_source_keyframe
             flow_arc = (flow_arc_source, i)
 
             arc_data = self.data_graph.get_edge_observations(*flow_arc)
@@ -691,7 +691,7 @@ class WriteResults:
         dpi = 600
 
         datagraph_frontview_data = self.data_graph.get_frame_data(frame_i)
-        new_flow_arcs = [(datagraph_frontview_data.long_jump_source, frame_i)]
+        new_flow_arcs = [(datagraph_frontview_data.matching_source_keyframe, frame_i)]
 
         for new_flow_arc in new_flow_arcs:
 
@@ -780,7 +780,7 @@ class WriteResults:
     def visualize_flow_with_matching_rerun(self, frame_i):
 
         datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
-        new_flow_arc = (datagraph_camera_data.long_jump_source, frame_i)
+        new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
         rr.set_time_sequence('frame', flow_arc_target)
@@ -933,7 +933,7 @@ class WriteResults:
         data_graph_node = self.data_graph.get_frame_data(frame_i)
         camera_specific_graph_node = self.data_graph.get_frame_data(frame_i)
 
-        long_jump_source = camera_specific_graph_node.long_jump_source
+        long_jump_source = camera_specific_graph_node.matching_source_keyframe
 
         rr.set_time_sequence("frame", frame_i)
         datagraph_long_edge = self.data_graph.get_edge_observations(long_jump_source, frame_i)

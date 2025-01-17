@@ -44,7 +44,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         preceding_frame_idx = current_frame_idx - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
 
-        keyframe_idx = preceding_frame_node.long_jump_source
+        keyframe_idx = preceding_frame_node.matching_source_keyframe
 
         print("Detection features")
 
@@ -106,7 +106,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         datagraph_node.pose_estimation_time = duration
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_sources)
-        datagraph_node.long_jump_source = keyframe_idx
+        datagraph_node.matching_source_keyframe = keyframe_idx
 
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
@@ -116,11 +116,11 @@ class RoMaFrameFilter(BaseFrameFilter):
         if frame_i == 0:
             self.keyframe_graph.add_node(0)
             self.data_graph.get_frame_data(0).reliable_sources = {0}
-            self.data_graph.get_frame_data(0).long_jump_source = 0
+            self.data_graph.get_frame_data(0).matching_source_keyframe = 0
             return
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
-        preceding_source = preceding_frame_node.long_jump_source
+        preceding_source = preceding_frame_node.matching_source_keyframe
         self.add_new_flow(preceding_source, preceding_frame_idx)
 
         # for preceding_frame in range(frame_i):
@@ -168,7 +168,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         datagraph_node.reliable_sources = ({long_jump_source} | reliable_flows_sources)
 
-        datagraph_node.long_jump_source = source
+        datagraph_node.matching_source_keyframe = source
 
     def match_to_all_keyframes(self, frame_i):
         best_source: int = 0
@@ -277,7 +277,7 @@ class FrameFilterSift(BaseFrameFilter):
         preceding_frame_idx = current_frame_idx - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
 
-        keyframe_idx = preceding_frame_node.long_jump_source
+        keyframe_idx = preceding_frame_node.matching_source_keyframe
 
         print("Detection features")
 
@@ -341,7 +341,7 @@ class FrameFilterSift(BaseFrameFilter):
         datagraph_node.pose_estimation_time = duration
 
         datagraph_node.reliable_sources |= ({long_jump_source} | reliable_sources)
-        datagraph_node.long_jump_source = keyframe_idx
+        datagraph_node.matching_source_keyframe = keyframe_idx
 
     def compute_sift_reliability(self, frame_idx1: int, frame_idx2: int):
 

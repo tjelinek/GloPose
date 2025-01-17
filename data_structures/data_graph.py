@@ -24,7 +24,7 @@ class CommonFrameData:
     image_shape: ImageSize = None
 
     # Long short jumps
-    long_jump_source: int = 0
+    matching_source_keyframe: int = 0
     predicted_object_se3_long_jump: Se3 = Se3.identity(1, 'cuda')
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
 
