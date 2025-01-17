@@ -84,8 +84,8 @@ def main():
 
         config.input_frames = len(gt_images_list)
 
-        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).cuda()
-        translations_array = torch.from_numpy(np.array(filtered_gt_translations)).cuda()
+        rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.device)
+        translations_array = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
