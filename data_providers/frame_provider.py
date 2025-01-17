@@ -206,8 +206,8 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor, images_paths: List[Path],
-                 sam2_cache_folder: Optional[Path] = None, **kwargs):
+    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
+                 sam2_images_paths: List[Path], sam2_cache_folder: Optional[Path] = None, **kwargs):
         super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None
@@ -298,21 +298,22 @@ class BaseTracker:
             need_to_clean_sam2_images = False
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
+            images_paths = kwargs['images_paths']
+            images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
+            kwargs['images_paths'] = images_paths_for_sam
+
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
-                images_paths = kwargs['images_paths'] if 'images_paths' in kwargs else None
-                images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
-                kwargs['images_paths'] = images_paths_for_sam
                 need_to_clean_sam2_images = True
             else:
                 assert 'initial_segmentation' in kwargs and kwargs['initial_segmentation'] is not None
             initial_segmentation = kwargs['initial_segmentation']
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
-                                                                  **kwargs)
+                                                                  sam2_images_paths=images_paths_for_sam, **kwargs)
 
             if need_to_clean_sam2_images:
                 shutil.rmtree(sam2_tmp_path)
