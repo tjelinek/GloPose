@@ -933,15 +933,11 @@ class WriteResults:
         data_graph_node = self.data_graph.get_frame_data(frame_i)
         camera_specific_graph_node = self.data_graph.get_frame_data(frame_i)
 
-        short_jump_source = camera_specific_graph_node.short_jump_source
         long_jump_source = camera_specific_graph_node.long_jump_source
 
         rr.set_time_sequence("frame", frame_i)
-        datagraph_short_edge = self.data_graph.get_edge_observations(short_jump_source, frame_i)
         datagraph_long_edge = self.data_graph.get_edge_observations(long_jump_source, frame_i)
 
-        rr.log(RerunAnnotations.long_short_chain_remaining_pts,
-               rr.Scalar(datagraph_long_edge.remaining_pts_after_filtering))
         rr.log(RerunAnnotations.pose_estimation_time, rr.Scalar(data_graph_node.pose_estimation_time))
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
@@ -960,48 +956,26 @@ class WriteResults:
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
 
         pred_cam_RANSAC_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac
-        pred_cam_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3
-        pred_cam_RANSAC_prev_to_last = datagraph_short_edge.predicted_cam_delta_se3_ransac
 
         rr.log(RerunAnnotations.cam_delta_r_long_flow_zaragoza,
                rr.Scalar(torch.rad2deg(2 * pred_cam_ref_to_last.quaternion.polar_angle).cpu()))
         rr.log(RerunAnnotations.cam_delta_r_long_flow_RANSAC,
                rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_ref_to_last.quaternion.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_r_short_flow_zaragoza,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_prev_to_last.quaternion.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_r_short_flow_RANSAC,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_prev_to_last.quaternion.polar_angle).cpu()))
 
         rr.log(RerunAnnotations.cam_delta_t_long_flow_zaragoza,
                rr.Scalar(pred_cam_ref_to_last.translation.squeeze().numpy(force=True)))
         rr.log(RerunAnnotations.cam_delta_t_long_flow_RANSAC,
                rr.Scalar(pred_cam_RANSAC_ref_to_last.translation.squeeze().numpy(force=True)))
-        rr.log(RerunAnnotations.cam_delta_t_short_flow_zaragoza,
-               rr.Scalar(pred_cam_prev_to_last.translation.squeeze().numpy(force=True)))
-        rr.log(RerunAnnotations.cam_delta_t_short_flow_RANSAC,
-               rr.Scalar(pred_cam_RANSAC_prev_to_last.translation.squeeze().numpy(force=True)))
 
         pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         gt_obj_rot_ref_to_last = quaternion_to_axis_angle(gt_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         gt_cam_rot_ref_to_last = quaternion_to_axis_angle(gt_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
 
-        rr.log(RerunAnnotations.long_short_chain_diff, rr.Scalar(data_graph_node.predicted_obj_long_short_chain_diff))
-
         long_jump_chain_pose_q = data_graph_node.predicted_object_se3_long_jump.quaternion
-        short_jumps_chain_pose_q = data_graph_node.predicted_object_se3_short_jump.quaternion
         long_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle(long_jump_chain_pose_q.q)).cpu().squeeze()
-        short_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle
-                                                    (short_jumps_chain_pose_q.q)).cpu().squeeze()
         rr.log(RerunAnnotations.chained_pose_long_flow_polar,
                rr.Scalar(torch.rad2deg(long_jump_chain_pose_q.polar_angle * 2).item()))
-        rr.log(RerunAnnotations.chained_pose_short_flow_polar,
-               rr.Scalar(torch.rad2deg(short_jumps_chain_pose_q.polar_angle * 2).item()))
-
-        scale_factor_per_axis_long_edge = datagraph_long_edge.camera_scale_per_axis_gt
-        scale_factor_estimated_long_edge = datagraph_long_edge.camera_scale_estimated
-
-        rr.log(RerunAnnotations.translation_scale_estimated, rr.Scalar(scale_factor_estimated_long_edge))
 
         for axis, axis_label in enumerate(['x', 'y', 'z']):
             rr.log(RerunAnnotations.obj_rot_1st_to_last_axes[axis_label], rr.Scalar(obj_rot_1st_to_last[axis]))
@@ -1027,11 +1001,6 @@ class WriteResults:
 
             rr.log(RerunAnnotations.chained_pose_long_flow_axes[axis_label],
                    rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
-            rr.log(RerunAnnotations.chained_pose_short_flow_axes[axis_label],
-                   rr.Scalar(short_jumps_pose_axis_angle[axis].item()))
-
-            rr.log(RerunAnnotations.translation_scale_gt_axes[axis_label],
-                   rr.Scalar(scale_factor_per_axis_long_edge[axis].item()))
 
     def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rotations = []

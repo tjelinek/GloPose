@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Set
+from typing import Set
 
 import networkx as nx
 import torch
@@ -8,7 +8,6 @@ from kornia.geometry import Se3
 from kornia.image import ImageSize
 
 from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
-from models.encoder import EncoderResult
 
 
 @dataclass
@@ -24,21 +23,10 @@ class CommonFrameData:
     gt_pinhole_K: torch.Tensor = None
     image_shape: ImageSize = None
 
-    # Intermediate output data
-    encoder_result: EncoderResult = None
-
-    # Optimization
-    frame_losses: Any = None
-    translations_during_optimization: List = field(default_factory=list)
-    quaternions_during_optimization: List = field(default_factory=list)
-
     # Long short jumps
     long_jump_source: int = 0
-    short_jump_source: int = None
     predicted_object_se3_long_jump: Se3 = Se3.identity(1, 'cuda')
     predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
-    predicted_object_se3_short_jump: Se3 = Se3.identity(1, 'cuda')
-    predicted_obj_long_short_chain_diff: float = 0.0
 
     # Sources
     reliable_sources: Set[int] = field(default_factory=set)
@@ -75,7 +63,6 @@ class CrossFrameData:
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
     dst_pts_yx_gt: torch.Tensor = None
-    dst_pts_yx_chained: torch.Tensor = None
     remaining_pts_after_filtering: float = None
     ransac_inliers_mask: torch.Tensor = None
     ransac_inlier_ratio: float = None
@@ -98,9 +85,6 @@ class CrossFrameData:
     predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
     predicted_cam_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
 
-    # Camera scaling
-    camera_scale_per_axis_gt: torch.Tensor = None
-    camera_scale_estimated: float = None
 
     # SIFT
     num_matches: int = None
