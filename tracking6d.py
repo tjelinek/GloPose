@@ -19,9 +19,9 @@ from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 
 class Tracking6D:
 
-    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=None,
-                 gt_translations=None, images_paths: List[Path] = None, segmentation_paths: List[Path] = None,
-                 gt_Se3_world_to_cam: Se3 = None, initial_image: torch.Tensor = None,
+    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_cam_to_obj_rotations=None,
+                 gt_cam_to_obj_translations=None, images_paths: List[Path] = None,
+                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
                  initial_segmentation: torch.Tensor = None):
 
         config.write_folder = write_folder
@@ -30,14 +30,14 @@ class Tracking6D:
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
 
         # Ground truth related
-        assert torch.all(gt_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
-        assert torch.all(gt_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
+        assert torch.all(gt_cam_to_obj_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
+        assert torch.all(gt_cam_to_obj_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
 
-        config.rot_init = tuple(gt_rotations[0].numpy(force=True))
-        config.tran_init = tuple(gt_translations[0].numpy(force=True))
+        config.rot_init = tuple(gt_cam_to_obj_rotations[0].numpy(force=True))
+        config.tran_init = tuple(gt_cam_to_obj_translations[0].numpy(force=True))
 
-        self.gt_rotations: Optional[torch.Tensor] = gt_rotations
-        self.gt_translations: Optional[torch.Tensor] = gt_translations
+        self.gt_cam_to_obj_rotations: Optional[torch.Tensor] = gt_cam_to_obj_rotations
+        self.gt_cam_to_obj_translations: Optional[torch.Tensor] = gt_cam_to_obj_translations
         self.gt_Se3_world_to_cam: Optional[Se3] = gt_Se3_world_to_cam
         self.world_to_cam: Optional[Se3] = None
         if self.gt_Se3_world_to_cam is None:
@@ -72,8 +72,8 @@ class Tracking6D:
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
-        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_rotations,
-                                   gt_translations=gt_translations, initial_segmentation=initial_segmentation,
+        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_cam_to_obj_rotations,
+                                   gt_translations=gt_cam_to_obj_translations, initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths,
                                    segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
@@ -260,11 +260,11 @@ class Tracking6D:
         self.data_graph.add_new_frame(frame_i)
 
         frame_node = self.data_graph.get_frame_data(frame_i)
-        frame_node.gt_rot_axis_angle = self.gt_rotations[frame_i]
-        frame_node.gt_translation = self.gt_translations[frame_i]
+        frame_node.gt_rot_axis_angle = self.gt_cam_to_obj_rotations[frame_i]
+        frame_node.gt_translation = self.gt_cam_to_obj_translations[frame_i]
 
-        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_rotations[[frame_i]]),
-                         self.gt_translations[[frame_i]]).cpu()
+        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_cam_to_obj_rotations[[frame_i]]),
+                         self.gt_cam_to_obj_translations[[frame_i]]).cpu()
 
         if self.gt_Se3_world_to_cam is not None:
             Se3_world_to_cam = self.gt_Se3_world_to_cam

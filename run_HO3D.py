@@ -87,10 +87,6 @@ def main():
         rotations_array = torch.from_numpy(np.array(filtered_gt_rotations)).cuda()
         translations_array = torch.from_numpy(np.array(filtered_gt_translations)).cuda()
 
-        # config.rot_init = tuple(rotations_array[0, 0].numpy(force=True).tolist())
-        # config.tran_init = tuple(translations_array[0, 0, 0].numpy(force=True).tolist())
-        # config.camera_up = (0, 0, 1)
-
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
@@ -113,8 +109,9 @@ def main():
         first_segment_tensor = transform(first_segment_resized)[1].squeeze()  # Green channel is the obj segmentation
         first_image_tensor = transform(first_image).squeeze()
 
-        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_rotations=rotations_array,
-                                 gt_translations=translations_array, images_paths=gt_images_list,
+        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
+                                 gt_cam_to_obj_rotations=rotations_array,
+                                 gt_cam_to_obj_translations=translations_array, images_paths=gt_images_list,
                                  segmentation_paths=gt_segmentations_list, initial_segmentation=first_segment_tensor,
                                  initial_image=first_image_tensor)
 

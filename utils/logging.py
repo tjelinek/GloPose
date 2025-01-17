@@ -104,31 +104,6 @@ class WriteResults:
                         contents=[
                             rrb.Horizontal(
                                 contents=[
-                                    rrb.Spatial2DView(name="Observed Flow Occlusion",
-                                                      origin=RerunAnnotations.observed_flow_frontview),
-                                    # rrb.Spatial2DView(name="Observed Flow Uncertainty",
-                                    #                   origin=RerunAnnotations.observed_flow_with_uncertainty_frontview),
-                                    # rrb.Spatial2DView(name="Observed Flow GT Disparity",
-                                    #                   origin=RerunAnnotations.observed_flow_errors_frontview),
-                                ],
-                                name='Flows'
-                            ),
-                            rrb.Horizontal(
-                                contents=[
-                                    rrb.Spatial2DView(name="Template Image Current",
-                                                      origin=RerunAnnotations.template_image_frontview),
-                                    rrb.Spatial2DView(name="Observed Image",
-                                                      origin=RerunAnnotations.observed_image_frontview),
-                                ],
-                                name='Observed Images'
-                            )
-                        ],
-                        name='Observed Input'
-                    ),
-                    rrb.Vertical(
-                        contents=[
-                            rrb.Horizontal(
-                                contents=[
                                     rrb.Spatial2DView(name="Template Image Current",
                                                       origin=RerunAnnotations.template_image_frontview),
                                     rrb.Spatial2DView(name="Observed Image",
@@ -197,42 +172,6 @@ class WriteResults:
                             ),
                             rrb.Grid(
                                 contents=[
-                                    rrb.TimeSeriesView(name="Chained Pose Long Flow",
-                                                       origin=RerunAnnotations.chained_pose_long_flow
-                                                       ),
-                                    rrb.TimeSeriesView(name="Chained Pose Short Flow",
-                                                       origin=RerunAnnotations.chained_pose_short_flow
-                                                       ),
-                                    rrb.TimeSeriesView(name="Chained Pose Polar Angles",
-                                                       origin=RerunAnnotations.chained_pose_polar
-                                                       ),
-                                    rrb.TimeSeriesView(name="Short Flow Chaining Filtering - % Remaining in Long Jump",
-                                                       origin=RerunAnnotations.long_short_chain_remaining_pts
-                                                       ),
-                                ],
-                                grid_columns=2,
-                                name='Flow Chaining'
-                            ),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.TimeSeriesView(name="Cam Rot Delta Short Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_r_short_flow
-                                                       ),
-                                    rrb.TimeSeriesView(name="Cam Rot Delta Long Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_r_long_flow
-                                                       ),
-                                    rrb.TimeSeriesView(name="Cam Tran Delta Short Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_t_short_flow
-                                                       ),
-                                    rrb.TimeSeriesView(name="Cam Tran Delta Long Flow Zaragoza vs RANSAC",
-                                                       origin=RerunAnnotations.cam_delta_t_long_flow
-                                                       ),
-                                ],
-                                grid_columns=2,
-                                name='RANSAC pose vs Zaragoza pose'
-                            ),
-                            rrb.Grid(
-                                contents=[
                                     rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
                                                        origin=RerunAnnotations.cam_rot_ref_to_last
                                                        ),
@@ -248,15 +187,6 @@ class WriteResults:
                                 ],
                                 grid_columns=2,
                                 name='Pose'
-                            ),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.TimeSeriesView(name="Translation Per Axis GT Scale",
-                                                       origin=RerunAnnotations.translation_scale
-                                                       ),
-                                ],
-                                grid_columns=1,
-                                name='Translation Scaling'
                             ),
                         ],
                         name='Pose'
@@ -954,18 +884,6 @@ class WriteResults:
 
         Se3_world_to_cam = self.Se3_world_to_cam
         gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
-
-        pred_cam_RANSAC_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3_ransac
-
-        rr.log(RerunAnnotations.cam_delta_r_long_flow_zaragoza,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_ref_to_last.quaternion.polar_angle).cpu()))
-        rr.log(RerunAnnotations.cam_delta_r_long_flow_RANSAC,
-               rr.Scalar(torch.rad2deg(2 * pred_cam_RANSAC_ref_to_last.quaternion.polar_angle).cpu()))
-
-        rr.log(RerunAnnotations.cam_delta_t_long_flow_zaragoza,
-               rr.Scalar(pred_cam_ref_to_last.translation.squeeze().numpy(force=True)))
-        rr.log(RerunAnnotations.cam_delta_t_long_flow_RANSAC,
-               rr.Scalar(pred_cam_RANSAC_ref_to_last.translation.squeeze().numpy(force=True)))
 
         pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()

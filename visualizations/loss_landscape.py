@@ -106,11 +106,11 @@ def visualize_loss_landscape(self, observations: FrameObservation, flow_observat
             continue
 
         if relative_mode and stepi > 1:
-            gt_rotation_deg_prev = torch.rad2deg(tracking6d.gt_rotations[0, stepi - 1]).cpu()
-            gt_translation_prev = tracking6d.gt_translations[0, 0, stepi - 1].cpu()
+            gt_rotation_deg_prev = torch.rad2deg(tracking6d.gt_cam_to_obj_rotations[0, stepi - 1]).cpu()
+            gt_translation_prev = tracking6d.gt_cam_to_obj_translations[0, 0, stepi - 1].cpu()
 
-            gt_rotation_deg_current = torch.rad2deg(tracking6d.gt_rotations[0, stepi]).cpu()
-            gt_translation_current = tracking6d.gt_translations[0, 0, stepi].cpu()
+            gt_rotation_deg_current = torch.rad2deg(tracking6d.gt_cam_to_obj_rotations[0, stepi]).cpu()
+            gt_translation_current = tracking6d.gt_cam_to_obj_translations[0, 0, stepi].cpu()
 
             gt_translation_diff = gt_translation_current - gt_translation_prev
             gt_rotation_diff = gt_rotation_deg_current - gt_rotation_deg_prev
@@ -123,8 +123,8 @@ def visualize_loss_landscape(self, observations: FrameObservation, flow_observat
 
             gt_rotation_deg = last_rotation_deg + gt_rotation_diff
         else:
-            gt_rotation_deg = torch.rad2deg(tracking6d.gt_rotations[0, stepi]).cpu()
-            gt_translation = tracking6d.gt_translations[0, 0, stepi].cpu()
+            gt_rotation_deg = torch.rad2deg(tracking6d.gt_cam_to_obj_rotations[0, stepi]).cpu()
+            gt_translation = tracking6d.gt_cam_to_obj_translations[0, 0, stepi].cpu()
 
         translations_space = np.linspace(gt_translation[trans_axis_idx] - 0.3,
                                          gt_translation[trans_axis_idx] + 0.3, num=num_translations)
