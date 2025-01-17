@@ -219,7 +219,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
         if self.cache_folder is not None:
-            self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt') for img_path in images_paths]
+            self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
+                                            for img_path in sam2_images_paths]
             self.cache_exists: bool = all(x.exists() for x in self.cache_paths)
         else:
             self.cache_exists = False
@@ -231,7 +232,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-            state = self.predictor.init_state(str(images_paths[0].parent))
+            state = self.predictor.init_state(str(sam2_images_paths[0].parent))
 
             initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
