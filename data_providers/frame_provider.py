@@ -296,7 +296,6 @@ class BaseTracker:
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
-            need_to_clean_sam2_images = False
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
             images_paths = kwargs['images_paths']
@@ -308,16 +307,13 @@ class BaseTracker:
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
-                need_to_clean_sam2_images = True
             else:
                 assert 'initial_segmentation' in kwargs and kwargs['initial_segmentation'] is not None
             initial_segmentation = kwargs['initial_segmentation']
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   sam2_images_paths=images_paths_for_sam, **kwargs)
-
-            if need_to_clean_sam2_images:
-                shutil.rmtree(sam2_tmp_path)
+            shutil.rmtree(sam2_tmp_path)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
