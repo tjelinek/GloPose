@@ -1,10 +1,12 @@
+import kaolin
 import torch
+from kornia.geometry import Se3
 
 from dataset_generators import scenarios
-from dataset_generators.track_augmentation import modify_rotations
+from models.rendering import get_Se3_obj_to_cam_from_kaolin_params
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.data_utils import load_mesh, load_texture
-from utils.general import load_config
+from utils.general import load_config, homogenize_3x4_transformation_matrix
 from pathlib import Path
 
 
@@ -45,7 +47,6 @@ def main():
 
         config.gt_texture_path = gt_texture_path
         config.gt_mesh_path = gt_mesh_path
-        # config.gt_track_path = gt_tracking_path
 
         config.experiment_name = experiment_name
         config.sequence = sequence
@@ -68,10 +69,16 @@ def main():
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         config.input_frames = gt_rotations.shape[0]
+        camera_trans = torch.FloatTensor(config.camera_position)[None].to(config.device)
+        camera_up = torch.FloatTensor(config.camera_up)[None].to(config.device)
+        obj_center = torch.FloatTensor(config.obj_center)[None].to(config.device)
+
+        Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_kaolin_params(camera_trans, camera_up, obj_center)
 
         run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
-                                 gt_cam_to_obj_rotations=gt_rotations, gt_cam_to_obj_translations=gt_translations,
-                                 images_paths=images_paths)
+                                 gt_obj_1_to_obj_i_rotations=gt_rotations,
+                                 gt_obj_1_to_obj_i_translations=gt_translations,
+                                 images_paths=images_paths, gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
 
         return
 

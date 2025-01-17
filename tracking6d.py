@@ -19,10 +19,10 @@ from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 
 class Tracking6D:
 
-    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None, gt_cam_to_obj_rotations=None,
-                 gt_cam_to_obj_translations=None, images_paths: List[Path] = None,
+    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
+                 gt_obj_1_to_obj_i_rotations=None, gt_obj_1_to_obj_i_translations=None, images_paths: List[Path] = None,
                  segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
-                 initial_segmentation: torch.Tensor = None):
+                 initial_segmentation: torch.Tensor = None, gt_Se3_obj_1_to_cam: Se3 = None):
 
         config.write_folder = write_folder
         # Paths
@@ -30,21 +30,18 @@ class Tracking6D:
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
 
         # Ground truth related
-        assert torch.all(gt_cam_to_obj_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
-        assert torch.all(gt_cam_to_obj_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
+        assert torch.all(gt_obj_1_to_obj_i_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
+        assert torch.all(gt_obj_1_to_obj_i_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
 
-        config.rot_init = tuple(gt_cam_to_obj_rotations[0].numpy(force=True))
-        config.tran_init = tuple(gt_cam_to_obj_translations[0].numpy(force=True))
+        config.rot_init = tuple(gt_obj_1_to_obj_i_rotations[0].numpy(force=True))
+        config.tran_init = tuple(gt_obj_1_to_obj_i_translations[0].numpy(force=True))
 
-        self.gt_cam_to_obj_rotations: Optional[torch.Tensor] = gt_cam_to_obj_rotations
-        self.gt_cam_to_obj_translations: Optional[torch.Tensor] = gt_cam_to_obj_translations
-        self.gt_Se3_world_to_cam: Optional[Se3] = gt_Se3_world_to_cam
-        self.world_to_cam: Optional[Se3] = None
-        if self.gt_Se3_world_to_cam is None:
-            self.world_to_cam: Optional[Se3] = Se3(Quaternion.identity(1),
-                                                   torch.tensor([[0., 0., 1.]])).to(config.device)
-        else:
-            self.world_to_cam = self.gt_Se3_world_to_cam
+        self.gt_cam_to_obj_rotations: Optional[torch.Tensor] = gt_obj_1_to_obj_i_rotations
+        self.gt_cam_to_obj_translations: Optional[torch.Tensor] = gt_obj_1_to_obj_i_translations
+
+        self.Se3_obj_to_cam: Se3 = gt_Se3_obj_1_to_cam
+        if self.Se3_obj_to_cam is None:
+            self.Se3_obj_to_cam: Se3 = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]])).to(config.device)
 
         # Data graph
         self.data_graph: Optional[DataGraph] = None
@@ -72,8 +69,8 @@ class Tracking6D:
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
-        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_cam_to_obj_rotations,
-                                   gt_translations=gt_cam_to_obj_translations, initial_segmentation=initial_segmentation,
+        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_obj_1_to_obj_i_rotations,
+                                   gt_translations=gt_obj_1_to_obj_i_translations, initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths,
                                    segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
@@ -82,7 +79,7 @@ class Tracking6D:
                                            tracking_config=self.config, data_graph=self.data_graph,
                                            images_paths=self.images_paths,
                                            segmentation_paths=self.segmentation_paths,
-                                           Se3_world_to_cam=self.world_to_cam)
+                                           Se3_world_to_cam=self.Se3_obj_to_cam)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
 
@@ -264,13 +261,9 @@ class Tracking6D:
         frame_node.gt_translation = self.gt_cam_to_obj_translations[frame_i]
 
         gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_cam_to_obj_rotations[[frame_i]]),
-                         self.gt_cam_to_obj_translations[[frame_i]]).cpu()
+                         self.gt_cam_to_obj_translations[[frame_i]]).to(self.config.device)
 
-        if self.gt_Se3_world_to_cam is not None:
-            Se3_world_to_cam = self.gt_Se3_world_to_cam
-        else:
-            Se3_world_to_cam = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]]))
-        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, Se3_world_to_cam)
+        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, self.Se3_obj_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 
         camera_intrinsics = self.tracker.get_intrinsics_for_frame(frame_i)

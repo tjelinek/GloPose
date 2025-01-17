@@ -35,6 +35,7 @@ class TrackerConfig:
     # Renderer settings
     camera_position: Tuple[float] = (0, 0, 5.0)
     camera_up: Tuple[float] = (0, 1, 0)
+    obj_center: Tuple[float] = (0, 0, 0)
     rendered_image_shape: ImageSize = ImageSize(500, 500)
     sigmainv: float = 7000
     features: str = 'deep'

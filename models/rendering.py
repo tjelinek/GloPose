@@ -49,7 +49,7 @@ class RenderingKaolin(nn.Module):
         camera_position = torch.Tensor(self.config.camera_position)[None]
         # camera_position[:, 2] *= -1.  # Compensating for different kaolin coordinate system
         self.register_buffer('camera_trans', camera_position)
-        self.register_buffer('obj_center', torch.zeros((1, 3)))
+        self.register_buffer('obj_center', torch.Tensor(self.config.obj_center)[None])
         camera_up_direction = torch.Tensor(self.config.camera_up)[None]
         self.register_buffer('camera_up', camera_up_direction)
 
@@ -374,17 +374,8 @@ class RenderingKaolin(nn.Module):
 
         return synthetic_flow_cpu
 
-    def camera_transformation_matrix_4x4(self):
-        T_world_to_cam_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=self.camera_trans,
-                                                                                 camera_up_direction=self.camera_up,
-                                                                                 look_at=self.obj_center)
-
-        T_world_to_cam_4x4 = homogenize_3x4_transformation_matrix(T_world_to_cam_4x3.permute(0, 2, 1))
-
-        return T_world_to_cam_4x4
-
-    def camera_transformation_matrix_Se3(self):
-        return Se3.from_matrix(self.camera_transformation_matrix_4x4())
+    def Se3_obj_center_to_camera(self) -> Se3:
+        return get_Se3_obj_to_cam_from_kaolin_params(self.camera_trans, self.camera_up, self.obj_center)
 
     @staticmethod
     def rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
@@ -525,3 +516,14 @@ def pinhole_intrinsics_to_tensor(intrinsics: kaolin.render.camera.PinholeIntrins
         intrinsics_tensor = intrinsics_tensor
 
     return intrinsics_tensor
+
+
+def get_Se3_obj_to_cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up: torch.Tensor,
+                                          obj_center: torch.Tensor) -> Se3:
+    T_obj_to_cam_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=camera_trans,
+                                                                             camera_up_direction=camera_up,
+                                                                             look_at=obj_center)
+    T_obj_to_cam_4x4 = homogenize_3x4_transformation_matrix(T_obj_to_cam_4x3.permute(0, 2, 1))
+    Se3_obj_to_cam = Se3.from_matrix(T_obj_to_cam_4x4)
+
+    return Se3_obj_to_cam

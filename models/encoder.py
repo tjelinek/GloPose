@@ -88,15 +88,10 @@ class Encoder(nn.Module):
         quaternion = quaternion[:opt_frames[-1] + 1]
         translation = translation[:opt_frames[-1] + 1]
 
-        if self.config.features == 'deep':
-            texture_map = self.texture_map
-        else:
-            texture_map = nn.Sigmoid()(self.texture_map)
-
         result = EncoderResult(translations=translation,
                                quaternions=quaternion,
                                vertices=vertices,
-                               texture_maps=texture_map,
+                               texture_maps=self.texture_map,
                                lights=self.lights)
         return result
 
