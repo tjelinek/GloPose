@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Tuple
 
 from kornia.image import ImageSize
+
+from configs.base_BOP_config import BaseBOPConfig
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
 
@@ -71,3 +73,6 @@ class TrackerConfig:
     sift_mapping_num_feats: int = 8192
     sift_mapping_min_matches: int = 15
     sift_mapping_single_camera: bool = True
+
+    # BOP Config
+    bop_config: BaseBOPConfig = None
