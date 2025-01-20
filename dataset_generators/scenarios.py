@@ -109,12 +109,38 @@ def generate_rotations_xyz(step=10.0) -> MovementScenario:
     return MovementScenario(rotations=rotations)
 
 
-def random_walk_on_a_sphere(n_steps=200, seed=42) -> MovementScenario:
+def random_walk_on_a_hemisphere(n_steps=200, seed=42) -> MovementScenario:
     torch.manual_seed(seed)
 
     rotations = torch.zeros((n_steps, 3))
 
     steps_thresholds = torch.tensor([0.5, 0.25, 0.75])
+
+    steps_per_ax_low = torch.tensor([0, -5, 10])
+    steps_per_ax_high = torch.tensor([5, 10, 15])
+
+    for step in range(1, n_steps):
+        directions = torch.rand(3) > steps_thresholds
+        steps = torch.stack(
+            [torch.tensor([torch.FloatTensor(1).uniform_(low, high).item()]) for low, high in zip(steps_per_ax_low, steps_per_ax_high)]
+        ).view(-1)
+        steps *= directions.float()
+
+        rotations[step] = rotations[step - 1] + steps
+
+    rotations = rotations.deg2rad_()
+    rotations = quaternion_to_axis_angle(torch.stack(quaternion_from_euler(rotations[:, 0], rotations[:, 1], rotations[:, 2]), dim=-1))
+    rotations.rad2deg_()
+
+    return MovementScenario(rotations=rotations)
+
+
+def random_walk_on_a_sphere(n_steps=200, seed=42) -> MovementScenario:
+    torch.manual_seed(seed)
+
+    rotations = torch.zeros((n_steps, 3))
+
+    steps_thresholds = torch.tensor([0.5, 0.25, 0.5])
 
     steps_per_ax_low = torch.tensor([0, -5, 10])
     steps_per_ax_high = torch.tensor([5, 10, 15])
