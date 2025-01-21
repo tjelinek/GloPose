@@ -60,3 +60,9 @@ def pixel_coords_to_unit_coords(image_width: int, image_height: int, pts_yx: tor
         -> torch.Tensor:
     return pts_yx.to(dtype) / torch.Tensor([image_height, image_width]).to(pts_yx.device)
 
+
+def Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj: Se3) -> Se3:
+    Se3_cam_to_obj_1 = Se3_cam_to_obj[[0]]
+    Se3_cam_to_obj_1_expanded = Se3.from_matrix(Se3_cam_to_obj_1.matrix().expand_as(Se3_cam_to_obj.matrix()))
+    Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
+    return Se3_obj_1_to_obj_i

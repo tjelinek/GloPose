@@ -36,8 +36,9 @@ class Tracking6D:
         config.rot_init = tuple(gt_obj_1_to_obj_i_rotations[0].numpy(force=True))
         config.tran_init = tuple(gt_obj_1_to_obj_i_translations[0].numpy(force=True))
 
-        self.gt_cam_to_obj_rotations: Optional[torch.Tensor] = gt_obj_1_to_obj_i_rotations
-        self.gt_cam_to_obj_translations: Optional[torch.Tensor] = gt_obj_1_to_obj_i_translations
+        self.gt_cam_to_obj_Se3: Optional[Se3]
+        self.gt_obj_1_to_obj_i_Se3: Optional[Se3] = Se3(Quaternion.from_axis_angle(gt_obj_1_to_obj_i_rotations),
+                                                    gt_obj_1_to_obj_i_translations)
 
         self.Se3_obj_to_cam: Se3 = gt_Se3_obj_1_to_cam
         if self.Se3_obj_to_cam is None:
@@ -257,13 +258,8 @@ class Tracking6D:
         self.data_graph.add_new_frame(frame_i)
 
         frame_node = self.data_graph.get_frame_data(frame_i)
-        frame_node.gt_rot_axis_angle = self.gt_cam_to_obj_rotations[frame_i]
-        frame_node.gt_translation = self.gt_cam_to_obj_translations[frame_i]
 
-        gt_Se3_obj = Se3(Quaternion.from_axis_angle(self.gt_cam_to_obj_rotations[[frame_i]]),
-                         self.gt_cam_to_obj_translations[[frame_i]]).to(self.config.device)
-
-        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(gt_Se3_obj, self.Se3_obj_to_cam)
+        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(self.gt_obj_1_to_obj_i_Se3[[frame_i]], self.Se3_obj_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 
         camera_intrinsics = self.tracker.get_intrinsics_for_frame(frame_i)

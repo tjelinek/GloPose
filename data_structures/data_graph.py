@@ -17,8 +17,7 @@ class CommonFrameData:
     frame_observation: FrameObservation = None
 
     # Ground truth data
-    gt_rot_axis_angle: torch.Tensor = None
-    gt_translation: torch.Tensor = None
+    gt_obj1_to_obji: Se3 = None
     gt_pose_cam: Se3 = None
     gt_pinhole_K: torch.Tensor = None
     image_shape: ImageSize = None

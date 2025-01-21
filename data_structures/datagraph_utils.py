@@ -1,27 +1,18 @@
-from kornia.geometry import Quaternion, Se3
+from kornia.geometry import Se3
 
 from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 from data_structures.data_graph import DataGraph
 
 
-def get_gt_obj_pose(frame: int, data_graph: DataGraph) -> Se3:
-    frame_data = data_graph.get_frame_data(frame)
-
-    quaternion = Quaternion.from_axis_angle(frame_data.gt_rot_axis_angle[None])
-    tran = frame_data.gt_translation[None]
-
-    return Se3(quaternion, tran)
-
-
 def get_gt_cam_pose(frame: int, Se3_world_to_cam, data_graph: DataGraph) -> Se3:
-    Se3_obj_gt = get_gt_obj_pose(frame, data_graph)
+    Se3_obj_gt = data_graph.get_frame_data(frame).gt_obj1_to_obji
 
     return Se3_epipolar_cam_from_Se3_obj(Se3_obj_gt, Se3_world_to_cam)
 
 
 def get_relative_gt_obj_rotation(source_frame, target_frame, data_graph: DataGraph) -> Se3:
-    Se3_obj_ref_frame_gt = get_gt_obj_pose(source_frame, data_graph)
-    Se3_obj_target_frame_gt = get_gt_obj_pose(target_frame, data_graph)
+    Se3_obj_ref_frame_gt = data_graph.get_frame_data(source_frame).gt_obj1_to_obji
+    Se3_obj_target_frame_gt = data_graph.get_frame_data(target_frame).gt_obj1_to_obji
 
     Se3_obj_chained_long_jump = Se3_obj_target_frame_gt * Se3_obj_ref_frame_gt.inverse()
     return Se3_obj_chained_long_jump
