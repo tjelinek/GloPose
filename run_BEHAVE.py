@@ -1,13 +1,13 @@
 import pickle
 
 import torch
-import time
 import torchvision.transforms as transforms
 from pathlib import Path
 
 from PIL import Image
-from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
+from kornia.geometry import Quaternion, Se3
 
+from utils.data_utils import get_first_video_segment
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.general import load_config
@@ -32,8 +32,6 @@ def main():
             '2csdgc36d5txks6kpssnrojmby',
         ]
 
-    skip_indices = 15
-
     for sequence in sequences:
         config = load_config(args.config)
 
@@ -56,7 +54,7 @@ def main():
 
         video_path = sequence_folder / f'{sequence}.mp4'
         gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
-        object_segmentation_path = sequence_folder / f'{sequence}_mask_obj.mp4'
+        object_seg_video_path = sequence_folder / f'{sequence}_mask_obj.mp4'
 
         with open(gt_pkl_name, "rb") as f:
             gt_annotations = pickle.load(f)
@@ -69,12 +67,12 @@ def main():
         Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
-
+        config.input_frames = sequence_length
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
 
-        first_segment = Image.open(gt_segmentations_list[0])
-        first_image = Image.open(gt_images_list[0])
+        first_image = get_first_video_segment(video_path, mode='rgb')
+        first_segment = get_first_video_segment(object_seg_video_path, mode='grayscale')
 
         first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
 
@@ -84,7 +82,7 @@ def main():
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
                                  gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
-                                 video_path=video_path, segmentation_video_path=object_segmentation_path,
+                                 video_path=video_path, segmentation_video_path=object_seg_video_path,
                                  initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
                                  gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
 
