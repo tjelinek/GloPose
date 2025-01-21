@@ -75,7 +75,8 @@ class Tracking6D:
                                    gt_translations=gt_obj_1_to_obj_i_Se3.translation,
                                    initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths, video_path=video_path,
-                                   segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
+                                   segmentation_paths=segmentation_paths,
+                                   segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,

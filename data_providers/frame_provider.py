@@ -15,7 +15,7 @@ from torchvision.transforms import InterpolationMode
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
-from utils.image_utils import get_shape, get_intrinsics_from_exif, get_nth_video_frame
+from utils.image_utils import get_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length_in_frames
 
 
 class SyntheticDataProvider:
@@ -127,12 +127,17 @@ class PrecomputedFrameProvider(FrameProvider):
 
 ##############################
 class SegmentationProvider(ABC):
-    def __init__(self, image_shape: ImageSize, device='cuda'):
+    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
         self.image_shape: ImageSize = image_shape
-        self.device = device
+        self.device = config.device
+        self.config = config
 
     @abstractmethod
     def next_segmentation(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def get_sequence_length(self):
         pass
 
 
@@ -140,24 +145,30 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
     def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
                  gt_translations: torch.Tensor):
-        SegmentationProvider.__init__(self, image_shape, config.device)
+        SegmentationProvider.__init__(self, image_shape, config)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
 
     def next_segmentation(self, frame_id, **kwargs):
         segmentation = super().next(frame_id).observed_segmentation
         return segmentation
 
+    def get_sequence_length(self) -> int:
+        return self.config.input_frames
+
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape: ImageSize, segmentations_paths: List[Path]):
-        super().__init__(image_shape, config.device)
+        super().__init__(image_shape, config)
 
         self.image_shape: ImageSize = image_shape
         self.segmentations_paths: List[Path] = segmentations_paths
 
         self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
                                                   interpolation=InterpolationMode.NEAREST)
+
+    def get_sequence_length(self):
+        return len(self.segmentations_paths)
 
     def next_segmentation(self, frame_i, **kwargs):
         segmentation = imageio.v3.imread(self.segmentations_paths[frame_i])
@@ -173,7 +184,7 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
                  initial_image: torch.Tensor, **kwargs):
-        super().__init__(image_shape, config.device)
+        super().__init__(image_shape, config)
 
         assert initial_segmentation is not None
 
@@ -216,10 +227,18 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
 class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
-                 sam2_images_paths: List[Path], sam2_cache_folder: Optional[Path] = None, **kwargs):
-        super().__init__(image_shape, config.device)
+                 sam2_images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
+                 sam2_cache_folder: Optional[Path] = None, **kwargs):
+        super().__init__(image_shape, config)
 
         assert initial_segmentation is not None
+        assert sam2_images_paths is not None or video_path is not None
+
+        if sam2_images_paths is not None:
+            self.sequence_length = len(sam2_images_paths)
+        else:
+            self.sequence_length = get_video_length_in_frames(video_path)
+
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
 
         self.predictor: Optional[SamPredictor] = None
@@ -228,8 +247,12 @@ class SAM2SegmentationProvider(SegmentationProvider):
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
         if self.cache_folder is not None:
-            self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
-                                            for img_path in sam2_images_paths]
+            if sam2_images_paths is not None:
+                self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
+                                                for img_path in sam2_images_paths]
+            else:
+                self.cache_paths: List[Path] = [self.cache_folder / f'{video_path.stem}_{i}.pt'
+                                                for i in range(self.sequence_length)]
             self.cache_exists: bool = all(x.exists() for x in self.cache_paths)
         else:
             self.cache_exists = False
@@ -241,7 +264,10 @@ class SAM2SegmentationProvider(SegmentationProvider):
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-            state = self.predictor.init_state(str(sam2_images_paths[0].parent))
+            if sam2_images_paths is not None:
+                state = self.predictor.init_state(str(sam2_images_paths[0].parent))
+            else:
+                state = self.predictor.init_state(str(video_path))
 
             initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
@@ -257,6 +283,9 @@ class SAM2SegmentationProvider(SegmentationProvider):
                 out_frame_idx, out_obj_ids, out_mask_logits = torch.load(cache_path, weights_only=True)
                 out_mask_logits = out_mask_logits.to(self.device)
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
+
+    def get_sequence_length(self):
+        return self.sequence_length
 
     @staticmethod
     def _image_to_sam(image: torch.Tensor) -> np.ndarray:
@@ -307,9 +336,12 @@ class BaseTracker:
         elif config.segmentation_provider == 'SAM2':
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
-            images_paths = kwargs['images_paths']
-            images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
-            kwargs['images_paths'] = images_paths_for_sam
+            if kwargs.get('images_paths'):
+                images_paths = kwargs['images_paths']
+                images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
+            else:
+                images_paths_for_sam = None
+                assert kwargs.get('video_path')
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)

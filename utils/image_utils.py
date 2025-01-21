@@ -38,6 +38,31 @@ def get_shape(image_path: Path, image_downsample: float = 1.0) -> ImageSize:
         raise ValueError(f"Unsupported file type: {file_ext}")
 
 
+def get_video_length_in_frames(video_path: Path) -> int:
+    """
+    Gets the total number of frames in a video.
+
+    Args:
+        video_path (Path): Path to the video file.
+
+    Returns:
+        int: Total number of frames in the video.
+    """
+    if not video_path.is_file():
+        raise FileNotFoundError(f"The file {video_path} does not exist.")
+
+    # Open the video file
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file {video_path}.")
+
+    # Get the total number of frames
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    return frame_count
+
+
 def get_nth_video_frame(video_path: Path, frame_number: int, mode: str = 'rgb') -> Image:
     """
     Retrieves the nth frame from a video and returns it as a PIL Image in the specified mode.
