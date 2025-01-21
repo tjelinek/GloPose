@@ -1,0 +1,118 @@
+import pickle
+
+import numpy as np
+import torch
+import time
+import torchvision.transforms as transforms
+from pathlib import Path
+
+from PIL import Image
+from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
+
+from utils.runtime_utils import run_tracking_on_sequence, parse_args
+from utils.general import load_config
+
+
+def main():
+    dataset = 'BEHAVE'
+    args = parse_args()
+    if args.sequences is not None and len(args.sequences) > 0:
+        sequences = args.sequences
+    else:
+        sequences = [
+            '225z4rz6dtrsezi34lsrcnukni',
+            '227ybq4jddcxeobo7njvjnkmgy',
+            '24bw7vtbjt3ony3cgvye2oyjgu',
+            '24n2fzuerdocahja7fxod3jzfe',
+            '25zqalav3mxmbuvwzrgdxvp6ne',
+            '26623u6vetquo3323cyano7xpu',
+            '27pfmpfuewryv7u2vqe56sbsua',
+            '2ayiktcgtfbj45woxvfv74plui',
+            '2b2o7cfrp6j5luxwixtq2syeoy',
+            '2csdgc36d5txks6kpssnrojmby',
+        ]
+
+    skip_indices = 15
+
+    for sequence in sequences:
+        config = load_config(args.config)
+
+        if config.gt_flow_source == 'GenerateSynthetic':
+            exit()
+
+        experiment_name = args.experiment
+        config.experiment_name = experiment_name
+        config.sequence = sequence
+        config.dataset = dataset
+        config.image_downsample = 1.0
+
+        if args.output_folder is not None:
+            write_folder = Path(args.output_folder) / dataset / sequence
+        else:
+            write_folder = config.default_results_folder / experiment_name / dataset / sequence
+
+        config.write_folder = write_folder
+        t0 = time.time()
+
+        sequence_folder = config.default_data_folder / 'BEHAVE' / 'train'
+
+        video_name = sequence_folder / f'{sequence}.mp4'
+        gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
+        obj_segment_name = sequence_folder / f'{sequence}_mask_obj.mp4'
+
+        breakpoint()
+
+        with open(gt_pkl_name, "rb") as f:
+            gt_annotations = pickle.load(f)
+            cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_rot']).to(config.device)
+            cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
+            sequence_length = obj_rot.shape[0]
+
+        gt_Se3_obj_1_to_cam, obj_1_to_obj_i_rotations, obj_1_to_obj_i_translations = get_relative_obj_rotations(
+            cam_to_obj_rotations, cam_to_obj_translations)
+
+        print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
+
+        quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
+        trans_frame1 = torch.from_numpy(gt_translations[0])[None]
+        Se3_cam_to_obj = Se3(quat_frame1, trans_frame1)
+        T_cam_to_obj = Se3_cam_to_obj.matrix().squeeze()
+
+        config.camera_intrinsics = cam_intrinsics_list[0]
+        config.camera_extrinsics = T_cam_to_obj.numpy(force=True)
+
+        config.segmentation_provider = 'SAM2'
+        config.frame_provider = 'precomputed'
+
+        first_segment = Image.open(gt_segmentations_list[0])
+        first_image = Image.open(gt_images_list[0])
+
+        first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
+
+        transform = transforms.ToTensor()
+        first_segment_tensor = transform(first_segment_resized)[1].squeeze()  # Green channel is the obj segmentation
+        first_image_tensor = transform(first_image).squeeze()
+
+        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
+                                 gt_obj_1_to_obj_i_rotations=obj_1_to_obj_i_rotations,
+                                 gt_obj_1_to_obj_i_translations=obj_1_to_obj_i_translations,
+                                 images_paths=gt_images_list, segmentation_paths=gt_segmentations_list,
+                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
+                                 gt_Se3_obj_1_to_cam=gt_Se3_obj_1_to_cam)
+
+        exit()
+
+
+def get_relative_obj_rotations(cam_to_obj_rotations, cam_to_obj_translations):
+    Se3_cam_to_obj = Se3(Quaternion.from_axis_angle(cam_to_obj_rotations), cam_to_obj_translations)
+    Se3_cam_to_obj_1 = Se3_cam_to_obj[[0]]
+    Se3_cam_to_obj_1_expanded = Se3.from_matrix(Se3_cam_to_obj_1.matrix().expand_as(Se3_cam_to_obj.matrix()))
+    Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
+    gt_Se3_obj_1_to_cam = Se3_cam_to_obj_1.inverse()
+    obj_1_to_obj_i_rotations = quaternion_to_axis_angle(Se3_obj_1_to_obj_i.quaternion.q)
+    obj_1_to_obj_i_translations = Se3_obj_1_to_obj_i.translation
+    return gt_Se3_obj_1_to_cam, obj_1_to_obj_i_rotations, obj_1_to_obj_i_translations
+
+
+if __name__ == "__main__":
+    main()
