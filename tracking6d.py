@@ -31,7 +31,7 @@ class Tracking6D:
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
 
         # Ground truth related
-        assert gt_obj_1_to_obj_i_Se3 is None or config.rot_init is None  # Conflicting setting handling
+        # assert gt_obj_1_to_obj_i_Se3 is None or config.rot_init is None  # Conflicting setting handling
 
         if gt_obj_1_to_obj_i_Se3 is not None:
             config.rot_init = tuple(gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle()[0].numpy(force=True))
@@ -74,7 +74,7 @@ class Tracking6D:
                                    gt_rotations=gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle(),
                                    gt_translations=gt_obj_1_to_obj_i_Se3.translation,
                                    initial_segmentation=initial_segmentation,
-                                   initial_image=initial_image, images_paths=images_paths,
+                                   initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                    segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
 

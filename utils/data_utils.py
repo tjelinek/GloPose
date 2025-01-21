@@ -3,12 +3,10 @@ import math
 from pathlib import Path
 from typing import Iterable, Dict, Tuple, cast
 
-import cv2
 import torch
 import trimesh
 import imageio
 from torchvision import transforms
-from PIL import Image
 
 from tracker_config import TrackerConfig
 
@@ -93,18 +91,3 @@ def load_gt_data(config: TrackerConfig):
         gt_rotations, gt_translations = load_gt_annotations_file(config.gt_track_path)
 
     return gt_texture, gt_mesh, gt_rotations, gt_translations
-
-
-def get_first_video_segment(video_path: Path, mode='rgb') -> Image:
-    cap = cv2.VideoCapture(str(video_path))
-    ret, first_frame = cap.read()
-    if mode == 'rgb':
-        first_image = Image.fromarray(cv2.cvtColor(first_frame, cv2.COLOR_BGR2RGB))
-    elif mode == 'grayscale':
-        first_image = Image.fromarray(first_frame)
-    else:
-        raise ValueError(f'Unknown mode {mode}')
-    cap.release()
-
-    return first_image
-

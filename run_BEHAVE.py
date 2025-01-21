@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
-from utils.data_utils import get_first_video_segment
+from utils.image_utils import get_nth_video_frame
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.general import load_config
@@ -71,13 +71,13 @@ def main():
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
 
-        first_image = get_first_video_segment(video_path, mode='rgb')
-        first_segment = get_first_video_segment(object_seg_video_path, mode='grayscale')
+        first_image = get_nth_video_frame(video_path, 0, mode='rgb')
+        first_segment = get_nth_video_frame(object_seg_video_path, 0, mode='grayscale')
 
         first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
 
         transform = transforms.ToTensor()
-        first_segment_tensor = transform(first_segment_resized)[1].squeeze()  # Green channel is the obj segmentation
+        first_segment_tensor = transform(first_segment_resized).squeeze()
         first_image_tensor = transform(first_image).squeeze()
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,

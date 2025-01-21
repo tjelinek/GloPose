@@ -15,7 +15,7 @@ from torchvision.transforms import InterpolationMode
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
-from utils.image_utils import get_shape, get_intrinsics_from_exif
+from utils.image_utils import get_shape, get_intrinsics_from_exif, get_nth_video_frame
 
 
 class SyntheticDataProvider:
@@ -95,20 +95,29 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
 class PrecomputedFrameProvider(FrameProvider):
 
-    def __init__(self, config: TrackerConfig, images_paths: List[Path], **kwargs):
+    def __init__(self, config: TrackerConfig, images_paths: Optional[List[Path]], video_path: Optional[Path] = None,
+                 **kwargs):
         super().__init__(config.image_downsample, config)
 
-        self.image_shape = get_shape(images_paths[0], self.downsample_factor)
-        self.images_paths: List[Path] = images_paths
+        assert images_paths is not None or video_path is not None
+        ref_path = images_paths[0] if images_paths is not None else video_path
+        self.image_shape = get_shape(ref_path, self.downsample_factor)
+
+        self.images_paths: Optional[List[Path]] = images_paths
+        self.video_path: Optional[Path] = video_path
 
         self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
                                                   interpolation=InterpolationMode.NEAREST)
 
     def next_image(self, frame_i):
-        image = imageio.v3.imread(self.images_paths[frame_i])
-        image_perm = torch.from_numpy(image).cuda().permute(2, 0, 1)[None].to(torch.float32) / 255.0
+        if self.images_paths is not None:
+            frame = imageio.v3.imread(self.images_paths[frame_i])
+        else:
+            frame = get_nth_video_frame(self.video_path, frame_i)
 
-        image_downsampled = F.interpolate(image_perm, scale_factor=self.downsample_factor, mode='bilinear',
+        image_tensor = transforms.ToTensor()(frame)[None].to(self.device)
+
+        image_downsampled = F.interpolate(image_tensor, scale_factor=self.downsample_factor, mode='bilinear',
                                           align_corners=False)[None]
         return image_downsampled
 

@@ -1,4 +1,3 @@
-from collections import namedtuple
 from pathlib import Path
 
 import cv2
@@ -11,11 +10,73 @@ from torch.nn import functional as F
 from torchvision import transforms
 from PIL import Image, ExifTags
 
-def get_shape(image_path: Path, image_downsample: float=1.0) -> ImageSize:
-    image = imageio.v3.imread(image_path)
 
-    return ImageSize(width=int(image_downsample * image.shape[1]),
-                     height=int(image_downsample * image.shape[0]))
+def get_shape(image_path: Path, image_downsample: float = 1.0) -> ImageSize:
+    if not image_path.is_file():
+        raise FileNotFoundError(f"The file {image_path} does not exist.")
+
+    file_ext = image_path.suffix.lower()
+
+    if file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:  # Image file
+        image = imageio.v3.imread(image_path)
+        return ImageSize(width=int(image_downsample * image.shape[1]),
+                         height=int(image_downsample * image.shape[0]))
+
+    elif file_ext in ['.mp4', '.avi', '.mov', '.mkv']:  # Video file
+        cap = cv2.VideoCapture(str(image_path))
+        if not cap.isOpened():
+            raise IOError(f"Cannot open video file {image_path}.")
+
+        # Get the width and height of the video frames
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        return ImageSize(width=int(image_downsample * width),
+                         height=int(image_downsample * height))
+    else:
+        raise ValueError(f"Unsupported file type: {file_ext}")
+
+
+def get_nth_video_frame(video_path: Path, frame_number: int, mode: str = 'rgb') -> Image:
+    """
+    Retrieves the nth frame from a video and returns it as a PIL Image in the specified mode.
+
+    Args:
+        video_path (Path): Path to the video file.
+        frame_number (int): The frame index to retrieve (0-based).
+        mode (str): The mode of the output image ('rgb' or 'grayscale').
+
+    Returns:
+        Image: The nth frame as a PIL Image.
+    """
+    if not video_path.is_file():
+        raise FileNotFoundError(f"The file {video_path} does not exist.")
+
+    # Open the video file
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file {video_path}.")
+
+    # Set the video to the desired frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+    # Read the frame
+    success, frame = cap.read()
+    cap.release()
+
+    if not success:
+        raise ValueError(f"Frame number {frame_number} could not be retrieved.")
+
+    # Process the frame based on the mode
+    if mode == 'rgb':
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    elif mode == 'grayscale':
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    else:
+        raise ValueError(f"Unknown mode {mode}")
+
+    return Image.fromarray(frame)
 
 
 def pad_image(image):
