@@ -94,9 +94,6 @@ def main():
         Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
         gt_Se3_obj_1_to_cam = Se3_cam_to_obj_1.inverse()
 
-        obj_1_to_obj_i_rotations = quaternion_to_axis_angle(Se3_obj_1_to_obj_i.quaternion.q)
-        obj_1_to_obj_i_translations = Se3_obj_1_to_obj_i.translation
-
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
@@ -120,8 +117,7 @@ def main():
         first_image_tensor = transform(first_image).squeeze()
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_rotations=obj_1_to_obj_i_rotations,
-                                 gt_obj_1_to_obj_i_translations=obj_1_to_obj_i_translations,
+                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
                                  images_paths=gt_images_list, segmentation_paths=gt_segmentations_list,
                                  initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
                                  gt_Se3_obj_1_to_cam=gt_Se3_obj_1_to_cam)
