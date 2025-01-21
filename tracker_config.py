@@ -48,8 +48,8 @@ class TrackerConfig:
     gt_texture_path: str = None
 
     # Tracking initialization
-    tran_init: Tuple[float] = None  # (0., 0., 0.)
-    rot_init: Tuple[float] = None   # (0., 0., 0.)
+    tran_init: Tuple[float] = (0., 0., 0.)  # (0., 0., 0.)
+    rot_init: Tuple[float] = (0., 0., 0.)   # (0., 0., 0.)
 
     # Optical flow and segmentation settings
     segmentation_mask_threshold: float = 0.99

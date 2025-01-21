@@ -1,6 +1,5 @@
 import pickle
 
-import numpy as np
 import torch
 import time
 import torchvision.transforms as transforms
@@ -9,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
 
+from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.general import load_config
 
@@ -52,15 +52,11 @@ def main():
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         config.write_folder = write_folder
-        t0 = time.time()
-
         sequence_folder = config.default_data_folder / 'BEHAVE' / 'train'
 
-        video_name = sequence_folder / f'{sequence}.mp4'
+        video_path = sequence_folder / f'{sequence}.mp4'
         gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
-        obj_segment_name = sequence_folder / f'{sequence}_mask_obj.mp4'
-
-        breakpoint()
+        object_segmentation_path = sequence_folder / f'{sequence}_mask_obj.mp4'
 
         with open(gt_pkl_name, "rb") as f:
             gt_annotations = pickle.load(f)

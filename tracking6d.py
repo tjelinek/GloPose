@@ -20,9 +20,10 @@ from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 class Tracking6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
-                 gt_obj_1_to_obj_i_rotations=None, gt_obj_1_to_obj_i_translations=None, images_paths: List[Path] = None,
-                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
-                 initial_segmentation: torch.Tensor = None, gt_Se3_obj_1_to_cam: Se3 = None):
+                 gt_obj_1_to_obj_i_Se3: Optional[Se3] = None, gt_Se3_obj_1_to_cam: Se3 = None,
+                 images_paths: List[Path] = None, video_path: Optional[Path] = None,
+                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
+                 initial_image: torch.Tensor = None, initial_segmentation: torch.Tensor = None,):
 
         config.write_folder = write_folder
         # Paths
@@ -30,15 +31,14 @@ class Tracking6D:
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
 
         # Ground truth related
-        assert torch.all(gt_obj_1_to_obj_i_rotations.eq(0)) or config.rot_init is None  # Conflicting setting handling
-        assert torch.all(gt_obj_1_to_obj_i_translations.eq(0)) or config.tran_init is None  # Conflicting setting handling
+        assert gt_obj_1_to_obj_i_Se3 is None or config.rot_init is None  # Conflicting setting handling
 
-        config.rot_init = tuple(gt_obj_1_to_obj_i_rotations[0].numpy(force=True))
-        config.tran_init = tuple(gt_obj_1_to_obj_i_translations[0].numpy(force=True))
+        if gt_obj_1_to_obj_i_Se3 is not None:
+            config.rot_init = tuple(gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle()[0].numpy(force=True))
+            config.tran_init = tuple(gt_obj_1_to_obj_i_Se3.translation[0].numpy(force=True))
 
         self.gt_cam_to_obj_Se3: Optional[Se3]
-        self.gt_obj_1_to_obj_i_Se3: Optional[Se3] = Se3(Quaternion.from_axis_angle(gt_obj_1_to_obj_i_rotations),
-                                                    gt_obj_1_to_obj_i_translations)
+        self.gt_obj_1_to_obj_i_Se3: Optional[Se3] = gt_obj_1_to_obj_i_Se3
 
         self.Se3_obj_to_cam: Se3 = gt_Se3_obj_1_to_cam
         if self.Se3_obj_to_cam is None:
@@ -70,8 +70,10 @@ class Tracking6D:
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
-        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture, gt_rotations=gt_obj_1_to_obj_i_rotations,
-                                   gt_translations=gt_obj_1_to_obj_i_translations, initial_segmentation=initial_segmentation,
+        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
+                                   gt_rotations=gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle(),
+                                   gt_translations=gt_obj_1_to_obj_i_Se3.translation,
+                                   initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths,
                                    segmentation_paths=segmentation_paths, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
@@ -133,7 +135,6 @@ class Tracking6D:
 
     def filter_frames(self):
         for frame_i in range(0, self.config.input_frames):
-
             self.init_datagraph_frame(frame_i)
 
             new_frame_observation = self.tracker.next(frame_i)
@@ -229,7 +230,6 @@ class Tracking6D:
         csv_output_path = self.write_folder.parent.parent / 'gt_poses.csv'
 
         for node_idx in sorted(self.data_graph.G.nodes):
-
             node_data = self.data_graph.get_frame_data(node_idx)
 
             Se3_cam_gt = node_data.gt_pose_cam
