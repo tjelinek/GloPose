@@ -60,22 +60,15 @@ def main():
 
         with open(gt_pkl_name, "rb") as f:
             gt_annotations = pickle.load(f)
-            cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_rot']).to(config.device)
-            cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
-            sequence_length = obj_rot.shape[0]
+            cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_rot']).to(config.device)
+            cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
+            sequence_length = cam_to_obj_rotations.shape[0]
 
-        gt_Se3_obj_1_to_cam, obj_1_to_obj_i_rotations, obj_1_to_obj_i_translations = get_relative_obj_rotations(
-            cam_to_obj_rotations, cam_to_obj_translations)
+        Se3_cam_to_obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
+        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj)
+        Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
 
-        print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-
-        quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
-        trans_frame1 = torch.from_numpy(gt_translations[0])[None]
-        Se3_cam_to_obj = Se3(quat_frame1, trans_frame1)
-        T_cam_to_obj = Se3_cam_to_obj.matrix().squeeze()
-
-        config.camera_intrinsics = cam_intrinsics_list[0]
-        config.camera_extrinsics = T_cam_to_obj.numpy(force=True)
+        config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
 
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
@@ -90,24 +83,12 @@ def main():
         first_image_tensor = transform(first_image).squeeze()
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_rotations=obj_1_to_obj_i_rotations,
-                                 gt_obj_1_to_obj_i_translations=obj_1_to_obj_i_translations,
-                                 images_paths=gt_images_list, segmentation_paths=gt_segmentations_list,
+                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
+                                 video_path=video_path, segmentation_video_path=object_segmentation_path,
                                  initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
-                                 gt_Se3_obj_1_to_cam=gt_Se3_obj_1_to_cam)
+                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
 
         exit()
-
-
-def get_relative_obj_rotations(cam_to_obj_rotations, cam_to_obj_translations):
-    Se3_cam_to_obj = Se3(Quaternion.from_axis_angle(cam_to_obj_rotations), cam_to_obj_translations)
-    Se3_cam_to_obj_1 = Se3_cam_to_obj[[0]]
-    Se3_cam_to_obj_1_expanded = Se3.from_matrix(Se3_cam_to_obj_1.matrix().expand_as(Se3_cam_to_obj.matrix()))
-    Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
-    gt_Se3_obj_1_to_cam = Se3_cam_to_obj_1.inverse()
-    obj_1_to_obj_i_rotations = quaternion_to_axis_angle(Se3_obj_1_to_obj_i.quaternion.q)
-    obj_1_to_obj_i_translations = Se3_obj_1_to_obj_i.translation
-    return gt_Se3_obj_1_to_cam, obj_1_to_obj_i_rotations, obj_1_to_obj_i_translations
 
 
 if __name__ == "__main__":
