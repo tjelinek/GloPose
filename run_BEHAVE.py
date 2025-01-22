@@ -67,7 +67,7 @@ def main():
         Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
-        config.input_frames = 50
+        config.input_frames = sequence_length
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
 
