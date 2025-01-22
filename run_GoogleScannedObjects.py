@@ -71,11 +71,8 @@ def main():
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         config.input_frames = gt_rotations.shape[0]
-        camera_trans = torch.FloatTensor(config.camera_position)[None].to(config.device)
-        camera_up = torch.FloatTensor(config.camera_up)[None].to(config.device)
-        obj_center = torch.FloatTensor(config.obj_center)[None].to(config.device)
 
-        Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_kaolin_params(camera_trans, camera_up, obj_center)
+        Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_config(config)
 
         run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
                                  gt_obj_1_to_obj_i_Se3=gt_obj_1_to_obj_i_Se3, images_paths=images_paths,

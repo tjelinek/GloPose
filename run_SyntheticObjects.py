@@ -5,10 +5,12 @@ import time
 from pathlib import Path
 
 import torch
+from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
+from models.rendering import get_Se3_obj_to_cam_from_config
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
-from utils.data_utils import load_gt_data
+from utils.data_utils import load_gt_data, load_texture, load_mesh
 from utils.general import load_config
 
 
@@ -72,7 +74,9 @@ def main():
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         skip_frames = 1
-        gt_texture, gt_mesh, gt_rotations, gt_translations = load_gt_data(config)
+        gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
+        gt_mesh = load_mesh(Path(config.gt_mesh_path))
+
         gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).cuda().to(torch.float32)
         images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
 
@@ -80,9 +84,14 @@ def main():
         images_paths = images_paths[::skip_frames]
         gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations.cuda()
 
+        gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
+
+        Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_config(config)
+
         config.input_frames = gt_rotations.shape[0]
         run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
-                                 gt_rotations=gt_rotations, gt_translations=gt_translations)
+                                 gt_obj_1_to_obj_i_Se3=gt_obj_1_to_obj_i_Se3, images_paths=images_paths,
+                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
 
 
 if __name__ == "__main__":
