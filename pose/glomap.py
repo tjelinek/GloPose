@@ -220,12 +220,17 @@ class GlomapWrapper:
         gt_reconstruction = pycolmap.Reconstruction()
 
         gt_K = self.data_graph.get_frame_data(0).gt_pinhole_K
-        fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
+        if gt_K is not None:
+            fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
+            fx = fx.item()
+            fy = fy.item()
+        else:
+            pred_reconstruction_cam = reconstruction.cameras[1]
+            cx, cy = (pred_reconstruction_cam.params[1], pred_reconstruction_cam.params[2])
+            fx, fy = (pred_reconstruction_cam.params[0], pred_reconstruction_cam.params[0])
 
         gt_w = int(self.image_width)
         gt_h = int(self.image_height)
-        fx = fx.item()
-        fy = fy.item()
 
         gt_reconstruction_cam_id = 1
         cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, cx, cy]))
