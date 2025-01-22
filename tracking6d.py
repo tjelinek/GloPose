@@ -179,7 +179,8 @@ class Tracking6D:
         if csv_output_path is None:
             csv_output_path = self.write_folder.parent.parent / 'stats.csv'
 
-        images_paths_to_frame_index = {str(self.images_paths[i].name): i for i in range(len(self.images_paths))}
+        images_paths_to_frame_index = {str(self.data_graph.get_frame_data(i).image_filename.name): i
+                                       for i in range(self.config.input_frames)}
 
         for image in reconstruction.images.values():
             image_frame_id = images_paths_to_frame_index[image.name]
@@ -264,6 +265,7 @@ class Tracking6D:
 
         gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(self.gt_obj_1_to_obj_i_Se3[[frame_i]], self.Se3_obj_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
+        frame_node.gt_obj1_to_obji = self.gt_obj_1_to_obj_i_Se3[[frame_i]]
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
