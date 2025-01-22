@@ -19,8 +19,17 @@ class BaseFrameFilter:
         self.keyframe_graph: nx.DiGraph = nx.DiGraph()
 
         self.image_size: ImageSize = image_shape
+        self.n_frames = self.config.input_frames
 
     def get_keyframe_graph(self) -> nx.DiGraph:
+        if len(self.keyframe_graph.nodes) <= 2:
+            nodes_list = sorted(list(self.keyframe_graph.nodes))
+            middle_node = (nodes_list[-1] - nodes_list[0]) // 2
+            assert nodes_list[0] < middle_node < nodes_list[-1]
+
+            self.keyframe_graph.add_edge(nodes_list[0], middle_node)
+            self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
+
         return self.keyframe_graph
 
 
@@ -37,7 +46,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         start_time = time()
 
-        if current_frame_idx == 0:
+        if current_frame_idx == 0 or current_frame_idx >= self.n_frames - 1:
             self.keyframe_graph.add_node(current_frame_idx)
             return
 
@@ -118,6 +127,9 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.data_graph.get_frame_data(0).reliable_sources = {0}
             self.data_graph.get_frame_data(0).matching_source_keyframe = 0
             return
+        if frame_i >= self.n_frames - 1:
+            self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
+
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
         preceding_source = preceding_frame_node.matching_source_keyframe
