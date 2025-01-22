@@ -1,4 +1,4 @@
-import pickle
+import csv
 
 import torch
 import torchvision.transforms as transforms
@@ -78,18 +78,44 @@ def main():
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
         config.write_folder = write_folder
-        sequence_folder = config.default_data_folder / 'BEHAVE' / 'train'
+        sequence_folder = config.default_data_folder / 'SLAM' / 'tum_rgbd' / sequence
 
-        video_path = sequence_folder / f'{sequence}.mp4'
-        gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
-        object_seg_video_path = sequence_folder / f'{sequence}_mask_obj.mp4'
+        image_paths = []
 
-        with open(gt_pkl_name, "rb") as f:
-            gt_annotations = pickle.load(f)
-            cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_rot']).to(config.device)
-            cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
-            sequence_length = cam_to_obj_rotations.shape[0]
+        gt_images_list_txt_path = sequence_folder / 'rgb.txt'
+        with open(gt_images_list_txt_path, 'r') as file:
+            csv_reader = csv.reader(file, delimiter=' ')
+            for row in csv_reader:
+                if not row or row[0].startswith('#'):
+                    continue
 
+                if len(row) > 1:
+                    image_paths.append(Path(row[1]))
+
+        sequence_length = len(image_paths)
+
+        gt_txt_path = sequence_folder / 'groundtruth.txt'
+
+        gt_cam_ts = []
+        gt_cam_quats = []
+        with open(gt_txt_path, 'r') as file:
+            csv_reader = csv.reader(file, delimiter=' ')
+            for row in csv_reader:
+                if not row or row[0].startswith('#') or len(row) != 8:
+                    continue
+
+                tx, ty, tz = [float(x) for x in row[1:4]]
+                qx, qy, qz, qw = [float(x) for x in row[4:]]
+
+                gt_cam_ts.append(torch.tensor([tx, ty, tz]).to(config.device))
+                gt_cam_quats.append(torch.tensor([qw, qx, qy, qz]).to(config.device))
+
+        gt_cam_t = torch.stack(gt_cam_ts)
+        gt_cam_quat = torch.stack(gt_cam_quats)
+
+        gt_cam_Se3 = Se3(Quaternion(gt_cam_quat), gt_cam_t)
+
+        # TILL HERE FINISHED
         Se3_cam_to_obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
         Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj)
         Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
