@@ -17,9 +17,8 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs
     write_folder.mkdir(exist_ok=True, parents=True)
 
     print('\n\n\n---------------------------------------------------')
-    write_folder_path = Path(write_folder)
-    print("Running tracking on dataset:", write_folder_path.parent.name)
-    print("Sequence:", write_folder_path.name)
+    print("Running tracking on dataset:", config.dataset)
+    print("Sequence:", config.sequence)
     print('---------------------------------------------------\n\n')
 
     torch.cuda.empty_cache()
