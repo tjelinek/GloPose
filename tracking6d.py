@@ -130,7 +130,7 @@ class Tracking6D:
         reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
         self.write_gt_poses()
-        self.results_writer.visualize_colmap_track(len(self.images_paths) - 1, reconstruction)
+        self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
         self.evaluate_reconstruction(reconstruction)
 
@@ -243,13 +243,15 @@ class Tracking6D:
 
             image_name = str(node_data.image_filename)
             # Add stats for the current image frame
+
+            gt_pinhole_K = node_data.gt_pinhole_K
             stats.append({
                 'dataset': self.config.dataset,
                 'sequence': self.config.sequence,
                 'frame_name': image_name,
                 'gt_R_w2c': gt_rotation,
                 'gt_t_Rw2c': gt_translation,
-                'gt_cam_K': node_data.gt_pinhole_K.numpy(force=True).tolist(),
+                'gt_cam_K': gt_pinhole_K.numpy(force=True).tolist() if gt_pinhole_K is not None else None,
             })
 
         # Convert stats to a Pandas DataFrame
