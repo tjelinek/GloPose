@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Tuple, List, Any, Optional
+from typing import Tuple, List, Any
 
 import imageio
 import networkx as nx
@@ -35,13 +35,10 @@ from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_ca
 class WriteResults:
 
     def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 images_paths, segmentation_paths, Se3_world_to_cam: Se3):
+                 Se3_world_to_cam: Se3):
 
         self.image_height = shape.height
         self.image_width = shape.width
-
-        self.images_paths: Optional[List] = images_paths
-        self.segmentation_paths: Optional[List] = segmentation_paths
 
         self.data_graph: DataGraph = data_graph
 
@@ -310,14 +307,15 @@ class WriteResults:
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
         template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, self.Se3_world_to_cam)
+        # template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, self.Se3_world_to_cam)
 
         image_id_to_poses = {}
         image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
 
         G_reliable = nx.Graph()
 
-        all_image_names = [image_path.name for image_path in self.images_paths]
+        all_image_names = [str(self.data_graph.get_frame_data(i).image_filename)
+                           for i in range(len(self.data_graph.G.nodes))]
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
 

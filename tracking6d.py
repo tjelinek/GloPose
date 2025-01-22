@@ -83,8 +83,6 @@ class Tracking6D:
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
                                            tracking_config=self.config, data_graph=self.data_graph,
-                                           images_paths=self.images_paths,
-                                           segmentation_paths=self.segmentation_paths,
                                            Se3_world_to_cam=self.Se3_obj_to_cam)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
