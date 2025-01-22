@@ -263,9 +263,6 @@ class Tracking6D:
         gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(self.gt_obj_1_to_obj_i_Se3[[frame_i]], self.Se3_obj_to_cam)
         frame_node.gt_pose_cam = gt_Se3_cam
 
-        camera_intrinsics = self.tracker.get_intrinsics_for_frame(frame_i)
-        frame_node.gt_pinhole_K = camera_intrinsics
-
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
 

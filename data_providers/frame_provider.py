@@ -122,7 +122,10 @@ class PrecomputedFrameProvider(FrameProvider):
         return image_downsampled
 
     def get_intrinsics_for_frame(self, frame_i):
-        return get_intrinsics_from_exif(self.images_paths[frame_i]).to(self.device)
+        if self.images_paths is not None:
+            return get_intrinsics_from_exif(self.images_paths[frame_i]).to(self.device)
+        else:  # We can not read it from a video
+            raise ValueError("Can not gen cam intrinsics from a video")
 
 
 ##############################
@@ -265,9 +268,13 @@ class SAM2SegmentationProvider(SegmentationProvider):
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
             if sam2_images_paths is not None:
-                state = self.predictor.init_state(str(sam2_images_paths[0].parent))
+                state = self.predictor.init_state(str(sam2_images_paths[0].parent),
+                                                  offload_video_to_cpu=True,
+                                                  offload_state_to_cpu=True,
+                                                  )
             else:
-                state = self.predictor.init_state(str(video_path))
+                state = self.predictor.init_state(str(video_path), offload_video_to_cpu=True,
+                                                  offload_state_to_cpu=True)
 
             initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
@@ -336,9 +343,11 @@ class BaseTracker:
         elif config.segmentation_provider == 'SAM2':
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
+            need_to_delete_cache = False
             if kwargs.get('images_paths'):
                 images_paths = kwargs['images_paths']
                 images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
+                need_to_delete_cache = True
             else:
                 images_paths_for_sam = None
                 assert kwargs.get('video_path')
@@ -354,7 +363,8 @@ class BaseTracker:
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   sam2_images_paths=images_paths_for_sam, **kwargs)
-            shutil.rmtree(sam2_tmp_path)
+            if need_to_delete_cache:
+                shutil.rmtree(sam2_tmp_path)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
