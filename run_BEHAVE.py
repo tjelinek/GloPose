@@ -20,15 +20,15 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            '225z4rz6dtrsezi34lsrcnukni',
-            '227ybq4jddcxeobo7njvjnkmgy',
-            '24bw7vtbjt3ony3cgvye2oyjgu',
-            '24n2fzuerdocahja7fxod3jzfe',
-            '25zqalav3mxmbuvwzrgdxvp6ne',
-            '26623u6vetquo3323cyano7xpu',
-            '27pfmpfuewryv7u2vqe56sbsua',
-            '2ayiktcgtfbj45woxvfv74plui',
-            '2b2o7cfrp6j5luxwixtq2syeoy',
+            # '225z4rz6dtrsezi34lsrcnukni',
+            # '227ybq4jddcxeobo7njvjnkmgy',
+            # '24bw7vtbjt3ony3cgvye2oyjgu',
+            # '24n2fzuerdocahja7fxod3jzfe',
+            # '25zqalav3mxmbuvwzrgdxvp6ne',
+            # '26623u6vetquo3323cyano7xpu',
+            # '27pfmpfuewryv7u2vqe56sbsua',
+            # '2ayiktcgtfbj45woxvfv74plui',
+            # '2b2o7cfrp6j5luxwixtq2syeoy',
             '2csdgc36d5txks6kpssnrojmby',
         ]
 
@@ -67,7 +67,7 @@ def main():
         Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
-        config.input_frames = sequence_length
+        config.input_frames = 50
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
 
