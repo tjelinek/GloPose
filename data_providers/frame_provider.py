@@ -139,9 +139,18 @@ class SegmentationProvider(ABC):
     def next_segmentation(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
         pass
 
-    @abstractmethod
     def get_sequence_length(self):
-        pass
+        return self.config.input_frames
+
+
+class WhiteSegmentationProvider(ABC):
+    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
+        self.image_shape: ImageSize = image_shape
+        self.device = config.device
+        self.config = config
+
+    def next_segmentation(self, **kwargs) -> torch.Tensor:
+        return torch.ones((1, 1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float)
 
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
@@ -340,6 +349,8 @@ class BaseTracker:
             self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
+        elif config.segmentation_provider == 'whites':
+            self.segmentation_provider = WhiteSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
