@@ -29,6 +29,8 @@ class Tracking6D:
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
+        self.video_path: Optional[Path] = video_path
+        self.segmentation_video_path: Optional[Path] = segmentation_video_path
 
         # Ground truth related
         # assert gt_obj_1_to_obj_i_Se3 is None or config.rot_init is None  # Conflicting setting handling
@@ -265,6 +267,10 @@ class Tracking6D:
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
+        elif self.video_path is not None:
+            frame_node.image_filename = Path(f'{self.video_path.stem}_{frame_i}')
 
         if self.segmentation_paths is not None:
             frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i].name)
+        elif self.segmentation_video_path is not None:
+            frame_node.image_filename = Path(f'{self.segmentation_video_path.stem}_{frame_i}')
