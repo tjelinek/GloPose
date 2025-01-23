@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
 
+from utils.data_utils import get_initial_image_and_segment
 from utils.runtime_utils import run_tracking_on_sequence, parse_args
 from utils.general import load_config
 
@@ -18,11 +19,11 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            'ABF10',  'BB10',  'GPMF10',  'GSF10',  'MC1',  'MDF10',  'ND2',     'ShSu12',  'SiBF12',  'SM3',    'SMu41',
-            'ABF11',  'BB11',  'GPMF11',  'GSF11',  'MC2',  'MDF11',  'SB10',    'ShSu13',  'SiBF13',  'SM4',    'SMu42',
-            'ABF12',  'BB12',  'GPMF12',  'GSF12',  'MC4',  'MDF12',  'SB12',    'ShSu14',  'SiBF14',  'SM5',    'SS1',
-            'ABF13',  'BB13',  'GPMF13',  'GSF13',  'MC5',  'MDF13',  'SB14',    'SiBF10',  'SiS1',    'SMu1',   'SS2',
-            'ABF14',  'BB14',  'GPMF14',  'GSF14',  'MC6',  'MDF14',  'ShSu10',  'SiBF11',  'SM2',     'SMu40',  'SS3',
+            'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+            'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
+            'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
+            'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
+            'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
 
         ]
 
@@ -33,7 +34,6 @@ def main():
 
         if config.gt_flow_source == 'GenerateSynthetic':
             exit()
-
 
         experiment_name = args.experiment
         config.experiment_name = experiment_name
@@ -107,14 +107,8 @@ def main():
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
 
-        first_segment = Image.open(gt_segmentations_list[0])
-        first_image = Image.open(gt_images_list[0])
-
-        first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
-
-        transform = transforms.ToTensor()
-        first_segment_tensor = transform(first_segment_resized)[1].squeeze()  # Green channel is the obj segmentation
-        first_image_tensor = transform(first_image).squeeze()
+        first_image_tensor, first_segment_tensor = get_initial_image_and_segment(gt_images_list, gt_segmentations_list,
+                                                                                 segmentation_channel=1)
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
                                  gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
@@ -123,6 +117,7 @@ def main():
                                  gt_Se3_obj_1_to_cam=gt_Se3_obj_1_to_cam)
 
         exit()
+
 
 if __name__ == "__main__":
     main()

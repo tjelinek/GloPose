@@ -6,6 +6,7 @@ from typing import Iterable, Dict, Tuple, cast
 import torch
 import trimesh
 import imageio
+from PIL import Image
 from torchvision import transforms
 
 from tracker_config import TrackerConfig
@@ -91,3 +92,15 @@ def load_gt_data(config: TrackerConfig):
         gt_rotations, gt_translations = load_gt_annotations_file(config.gt_track_path)
 
     return gt_texture, gt_mesh, gt_rotations, gt_translations
+
+
+def get_initial_image_and_segment(images_list, segmentations_list, segmentation_channel=0) \
+        -> Tuple[torch.Tensor, torch.Tensor]:
+    first_segment = Image.open(segmentations_list[0])
+    first_image = Image.open(images_list[0])
+    first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
+    transform = transforms.ToTensor()
+    first_segment_tensor = transform(first_segment_resized)[segmentation_channel].squeeze()
+    first_image_tensor = transform(first_image).squeeze()
+
+    return first_image_tensor, first_segment_tensor
