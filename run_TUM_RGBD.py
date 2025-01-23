@@ -90,7 +90,7 @@ def main():
                     continue
 
                 if len(row) > 1:
-                    image_paths.append(Path(row[1]))
+                    image_paths.append(sequence_folder / Path(row[1]))
 
         sequence_length = len(image_paths)
 
@@ -113,31 +113,20 @@ def main():
         gt_cam_t = torch.stack(gt_cam_ts)
         gt_cam_quat = torch.stack(gt_cam_quats)
 
-        gt_cam_Se3 = Se3(Quaternion(gt_cam_quat), gt_cam_t)
+        gt_Se3_world_to_cam = Se3(Quaternion(gt_cam_quat), gt_cam_t)
 
         # TILL HERE FINISHED
-        Se3_cam_to_obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
-        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj)
-        Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
+        gt_Se3_cam_to_world = gt_Se3_world_to_cam.inverse()
+        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam_to_world)
+        Se3_obj_1_to_cam = gt_Se3_cam_to_world[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
         config.input_frames = sequence_length
-        config.segmentation_provider = 'SAM2'
+        config.segmentation_provider = 'whites'
         config.frame_provider = 'precomputed'
 
-        first_image = get_nth_video_frame(video_path, 0, mode='rgb')
-        first_segment = get_nth_video_frame(object_seg_video_path, 0, mode='grayscale')
-
-        first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
-
-        transform = transforms.ToTensor()
-        first_segment_tensor = transform(first_segment_resized).squeeze()
-        first_image_tensor = transform(first_image).squeeze()
-
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
-                                 video_path=video_path, segmentation_video_path=object_seg_video_path,
-                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
+                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i, images_paths=image_paths,
                                  gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
 
         exit()

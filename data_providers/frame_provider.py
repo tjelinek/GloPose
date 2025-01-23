@@ -143,14 +143,12 @@ class SegmentationProvider(ABC):
         return self.config.input_frames
 
 
-class WhiteSegmentationProvider(ABC):
-    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
-        self.image_shape: ImageSize = image_shape
-        self.device = config.device
-        self.config = config
+class WhiteSegmentationProvider(SegmentationProvider):
+    def __init__(self, config: TrackerConfig, image_shape: ImageSize, **kwargs):
+        super().__init__(image_shape, config)
 
-    def next_segmentation(self, **kwargs) -> torch.Tensor:
-        return torch.ones((1, 1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float)
+    def next_segmentation(self, frame_i, **kwargs) -> torch.Tensor:
+        return torch.ones((1, 1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float).to(self.device)
 
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
