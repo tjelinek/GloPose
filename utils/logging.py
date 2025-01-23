@@ -1035,11 +1035,11 @@ class WriteResults:
 
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
 
-        image_255 = (last_observed_image * 255).to(torch.uint8)
-        seg = last_frame_observation.observed_segmentation.squeeze().unsqueeze(0).repeat(3, 1, 1).permute(1, 2, 0).cpu()
-        seg_255 = (seg * 255.).to(torch.uint8)
-        imageio.imwrite(new_image_path, image_255)
-        imageio.imwrite(new_segment_path, seg_255)
+        # image_255 = (last_observed_image * 255).to(torch.uint8)
+        # seg = last_frame_observation.observed_segmentation.squeeze().unsqueeze(0).repeat(3, 1, 1).permute(1, 2, 0).cpu()
+        # seg_255 = (seg * 255.).to(torch.uint8)
+        # imageio.imwrite(new_image_path, image_255)
+        # imageio.imwrite(new_segment_path, seg_255)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame_i)
