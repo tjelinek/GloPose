@@ -3,7 +3,8 @@ from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
 from models.rendering import get_Se3_obj_to_cam_from_kaolin_params, get_Se3_obj_to_cam_from_config
-from utils.runtime_utils import run_tracking_on_sequence, parse_args
+from utils.runtime_utils import parse_args
+from tracking6d import run_tracking_on_sequence
 from utils.data_utils import load_mesh, load_texture
 from utils.general import load_config
 from pathlib import Path

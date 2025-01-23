@@ -1,3 +1,5 @@
+import os
+import shutil
 import time
 from pathlib import Path
 from typing import Optional, List
@@ -276,3 +278,22 @@ class Tracking6D:
             frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i].name)
         elif self.segmentation_video_path is not None:
             frame_node.image_filename = Path(f'{self.segmentation_video_path.stem}_{frame_i}.png')
+
+
+def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
+    if os.path.exists(write_folder):
+        shutil.rmtree(write_folder)
+
+    write_folder.mkdir(exist_ok=True, parents=True)
+
+    print('\n\n\n---------------------------------------------------')
+    print("Running tracking on dataset:", config.dataset)
+    print("Sequence:", config.sequence)
+    print('---------------------------------------------------\n\n')
+
+    t0 = time.time()
+
+    sfb = Tracking6D(config, write_folder, **kwargs)
+    sfb.run_filtering_with_reconstruction()
+
+    print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds.')

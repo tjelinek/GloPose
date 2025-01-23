@@ -8,7 +8,8 @@ from PIL import Image
 from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.runtime_utils import run_tracking_on_sequence, parse_args
+from utils.runtime_utils import parse_args
+from tracking6d import run_tracking_on_sequence
 from utils.general import load_config
 
 
