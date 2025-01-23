@@ -1,14 +1,13 @@
 import json
+from collections import defaultdict
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Tuple
 
+import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from PIL import Image
-from kornia.geometry import Se3, Quaternion, PinholeCamera
-
-from data_structures.keyframe_buffer import FrameObservation
-from data_structures.keyframe_graph import KeyframeGraph
+from kornia.geometry import Se3, Quaternion, PinholeCamera, rotation_matrix_to_axis_angle
 
 
 def bop_t_to_torch_tensor(json_t_value: list[float]) -> torch.Tensor:
@@ -30,46 +29,6 @@ def get_bop_image_tensor(rgb_path: Path) -> torch.Tensor:
     rgb_image = Image.open(rgb_path)
     rgb_image_tensor = F.pil_to_tensor(rgb_image).float()[None, None]
     return rgb_image_tensor
-
-
-def perform_onboarding(sequence_path: Path) -> KeyframeGraph:
-    scene_gt_json_path = sequence_path / 'scene_gt.json'
-    scene_cam_json_path = sequence_path / 'scene_camera.json'
-    rgb_folder_path = sequence_path / 'rgb/'
-    segmentation_path = sequence_path / 'mask_visib'
-
-    with open(scene_gt_json_path, 'r') as json_file:
-        scene_gt_json_data = json.load(json_file)
-
-    rgb_image_paths_sorted = list(sorted(rgb_folder_path.iterdir()))
-    segmentation_paths_sorted = list(sorted(segmentation_path.iterdir()))
-
-    Se3_obj_to_cam = get_Se3_world_to_cam_from_bop_json(scene_gt_json_data)
-    pinhole_params = get_pinhole_params(scene_cam_json_path)
-
-    pose_icosphere = KeyframeGraph(30)
-
-    for json_item, rgb_path, segmentation_path in zip(scene_gt_json_data.items(), rgb_image_paths_sorted,
-                                                      segmentation_paths_sorted):
-        frame_i = int(json_item[0])
-        frame_data = json_item[1][0]
-
-        frame_cam_t = bop_t_to_torch_tensor(frame_data['cam_t_m2c'])
-        frame_cam_R = bop_R_to_torch_tensor(frame_data['cam_R_m2c'])
-
-        frame_cam_Se3 = Se3(Quaternion.from_matrix(frame_cam_R), frame_cam_t)
-
-        if pose_icosphere.check_inserting_new_node(frame_cam_Se3):
-            rgb_image = get_bop_image_tensor(rgb_path)
-            segmentation = get_bop_segmentation_tensor(segmentation_path)
-
-            frame_observation = FrameObservation(observed_image=rgb_image, observed_segmentation=segmentation,
-                                                 observed_image_features=None)
-
-            pose_icosphere.insert_new_reference(frame_observation, frame_cam_Se3, frame_i,
-                                                pinhole_params[frame_i])
-
-    return pose_icosphere
 
 
 def get_Se3_world_to_cam_from_bop_json(json_data) -> Se3:
@@ -119,3 +78,25 @@ def get_pinhole_params(json_file_path) -> List[PinholeCamera]:
         pinhole_cameras.append(pinhole_camera)
 
     return pinhole_cameras
+
+
+def read_obj_to_cam_transformations_from_gt(pose_json_path) -> (
+        Tuple)[Dict[int, Dict[int, torch.Tensor]], Dict[int, Dict[int, torch.Tensor]]]:
+    gt_translations_obj_to_cam = defaultdict(dict)
+    gt_rotations_obj_to_cam = defaultdict(dict)
+    with open(pose_json_path, 'r') as file:
+        pose_json = json.load(file)
+        for frame, data in pose_json.items():
+            frame = int(frame)
+            for entry in data:
+                obj_id = entry['obj_id']
+                R_obj_to_cam = entry['cam_R_m2c']
+                R_m2c = torch.tensor(np.array(R_obj_to_cam).reshape(3, 3))
+                r_m2c = rotation_matrix_to_axis_angle(R_m2c).numpy()
+
+                cam_t_m2c = entry['cam_t_m2c']
+                t_m2c = np.array(cam_t_m2c)
+
+                gt_rotations_obj_to_cam[obj_id][frame] = r_m2c
+                gt_translations_obj_to_cam[obj_id][frame] = t_m2c
+    return gt_rotations_obj_to_cam, gt_translations_obj_to_cam
