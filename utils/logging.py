@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, List, Any
+from typing import Tuple, List
 
 import imageio
 import networkx as nx
@@ -13,20 +13,16 @@ from kornia.geometry import Se3, Quaternion
 from kornia.geometry.conversions import quaternion_to_axis_angle
 from kornia.image import ImageSize
 from matplotlib import pyplot as plt
-from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
-from matplotlib.patches import ConnectionPatch, Patch
 
 from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.rerun_annotations import RerunAnnotations
-from flow import (flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
-                  source_coords_to_target_coords_np)
+from flow import (source_coords_to_target_coords_image)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
-from utils.image_utils import overlay_occlusion
 from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
 
 
@@ -557,121 +553,6 @@ class WriteResults:
                     ),
                 )
 
-    @staticmethod
-    def write_obj_mesh(vertices, faces, face_features, name, materials_model_name=None):
-        if materials_model_name is None:
-            materials_model_name = "model.mtl"
-
-        file = open(name, "w")
-        file.write("mtllib " + materials_model_name + "\n")
-        file.write("o FMO\n")
-        for ver in vertices:
-            file.write("v {:.6f} {:.6f} {:.6f} \n".format(ver[0], ver[1], ver[2]))
-        for ffeat in face_features:
-            for feat in ffeat:
-                if len(feat) == 3:
-                    file.write("vt {:.6f} {:.6f} {:.6f} \n".format(feat[0], feat[1], feat[2]))
-                else:
-                    file.write("vt {:.6f} {:.6f} \n".format(feat[0], feat[1]))
-        file.write("usemtl Material.002\n")
-        file.write("s 1\n")
-        for fi in range(faces.shape[0]):
-            fc = faces[fi] + 1
-            ti = 3 * fi + 1
-            file.write("f {}/{} {}/{} {}/{}\n".format(fc[0], ti, fc[1], ti + 1, fc[2], ti + 2))
-        file.close()
-
-    def visualize_flow_with_matching(self, frame_i):
-
-        dpi = 600
-
-        datagraph_frontview_data = self.data_graph.get_frame_data(frame_i)
-        new_flow_arcs = [(datagraph_frontview_data.matching_source_keyframe, frame_i)]
-
-        for new_flow_arc in new_flow_arcs:
-
-            flow_arc_source, flow_arc_target = new_flow_arc
-
-            fig, axs = plt.subplots(3, 1, figsize=(8, 12), dpi=600)
-            axs: Any = axs
-
-            flow_source_label = self.tracking_config.gt_flow_source
-            # if flow_source_label == 'FlowNetwork':
-            #     flow_source_label = self.tracking_config.long_flow_model
-
-            heading_text = (f"Frames {new_flow_arc}\n"
-                            f"Flow: {flow_source_label}")
-
-            axs = np.atleast_2d(axs).T
-
-            axs[0, 0].text(1.05, 1, heading_text, transform=axs[0, 0].transAxes, verticalalignment='top',
-                           fontsize='medium')
-
-            arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
-
-            rendered_flow_res = arc_observation.synthetic_flow_result
-
-            rend_flow = flow_unit_coords_to_image_coords(rendered_flow_res.observed_flow)
-            rend_flow_np = rend_flow.numpy(force=True)
-
-            flow_observation = arc_observation.observed_flow
-            opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
-            occlusion_mask = self.convert_observation_to_numpy(flow_observation.observed_flow_occlusion)
-            occlusion_mask_thresh = np.greater_equal(occlusion_mask, self.tracking_config.occlusion_coef_threshold)
-            segmentation_mask = flow_observation.observed_flow_segmentation.numpy(force=True)
-
-            template_data = self.data_graph.get_frame_data(flow_arc_source)
-            target_data = self.data_graph.get_frame_data(flow_arc_target)
-            template_observation_frontview = template_data.frame_observation
-            target_observation_frontview = target_data.frame_observation
-            template_image = self.convert_observation_to_numpy(template_observation_frontview.observed_image)
-            target_image = self.convert_observation_to_numpy(target_observation_frontview.observed_image)
-
-            template_overlay = overlay_occlusion(template_image, occlusion_mask_thresh.astype(np.float32))
-
-            display_bounds = (0, self.image_width, 0, self.image_height)
-
-            for ax in axs.flat:
-                ax.axis('off')
-
-            darkening_factor = 0.5
-            axs[0, 0].imshow(template_overlay * darkening_factor, extent=display_bounds)
-            axs[0, 0].set_title(f'Template occlusion')
-
-            axs[1, 0].imshow(template_image * darkening_factor, extent=display_bounds)
-            axs[1, 0].set_title(f'Template')
-
-            axs[2, 0].imshow(target_image * darkening_factor, extent=display_bounds)
-            axs[2, 0].set_title(f'Target')
-
-            step = self.image_width // 20
-            x, y = np.meshgrid(np.arange(self.image_width, step=step), np.arange(self.image_height, step=step))
-            template_coords = np.stack((y, x), axis=0).reshape(2, -1).T
-
-            # Plot lines on the target front and back view subplots
-            occlusion_threshold = self.tracking_config.occlusion_coef_threshold
-
-            flow_frontview_np = opt_flow.numpy(force=True)
-
-            self.visualize_inliers_outliers_matching(axs[1, 0], axs[2, 0], flow_frontview_np,
-                                                     rend_flow_np, occlusion_mask,
-                                                     arc_observation.ransac_inliers,
-                                                     arc_observation.ransac_outliers)
-
-            self.plot_matched_lines(axs[1, 0], axs[2, 0], template_coords, occlusion_mask, occlusion_threshold,
-                                    flow_frontview_np, cmap='spring', marker='o', segment_mask=segmentation_mask)
-
-            legend_elements = [Patch(facecolor='green', edgecolor='green', label='TP inliers'),
-                               Patch(facecolor='red', edgecolor='red', label='FP inliers'),
-                               Patch(facecolor='blue', edgecolor='blue', label='Predicted outliers'), ]
-
-            axs[2, 0].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5), fontsize='small')
-
-            destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
-
-            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matches,
-                            dpi=dpi, bbox_inches='tight')
-
     def visualize_flow_with_matching_rerun(self, frame_i):
 
         if frame_i == 0:
@@ -718,103 +599,6 @@ class WriteResults:
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
                                   RerunAnnotations.matches)
-
-    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, occlusion, inliers,
-                                            outliers):
-        # matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
-        matching_text = f''
-        if inliers is not None:
-            inliers = inliers.numpy(force=True)  # Ensure shape is (2, N)
-            self.draw_cross_axes_flow_matches(inliers, occlusion, flow_np, rendered_flow,
-                                              ax_source, axs_target, 'Greens', 'Reds', 'inliers',
-                                              max_points=20)
-            matching_text += f'inliers: {inliers.shape[1]}\n'
-        if outliers is not None:
-            outliers = outliers.numpy(force=True)  # Ensure shape is (2, N)
-            self.draw_cross_axes_flow_matches(outliers, occlusion, flow_np, rendered_flow, ax_source,
-                                              axs_target, 'Blues', 'Oranges', 'outliers',
-                                              max_points=10)
-            matching_text += f'outliers: {outliers.shape[1]}'
-        ax_source.text(0.95, 0.95, matching_text, transform=ax_source.transAxes, fontsize=4,
-                       verticalalignment='top', horizontalalignment='right',
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.5))
-
-    def draw_cross_axes_flow_matches(self, source_coords, occlusion_mask, flow_np, flow_np_from_movement,
-                                     axs1, axs2, cmap_correct, cmap_incorrect, point_type, max_points=30):
-
-        outlier_pixel_threshold = 1.0
-
-        total_points = source_coords.shape[1]
-
-        assert self.tracking_config.matching_visualization_type in {'matching', 'dots'}
-
-        if total_points > max_points and self.tracking_config.matching_visualization_type == 'matching':
-            random_sample = np.random.default_rng(seed=42).permutation(total_points)[:max_points]
-            source_coords = source_coords[random_sample, :]
-
-        source_coords[:, 0] = self.image_height - source_coords[:, 0]
-        target_coords = source_coords_to_target_coords_image(source_coords, flow_np)
-        target_coords_from_pred_movement = source_coords_to_target_coords_image(source_coords, flow_np_from_movement)
-
-        norm = Normalize(vmin=0, vmax=source_coords.shape[1] - 1)
-        cmap_correct = plt.get_cmap(cmap_correct)
-        cmap_incorrect = plt.get_cmap(cmap_incorrect)
-        mappable_correct = ScalarMappable(norm=norm, cmap=cmap_correct)
-        mappable_incorrect = ScalarMappable(norm=norm, cmap=cmap_incorrect)
-
-        dots_axs1 = []
-        dots_axs2 = []
-        colors_axs1 = []
-        colors_axs2 = []
-
-        for i in range(0, source_coords.shape[1]):
-
-            yxA = source_coords[:, i].astype(np.int32)
-            yxB = target_coords[:, i]
-            yxB_movement = target_coords_from_pred_movement[:, i]
-
-            yA, xA = yxA
-            yB, xB = yxB
-            yB_movement, xB_movement = yxB_movement
-
-            color = mappable_correct.to_rgba(source_coords.shape[1] / 2 + i / 2)
-            alpha = 1.0
-            if point_type == 'inliers':
-                if (np.linalg.norm(yxB - yxB_movement) > outlier_pixel_threshold or
-                        occlusion_mask[-yA, xA] >= self.tracking_config.occlusion_coef_threshold):
-                    color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
-
-                    axs2.plot(xB_movement, yB_movement, color=color, marker='+', markersize=0.5)
-
-                    if self.tracking_config.matching_visualization_type == 'matching':
-                        axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white')
-
-            elif point_type == 'outliers':
-                if np.linalg.norm(yxB - yxB_movement) <= outlier_pixel_threshold:
-                    alpha = 0.0
-                    color = mappable_incorrect.to_rgba(source_coords.shape[1] / 2 + i / 2)
-
-            dots_axs1.append((xA, yA))
-            dots_axs2.append((xB, yB))
-            colors_axs1.append(color)
-            colors_axs2.append(color)
-
-            if self.tracking_config.matching_visualization_type == 'matching':
-                # Create a ConnectionPatch for each pair of sampled points
-                axs1.plot(xA, yA, color=color, marker='X', markersize=0.5, alpha=alpha)
-                axs2.plot(xB, yB, color=color, marker='X', markersize=0.5, alpha=alpha)
-
-                con = ConnectionPatch(xyA=(xA, yA), xyB=(xB, yB),
-                                      coordsA='data', coordsB='data',
-                                      axesA=axs1, axesB=axs2, color=color, lw=0.5, alpha=alpha)
-                axs2.add_artist(con)
-
-                axs1.text(xA, yA, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
-                axs2.text(xB, yB, str(i), fontsize=1, ha='left', va='center', color='white', alpha=alpha)
-
-        if self.tracking_config.matching_visualization_type == 'dots' and len(dots_axs1) > 0:
-            axs1.scatter(*zip(*dots_axs1), c=colors_axs1, marker='X', s=0.5, alpha=0.33)
-            axs2.scatter(*zip(*dots_axs2), c=colors_axs2, marker='X', s=0.5, alpha=0.33)
 
     def log_poses_into_rerun(self, frame_i: int):
 
