@@ -14,6 +14,9 @@ class RerunAnnotations:
     keyframe_images = '/keyframes/keyframe_images'
     keyframe_graph = '/keyframes/keyframe_graph'
 
+    # Matching
+    matches: Final[str] = '/epipolar/matching/'
+
     # Observations
     space_visualization: Final[str] = '/3d_space'
     colmap_visualization: Final[str] = '/3d_colmap'
@@ -43,10 +46,6 @@ class RerunAnnotations:
     # Optimized model visualizations
     optimized_model_occlusion: Final[str] = '/optimized_values/occlusion'
     optimized_model_render: Final[str] = '/optimized_values/rendering'
-
-    # Ransac
-    matching_correspondences_inliers: Final[str] = '/epipolar/matching/correspondences_inliers'
-    matching_correspondences_outliers: Final[str] = '/epipolar/matching/correspondences_outliers'
 
     ransac_stats: Final[str] = '/epipolar/ransac_stats'
     ransac_stats_visible: Final[str] = '/epipolar/ransac_stats/visible'
