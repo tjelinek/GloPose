@@ -3,18 +3,21 @@ from typing import Union
 
 import torch
 import torchvision
+from kornia.image import ImageSize
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
 from data_structures.data_graph import DataGraph
+from flow import roma_warp_to_pixel_coordinates
 
 
 class RoMaFlowProviderDirect:
 
-    def __init__(self, data_graph: DataGraph, device):
+    def __init__(self, data_graph: DataGraph, device, image_shape: ImageSize):
         self.device = device
-        self.data_graph = data_graph
+        self.data_graph: DataGraph = data_graph
         self.flow_model: roma_model = None
+        self.image_shape: ImageSize = image_shape
 
     def _init_flow_model(self):
         self.flow_model: roma_model = roma_outdoor(device=self.device)
@@ -46,11 +49,19 @@ class RoMaFlowProviderDirect:
         edge_data.roma_flow_warp = warp
         edge_data.roma_flow_certainty = certainty
 
+        h1 = h2 = self.image_shape.height
+        w1 = w2 = self.image_shape.width
+        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+
+        edge_data.src_pts_xy_roma = src_pts_xy_roma
+        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
+
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True):
-        super().__init__(data_graph, device)
+    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, image_shape: ImageSize,
+                 allow_missing: bool = True):
+        super().__init__(data_graph, device, image_shape)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
         self.saved_flow_paths = cache_dir

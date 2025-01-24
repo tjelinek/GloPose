@@ -53,37 +53,23 @@ class CrossFrameData:
     # Optical Flow observations
     synthetic_flow_result: SyntheticFlowObservation = None
     observed_flow: FlowObservation = None
+
     roma_flow_warp: torch.Tensor = None  # [W, H] format
     roma_flow_certainty: torch.Tensor = None  # [W, H] format
-
-    # Points and reliability
-    src_pts_yx: torch.Tensor = None
-    dst_pts_yx: torch.Tensor = None
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
-    dst_pts_yx_gt: torch.Tensor = None
-    remaining_pts_after_filtering: float = None
-    ransac_inliers_mask: torch.Tensor = None
-    ransac_inlier_ratio: float = None
+
+    # Points and reliability
     reliability_score: float = 0.0
     is_match_reliable: bool = False
 
     # RANSAC
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
-    ransac_triangulated_points: torch.Tensor = None
-
-    # Segmentation and masks
-    adjusted_segmentation: torch.Tensor = None
-    observed_visible_fg_points_mask: torch.Tensor = None
-    gt_visible_fg_points_mask: torch.Tensor = None
 
     # Predicted SE3 transformations
     predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
-    predicted_obj_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
     predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
-    predicted_cam_delta_se3_ransac: Se3 = Se3.identity(1, 'cuda')
-
 
     # SIFT
     num_matches: int = None

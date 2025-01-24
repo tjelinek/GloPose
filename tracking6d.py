@@ -87,7 +87,8 @@ class Tracking6D:
                                            tracking_config=self.config, data_graph=self.data_graph,
                                            Se3_world_to_cam=self.Se3_obj_to_cam)
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA,
+                                                               self.image_shape)
 
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.image_shape,
