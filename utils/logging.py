@@ -968,9 +968,6 @@ class WriteResults:
         new_segment_path = self.segmentation_path / Path(f'seg_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
 
-        self.observations_path.mkdir(exist_ok=True, parents=True)
-        self.segmentation_path.mkdir(exist_ok=True, parents=True)
-
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
 
         # image_255 = (last_observed_image * 255).to(torch.uint8)
