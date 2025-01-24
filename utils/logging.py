@@ -1,4 +1,3 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Tuple, List, Any
 
@@ -553,71 +552,6 @@ class WriteResults:
             ti = 3 * fi + 1
             file.write("f {}/{} {}/{} {}/{}\n".format(fc[0], ti, fc[1], ti + 1, fc[2], ti + 2))
         file.close()
-
-    def measure_ransac_stats(self, frame_i):
-        correct_threshold = self.tracking_config.ransac_feed_only_inlier_flow_epe_threshold
-        results = defaultdict(list)
-
-        for i in range(1, frame_i + 1):
-            flow_arc_source = self.data_graph.get_frame_data(i).matching_source_keyframe
-            flow_arc = (flow_arc_source, i)
-
-            arc_data = self.data_graph.get_edge_observations(*flow_arc)
-
-            pred_inlier_ratio = arc_data.ransac_inlier_ratio
-            inlier_mask = arc_data.ransac_inliers_mask
-
-            observed_flow_image = flow_unit_coords_to_image_coords(arc_data.observed_flow.observed_flow)
-            gt_flow_image = flow_unit_coords_to_image_coords(arc_data.synthetic_flow_result.observed_flow)
-
-            src_pts_pred_visible_yx = arc_data.observed_visible_fg_points_mask.nonzero()
-            dst_pts_pred_visible_yx = source_coords_to_target_coords(src_pts_pred_visible_yx, observed_flow_image)
-            dst_pts_pred_visible_yx_gt = source_coords_to_target_coords(src_pts_pred_visible_yx, gt_flow_image)
-
-            correct_flows_epe = torch.linalg.norm(dst_pts_pred_visible_yx - dst_pts_pred_visible_yx_gt, dim=1)
-
-            correct_flows = (correct_flows_epe < correct_threshold)
-
-            dst_pts_pred_visible_yx_small_errors = arc_data.dst_pts_yx
-            dst_pts_pred_visible_yx_gt_small_errors = arc_data.dst_pts_yx_gt
-
-            inliers_errors = torch.linalg.norm(arc_data.dst_pts_yx[inlier_mask] -
-                                               arc_data.dst_pts_yx_gt[inlier_mask], dim=-1)
-            correct_inliers = inliers_errors < correct_threshold
-
-            fg_points_num = float(arc_data.adjusted_segmentation.sum()) + 1e-5
-            pred_visible_num = float(arc_data.observed_visible_fg_points_mask.sum())
-            correct_flows_num = float(correct_flows.sum())
-            predicted_inliers_num = float(inlier_mask.sum())
-            correct_inliers_num = float(correct_inliers.sum())
-            actually_visible_num = float(arc_data.gt_visible_fg_points_mask.sum())
-
-            # results['foreground_points'].append(fg_points_num / fg_points_num)
-            results['visible'].append(actually_visible_num / fg_points_num)
-            results['predicted_as_visible'].append(pred_visible_num / fg_points_num)
-            results['correctly_predicted_flows'].append(correct_flows_num / fg_points_num)
-            results['ransac_predicted_inliers'].append(predicted_inliers_num / fg_points_num)
-            results['correctly_predicted_inliers'].append(correct_inliers_num / fg_points_num)
-            results['ransac_inlier_ratio'].append(pred_inlier_ratio)
-            results['mft_flow_gt_flow_difference'].append(dst_pts_pred_visible_yx_small_errors -
-                                                          dst_pts_pred_visible_yx_gt_small_errors)
-
-        return results
-
-    def analyze_ransac_matchings(self, frame_i):
-
-        ransac_stats = self.measure_ransac_stats(frame_i)
-
-        ransac_stats.pop('mft_flow_gt_flow_difference')
-
-        # We want each line to have its assigned color
-        for i, metric in enumerate(ransac_stats.keys()):
-
-            rerun_time_series_entity = getattr(RerunAnnotations, f'ransac_stats_{metric}')
-
-            rr.set_time_sequence("frame", frame_i)
-            metric_val: float = ransac_stats[metric][-1]
-            rr.log(rerun_time_series_entity, rr.Scalar(metric_val))
 
     def visualize_flow_with_matching(self, frame_i):
 
