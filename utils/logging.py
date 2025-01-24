@@ -8,7 +8,6 @@ import pycolmap
 import rerun as rr
 import rerun.blueprint as rrb
 import torch
-import torchvision
 from PIL import Image
 from kornia.geometry import Se3, Quaternion
 from kornia.geometry.conversions import quaternion_to_axis_angle
@@ -22,7 +21,7 @@ from matplotlib.patches import ConnectionPatch, Patch
 from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.rerun_annotations import RerunAnnotations
-from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
+from flow import (flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
                   source_coords_to_target_coords_np)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
@@ -154,10 +153,8 @@ class WriteResults:
                     rrb.Tabs(
                         rrb.Horizontal(
                             contents=[
-                                rrb.Spatial2DView(name="RANSAC Inliers Visualization",
-                                                  origin=RerunAnnotations.matching_correspondences_inliers),
-                                rrb.Spatial2DView(name="RANSAC Outliers Visualizations",
-                                                  origin=RerunAnnotations.matching_correspondences_outliers),
+                                rrb.Spatial2DView(name="RoMaMatches",
+                                                  origin=RerunAnnotations.matches),
                             ],
                             name='Matching - Long Jumps'
                         ),
@@ -292,14 +289,13 @@ class WriteResults:
         self.visualize_keyframes(frame_i, keyframe_graph)
         self.visualize_observed_data(frame_i)
 
-        if not self.tracking_config.write_to_rerun_rather_than_disk:
-            self.visualize_flow_with_matching(frame_i)
+        self.visualize_flow_with_matching_rerun(frame_i)
 
         # self.visualize_3d_camera_space(frame_i)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             # self.log_poses_into_rerun(frame_i)
-            # self.visualize_flow_with_matching_rerun(frame_i)
+            #
             pass
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
@@ -673,10 +669,13 @@ class WriteResults:
 
             destination_path = self.ransac_path / f'matching_gt_flow_{flow_arc_source}_{flow_arc_target}.png'
 
-            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matching_correspondences_inliers,
+            self.log_pyplot(flow_arc_target, fig, destination_path, RerunAnnotations.matches,
                             dpi=dpi, bbox_inches='tight')
 
     def visualize_flow_with_matching_rerun(self, frame_i):
+
+        if frame_i == 0:
+            return
 
         datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
         new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
@@ -686,10 +685,6 @@ class WriteResults:
 
         arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
-        flow_observation = arc_observation.observed_flow
-        opt_flow = flow_unit_coords_to_image_coords(flow_observation.observed_flow)
-        opt_flow_np = opt_flow.numpy(force=True)
-
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
         template_image = self.convert_observation_to_numpy(template_data.frame_observation.observed_image)
@@ -697,14 +692,10 @@ class WriteResults:
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
         rerun_image = rr.Image(template_target_image)
-        rr.log(RerunAnnotations.matching_correspondences_inliers, rerun_image)
-        rr.log(RerunAnnotations.matching_correspondences_outliers, rerun_image)
+        rr.log(RerunAnnotations.matches, rerun_image)
 
-        inliers_src_yx = arc_observation.ransac_inliers.numpy(force=True)
-        outliers_src_yx = arc_observation.ransac_outliers.numpy(force=True)
-
-        inliers_target_yx = source_coords_to_target_coords_np(inliers_src_yx, opt_flow_np)
-        outliers_target_yx = source_coords_to_target_coords_np(outliers_src_yx, opt_flow_np)
+        inliers_source_yx = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
+        inliers_target_yx = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
         def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation):
             target_yx_2nd_image = target_yx
@@ -725,11 +716,8 @@ class WriteResults:
             )
 
         cmap_inliers = plt.get_cmap('Greens')
-        log_correspondences_rerun(cmap_inliers, inliers_src_yx, inliers_target_yx,
-                                  RerunAnnotations.matching_correspondences_inliers)
-        cmap_outliers = plt.get_cmap('Reds')
-        log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx,
-                                  RerunAnnotations.matching_correspondences_outliers)
+        log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
+                                  RerunAnnotations.matches)
 
     def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, occlusion, inliers,
                                             outliers):
@@ -988,121 +976,20 @@ class WriteResults:
 
         observed_image_annotation = RerunAnnotations.observed_image
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
-        observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion
-        observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty
-        observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty
-        observed_flow_annotation = RerunAnnotations.observed_flow
 
         # Save the images to disk
         current_datagraph_node = self.data_graph.get_frame_data(frame_i)
         last_frame_observation = current_datagraph_node.frame_observation
 
         new_image_path = self.observations_path / Path(f'image_{frame_i}.png')
-        new_segment_path = self.segmentation_path / Path(f'seg_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
 
         self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
-
-        # image_255 = (last_observed_image * 255).to(torch.uint8)
-        # seg = last_frame_observation.observed_segmentation.squeeze().unsqueeze(0).repeat(3, 1, 1).permute(1, 2, 0).cpu()
-        # seg_255 = (seg * 255.).to(torch.uint8)
-        # imageio.imwrite(new_image_path, image_255)
-        # imageio.imwrite(new_segment_path, seg_255)
 
         if self.tracking_config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame_i)
             image_segmentation = last_frame_observation.observed_segmentation
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
-
-        new_flow_arcs = []
-
-        for new_flow_arcs in sorted(new_flow_arcs):
-            source_frame = new_flow_arcs[0]
-            target_frame = new_flow_arcs[1]
-
-            data_graph_edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
-            flow_observation = data_graph_edge_data.observed_flow
-            flow_observation_image_coords = flow_observation.cast_unit_coords_to_image_coords()
-
-            synthetic_flow_obs = data_graph_edge_data.synthetic_flow_result.cast_unit_coords_to_image_coords()
-
-            source_frame_data = self.data_graph.get_frame_data(source_frame)
-            target_frame_data = self.data_graph.get_frame_data(target_frame)
-
-            source_frame_observation = source_frame_data.frame_observation
-            target_frame_observation = target_frame_data.frame_observation
-
-            source_frame_image = source_frame_observation.observed_image
-            source_frame_segment = source_frame_observation.observed_segmentation
-
-            target_frame_image = target_frame_observation.observed_image.cpu()
-            target_frame_segment = target_frame_observation.observed_segmentation.cpu()
-
-            observed_flow_reordered = flow_observation_image_coords.observed_flow.squeeze().permute(1, 2, 0).numpy()
-
-            source_image_discrete: torch.Tensor = (source_frame_image * 255).to(torch.uint8).squeeze()
-            target_image_discrete: torch.Tensor = (target_frame_image * 255).to(torch.uint8).squeeze()
-
-            source_frame_segment_squeezed = source_frame_segment.squeeze()
-            target_frame_segment_squeezed = target_frame_segment.squeeze()
-            observed_flow_occlusions_squeezed = flow_observation.observed_flow_occlusion.cpu().squeeze()
-            observed_flow_uncertainties_squeezed = flow_observation.observed_flow_uncertainty.cpu().squeeze()
-
-            # TODO this computation is not mathematically justified, and serves just for visualization purposes
-            observed_flow_uncertainties_0_1_range = (observed_flow_uncertainties_squeezed -
-                                                     observed_flow_uncertainties_squeezed.min())
-            observed_flow_uncertainties_0_1_range /= observed_flow_uncertainties_0_1_range.max()
-
-            flow_illustration = visualize_flow_with_images([source_image_discrete], target_image_discrete,
-                                                           [observed_flow_reordered], None,
-                                                           gt_silhouette_current=source_frame_segment_squeezed,
-                                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
-                                                           flow_occlusion_masks=[observed_flow_occlusions_squeezed])
-
-            uncertainty_illustration = (
-                visualize_flow_with_images([source_image_discrete], target_image_discrete,
-                                           [observed_flow_reordered], None,
-                                           gt_silhouette_current=source_frame_segment_squeezed,
-                                           gt_silhouettes_prev=[target_frame_segment_squeezed],
-                                           flow_occlusion_masks=[observed_flow_uncertainties_0_1_range]))
-
-            # flow_errors_illustration = visualize_optical_flow_errors(source_image_discrete,
-            #                                                          target_image_discrete,
-            #                                                          flow_observation_image_coords,
-            #                                                          synthetic_flow_obs)
-
-            # Define output file paths
-            observed_flow_path = self.observations_path / Path(f'flow_{source_frame}_{target_frame}.png')
-            observed_flow_uncertainty_path = (self.observations_path /
-                                              Path(f'flow_uncertainty_{source_frame}_{target_frame}.png'))
-            observed_flow_errors_path = self.observations_path / Path(
-                f'flow_errors_{source_frame}_{target_frame}.png')
-            occlusion_path = self.observations_path / Path(f"occlusion_{source_frame}_{target_frame}.png")
-            uncertainty_path = self.observations_path / Path(f"uncertainty_{source_frame}_{target_frame}.png")
-
-            flow_occlusions_image = self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                                                observed_flow_occlusions_squeezed,
-                                                                                alpha=0.8)
-            # Uncertainty visualizations
-            flow_uncertainty_image = (
-                self.visualize_1D_feature_map_using_overlay(source_frame_image.squeeze(),
-                                                            observed_flow_uncertainties_0_1_range, alpha=0.8))
-
-            flow_illustration_torch = (
-                torchvision.transforms.functional.pil_to_tensor(flow_illustration).permute(1, 2, 0))
-            flow_illustration_uncertainty_torch = (
-                torchvision.transforms.functional.pil_to_tensor(uncertainty_illustration).permute(1, 2, 0))
-
-            # self.log_pyplot(target_frame, flow_errors_illustration, observed_flow_errors_path,
-            #                 observed_flow_errors_annotations)
-            self.log_image(target_frame, flow_occlusions_image, occlusion_path,
-                           observed_flow_occlusion_annotation)
-            self.log_image(target_frame, flow_uncertainty_image, uncertainty_path,
-                           observed_flow_uncertainty_annotation)
-            self.log_image(target_frame, flow_illustration_uncertainty_torch, observed_flow_uncertainty_path,
-                           observed_flow_uncertainty_illustration_annotation, ignore_dimensions=True)
-            self.log_image(target_frame, flow_illustration_torch, observed_flow_path, observed_flow_annotation,
-                           ignore_dimensions=True)
 
     def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
         assert flow_occlusion.shape == (self.image_height, self.image_width)
