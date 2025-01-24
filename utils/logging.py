@@ -97,28 +97,33 @@ class WriteResults:
         blueprint = rrb.Blueprint(
             rrb.Tabs(
                 contents=[
-                    rrb.Vertical(
+                    rrb.Tabs(
                         contents=[
-                            rrb.Horizontal(
-                                contents=[
-                                    rrb.Spatial2DView(name="Template Image Current",
-                                                      origin=RerunAnnotations.template_image_frontview),
-                                    rrb.Spatial2DView(name="Observed Image",
-                                                      origin=RerunAnnotations.observed_image_frontview),
-                                ],
-                                name='Observed Images'
-                            ),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.Spatial2DView(name=f"Template {i}",
-                                                      origin=f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}')
-                                    for i in range(27)
-                                ],
-                                grid_columns=9,
-                                name='Templates'
-                            ),
-                        ],
-                        name='Templates'
+                        rrb.Vertical(
+                            contents=[
+                                rrb.Horizontal(
+                                    contents=[
+                                        rrb.Spatial2DView(name="Template Image Current",
+                                                          origin=RerunAnnotations.template_image),
+                                        rrb.Spatial2DView(name="Observed Image",
+                                                          origin=RerunAnnotations.observed_image),
+                                    ],
+                                    name='Observed Images'
+                                ),
+                                rrb.Grid(
+                                    contents=[
+                                        rrb.Spatial2DView(name=f"Template {i}",
+                                                          origin=f'{RerunAnnotations.templates}/{i}')
+                                        for i in range(27)
+                                    ],
+                                    grid_columns=9,
+                                    name='Templates'
+                                ),
+                            ],
+                            name='Templates'
+                        ),
+                        rrb.GraphView
+                        ]
                     ),
                     rrb.Spatial3DView(
                         origin=RerunAnnotations.space_visualization,
@@ -1013,18 +1018,17 @@ class WriteResults:
 
     def visualize_observed_data(self, frame_i):
 
-        observed_image_annotation = RerunAnnotations.observed_image_frontview
-        observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation_frontview
-        template_image_annotation = RerunAnnotations.template_image_frontview
-        template_image_segmentation_annotation = RerunAnnotations.template_image_segmentation_frontview
-        observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion_frontview
-        observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty_frontview
-        observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty_frontview
-        observed_flow_annotation = RerunAnnotations.observed_flow_frontview
+        observed_image_annotation = RerunAnnotations.observed_image
+        observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
+        template_image_segmentation_annotation = RerunAnnotations.template_image_segmentation
+        observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion
+        observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty
+        observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty
+        observed_flow_annotation = RerunAnnotations.observed_flow
 
         # Save the images to disk
-        last_datagraph_node = self.data_graph.get_frame_data(frame_i)
-        last_frame_observation = last_datagraph_node.frame_observation
+        current_datagraph_node = self.data_graph.get_frame_data(frame_i)
+        last_frame_observation = current_datagraph_node.frame_observation
 
         new_image_path = self.observations_path / Path(f'image_{frame_i}.png')
         new_segment_path = self.segmentation_path / Path(f'seg_{frame_i}.png')
@@ -1068,8 +1072,11 @@ class WriteResults:
             source_frame_image = source_frame_observation.observed_image
             source_frame_segment = source_frame_observation.observed_segmentation
 
-            if (len(self.logged_flow_tracks_inits) == 0 or
-                    source_frame != self.logged_flow_tracks_inits[-1]):
+            last_datagraph_node = self.data_graph.get_frame_data(frame_i - 1) if frame_i > 0 else None
+            if (frame_i == 0 or current_datagraph_node.matching_source_keyframe !=
+                    last_datagraph_node.matching_source_keyframe):
+
+                template_image_annotation = RerunAnnotations.template_image
                 template = source_frame_image.squeeze().permute(1, 2, 0)
 
                 template_image_path = self.observations_path / Path(f'template_img_{frame_i}.png')

@@ -4,6 +4,16 @@ axes = ['x', 'y', 'z']
 
 
 class RerunAnnotations:
+    # Input
+    template_image: Final[str] = '/observations/template_image'
+    template_image_segmentation: Final[str] = '/observations/template_image/segment'
+    observed_image: Final[str] = '/observations/observed_image'
+    observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
+
+    # Keyframes
+    keyframe_images = '/keyframes/keyframe_images'
+    keyframe_graph = '/keyframes/keyframe_graph'
+
     # Observations
     space_visualization: Final[str] = '/3d_space'
     colmap_visualization: Final[str] = '/3d_colmap'
@@ -24,29 +34,15 @@ class RerunAnnotations:
     colmap_predicted_reliable_templates: Final[str] = '/3d_colmap/predicted_reliable_templates'
     colmap_predicted_line_strips_reliable: Final[str] = '/3d_colmap/line_strips_reliable'
 
-    template_image_frontview: Final[str] = '/observations/template_image_frontview'
-
-    template_image_segmentation_frontview: Final[str] = '/observations/template_image_frontview/segment'
-
-    observed_image_frontview: Final[str] = '/observations/observed_image_frontview'
-
-    observed_image_segmentation_frontview: Final[str] = '/observations/observed_image_frontview/segment'
-
-    observed_flow_frontview: Final[str] = '/observed_flow/observed_flow_frontview'
-    observed_flow_occlusion_frontview: Final[str] = '/observed_flow/occlusion_frontview'
-    observed_flow_uncertainty_frontview: Final[str] = '/observed_flow/uncertainty_frontview'
-    observed_flow_with_uncertainty_frontview: Final[str] = '/observed_flow/observed_flow_front_uncertainty'
-    observed_flow_errors_frontview: Final[str] = '/observed_flow/observed_flow_gt_disparity'
+    observed_flow: Final[str] = '/observed_flow/observed_flow'
+    observed_flow_occlusion: Final[str] = '/observed_flow/occlusion'
+    observed_flow_uncertainty: Final[str] = '/observed_flow/uncertainty'
+    observed_flow_with_uncertainty: Final[str] = '/observed_flow/observed_flow_front_uncertainty'
+    observed_flow_errors: Final[str] = '/observed_flow/observed_flow_gt_disparity'
 
     # Optimized model visualizations
     optimized_model_occlusion: Final[str] = '/optimized_values/occlusion'
     optimized_model_render: Final[str] = '/optimized_values/rendering'
-
-    # Triangulated points RANSAC
-    triangulated_points_gt_Rt_gt_flow: Final[str] = '/point_clouds/triangulated_points_gt_Rt_gt_flow'
-    triangulated_points_gt_Rt_mft_flow: Final[str] = '/point_clouds/triangulated_points_gt_Rt_mft_flow'
-    point_cloud_dust3r_im1: Final[str] = '/point_clouds/point_cloud_dust3r_im1'
-    point_cloud_dust3r_im2: Final[str] = '/point_clouds/point_cloud_dust3r_im2'
 
     # Ransac
     matching_correspondences_inliers: Final[str] = '/epipolar/matching/correspondences_inliers'
