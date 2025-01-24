@@ -15,7 +15,11 @@ class RerunAnnotations:
     keyframe_graph = '/keyframes/keyframe_graph'
 
     # Matching
-    matches: Final[str] = '/epipolar/matching/'
+    matches_high_certainty: Final[str] = '/matching/high_certainty'
+    matches_low_certainty: Final[str] = '/matching/low_certainty'
+    matching_reliability_plot: Final[str] = '/matching/reliability_plot'
+    matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
+    matching_reliability_threshold: Final[str] = '/matching/reliability_plot/reliability_threshold'
 
     # Observations
     space_visualization: Final[str] = '/3d_space'

@@ -147,13 +147,27 @@ class WriteResults:
                         name='Timings'
                     ),
                     rrb.Tabs(
-                        rrb.Horizontal(
-                            contents=[
-                                rrb.Spatial2DView(name="RoMaMatches",
-                                                  origin=RerunAnnotations.matches),
-                            ],
-                            name='Matching - Long Jumps'
-                        ),
+                        contents=[
+                            rrb.Vertical(
+                                contents=[
+                                    rrb.Horizontal(
+                                        contents=[
+                                            rrb.Spatial2DView(name="RoMa Matches High Certainty",
+                                                              origin=RerunAnnotations.matches_high_certainty),
+                                            rrb.Spatial2DView(name="RoMa Matches Low Certainty",
+                                                              origin=RerunAnnotations.matches_low_certainty),
+                                        ],
+                                        name='Matching'
+                                    ),
+                                    rrb.TimeSeriesView(name="RoMa Matching Reliability",
+                                                       origin=RerunAnnotations.matching_reliability_plot,
+                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.0), zoom_lock=True),
+                                                       plot_legend=rrb.PlotLegend(visible=True), ),
+                                ],
+                                row_shares=[0.8, 0.2],
+                                name='Matching'
+                            ),
+                        ],
                         name='Matching'
                     ),
                     rrb.Tabs(
@@ -210,6 +224,10 @@ class WriteResults:
             'y': (102, 178, 255),
             'z': (255, 155, 255),
         }
+
+        rr.log(RerunAnnotations.matching_reliability_threshold, rr.SeriesLine(color=[255, 0, 0],
+                                                                              name="min reliability"), static=True)
+        rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 255, 0], name="reliability"), static=True)
 
         annotations = set()
         for axis, c in axes_colors.items():
@@ -573,12 +591,25 @@ class WriteResults:
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
         rerun_image = rr.Image(template_target_image)
-        rr.log(RerunAnnotations.matches, rerun_image)
+        rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
+        rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
-        inliers_source_yx = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
-        inliers_target_yx = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
+        certainties = arc_observation.roma_flow_certainty.numpy(force=True)
+        above_threshold_mask = certainties >= self.tracking_config.min_roma_certainty_threshold
+        src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
+        dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
-        def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation):
+        inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
+        inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
+        outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
+        outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+
+        def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, sample_size=None):
+            if sample_size is not None:
+                random_indices = torch.randperm(min(sample_size, src_yx.shape[0]))
+                src_yx = src_yx[random_indices]
+                target_yx = target_yx[random_indices]
+
             target_yx_2nd_image = target_yx
             target_yx_2nd_image[:, 0] = self.image_height + target_yx_2nd_image[:, 0]
 
@@ -598,7 +629,14 @@ class WriteResults:
 
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches)
+                                  RerunAnnotations.matches_high_certainty, 100)
+        cmap_outliers = plt.get_cmap('Reds')
+        log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
+                                  RerunAnnotations.matches_low_certainty, 100)
+
+        reliability = arc_observation.reliability_score
+        rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+        rr.log(RerunAnnotations.matching_reliability_threshold, rr.Scalar(self.tracking_config.min_flow_reliability))
 
     def log_poses_into_rerun(self, frame_i: int):
 
