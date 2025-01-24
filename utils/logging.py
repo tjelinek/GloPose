@@ -23,7 +23,7 @@ from data_structures.data_graph import DataGraph
 from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.rerun_annotations import RerunAnnotations
 from flow import (visualize_flow_with_images, flow_unit_coords_to_image_coords, source_coords_to_target_coords_image,
-                  source_coords_to_target_coords, source_coords_to_target_coords_np)
+                  source_coords_to_target_coords_np)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
@@ -41,7 +41,8 @@ class WriteResults:
 
         self.data_graph: DataGraph = data_graph
 
-        self.logged_flow_tracks_inits: List = list()
+        self.logged_templates_3d_space: List = list()
+        self.logged_keyframe_graph: nx.DiGraph = nx.DiGraph()
 
         self.tracking_config: TrackerConfig = tracking_config
 
@@ -98,41 +99,49 @@ class WriteResults:
                 contents=[
                     rrb.Tabs(
                         contents=[
-                        rrb.Vertical(
-                            contents=[
-                                rrb.Horizontal(
-                                    contents=[
-                                        rrb.Spatial2DView(name="Template Image Current",
-                                                          origin=RerunAnnotations.template_image),
-                                        rrb.Spatial2DView(name="Observed Image",
-                                                          origin=RerunAnnotations.observed_image),
-                                    ],
-                                    name='Observed Images'
-                                ),
-                                rrb.Grid(
-                                    contents=[
-                                        rrb.Spatial2DView(name=f"Template {i}",
-                                                          origin=f'{RerunAnnotations.templates}/{i}')
-                                        for i in range(27)
-                                    ],
-                                    grid_columns=9,
-                                    name='Templates'
-                                ),
-                            ],
-                            name='Templates'
-                        ),
-                        rrb.GraphView
-                        ]
+                            rrb.Vertical(
+                                contents=[
+                                    rrb.Horizontal(
+                                        contents=[
+                                            rrb.Spatial2DView(name="Template Image Current",
+                                                              origin=RerunAnnotations.template_image),
+                                            rrb.Spatial2DView(name="Observed Image",
+                                                              origin=RerunAnnotations.observed_image),
+                                        ],
+                                        name='Observed Images'
+                                    ),
+                                    rrb.Grid(
+                                        contents=[
+                                            rrb.Spatial2DView(name=f"Keyframe {i}",
+                                                              origin=f'{RerunAnnotations.keyframe_images}/{i}')
+                                            for i in range(27)
+                                        ],
+                                        grid_columns=9,
+                                        name='Templates'
+                                    ),
+                                ],
+                                name='Keyframe Images'
+                            ),
+                            rrb.GraphView(
+                                name='Keyframe Graph'
+                            )
+                        ],
+                        name='Keyframes'
                     ),
-                    rrb.Spatial3DView(
-                        origin=RerunAnnotations.space_visualization,
-                        name='3D Space',
-                        background=[255, 255, 255]
-                    ),
-                    rrb.Spatial3DView(
-                        origin=RerunAnnotations.colmap_visualization,
-                        name='COLMAP',
-                        background=[255, 255, 255]
+                    rrb.Tabs(
+                        contents=[
+                            rrb.Spatial3DView(
+                                origin=RerunAnnotations.colmap_visualization,
+                                name='COLMAP',
+                                background=[255, 255, 255]
+                            ),
+                            rrb.Spatial3DView(
+                                origin=RerunAnnotations.space_visualization,
+                                name='3D Ground Truth',
+                                background=[255, 255, 255]
+                            ),
+                        ],
+                        name='3D Space'
                     ),
                     rrb.Grid(
                         contents=[
@@ -224,7 +233,7 @@ class WriteResults:
                     RerunAnnotations.chained_pose_short_flow_axes[axis],
                     RerunAnnotations.translation_scale_gt_axes[axis],
                 ]
-                ))
+            ))
 
         for axis, c in gt_axes_colors.items():
             annotations |= set(map(
@@ -237,7 +246,7 @@ class WriteResults:
                     RerunAnnotations.obj_tran_ref_to_last_gt_axes[axis],
                     RerunAnnotations.cam_tran_ref_to_last_gt_axes[axis],
                 ]
-                ))
+            ))
 
             for rerun_annotation, color in annotations:
                 rr.log(rerun_annotation, rr.SeriesLine(color=color,
@@ -255,9 +264,32 @@ class WriteResults:
 
         rr.send_blueprint(blueprint)
 
-    @torch.no_grad()
-    def write_results(self, frame_i):
+    def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
+        rr.set_time_sequence('frame', frame_i)
 
+        not_logged_keyframes = set(keyframe_graph.nodes) - set(self.logged_keyframe_graph.nodes)
+        for kf_idx in sorted(not_logged_keyframes):
+            keyframe_node = self.data_graph.get_frame_data(kf_idx)
+            template = keyframe_node.frame_observation.observed_image[0, 0].permute(1, 2, 0).detach().cpu()
+
+            annotation = f'{RerunAnnotations.keyframe_images}/{len(self.logged_keyframe_graph.nodes)}'
+            template_path = self.write_folder / 'templates' / f'{len(keyframe_graph.nodes)}'
+
+            self.log_image(frame_i, template, template_path, annotation)
+            self.logged_keyframe_graph.add_node(kf_idx)
+
+        rr.log(RerunAnnotations.keyframe_graph, rr.GraphNodes(node_ids=list(keyframe_graph.nodes),
+                                                              labels=[str(kf) for kf in keyframe_graph.nodes]))
+
+        not_logged_keyframe_edges = set(keyframe_graph.edges) - set(self.logged_keyframe_graph.edges)
+        self.logged_keyframe_graph.add_edges_from(not_logged_keyframe_edges)
+
+        rr.log(RerunAnnotations.keyframe_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in keyframe_graph.edges]))
+
+    @torch.no_grad()
+    def write_results(self, frame_i, keyframe_graph):
+
+        self.visualize_keyframes(frame_i, keyframe_graph)
         self.visualize_observed_data(frame_i)
 
         if not self.tracking_config.write_to_rerun_rather_than_disk:
@@ -490,13 +522,13 @@ class WriteResults:
 
         for i, keyframe_node_idx in enumerate(sorted(keyframe_graph.nodes)):
 
-            if keyframe_node_idx not in self.logged_flow_tracks_inits:
-                template_idx = len(self.logged_flow_tracks_inits)
+            if keyframe_node_idx not in self.logged_templates_3d_space:
+                template_idx = len(self.logged_templates_3d_space)
 
                 keyframe_node = self.data_graph.get_frame_data(keyframe_node_idx)
                 template = keyframe_node.frame_observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
 
-                self.logged_flow_tracks_inits.append(keyframe_node_idx)
+                self.logged_templates_3d_space.append(keyframe_node_idx)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
                 rr.log(template_image_grid_annotation, rr.Image(template))
@@ -699,7 +731,8 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_src_yx, outliers_target_yx,
                                   RerunAnnotations.matching_correspondences_outliers)
 
-    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, occlusion, inliers, outliers):
+    def visualize_inliers_outliers_matching(self, ax_source, axs_target, flow_np, rendered_flow, occlusion, inliers,
+                                            outliers):
         # matching_text = f'ransac method: {self.tracking_config.ransac_inlier_filter}\n'
         matching_text = f''
         if inliers is not None:
@@ -809,7 +842,8 @@ class WriteResults:
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
-        obj_rot_1st_to_last_gt = torch.rad2deg(data_graph_node.gt_obj1_to_obji.quaternion.to_axis_angle()).cpu().squeeze()
+        obj_rot_1st_to_last_gt = torch.rad2deg(
+            data_graph_node.gt_obj1_to_obji.quaternion.to_axis_angle()).cpu().squeeze()
 
         obj_tran_1st_to_last = data_graph_node.predicted_object_se3_long_jump.translation.cpu().squeeze()
         obj_tran_1st_to_last_gt = data_graph_node.gt_obj1_to_obji.translation.cpu().squeeze()
@@ -954,7 +988,6 @@ class WriteResults:
 
         observed_image_annotation = RerunAnnotations.observed_image
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
-        template_image_segmentation_annotation = RerunAnnotations.template_image_segmentation
         observed_flow_occlusion_annotation = RerunAnnotations.observed_flow_occlusion
         observed_flow_uncertainty_annotation = RerunAnnotations.observed_flow_uncertainty
         observed_flow_uncertainty_illustration_annotation = RerunAnnotations.observed_flow_with_uncertainty
@@ -981,7 +1014,6 @@ class WriteResults:
             image_segmentation = last_frame_observation.observed_segmentation
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
-        data_graph_camera = self.data_graph.get_frame_data(frame_i)
         new_flow_arcs = []
 
         for new_flow_arcs in sorted(new_flow_arcs):
@@ -1002,21 +1034,6 @@ class WriteResults:
 
             source_frame_image = source_frame_observation.observed_image
             source_frame_segment = source_frame_observation.observed_segmentation
-
-            last_datagraph_node = self.data_graph.get_frame_data(frame_i - 1) if frame_i > 0 else None
-            if (frame_i == 0 or current_datagraph_node.matching_source_keyframe !=
-                    last_datagraph_node.matching_source_keyframe):
-
-                template_image_annotation = RerunAnnotations.template_image
-                template = source_frame_image.squeeze().permute(1, 2, 0)
-
-                template_image_path = self.observations_path / Path(f'template_img_{frame_i}.png')
-                self.log_image(target_frame, template, template_image_path,
-                               template_image_annotation)
-
-                if self.tracking_config.write_to_rerun_rather_than_disk:
-                    rr.set_time_sequence("frame", target_frame)
-                    rr.log(template_image_segmentation_annotation, rr.SegmentationImage(source_frame_segment))
 
             target_frame_image = target_frame_observation.observed_image.cpu()
             target_frame_segment = target_frame_observation.observed_segmentation.cpu()
