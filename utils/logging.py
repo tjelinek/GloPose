@@ -586,8 +586,8 @@ class WriteResults:
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
-        template_image = self.convert_observation_to_numpy(template_data.frame_observation.observed_image)
-        target_image = self.convert_observation_to_numpy(target_data.frame_observation.observed_image)
+        template_image = template_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
+        target_image = target_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
         rerun_image = rr.Image(template_target_image)
@@ -636,7 +636,8 @@ class WriteResults:
 
         reliability = arc_observation.reliability_score
         rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
-        rr.log(RerunAnnotations.matching_reliability_threshold, rr.Scalar(self.tracking_config.min_flow_reliability))
+        rr.log(RerunAnnotations.matching_reliability_threshold,
+               rr.Scalar(self.tracking_config.flow_reliability_threshold))
 
     def log_poses_into_rerun(self, frame_i: int):
 
@@ -728,10 +729,6 @@ class WriteResults:
         gt_translations = torch.stack(gt_translations).to(device)
 
         return gt_rotations, gt_translations, rotations, translations
-
-    @staticmethod
-    def convert_observation_to_numpy(observation):
-        return observation[0, 0].permute(1, 2, 0).numpy(force=True)
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
