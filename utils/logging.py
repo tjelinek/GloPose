@@ -118,8 +118,13 @@ class WriteResults:
                                 name='Keyframe Images'
                             ),
                             rrb.GraphView(
-                                name='Keyframe Graph'
-                            )
+                                name='Keyframe Graph',
+                                origin=RerunAnnotations.keyframe_graph,
+                            ),
+                            rrb.GraphView(
+                                name='View Graph',
+                                origin=RerunAnnotations.view_graph,
+                            ),
                         ],
                         name='Keyframes'
                     ),
@@ -297,10 +302,29 @@ class WriteResults:
 
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in keyframe_graph.edges]))
 
+    def visualize_pose_graph(self, frame_i: int, keyframe_graph: nx.Graph):
+        rr.set_time_sequence('frame', frame_i)
+
+        pose_graph = nx.DiGraph()
+        pose_graph.add_nodes_from(self.data_graph.G.nodes)
+        pose_graph.add_edges_from((u, v) for (u, v) in self.data_graph.G.edges
+                                  if self.data_graph.get_edge_observations(u, v).is_match_reliable)
+
+        white_node = [255, 255, 255]
+        red_node = [255, 0, 0]
+        kfs = set(keyframe_graph.nodes)
+        rr.log(RerunAnnotations.view_graph, rr.GraphNodes(node_ids=list(pose_graph.nodes),
+                                                          labels=[str(n) for n in pose_graph.nodes],
+                                                          colors=[red_node if n in kfs else white_node
+                                                                  for n in pose_graph.nodes]))
+
+        rr.log(RerunAnnotations.view_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in pose_graph.edges]))
+
     @torch.no_grad()
     def write_results(self, frame_i, keyframe_graph):
 
         self.visualize_keyframes(frame_i, keyframe_graph)
+        self.visualize_pose_graph(frame_i, keyframe_graph)
         self.visualize_observed_data(frame_i)
 
         self.visualize_flow_with_matching_rerun(frame_i)

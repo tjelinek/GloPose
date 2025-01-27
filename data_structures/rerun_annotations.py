@@ -14,6 +14,9 @@ class RerunAnnotations:
     keyframe_images = '/keyframes/keyframe_images'
     keyframe_graph = '/keyframes/keyframe_graph'
 
+    # Visibility Graph
+    view_graph = '/keyframes/view_graph'
+
     # Matching
     matches_high_certainty: Final[str] = '/matching/high_certainty'
     matches_low_certainty: Final[str] = '/matching/low_certainty'
