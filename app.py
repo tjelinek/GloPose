@@ -8,7 +8,6 @@ import cv2
 import os
 from hloc.utils import viz_3d
 import pycolmap
-# from frame_filtering_wrapper import default_matchability_opts, get_keyframes_and_segmentations_roma
 # from pose.glomap import run_glomap_from_image_list
 # from sift_baseline import (estimate_camera_poses_sift,
 #                            default_opts,
@@ -107,32 +106,21 @@ def get_keyframes_and_segmentations(input_images, segmentations, global_vars, al
     return k, s, global_vars
 
 
-def run_sift(input_images, segmentations, global_vars, mapper='colmap', num_features=1024, _device='cpu',
-             progress=gr.Progress()):
-    keyframes = [img for (img, _) in input_images]
-    segmentations = [seg for (seg, _) in segmentations]
-    matching_pairs = global_vars["matching_pairs"][-1]
-    opts = default_opts()
-    temp_dir = Path("temp_rec")
-    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    temp_dir = temp_dir / f"temp_{current_time}"
-    os.makedirs(temp_dir, exist_ok=True)
-    opts = {**opts,
-            "feature_dir": temp_dir / 'featureout',
-            "database_path": temp_dir / 'colmap.db',
-            "output_path": temp_dir / f'{mapper}_rec',
-            "mapper": mapper,
-            "num_feats": num_features,
-            "device": _device,
-            "img_ext": '.png'}
-    poses, colmap_rec = estimate_camera_poses_sift(keyframes, segmentations, matching_pairs, options=opts,
-                                                   progress=progress)
-    fig = visualize_reconstruction(colmap_rec)
-    return fig
+def ensure_same_dir(keyframes: List[Path]):
+    assert len(keyframes) > 0
+    base_image_path = keyframes[0].parent
+    files_same_dir = [keyframes[0]]
+    for img_path in keyframes[1:]:
+        new_img_path = base_image_path / img_path.name
+        if img_path != new_img_path:
+            shutil.copy(img_path, new_img_path)
+        files_same_dir.append(new_img_path)
+
+    return files_same_dir
 
 
-def run_roma(input_images, segmentations, global_vars, mapper='colmap', num_features=1024, _device='cpu',
-             progress=gr.Progress()):
+def on_glotrack_click(input_images, segmentations, global_vars, mapper='colmap', matcher='RoMa',
+                      num_features=1024, device_radio_='cpu', progress=gr.Progress()):
     keyframes = [Path(img) for (img, _) in input_images]
     segmentations = [Path(seg) for (seg, _) in segmentations]
 
@@ -162,31 +150,6 @@ def run_roma(input_images, segmentations, global_vars, mapper='colmap', num_feat
 
     fig = visualize_reconstruction(colmap_rec)
     return fig
-
-
-def ensure_same_dir(keyframes: List[Path]):
-    assert len(keyframes) > 0
-    base_image_path = keyframes[0].parent
-    files_same_dir = [keyframes[0]]
-    for img_path in keyframes[1:]:
-        new_img_path = base_image_path / img_path.name
-        if img_path != new_img_path:
-            shutil.copy(img_path, new_img_path)
-        files_same_dir.append(new_img_path)
-
-    return files_same_dir
-
-
-def on_glotrack_click(input_images, segmentations, global_vars, mapper='colmap', matcher='RoMa',
-                      num_features=1024, device_radio_='cpu', progress=gr.Progress()):
-    if matcher == 'RoMa':
-        return run_roma(input_images, segmentations, global_vars, mapper=mapper, num_features=num_features,
-                        _device=device_radio_, progress=progress)
-    elif matcher == 'SIFT':
-        return run_sift(input_images, segmentations, global_vars, mapper=mapper, num_features=num_features,
-                        _device='cpu', progress=progress)
-    else:
-        raise ValueError(f"Unknown matcher {matcher}")
 
 
 def update_sequences(dataset):
@@ -259,7 +222,7 @@ with gr.Blocks() as demo:
                                       label='Keyframe estimation algorithm', value="sift")
         with gr.Column():
             matchability_choices = ["Match frames in (last kf, current) once lost",
-                                    "Match every kf once lost",]
+                                    "Match every kf once lost", ]
             matchability_radio = gr.Radio(matchability_choices,
                                           label='Matchability Algorithm', value=matchability_choices[0])
 
