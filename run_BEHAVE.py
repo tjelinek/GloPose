@@ -10,7 +10,7 @@ from kornia.geometry import Quaternion, Se3
 from utils.image_utils import get_nth_video_frame
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import parse_args
-from tracking6d import run_tracking_on_sequence
+from tracker6d import run_tracking_on_sequence
 from utils.general import load_config
 
 

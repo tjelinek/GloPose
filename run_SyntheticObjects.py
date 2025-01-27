@@ -10,7 +10,7 @@ from kornia.geometry import Se3, Quaternion
 from dataset_generators import scenarios
 from models.rendering import get_Se3_obj_to_cam_from_config
 from utils.runtime_utils import parse_args
-from tracking6d import run_tracking_on_sequence
+from tracker6d import run_tracking_on_sequence
 from utils.data_utils import load_gt_data, load_texture, load_mesh
 from utils.general import load_config
 

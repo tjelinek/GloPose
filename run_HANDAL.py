@@ -11,7 +11,7 @@ from utils.dataset_utils.bop_challenge import get_pinhole_params, read_obj_to_ca
 from utils.general import load_config
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import parse_args
-from tracking6d import run_tracking_on_sequence
+from tracker6d import run_tracking_on_sequence
 
 
 def main():

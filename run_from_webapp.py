@@ -8,7 +8,7 @@ from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
 from utils.runtime_utils import parse_args
-from tracking6d import run_tracking_on_sequence
+from tracker6d import run_tracking_on_sequence
 from utils.general import load_config
 
 
