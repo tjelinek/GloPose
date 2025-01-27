@@ -322,7 +322,7 @@ class WriteResults:
 
         # Define y-axis positions for keyframes and ordinary frames
         positions = [
-            (n*50, 100.0) if n in kfs else (n*50, 0.0) for n in all_nodes
+            (n*50, 200.0) if n in kfs else (n*50, 0.0) for n in all_nodes
         ]
 
         # Define colors for keyframes and ordinary frames
