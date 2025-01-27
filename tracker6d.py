@@ -19,7 +19,7 @@ from utils.logging import WriteResults
 from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
 
 
-class Tracking6D:
+class Tracker6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
                  gt_obj_1_to_obj_i_Se3: Optional[Se3] = None, gt_Se3_obj_1_to_cam: Se3 = None,
@@ -294,7 +294,7 @@ def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs
 
     t0 = time.time()
 
-    sfb = Tracking6D(config, write_folder, **kwargs)
+    sfb = Tracker6D(config, write_folder, **kwargs)
     sfb.run_filtering_with_reconstruction()
 
     print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds.')
