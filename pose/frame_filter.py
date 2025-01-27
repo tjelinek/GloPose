@@ -240,8 +240,14 @@ class RoMaFrameFilter(BaseFrameFilter):
         H_A, W_A = self.image_size.height, self.image_size.width
         src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(flow_arc_node.roma_flow_warp, H_A, W_A, H_A, W_A)
 
-        src_pts_xy_int = src_pts_xy.int()
+        # src_pts_xy[:, 0] = torch.clamp(src_pts_xy[:, 0], max=self.image_size.width - 1)
+        # src_pts_xy[:, 1] = torch.clamp(src_pts_xy[:, 1], max=self.image_size.height - 1)
+        src_pts_xy_int = torch.ceil(src_pts_xy).int() - 1
+
+        assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < self.image_size.width)).all()
+        assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < self.image_size.height)).all()
         assert fg_segmentation_mask.shape[-2:] == (self.image_size.height, self.image_size.width)
+
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
         assert flow_arc_node.roma_flow_certainty.shape == in_segmentation_mask_yx.shape
