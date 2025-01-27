@@ -368,7 +368,7 @@ class FrameFilterSift(BaseFrameFilter):
 
         device = self.config.device
 
-        dists, idxs = self.sift_matcher.match_images_sift(frame_idx1, frame_idx2, device)
+        dists, idxs = self.sift_matcher.match_images_sift(frame_idx1, frame_idx2, device, save_to_datagraph=True)
 
         num_matches = len(idxs)
 

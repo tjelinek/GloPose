@@ -647,15 +647,31 @@ class WriteResults:
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
-        certainties = arc_observation.roma_flow_certainty.numpy(force=True)
-        above_threshold_mask = certainties >= self.tracking_config.min_roma_certainty_threshold
-        src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
-        dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
+        if self.tracking_config.frame_filter == 'RoMa':
+            certainties = arc_observation.roma_flow_certainty.numpy(force=True)
+            above_threshold_mask = certainties >= self.tracking_config.min_roma_certainty_threshold
+            src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
+            dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
-        inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
-        inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
-        outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
-        outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+            inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
+            inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
+            outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
+            outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+        elif self.tracking_config.frame_filter == 'SIFT':
+            keypoints_matching_indices = arc_observation.sift_keypoint_indices
+
+            template_src_pts = template_data.sift_keypoints
+            target_src_pts = target_data.sift_keypoints
+
+            inliers_source_xy = template_src_pts[keypoints_matching_indices[:, 0]]
+            inliers_target_xy = target_src_pts[keypoints_matching_indices[:, 1]]
+
+            inliers_source_yx = inliers_source_xy[:, [1, 0]].numpy(force=True)
+            inliers_target_yx = inliers_target_xy[:, [1, 0]].numpy(force=True)
+            outliers_source_yx = np.zeros((0, 2))
+            outliers_target_yx = np.zeros((0, 2))
+        else:
+            return
 
         def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, sample_size=None):
             if sample_size is not None:

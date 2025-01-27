@@ -22,16 +22,27 @@ class SIFTMatchingProvider:
 
         self.num_sift_features: int = num_sift_features
 
-    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu'):
+    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu',
+                             save_to_datagraph: bool = False):
 
         frame_data = self.data_graph.get_frame_data(source_image_idx)
 
         frame1_image = frame_data.frame_observation.observed_image.squeeze()
         frame1_segmentation = frame_data.frame_observation.observed_segmentation.squeeze()
 
-        return detect_sift_features(frame1_image, self.num_sift_features, frame1_segmentation, device)
+        lafs, keypoints, descriptors = detect_sift_features(frame1_image, self.num_sift_features,
+                                                            frame1_segmentation, device)
 
-    def match_images_sift(self, source_image_idx: int, target_image_idx: int, device: Optional[str] = 'cpu'):
+        if save_to_datagraph:
+            frame_data = self.data_graph.get_frame_data(source_image_idx)
+            frame_data.sift_lafs = lafs
+            frame_data.sift_keypoints = keypoints
+            frame_data.sift_descriptors = descriptors
+
+        return lafs, keypoints, descriptors
+
+    def match_images_sift(self, source_image_idx: int, target_image_idx: int, device: Optional[str] = 'cpu',
+                          save_to_datagraph: bool = False):
 
         frame1_data = self.data_graph.get_frame_data(source_image_idx)
         frame2_data = self.data_graph.get_frame_data(target_image_idx)
@@ -40,13 +51,20 @@ class SIFTMatchingProvider:
 
         image2 = frame2_data.frame_observation.observed_image.squeeze()
 
-        lafs1, keypoints1, descriptors1 = self.detect_sift_features(source_image_idx, device)
-        lafs2, keypoints2, descriptors2 = self.detect_sift_features(target_image_idx, device)
+        lafs1, keypoints1, descriptors1 = self.detect_sift_features(source_image_idx, device, save_to_datagraph)
+        lafs2, keypoints2, descriptors2 = self.detect_sift_features(target_image_idx, device, save_to_datagraph)
 
         hw1 = tuple(image1.shape[-2:])
         hw2 = tuple(image2.shape[-2:])
 
         dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
+
+        if save_to_datagraph:
+            if not self.data_graph.G.has_edge(source_image_idx, target_image_idx):
+                self.data_graph.add_new_arc(source_image_idx, target_image_idx)
+            edge_data = self.data_graph.get_edge_observations(source_image_idx, target_image_idx)
+            edge_data.sift_keypoint_indices = idxs
+            edge_data.sift_dists = dists
 
         return dists, idxs
 
@@ -78,7 +96,8 @@ class PrecomputedSIFTMatchingProvider(SIFTMatchingProvider):
 
         self.allow_missing: bool = allow_missing
 
-    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu'):
+    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu',
+                             save_to_datagraph: bool = False):
 
         image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
 
@@ -96,6 +115,12 @@ class PrecomputedSIFTMatchingProvider(SIFTMatchingProvider):
             torch.save(lafs, lafs_path)
             torch.save(keypoints, keypoints_path)
             torch.save(descriptors, descriptors_path)
+
+        if save_to_datagraph:
+            frame_data = self.data_graph.get_frame_data(source_image_idx)
+            frame_data.sift_lafs = lafs
+            frame_data.sift_keypoints = keypoints
+            frame_data.sift_descriptors = descriptors
 
         return lafs, keypoints, descriptors
 

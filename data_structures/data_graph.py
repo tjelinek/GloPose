@@ -16,6 +16,11 @@ class CommonFrameData:
     # Input data
     frame_observation: FrameObservation = None
 
+    # SIFT
+    sift_keypoints: torch.Tensor = None
+    sift_descriptors: torch.Tensor = None
+    sift_lafs: torch.Tensor = None
+
     # Ground truth data
     gt_obj1_to_obji: Se3 = None
     gt_pose_cam: Se3 = None
@@ -58,6 +63,9 @@ class CrossFrameData:
     roma_flow_certainty: torch.Tensor = None  # [W, H] format
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
+
+    sift_keypoint_indices: torch.Tensor = None
+    sift_dists: torch.Tensor = None
 
     # Points and reliability
     reliability_score: float = 0.0
