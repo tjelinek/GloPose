@@ -114,7 +114,12 @@ class WriteResults:
                                         grid_columns=9,
                                         name='Templates'
                                     ),
+                                    rrb.GraphView(
+                                        name='View Graph',
+                                        origin=RerunAnnotations.view_graph,
+                                    ),
                                 ],
+                                row_shares=[0.3, 0.5, 0.2],
                                 name='Keyframe Images'
                             ),
                             rrb.GraphView(
@@ -305,20 +310,44 @@ class WriteResults:
     def visualize_pose_graph(self, frame_i: int, keyframe_graph: nx.Graph):
         rr.set_time_sequence('frame', frame_i)
 
+        # Create a directed graph from the pose graph
         pose_graph = nx.DiGraph()
         pose_graph.add_nodes_from(self.data_graph.G.nodes)
         pose_graph.add_edges_from((u, v) for (u, v) in self.data_graph.G.edges
                                   if self.data_graph.get_edge_observations(u, v).is_match_reliable)
 
+        # Separate keyframes and ordinary frames
+        kfs = set(keyframe_graph.nodes)
+        all_nodes = list(pose_graph.nodes)
+
+        # Define y-axis positions for keyframes and ordinary frames
+        positions = [
+            (n*50, 100.0) if n in kfs else (n*50, 0.0) for n in all_nodes
+        ]
+
+        # Define colors for keyframes and ordinary frames
         white_node = [255, 255, 255]
         red_node = [255, 0, 0]
-        kfs = set(keyframe_graph.nodes)
-        rr.log(RerunAnnotations.view_graph, rr.GraphNodes(node_ids=list(pose_graph.nodes),
-                                                          labels=[str(n) for n in pose_graph.nodes],
-                                                          colors=[red_node if n in kfs else white_node
-                                                                  for n in pose_graph.nodes]))
+        colors = [
+            red_node if n in kfs else white_node for n in all_nodes
+        ]
 
-        rr.log(RerunAnnotations.view_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in pose_graph.edges]))
+        # Log nodes with their positions, colors, and labels
+        rr.log(
+            RerunAnnotations.view_graph,
+            rr.GraphNodes(
+                node_ids=list(all_nodes),
+                positions=positions,
+                labels=[str(n) for n in all_nodes],
+                colors=colors,
+            )
+        )
+
+        # Log edges of the graph
+        rr.log(
+            RerunAnnotations.view_graph,
+            rr.GraphEdges(edges=[(u, v) for (u, v) in pose_graph.edges])
+        )
 
     @torch.no_grad()
     def write_results(self, frame_i, keyframe_graph):
