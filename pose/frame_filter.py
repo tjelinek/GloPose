@@ -295,7 +295,10 @@ class FrameFilterSift(BaseFrameFilter):
         preceding_frame_idx = current_frame_idx - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
 
-        keyframe_idx = preceding_frame_node.matching_source_keyframe
+        if current_frame_idx == 1:
+            keyframe_idx = 0
+        else:
+            keyframe_idx = preceding_frame_node.matching_source_keyframe
 
         print("Detection features")
 
