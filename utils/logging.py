@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import imageio
 import networkx as nx
@@ -291,7 +291,7 @@ class WriteResults:
             annotation = f'{RerunAnnotations.keyframe_images}/{len(self.logged_keyframe_graph.nodes)}'
             template_path = self.write_folder / 'templates' / f'{len(keyframe_graph.nodes)}'
 
-            self.log_image(frame_i, template, template_path, annotation)
+            self.log_image(frame_i, template, annotation, template_path)
             self.logged_keyframe_graph.add_node(kf_idx)
 
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphNodes(node_ids=list(keyframe_graph.nodes),
@@ -821,18 +821,27 @@ class WriteResults:
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
 
         # Save the images to disk
+        prev_frame = self.data_graph.get_frame_data(frame_i - 1) if frame_i > 0 else None
         current_datagraph_node = self.data_graph.get_frame_data(frame_i)
         last_frame_observation = current_datagraph_node.frame_observation
 
         new_image_path = self.observations_path / Path(f'image_{frame_i}.png')
         last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
 
-        self.log_image(frame_i, last_observed_image, new_image_path, observed_image_annotation)
+        self.log_image(frame_i, last_observed_image, observed_image_annotation, new_image_path)
 
-        if self.tracking_config.write_to_rerun_rather_than_disk:
-            rr.set_time_sequence("frame", frame_i)
-            image_segmentation = last_frame_observation.observed_segmentation
-            rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
+        rr.set_time_sequence("frame", frame_i)
+
+        if frame_i == 0 or prev_frame.matching_source_keyframe != current_datagraph_node.matching_source_keyframe:
+            template_frame_observation = current_datagraph_node.frame_observation
+            template = template_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
+            template_segment = template_frame_observation.observed_segmentation
+            template_path = Path('')
+            self.log_image(frame_i, template, RerunAnnotations.template_image, template_path)
+            rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(template_segment))
+
+        image_segmentation = last_frame_observation.observed_segmentation
+        rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
     def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
         assert flow_occlusion.shape == (self.image_height, self.image_width)
@@ -844,7 +853,7 @@ class WriteResults:
 
         return blended_image
 
-    def log_image(self, frame: int, image: torch.Tensor, save_path: Path, rerun_annotation: str,
+    def log_image(self, frame: int, image: torch.Tensor, rerun_annotation: str, save_path: Optional[Path] = None,
                   ignore_dimensions=False):
         if not ignore_dimensions:
             assert image.shape == (self.image_height, self.image_width, 3)
