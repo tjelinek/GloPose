@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import List, Optional
 
 import imageio
 import networkx as nx
@@ -10,7 +10,6 @@ import rerun.blueprint as rrb
 import torch
 from PIL import Image
 from kornia.geometry import Se3, Quaternion
-from kornia.geometry.conversions import quaternion_to_axis_angle
 from kornia.image import ImageSize
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
@@ -27,8 +26,7 @@ from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 Se3_world_to_cam: Se3):
+    def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph):
 
         self.image_height = shape.height
         self.image_width = shape.width
@@ -46,8 +44,6 @@ class WriteResults:
         self.segmentation_path = self.write_folder / Path('segments')
         self.ransac_path = self.write_folder / Path('ransac')
         self.exported_mesh_path = self.write_folder / Path('3d_model')
-
-        self.Se3_world_to_cam: Se3 = Se3_world_to_cam
 
         self.init_directories()
 
@@ -377,16 +373,9 @@ class WriteResults:
 
         self.visualize_flow_with_matching_rerun(frame_i)
 
-        # self.visualize_3d_camera_space(frame_i)
-
-        if self.config.write_to_rerun_rather_than_disk:
-            # self.log_poses_into_rerun(frame_i)
-            #
-            pass
+        self.visualize_3d_camera_space(frame_i, keyframe_graph)
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
-        device = self.config.device
-
         rr.set_time_sequence("frame", frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -396,14 +385,10 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        T_world_to_cam_se3_batched = Se3.from_matrix(self.Se3_world_to_cam.matrix().repeat(n_poses, 1, 1)).to(device)
+        gt_cam2obj_Se3s = self.accumulate_gt_Se3_cam2obj(all_frames_from_0)
+        gt_obj2cam_Se3 = gt_cam2obj_Se3s.inverse()
 
-        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
-        gt_rotations_rad = torch.deg2rad(gt_rotations)
-
-        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations).to(device)
-        gt_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
-        gt_t_cam = gt_cam_se3.translation.numpy(force=True)
+        gt_t_cam = gt_obj2cam_Se3.translation.numpy(force=True)
 
         cmap_gt = plt.get_cmap('Reds')
         gradient = np.linspace(1., 0.5, self.config.input_frames)
@@ -411,7 +396,7 @@ class WriteResults:
 
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
 
-        strips_radii_factor = (max(torch.max(torch.cat([translations, gt_translations]).norm(dim=1)).item(), 5.) / 5.)
+        strips_radii_factor = (max(torch.max(torch.cat([gt_obj2cam_Se3.translation]).norm(dim=1)).item(), 5.) / 5.)
         strips_radii = [0.01 * strips_radii_factor] * n_poses
 
         rr.log(RerunAnnotations.colmap_gt_camera_track,
@@ -419,14 +404,6 @@ class WriteResults:
                                colors=colors_gt,
                                radii=strips_radii),
                static=True)
-
-        datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
-        template_frame_idx = datagraph_camera_node.matching_source_keyframe
-
-        datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
-
-        template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-        # template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, self.Se3_world_to_cam)
 
         image_id_to_poses = {}
         image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
@@ -440,8 +417,6 @@ class WriteResults:
 
             image_t_cam = torch.tensor(image.cam_from_world.translation)
             image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
-            image_q_cam_wxyz = image_q_cam_xyzw[[3, 0, 1, 2]]
-            image_Se3_cam = Se3(Quaternion(image_q_cam_wxyz), image_t_cam)
 
             image_id_to_poses[image_id] = image_t_cam
 
@@ -479,15 +454,6 @@ class WriteResults:
             im2_t = image_id_to_poses[im_id2]
 
             strips.append([im1_t, im2_t])
-
-        # rr.log(
-        #     RerunAnnotations.colmap_predicted_line_strips_reliable,
-        #     rr.LineStrips3D(
-        #         strips,
-        #         colors=[[255, 0, 0] ] * len(strips),
-        #         radii=[0.005] * len(strips),
-        #     )
-        # )
 
     def visualize_3d_camera_space(self, frame_i: int, keyframe_graph: nx.DiGraph):
 
@@ -736,73 +702,31 @@ class WriteResults:
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
                    rr.Scalar(self.config.sift_filter_good_to_add_matches))
 
-    def log_poses_into_rerun(self, frame_i: int):
+    def accumulate_pred_Se3_cam2obj(self, frame_indices) -> Se3:
+        pred_Ts_obj2cam = []
 
-        data_graph_node = self.data_graph.get_frame_data(frame_i)
-        camera_specific_graph_node = self.data_graph.get_frame_data(frame_i)
-
-        long_jump_source = camera_specific_graph_node.matching_source_keyframe
-
-        rr.set_time_sequence("frame", frame_i)
-        datagraph_long_edge = self.data_graph.get_edge_observations(long_jump_source, frame_i)
-
-        rr.log(RerunAnnotations.pose_estimation_time, rr.Scalar(data_graph_node.pose_estimation_time))
-
-        pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
-        obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
-
-        pred_obj_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3
-        pred_cam_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3
-
-        pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
-        pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
-
-        long_jump_chain_pose_q = data_graph_node.predicted_object_se3_long_jump.quaternion
-        long_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle(long_jump_chain_pose_q.q)).cpu().squeeze()
-        rr.log(RerunAnnotations.chained_pose_long_flow_polar,
-               rr.Scalar(torch.rad2deg(long_jump_chain_pose_q.polar_angle * 2).item()))
-
-        for axis, axis_label in enumerate(['x', 'y', 'z']):
-            rr.log(RerunAnnotations.obj_rot_1st_to_last_axes[axis_label], rr.Scalar(obj_rot_1st_to_last[axis]))
-
-            rr.log(RerunAnnotations.obj_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_obj_rot_ref_to_last[axis]))
-            rr.log(RerunAnnotations.cam_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_cam_rot_ref_to_last[axis]))
-
-            rr.log(RerunAnnotations.obj_tran_ref_to_last_axes[axis_label],
-                   rr.Scalar(pred_obj_ref_to_last.translation[0, axis].item()))
-            rr.log(RerunAnnotations.cam_tran_ref_to_last_axes[axis_label],
-                   rr.Scalar(pred_cam_ref_to_last.translation[0, axis].item()))
-
-            rr.log(RerunAnnotations.chained_pose_long_flow_axes[axis_label],
-                   rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
-
-    def read_poses_from_datagraph(self, frame_indices) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        rotations = []
-        translations = []
-        gt_rotations = []
-        gt_translations = []
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
 
-            last_quaternion = frame_data.predicted_object_se3_long_jump.quaternion.q
-            last_rotation = torch.rad2deg(quaternion_to_axis_angle(last_quaternion).squeeze())
-            last_translation = frame_data.predicted_object_se3_long_jump.translation.squeeze()
+            pred_Ts_obj2cam.append(frame_data.pred_Se3_obj2cam.matrix())
 
-            rotations.append(last_rotation)
-            translations.append(last_translation)
+        pred_T_obj2cam = torch.stack(pred_Ts_obj2cam, dim=0).to(self.config.device)
+        pred_Se3_obj2cam = Se3.from_matrix(pred_T_obj2cam)
 
-            gt_rotation = torch.rad2deg(frame_data.gt_obj1_to_obji.quaternion.to_axis_angle().squeeze())
-            gt_translation = frame_data.gt_obj1_to_obji.translation.squeeze()
-            gt_rotations.append(gt_rotation)
-            gt_translations.append(gt_translation)
+        return pred_Se3_obj2cam
 
-        device = self.config.device
-        rotations = torch.stack(rotations).to(device)
-        translations = torch.stack(translations).to(device)
-        gt_rotations = torch.stack(gt_rotations).to(device)
-        gt_translations = torch.stack(gt_translations).to(device)
+    def accumulate_gt_Se3_cam2obj(self, frame_indices) -> Se3:
+        gt_Ts_obj2cam = []
 
-        return gt_rotations, gt_translations, rotations, translations
+        for frame in frame_indices:
+            frame_data = self.data_graph.get_frame_data(frame)
+
+            gt_Ts_obj2cam.append(frame_data.gt_Se3_obj2cam.matrix())
+
+        gt_T_obj2cam = torch.stack(gt_Ts_obj2cam, dim=0).to(self.config.device)
+        gt_Se3_obj2cam = Se3.from_matrix(gt_T_obj2cam)
+
+        return gt_Se3_obj2cam
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',

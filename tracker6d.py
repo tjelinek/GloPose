@@ -16,16 +16,16 @@ from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
 from utils.logging import WriteResults
-from utils.math_utils import Se3_epipolar_cam_from_Se3_obj
+from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 
 class Tracker6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
-                 gt_obj_1_to_obj_i_Se3: Optional[Se3] = None, gt_Se3_obj_1_to_cam: Se3 = None,
                  images_paths: List[Path] = None, video_path: Optional[Path] = None,
-                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
-                 initial_image: torch.Tensor = None, initial_segmentation: torch.Tensor = None,):
+                 gt_Se3_cam2obj: Optional[Se3] = None, segmentation_video_path: Optional[Path] = None,
+                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
+                 initial_segmentation: torch.Tensor = None, ):
 
         config.write_folder = write_folder
         # Paths
@@ -35,18 +35,7 @@ class Tracker6D:
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
 
         # Ground truth related
-        # assert gt_obj_1_to_obj_i_Se3 is None or config.rot_init is None  # Conflicting setting handling
-
-        if gt_obj_1_to_obj_i_Se3 is not None:
-            config.rot_init = tuple(gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle()[0].numpy(force=True))
-            config.tran_init = tuple(gt_obj_1_to_obj_i_Se3.translation[0].numpy(force=True))
-
-        self.gt_cam_to_obj_Se3: Optional[Se3]
-        self.gt_obj_1_to_obj_i_Se3: Optional[Se3] = gt_obj_1_to_obj_i_Se3
-
-        self.Se3_obj_to_cam: Se3 = gt_Se3_obj_1_to_cam
-        if self.Se3_obj_to_cam is None:
-            self.Se3_obj_to_cam: Se3 = Se3(Quaternion.identity(1), torch.tensor([[0., 0., 1.]])).to(config.device)
+        self.gt_Se3_cam2obj: Optional[Se3] = gt_Se3_cam2obj
 
         # Data graph
         self.data_graph: Optional[DataGraph] = None
@@ -74,9 +63,14 @@ class Tracker6D:
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
+        if self.gt_Se3_cam2obj is not None:
+            Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(self.gt_Se3_cam2obj)
+        else:
+            Se3_obj_1_to_obj_i = None
+
         self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
-                                   gt_rotations=gt_obj_1_to_obj_i_Se3.quaternion.to_axis_angle(),
-                                   gt_translations=gt_obj_1_to_obj_i_Se3.translation,
+                                   gt_rotations=Se3_obj_1_to_obj_i.quaternion.to_axis_angle(),
+                                   gt_translations=Se3_obj_1_to_obj_i.translation,
                                    initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                    segmentation_paths=segmentation_paths,
@@ -84,8 +78,7 @@ class Tracker6D:
         self.image_shape = self.tracker.get_image_size()
 
         self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
-                                           tracking_config=self.config, data_graph=self.data_graph,
-                                           Se3_world_to_cam=self.Se3_obj_to_cam)
+                                           tracking_config=self.config, data_graph=self.data_graph)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA,
                                                                self.image_shape)
@@ -194,7 +187,7 @@ class Tracker6D:
             Se3_cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
 
             frame_data = self.data_graph.get_frame_data(image_frame_id)
-            Se3_cam_gt = frame_data.gt_pose_cam
+            Se3_cam_gt = frame_data.gt_Se3_obj2cam
 
             # Ground-truth rotation and translation
             gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
@@ -237,7 +230,7 @@ class Tracker6D:
         for node_idx in sorted(self.data_graph.G.nodes):
             node_data = self.data_graph.get_frame_data(node_idx)
 
-            Se3_cam_gt = node_data.gt_pose_cam
+            Se3_cam_gt = node_data.gt_Se3_obj2cam
 
             # Ground-truth rotation and translation
             gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
@@ -266,9 +259,7 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        gt_Se3_cam = Se3_epipolar_cam_from_Se3_obj(self.gt_obj_1_to_obj_i_Se3[[frame_i]], self.Se3_obj_to_cam)
-        frame_node.gt_pose_cam = gt_Se3_cam
-        frame_node.gt_obj1_to_obji = self.gt_obj_1_to_obj_i_Se3[[frame_i]]
+        frame_node.gt_Se3_obj2cam = self.gt_Se3_cam2obj[[frame_i]]
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)

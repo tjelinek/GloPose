@@ -22,15 +22,13 @@ class CommonFrameData:
     sift_lafs: torch.Tensor = None
 
     # Ground truth data
-    gt_obj1_to_obji: Se3 = None
-    gt_pose_cam: Se3 = None
+    gt_Se3_obj2cam: Se3 = None
     gt_pinhole_K: torch.Tensor = None
     image_shape: ImageSize = None
 
     # Long short jumps
     matching_source_keyframe: int = None
-    predicted_object_se3_long_jump: Se3 = Se3.identity(1, 'cuda')
-    predicted_object_se3_total: Se3 = Se3.identity(1, 'cuda')
+    pred_Se3_obj2cam: Se3 = None
 
     # Sources
     reliable_sources: Set[int] = field(default_factory=set)
