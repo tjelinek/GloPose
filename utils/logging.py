@@ -22,7 +22,7 @@ from flow import (source_coords_to_target_coords_image)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
-from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj, Se3_epipolar_cam_from_Se3_obj
+from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj
 
 
 class WriteResults:
@@ -750,24 +750,12 @@ class WriteResults:
 
         pred_obj_quaternion = data_graph_node.predicted_object_se3_long_jump.quaternion.q
         obj_rot_1st_to_last = torch.rad2deg(quaternion_to_axis_angle(pred_obj_quaternion)).cpu().squeeze()
-        obj_rot_1st_to_last_gt = torch.rad2deg(
-            data_graph_node.gt_obj1_to_obji.quaternion.to_axis_angle()).cpu().squeeze()
-
-        obj_tran_1st_to_last = data_graph_node.predicted_object_se3_long_jump.translation.cpu().squeeze()
-        obj_tran_1st_to_last_gt = data_graph_node.gt_obj1_to_obji.translation.cpu().squeeze()
 
         pred_obj_ref_to_last = datagraph_long_edge.predicted_obj_delta_se3
         pred_cam_ref_to_last = datagraph_long_edge.predicted_cam_delta_se3
 
-        gt_obj_ref_to_last = get_relative_gt_obj_rotation(long_jump_source, frame_i, self.data_graph)
-
-        Se3_world_to_cam = self.Se3_world_to_cam
-        gt_cam_ref_to_last = Se3_epipolar_cam_from_Se3_obj(gt_obj_ref_to_last, Se3_world_to_cam)
-
         pred_obj_rot_ref_to_last = quaternion_to_axis_angle(pred_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
         pred_cam_rot_ref_to_last = quaternion_to_axis_angle(pred_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
-        gt_obj_rot_ref_to_last = quaternion_to_axis_angle(gt_obj_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
-        gt_cam_rot_ref_to_last = quaternion_to_axis_angle(gt_cam_ref_to_last.quaternion.q).cpu().squeeze().rad2deg()
 
         long_jump_chain_pose_q = data_graph_node.predicted_object_se3_long_jump.quaternion
         long_jumps_pose_axis_angle = torch.rad2deg(quaternion_to_axis_angle(long_jump_chain_pose_q.q)).cpu().squeeze()
@@ -776,25 +764,14 @@ class WriteResults:
 
         for axis, axis_label in enumerate(['x', 'y', 'z']):
             rr.log(RerunAnnotations.obj_rot_1st_to_last_axes[axis_label], rr.Scalar(obj_rot_1st_to_last[axis]))
-            rr.log(RerunAnnotations.obj_rot_1st_to_last_gt_axes[axis_label], rr.Scalar(obj_rot_1st_to_last_gt[axis]))
-            rr.log(RerunAnnotations.obj_tran_1st_to_last_axes[axis_label], rr.Scalar(obj_tran_1st_to_last[axis]))
 
-            rr.log(RerunAnnotations.obj_tran_1st_to_last_gt_axes[axis_label], rr.Scalar(obj_tran_1st_to_last_gt[axis]))
             rr.log(RerunAnnotations.obj_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_obj_rot_ref_to_last[axis]))
             rr.log(RerunAnnotations.cam_rot_ref_to_last_axes[axis_label], rr.Scalar(pred_cam_rot_ref_to_last[axis]))
-
-            rr.log(RerunAnnotations.obj_rot_ref_to_last_axes[axis_label], rr.Scalar(gt_obj_rot_ref_to_last[axis]))
-            rr.log(RerunAnnotations.cam_rot_ref_to_last_gt_axes[axis_label], rr.Scalar(gt_cam_rot_ref_to_last[axis]))
 
             rr.log(RerunAnnotations.obj_tran_ref_to_last_axes[axis_label],
                    rr.Scalar(pred_obj_ref_to_last.translation[0, axis].item()))
             rr.log(RerunAnnotations.cam_tran_ref_to_last_axes[axis_label],
                    rr.Scalar(pred_cam_ref_to_last.translation[0, axis].item()))
-
-            rr.log(RerunAnnotations.obj_tran_ref_to_last_gt_axes[axis_label],
-                   rr.Scalar(gt_obj_ref_to_last.translation[0, axis].item()))
-            rr.log(RerunAnnotations.cam_tran_ref_to_last_gt_axes[axis_label],
-                   rr.Scalar(gt_cam_ref_to_last.translation[0, axis].item()))
 
             rr.log(RerunAnnotations.chained_pose_long_flow_axes[axis_label],
                    rr.Scalar(long_jumps_pose_axis_angle[axis].item()))
