@@ -22,7 +22,10 @@ class RerunAnnotations:
     matches_low_certainty: Final[str] = '/matching/low_certainty'
     matching_reliability_plot: Final[str] = '/matching/reliability_plot'
     matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
-    matching_reliability_threshold: Final[str] = '/matching/reliability_plot/reliability_threshold'
+    matching_reliability_threshold_roma: Final[str] = '/matching/reliability_plot/reliability_threshold'
+    matches_sift: Final[str] = '/matching/reliability_plot/sift_num_matches/'
+    min_matches_sift: Final[str] = '/matching/reliability_plot/min_matches_sift'
+    good_to_add_number_of_matches_sift: Final[str] = '/matching/reliability_plot/good_to_add_matches_sift'
 
     # Observations
     space_visualization: Final[str] = '/3d_space'
