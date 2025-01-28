@@ -17,7 +17,6 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
 from data_structures.data_graph import DataGraph
-from data_structures.datagraph_utils import get_relative_gt_obj_rotation
 from data_structures.rerun_annotations import RerunAnnotations
 from flow import (source_coords_to_target_coords_image)
 from tracker_config import TrackerConfig
