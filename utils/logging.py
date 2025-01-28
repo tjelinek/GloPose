@@ -39,7 +39,7 @@ class WriteResults:
         self.logged_templates_3d_space: List = list()
         self.logged_keyframe_graph: nx.DiGraph = nx.DiGraph()
 
-        self.tracking_config: TrackerConfig = tracking_config
+        self.config: TrackerConfig = tracking_config
 
         self.write_folder = Path(write_folder)
 
@@ -57,16 +57,16 @@ class WriteResults:
         self.rerun_init()
 
     def init_directories(self):
-        if not self.tracking_config.write_to_rerun_rather_than_disk:
+        if not self.config.write_to_rerun_rather_than_disk:
             self.observations_path.mkdir(exist_ok=True, parents=True)
             self.segmentation_path.mkdir(exist_ok=True, parents=True)
             self.ransac_path.mkdir(exist_ok=True, parents=True)
             self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
-        rr.init(f'{self.tracking_config.sequence}-{self.tracking_config.experiment_name}')
+        rr.init(f'{self.config.sequence}-{self.config.experiment_name}')
         rerun_file = (self.write_folder /
-                      f'rerun_{self.tracking_config.experiment_name}_{self.tracking_config.sequence}.rrd')
+                      f'rerun_{self.config.experiment_name}_{self.config.sequence}.rrd')
         rr.save(rerun_file)
 
         self.template_fields = {
@@ -88,6 +88,20 @@ class WriteResults:
 
             RerunAnnotations.translation_scale
         }
+
+        if self.config.frame_filter == 'RoMa':
+            match_reliability_statistics = rrb.TimeSeriesView(name="RoMa Matching Reliability",
+                                                              origin=RerunAnnotations.matching_reliability_plot,
+                                                              axis_y=rrb.ScalarAxis(range=(0.0, 1.0),
+                                                                                    zoom_lock=True),
+                                                              plot_legend=rrb.PlotLegend(visible=True))
+        else:
+            max_range = 3.0 * self.config.sift_filter_good_to_add_matches
+            match_reliability_statistics = rrb.TimeSeriesView(name="SIFT Num of Matches",
+                                                              origin=RerunAnnotations.matching_reliability_plot,
+                                                              axis_y=rrb.ScalarAxis(range=(0.0, max_range),
+                                                                                    zoom_lock=False),
+                                                              plot_legend=rrb.PlotLegend(visible=True))
 
         blueprint = rrb.Blueprint(
             rrb.Tabs(
@@ -169,10 +183,7 @@ class WriteResults:
                                         ],
                                         name='Matching'
                                     ),
-                                    rrb.TimeSeriesView(name="RoMa Matching Reliability",
-                                                       origin=RerunAnnotations.matching_reliability_plot,
-                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.0), zoom_lock=True),
-                                                       plot_legend=rrb.PlotLegend(visible=True), ),
+                                    match_reliability_statistics,
                                 ],
                                 row_shares=[0.8, 0.2],
                                 name='Matching'
@@ -219,7 +230,7 @@ class WriteResults:
                         name='Pose'
                     ),
                 ],
-                name=f'Results - {self.tracking_config.sequence}'
+                name=f'Results - {self.config.sequence}'
             )
         )
 
@@ -235,9 +246,18 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
-        rr.log(RerunAnnotations.matching_reliability_threshold, rr.SeriesLine(color=[255, 0, 0],
-                                                                              name="min reliability"), static=True)
-        rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 255, 0], name="reliability"), static=True)
+        if self.config.frame_filter == 'RoMa':
+            rr.log(RerunAnnotations.matching_reliability_threshold_roma,
+                   rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
+            rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
+                   static=True)
+        elif self.config.frame_filter == 'SIFT':
+            rr.log(RerunAnnotations.min_matches_sift,
+                   rr.SeriesLine(color=[255, 0, 0], name="min matches"), static=True)
+            rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
+                   rr.SeriesLine(color=[0, 255, 0], name="good to add matches"), static=True)
+            rr.log(RerunAnnotations.matches_sift,
+                   rr.SeriesLine(color=[0, 0, 255], name="matches"), static=True)
 
         annotations = set()
         for axis, c in axes_colors.items():
@@ -322,7 +342,7 @@ class WriteResults:
 
         # Define y-axis positions for keyframes and ordinary frames
         positions = [
-            (n*50, 200.0) if n in kfs else (n*50, 0.0) for n in all_nodes
+            (n * 50, 200.0) if n in kfs else (n * 50, 0.0) for n in all_nodes
         ]
 
         # Define colors for keyframes and ordinary frames
@@ -360,19 +380,19 @@ class WriteResults:
 
         # self.visualize_3d_camera_space(frame_i)
 
-        if self.tracking_config.write_to_rerun_rather_than_disk:
+        if self.config.write_to_rerun_rather_than_disk:
             # self.log_poses_into_rerun(frame_i)
             #
             pass
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
-        device = self.tracking_config.device
+        device = self.config.device
 
         rr.set_time_sequence("frame", frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
-        rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors))
+        rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
 
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
@@ -387,7 +407,7 @@ class WriteResults:
         gt_t_cam = gt_cam_se3.translation.numpy(force=True)
 
         cmap_gt = plt.get_cmap('Reds')
-        gradient = np.linspace(1., 0.5, self.tracking_config.input_frames)
+        gradient = np.linspace(1., 0.5, self.config.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
 
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
@@ -398,7 +418,8 @@ class WriteResults:
         rr.log(RerunAnnotations.colmap_gt_camera_track,
                rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
                                colors=colors_gt,
-                               radii=strips_radii))
+                               radii=strips_radii),
+               static=True)
 
         datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
         template_frame_idx = datagraph_camera_node.matching_source_keyframe
@@ -429,7 +450,8 @@ class WriteResults:
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
                 rr.Transform3D(translation=image_t_cam,
                                rotation=rr.Quaternion(xyzw=image_q_cam_xyzw),
-                               from_parent=True)
+                               from_parent=True),
+                static=True
             )
 
             camera_params = colmap_reconstruction.cameras[1]
@@ -439,6 +461,7 @@ class WriteResults:
                            focal_length=[camera_params.params[0], camera_params.params[0]],
                            camera_xyz=None  # rr.ViewCoordinates.RUB
                            ),
+                static=True
             )
 
             frame_node = self.data_graph.get_frame_data(frame_index)
@@ -471,7 +494,7 @@ class WriteResults:
 
         rr.set_time_sequence("frame", frame_i)
 
-        dev = self.tracking_config.device
+        dev = self.config.device
 
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
@@ -488,13 +511,13 @@ class WriteResults:
         gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
         pred_obj_se3 = Se3(Quaternion.from_axis_angle(rotations_rad), translations)
 
-        if (frame_i == 1 and self.tracking_config.gt_mesh_path is not None
-                and self.tracking_config.gt_texture_path is not None):
-            gt_texture = load_texture(Path(self.tracking_config.gt_texture_path),
-                                      self.tracking_config.texture_size)
+        if (frame_i == 1 and self.config.gt_mesh_path is not None
+                and self.config.gt_texture_path is not None):
+            gt_texture = load_texture(Path(self.config.gt_texture_path),
+                                      self.config.texture_size)
             gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
 
-            gt_mesh = load_mesh_using_trimesh(Path(self.tracking_config.gt_mesh_path))
+            gt_mesh = load_mesh_using_trimesh(Path(self.config.gt_mesh_path))
 
             normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
 
@@ -536,7 +559,7 @@ class WriteResults:
 
         cmap_gt = plt.get_cmap('Greens')
         cmap_pred = plt.get_cmap('Blues')
-        gradient = np.linspace(1., 0., self.tracking_config.input_frames)
+        gradient = np.linspace(1., 0., self.config.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
         colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
 
@@ -647,9 +670,9 @@ class WriteResults:
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
-        if self.tracking_config.frame_filter == 'RoMa':
+        if self.config.frame_filter == 'RoMa':
             certainties = arc_observation.roma_flow_certainty.numpy(force=True)
-            above_threshold_mask = certainties >= self.tracking_config.min_roma_certainty_threshold
+            above_threshold_mask = certainties >= self.config.min_roma_certainty_threshold
             src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
             dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
@@ -657,7 +680,7 @@ class WriteResults:
             inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
             outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
             outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
-        elif self.tracking_config.frame_filter == 'SIFT':
+        elif self.config.frame_filter == 'SIFT':
             keypoints_matching_indices = arc_observation.sift_keypoint_indices
 
             template_src_pts = template_data.sift_keypoints
@@ -703,10 +726,16 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                                   RerunAnnotations.matches_low_certainty, 100)
 
-        reliability = arc_observation.reliability_score
-        rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
-        rr.log(RerunAnnotations.matching_reliability_threshold,
-               rr.Scalar(self.tracking_config.flow_reliability_threshold))
+        if self.config.frame_filter == 'RoMa':
+            reliability = arc_observation.reliability_score
+            rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+            rr.log(RerunAnnotations.matching_reliability_threshold_roma,
+                   rr.Scalar(self.config.flow_reliability_threshold))
+        elif self.config.frame_filter == 'SIFT':
+            rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
+            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))
+            rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
+                   rr.Scalar(self.config.sift_filter_good_to_add_matches))
 
     def log_poses_into_rerun(self, frame_i: int):
 
@@ -791,7 +820,7 @@ class WriteResults:
             gt_rotations.append(gt_rotation)
             gt_translations.append(gt_translation)
 
-        device = self.tracking_config.device
+        device = self.config.device
         rotations = torch.stack(rotations).to(device)
         translations = torch.stack(translations).to(device)
         gt_rotations = torch.stack(gt_rotations).to(device)
@@ -903,7 +932,7 @@ class WriteResults:
         if not ignore_dimensions:
             assert image.shape == (self.image_height, self.image_width, 3)
 
-        if self.tracking_config.write_to_rerun_rather_than_disk:
+        if self.config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame)
             rr.log(rerun_annotation, rr.Image(image))
         else:
@@ -912,7 +941,7 @@ class WriteResults:
 
     def log_pyplot(self, frame: int, fig: plt.plot, save_path: Path, rerun_annotation: str, **kwargs):
 
-        if self.tracking_config.write_to_rerun_rather_than_disk:
+        if self.config.write_to_rerun_rather_than_disk:
             fig.canvas.draw()
 
             image_bytes_np = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
