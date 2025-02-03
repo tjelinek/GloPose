@@ -372,7 +372,7 @@ class WriteResults:
 
         self.visualize_flow_with_matching_rerun(frame_i)
 
-        self.visualize_3d_camera_space(frame_i, keyframe_graph)
+        # self.visualize_3d_camera_space(frame_i, keyframe_graph)
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
         rr.set_time_sequence("frame", frame_i)
