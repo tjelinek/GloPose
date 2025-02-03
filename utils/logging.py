@@ -9,7 +9,7 @@ import rerun as rr
 import rerun.blueprint as rrb
 import torch
 from PIL import Image
-from kornia.geometry import Se3, Quaternion
+from kornia.geometry import Se3
 from kornia.image import ImageSize
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
@@ -21,7 +21,6 @@ from flow import (source_coords_to_target_coords_image)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
-from utils.math_utils import Se3_last_cam_to_world_from_Se3_obj
 
 
 class WriteResults:
@@ -459,22 +458,8 @@ class WriteResults:
 
         rr.set_time_sequence("frame", frame_i)
 
-        dev = self.config.device
-
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
-
-        T_world_to_cam_se3 = Se3.from_matrix(self.Se3_world_to_cam.matrix().to(dev))
-        T_world_to_cam_se3_batched = Se3.from_matrix(T_world_to_cam_se3.matrix().repeat(n_poses, 1, 1))
-
-        gt_rotations, gt_translations, rotations, translations = self.read_poses_from_datagraph(all_frames_from_0)
-        gt_rotations_rad = torch.deg2rad(gt_rotations).to(dev)
-        rotations_rad = torch.deg2rad(rotations).to(dev)
-        translations = translations.to(dev)
-        gt_translations = gt_translations.to(dev)
-
-        gt_obj_se3 = Se3(Quaternion.from_axis_angle(gt_rotations_rad), gt_translations)
-        pred_obj_se3 = Se3(Quaternion.from_axis_angle(rotations_rad), translations)
 
         if (frame_i == 1 and self.config.gt_mesh_path is not None
                 and self.config.gt_texture_path is not None):
@@ -499,26 +484,26 @@ class WriteResults:
                 )
             )
 
-        gt_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(gt_obj_se3, T_world_to_cam_se3_batched)
-        pred_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(pred_obj_se3, T_world_to_cam_se3_batched)
+        gt_cam2obj_se3 = self.accumulate_gt_Se3_cam2obj(all_frames_from_0)
+        pred_cam2obj_se3 = self.accumulate_pred_Se3_cam2obj(all_frames_from_0)
 
-        q_cam_gt_xyzw = gt_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
-        q_cam_xyzw = pred_cam_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
-        gt_t_cam = gt_cam_se3.translation.numpy(force=True)
-        pred_t_cam = pred_cam_se3.translation.numpy(force=True)
+        gt_q_xyzw_cam2obj = gt_cam2obj_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
+        pred_q_xyzw_cam2obj = pred_cam2obj_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
+        gt_t_cam2obj = gt_cam2obj_se3.translation.numpy(force=True)
+        pred_t_cam2obj = pred_cam2obj_se3.translation.numpy(force=True)
 
         rr.set_time_sequence('frame', frame_i)
 
         rr.log(
             RerunAnnotations.space_predicted_camera_pose,
-            rr.Transform3D(translation=pred_t_cam[-1],
-                           rotation=rr.Quaternion(xyzw=q_cam_xyzw[-1]),
+            rr.Transform3D(translation=pred_t_cam2obj[-1],
+                           rotation=rr.Quaternion(xyzw=pred_q_xyzw_cam2obj[-1]),
                            )
         )
         rr.log(
             RerunAnnotations.space_gt_camera_pose,
-            rr.Transform3D(translation=gt_t_cam[-1],
-                           rotation=rr.Quaternion(xyzw=q_cam_gt_xyzw[-1]),
+            rr.Transform3D(translation=gt_t_cam2obj[-1],
+                           rotation=rr.Quaternion(xyzw=gt_q_xyzw_cam2obj[-1]),
                            )
         )
 
@@ -528,33 +513,32 @@ class WriteResults:
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
         colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
 
-        strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
-        strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
+        strips_gt = np.stack([gt_t_cam2obj[:-1], gt_t_cam2obj[1:]], axis=1)
+        strips_pred = np.stack([pred_t_cam2obj[:-1], pred_t_cam2obj[1:]], axis=1)
 
-        strips_radii_factor = (max(torch.max(torch.cat([translations, gt_translations]).norm(dim=1)).item(), 5.) / 5.)
+        strips_radii_factor = (max(torch.max(torch.cat([gt_t_cam2obj, pred_t_cam2obj]).norm(dim=1)).item(), 5.) / 5.)
         strips_radii = [0.01 * strips_radii_factor] * n_poses
 
         rr.log(RerunAnnotations.space_gt_camera_track,
-               rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
+               rr.LineStrips3D(strips=strips_gt,  # gt_t_cam2obj
                                colors=colors_gt,
                                radii=strips_radii))
 
         rr.log(RerunAnnotations.space_predicted_camera_track,
-               rr.LineStrips3D(strips=strips_pred,  # pred_t_cam
+               rr.LineStrips3D(strips=strips_pred,  # pred_t_cam2obj
                                colors=colors_pred,
                                radii=strips_radii))
 
         datagraph_camera_node = self.data_graph.get_frame_data(frame_i)
         template_frame_idx = datagraph_camera_node.matching_source_keyframe
-
         datagraph_template_node = self.data_graph.get_frame_data(template_frame_idx)
 
-        template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-        template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+        template_node_Se3_cam2obj = datagraph_template_node.pred_Se3_cam2obj
+        pred_template_node_t_cam2obj = template_node_Se3_cam2obj.translation.squeeze().numpy(force=True)
 
         rr.log(RerunAnnotations.space_predicted_closest_keypoint,
-               rr.LineStrips3D(strips=[[pred_t_cam[-1],
-                                        template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+               rr.LineStrips3D(strips=[[pred_t_cam2obj[-1],
+                                        pred_template_node_t_cam2obj]],
                                colors=[[255, 0, 0]],
                                radii=[0.025 * strips_radii_factor]))
 
@@ -562,12 +546,12 @@ class WriteResults:
             for reliable_template_idx in datagraph_camera_node.reliable_sources:
                 datagraph_template_node = self.data_graph.get_frame_data(reliable_template_idx)
 
-                template_node_Se3 = datagraph_template_node.predicted_object_se3_total
-                template_node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(template_node_Se3, T_world_to_cam_se3)
+                template_node_Se3_cam2obj = datagraph_template_node.pred_Se3_cam2obj
+                pred_template_node_t_cam2obj = template_node_Se3_cam2obj.translation.squeeze().numpy(force=True)
 
                 rr.log(f'{RerunAnnotations.space_predicted_reliable_templates}/{reliable_template_idx}',
-                       rr.LineStrips3D(strips=[[pred_t_cam[-1],
-                                                template_node_cam_se3.translation.squeeze().numpy(force=True)]],
+                       rr.LineStrips3D(strips=[[pred_t_cam2obj[-1],
+                                                pred_template_node_t_cam2obj]],
                                        colors=[[255, 255, 0]],
                                        radii=[0.025 * strips_radii_factor]))
 
@@ -588,16 +572,15 @@ class WriteResults:
                     rr.log(template_annotation, rr.Scalar(0.0))
 
                 template_frame_data = self.data_graph.get_frame_data(keyframe_node_idx)
-                pose = Se3.identity(1, device=dev)
-                # node_Se3 = Se3(q, t)
-                node_Se3 = pose
-                node_cam_se3 = Se3_last_cam_to_world_from_Se3_obj(node_Se3, T_world_to_cam_se3)
-                node_cam_q_xyzw = node_cam_se3.quaternion.q[:, [1, 2, 3, 0]]
+                keyframe_pred_Se3_cam2obj = template_frame_data.pred_Se3_cam2obj
+
+                keyframe_pred_q_cam2obj = keyframe_pred_Se3_cam2obj.quaternion.q[:, [1, 2, 3, 0]].squeeze()
+                keyframe_pred_t_cam2obj = keyframe_pred_Se3_cam2obj.translation.squeeze()
 
                 rr.log(
                     f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
-                    rr.Transform3D(translation=node_cam_se3.translation.squeeze().numpy(force=True),
-                                   rotation=rr.Quaternion(xyzw=node_cam_q_xyzw.squeeze().numpy(force=True)))
+                    rr.Transform3D(translation=keyframe_pred_t_cam2obj.numpy(force=True),
+                                   rotation=rr.Quaternion(xyzw=keyframe_pred_q_cam2obj.numpy(force=True)))
                 )
                 frame_data = self.data_graph.get_frame_data(keyframe_node_idx)
                 fx, fy, cx, cy = extract_intrinsics_from_tensor(frame_data.gt_pinhole_K)
