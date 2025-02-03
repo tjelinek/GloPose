@@ -528,10 +528,3 @@ def get_Se3_obj_to_cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up:
 
     return Se3_obj_to_cam
 
-def get_Se3_obj_to_cam_from_config(config: TrackerConfig) -> Se3:
-    camera_trans = torch.FloatTensor(config.camera_position)[None].to(config.device)
-    camera_up = torch.FloatTensor(config.camera_up)[None].to(config.device)
-    obj_center = torch.FloatTensor(config.obj_center)[None].to(config.device)
-    Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_kaolin_params(camera_trans, camera_up, obj_center)
-
-    return Se3_obj_1_to_cam

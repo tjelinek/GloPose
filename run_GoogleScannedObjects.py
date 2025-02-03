@@ -2,7 +2,7 @@ import torch
 from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
-from models.rendering import get_Se3_obj_to_cam_from_config
+from models.rendering import get_Se3_obj_to_cam_from_kaolin_params
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from utils.runtime_utils import parse_args
 from tracker6d import run_tracking_on_sequence
@@ -64,7 +64,12 @@ def main():
 
     gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
 
-    gt_Se3_obj2cam = get_Se3_obj_to_cam_from_config(config)
+    camera_trans = torch.FloatTensor(config.camera_position)[None].to(config.device)
+    up = torch.FloatTensor(config.camera_up)[None].to(config.device)
+    obj_center = torch.FloatTensor(config.obj_center)[None].to(config.device)
+
+    gt_Se3_obj2cam = get_Se3_obj_to_cam_from_kaolin_params(camera_trans, up, obj_center)
+
     gt_Se3_cam2obj = Se3_obj_relative_to_Se3_cam2obj(gt_obj_1_to_obj_i_Se3, gt_Se3_obj2cam)
 
     if args.output_folder is not None:
