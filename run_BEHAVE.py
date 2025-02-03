@@ -63,9 +63,8 @@ def main():
             cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
             sequence_length = cam_to_obj_rotations.shape[0]
 
-        Se3_cam_to_obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
-        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj)
-        Se3_obj_1_to_cam = Se3_cam_to_obj[[0]].inverse()
+        gt_Se3_cam2obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
+        Se3_obj_1_to_cam = gt_Se3_cam2obj[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
         config.input_frames = sequence_length
@@ -82,10 +81,9 @@ def main():
         first_image_tensor = transform(first_image).squeeze()
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
+                                 gt_Se3_cam2obj=gt_Se3_cam2obj,
                                  video_path=video_path, segmentation_video_path=object_seg_video_path,
-                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
-                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
+                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor)
 
         exit()
 

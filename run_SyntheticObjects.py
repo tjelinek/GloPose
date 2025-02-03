@@ -9,6 +9,7 @@ from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
 from models.rendering import get_Se3_obj_to_cam_from_config
+from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from utils.runtime_utils import parse_args
 from tracker6d import run_tracking_on_sequence
 from utils.data_utils import load_gt_data, load_texture, load_mesh
@@ -87,12 +88,12 @@ def main():
 
         gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
 
-        Se3_obj_1_to_cam = get_Se3_obj_to_cam_from_config(config)
+        gt_Se3_obj2cam = get_Se3_obj_to_cam_from_config(config)
+        gt_Se3_cam2obj = Se3_obj_relative_to_Se3_cam2obj(gt_obj_1_to_obj_i_Se3, gt_Se3_obj2cam)
 
         config.input_frames = gt_rotations.shape[0]
         run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
-                                 gt_obj_1_to_obj_i_Se3=gt_obj_1_to_obj_i_Se3, images_paths=images_paths,
-                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
+                                 images_paths=images_paths, gt_Se3_cam2obj=gt_Se3_cam2obj)
 
 
 if __name__ == "__main__":

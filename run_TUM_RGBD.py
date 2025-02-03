@@ -1,13 +1,10 @@
 import csv
 
 import torch
-import torchvision.transforms as transforms
 from pathlib import Path
 
-from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
-from utils.image_utils import get_nth_video_frame
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.runtime_utils import parse_args
 from tracker6d import run_tracking_on_sequence
@@ -118,7 +115,6 @@ def main():
 
         # TILL HERE FINISHED
         gt_Se3_cam_to_world = gt_Se3_world_to_cam.inverse()
-        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam_to_world)
         Se3_obj_1_to_cam = gt_Se3_cam_to_world[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
@@ -127,8 +123,7 @@ def main():
         config.frame_provider = 'precomputed'
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i, images_paths=image_paths,
-                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam)
+                                 gt_Se3_cam2obj=gt_Se3_cam_to_world, images_paths=image_paths)
 
         exit()
 

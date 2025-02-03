@@ -89,21 +89,13 @@ def main():
         cam_to_obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
 
         Se3_cam_to_obj = Se3(Quaternion.from_axis_angle(cam_to_obj_rotations), cam_to_obj_translations)
-        Se3_cam_to_obj_1 = Se3_cam_to_obj[[0]]
-        Se3_cam_to_obj_1_expanded = Se3.from_matrix(Se3_cam_to_obj_1.matrix().expand_as(Se3_cam_to_obj.matrix()))
-
-        Se3_obj_1_to_obj_i = Se3_cam_to_obj_1_expanded.inverse() * Se3_cam_to_obj
-        gt_Se3_obj_1_to_cam = Se3_cam_to_obj_1.inverse()
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        quat_frame1 = Quaternion.from_axis_angle(torch.from_numpy(gt_rotations[0])[None])
-        trans_frame1 = torch.from_numpy(gt_translations[0])[None]
-        Se3_cam_to_obj = Se3(quat_frame1, trans_frame1)
-        T_cam_to_obj = Se3_cam_to_obj.matrix().squeeze()
+        T_obj_to_cam = Se3_cam_to_obj.inverse().matrix().squeeze()
 
         config.camera_intrinsics = cam_intrinsics_list[0]
-        config.camera_extrinsics = T_cam_to_obj.numpy(force=True)
+        config.camera_extrinsics = T_obj_to_cam.numpy(force=True)
 
         config.segmentation_provider = 'SAM2'
         config.frame_provider = 'precomputed'
@@ -112,11 +104,9 @@ def main():
                                                                                  segmentation_channel=1)
 
         run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
+                                 gt_Se3_cam_to_obj=Se3_cam_to_obj,
                                  images_paths=gt_images_list, segmentation_paths=gt_segmentations_list,
-                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor,
-                                 gt_Se3_obj_1_to_cam=gt_Se3_obj_1_to_cam)
-
+                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor)
         exit()
 
 

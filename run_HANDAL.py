@@ -105,18 +105,14 @@ def main():
         gt_translations_obj_to_cam = gt_translations_obj_to_cam.to(torch.float32).to(config.device)
 
         gt_Se3_obj_to_cam = Se3(Quaternion.from_axis_angle(gt_rotations_obj_to_cam), gt_translations_obj_to_cam)
-        Se3_obj_1_to_cam = gt_Se3_obj_to_cam[[0]]
         gt_Se3_cam_to_obj = gt_Se3_obj_to_cam.inverse()
-
-        Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam_to_obj)
 
         first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, write_folder, gt_obj_1_to_obj_i_Se3=Se3_obj_1_to_obj_i,
+        run_tracking_on_sequence(config, write_folder, gt_Se3_cam2obj=gt_Se3_cam_to_obj,
                                  images_paths=gt_images, segmentation_paths=gt_segs,
-                                 gt_Se3_obj_1_to_cam=Se3_obj_1_to_cam,
                                  initial_segmentation=first_segmentation, initial_image=first_image)
 
 
