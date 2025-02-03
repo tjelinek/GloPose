@@ -242,19 +242,19 @@ class GlomapWrapper:
         for n in self.data_graph.G.nodes:
             node_data = self.data_graph.get_frame_data(n)
 
-            cam_pose_Se3 = node_data.gt_pose_cam
-            cam_pose_q_xyzw = cam_pose_Se3.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
-            cam_pose_t = cam_pose_Se3.t.squeeze().numpy(force=True).astype(np.float64)
+            gt_Se3_world2cam = node_data.gt_Se3_cam2obj.inverse()
+            gt_q_xyzw_world2cam = gt_Se3_world2cam.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
+            gt_t_world2cam = gt_Se3_world2cam.t.squeeze().numpy(force=True).astype(np.float64)
 
             image_name = node_data.image_filename
             gt_image = pycolmap.Image(name=image_name, image_id=n, camera_id=gt_reconstruction_cam_id)
-            gt_cam_pose = pycolmap.Rigid3d(rotation=cam_pose_q_xyzw, translation=cam_pose_t)
-            gt_image.cam_from_world = gt_cam_pose
+            gt_world2cam = pycolmap.Rigid3d(rotation=gt_q_xyzw_world2cam, translation=gt_t_world2cam)
+            gt_image.cam_from_world = gt_world2cam
             gt_reconstruction.add_image(gt_image)
             gt_reconstruction.register_image(n)
 
             tgt_image_names.append(image_name)
-            tgt_3d_locations.append(cam_pose_t)
+            tgt_3d_locations.append(gt_t_world2cam)
 
         sim3d = pycolmap.align_reconstructions_via_proj_centers(reconstruction, gt_reconstruction, 1.)
 
