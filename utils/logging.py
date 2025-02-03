@@ -720,7 +720,7 @@ class WriteResults:
 
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
-            Ts_cam2obj.append(getattr(frame_data, attr_name).matrix())
+            Ts_cam2obj.append(getattr(frame_data, attr_name).matrix().squeeze())
 
         T_cam2obj = torch.stack(Ts_cam2obj, dim=0).to(self.config.device)
         Se3_cam2obj = Se3.from_matrix(T_cam2obj)
