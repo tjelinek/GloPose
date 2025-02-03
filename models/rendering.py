@@ -4,14 +4,13 @@ from typing import Tuple
 import kaolin
 import torch
 import torch.nn as nn
-from kornia.geometry import Se3
+from kornia.geometry import Se3, Quaternion
 from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
 from data_structures.keyframe_buffer import SyntheticFlowObservation
 from models.encoder import EncoderResult, Encoder
 from tracker_config import TrackerConfig
 from flow import normalize_rendered_flows
-from utils.general import homogenize_3x4_transformation_matrix
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
                                                    'face_vertices_cam',
@@ -520,11 +519,11 @@ def pinhole_intrinsics_to_tensor(intrinsics: kaolin.render.camera.PinholeIntrins
 
 def get_Se3_obj_to_cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up: torch.Tensor,
                                           obj_center: torch.Tensor) -> Se3:
-    T_obj_to_cam_4x3 = kaolin.render.camera.generate_transformation_matrix(camera_position=camera_trans,
-                                                                           camera_up_direction=camera_up,
-                                                                           look_at=obj_center)
-    T_obj_to_cam_4x4 = homogenize_3x4_transformation_matrix(T_obj_to_cam_4x3.permute(0, 2, 1))
-    Se3_obj_to_cam = Se3.from_matrix(T_obj_to_cam_4x4)
+    R_obj_to_cam, t_obj_to_cam = (
+        kaolin.render.camera.generate_rotate_translate_matrices(camera_position=camera_trans,
+                                                                camera_up_direction=camera_up,
+                                                                look_at=obj_center))
+
+    Se3_obj_to_cam = Se3(Quaternion.from_matrix(R_obj_to_cam), t_obj_to_cam).inverse()
 
     return Se3_obj_to_cam
-
