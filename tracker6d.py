@@ -187,7 +187,7 @@ class Tracker6D:
             Se3_cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
 
             frame_data = self.data_graph.get_frame_data(image_frame_id)
-            Se3_cam_gt = frame_data.gt_Se3_obj2cam
+            Se3_cam_gt = frame_data.gt_Se3_cam2obj
 
             # Ground-truth rotation and translation
             gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
@@ -230,7 +230,7 @@ class Tracker6D:
         for node_idx in sorted(self.data_graph.G.nodes):
             node_data = self.data_graph.get_frame_data(node_idx)
 
-            Se3_cam_gt = node_data.gt_Se3_obj2cam
+            Se3_cam_gt = node_data.gt_Se3_cam2obj
 
             # Ground-truth rotation and translation
             gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
@@ -259,7 +259,7 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        frame_node.gt_Se3_obj2cam = self.gt_Se3_cam2obj[[frame_i]]
+        frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[[frame_i]]
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)

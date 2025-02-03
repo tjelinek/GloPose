@@ -703,30 +703,29 @@ class WriteResults:
                    rr.Scalar(self.config.sift_filter_good_to_add_matches))
 
     def accumulate_pred_Se3_cam2obj(self, frame_indices) -> Se3:
-        pred_Ts_obj2cam = []
-
-        for frame in frame_indices:
-            frame_data = self.data_graph.get_frame_data(frame)
-
-            pred_Ts_obj2cam.append(frame_data.pred_Se3_obj2cam.matrix())
-
-        pred_T_obj2cam = torch.stack(pred_Ts_obj2cam, dim=0).to(self.config.device)
-        pred_Se3_obj2cam = Se3.from_matrix(pred_T_obj2cam)
-
-        return pred_Se3_obj2cam
+        return self.accumulate_Se3_cam2obj(frame_indices, 'pred')
 
     def accumulate_gt_Se3_cam2obj(self, frame_indices) -> Se3:
-        gt_Ts_obj2cam = []
+        return self.accumulate_Se3_cam2obj(frame_indices, 'gt')
+
+    def accumulate_Se3_cam2obj(self, frame_indices, mode) -> Se3:
+        if mode == 'gt':
+            attr_name = 'gt_Se3_cam2obj'
+        elif mode == 'pred':
+            attr_name = 'pred_Se3_cam2obj'
+        else:
+            raise ValueError("mode must be 'gt' or 'pred'")
+
+        Ts_cam2obj = []
 
         for frame in frame_indices:
             frame_data = self.data_graph.get_frame_data(frame)
+            Ts_cam2obj.append(getattr(frame_data, attr_name).matrix())
 
-            gt_Ts_obj2cam.append(frame_data.gt_Se3_obj2cam.matrix())
+        T_cam2obj = torch.stack(Ts_cam2obj, dim=0).to(self.config.device)
+        Se3_cam2obj = Se3.from_matrix(T_cam2obj)
 
-        gt_T_obj2cam = torch.stack(gt_Ts_obj2cam, dim=0).to(self.config.device)
-        gt_Se3_obj2cam = Se3.from_matrix(gt_T_obj2cam)
-
-        return gt_Se3_obj2cam
+        return Se3_cam2obj
 
     @staticmethod
     def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
