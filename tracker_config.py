@@ -64,7 +64,7 @@ class TrackerConfig:
     min_flow_reliability: float = 0.25
     min_number_of_reliable_matches: int = 0
     mapper: str = 'pycolmap'
-    frame_filter: str = 'SIFT'  # Either 'RoMa', 'SIFT', or 'passthrough'
+    frame_filter: str = 'RoMa'  # Either 'RoMa', 'SIFT', or 'passthrough'
     reconstruction_matches: str = 'RoMa'
 
     # SIFT options
