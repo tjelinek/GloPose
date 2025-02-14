@@ -1,10 +1,8 @@
-import os
 import pickle
 from pathlib import Path
 
 import networkx as nx
-import cv2
-import torch
+import torchvision.utils as vutils
 from dataclasses import dataclass
 from kornia.geometry import Se3
 from data_structures.keyframe_buffer import FrameObservation
@@ -31,47 +29,36 @@ class ViewGraph:
         else:
             raise KeyError(f"Node {frame_idx} not found in the graph.")
 
-    def save(self, save_dir):
+    def save(self, save_dir: Path, save_images: bool = False):
         """Saves the graph structure and associated images/segmentations to disk."""
-        os.makedirs(save_dir, exist_ok=True)
-        graph_path = os.path.join(save_dir, "graph.pkl")
-
-        # Save images and segmentations separately
-        for node_id, data in self.view_graph.nodes(data=True):
-            node_data: ViewGraphNode = self.get_node_data(node_id)
-            img_path = os.path.join(save_dir, f"{node_id}_image.png")
-            seg_path = os.path.join(save_dir, f"{node_id}_seg.png")
-
-            # Save image and segmentation
-            cv2.imwrite(img_path, node_data.observation.observed_image)
-            cv2.imwrite(seg_path, node_data.observation.observed_segmentation)
-
-            # Convert Se3_obj2cam to a serializable format (e.g., tensor or numpy array)
-            data["data"] = {
-                "Se3_obj2cam": node_data.Se3_obj2cam.matrix().cpu(),
-                "image_path": img_path,
-                "seg_path": seg_path
-            }
-
-        # Save the modified graph as a pickle file
+        graph_path = save_dir / "graph.pkl"
+        graph_path.mkdir(exist_ok=True)
         with open(graph_path, "wb") as f:
-            pickle.dump(self.view_graph, f)
+            pickle.dump(self, f)
+
+        if save_images:
+            image_save_dir = save_dir / "images"
+            segmentations_save_dir = save_dir / "segmentations"
+
+            image_save_dir.mkdir(exist_ok=True)
+            segmentations_save_dir.mkdir(exist_ok=True)
+
+            # Save images and segmentations separately
+            for node_id, data in self.view_graph.nodes(data=True):
+                node_data: ViewGraphNode = self.get_node_data(node_id)
+
+                image = node_data.observation.observed_image  # Shape: (1, C, H, W)
+                segmentation = node_data.observation.observed_segmentation  # Shape: (1, 1, H, W)
+
+                img_path = image_save_dir / f"{node_id}_image.png"
+                seg_path = segmentations_save_dir / f"{node_id}_seg.png"
+
+                vutils.save_image(image, str(img_path))
+                vutils.save_image(segmentation.float(), str(seg_path))
 
 
-def from_pickle(self, load_dir: Path):
+def view_graph_from_pickle(self, load_dir: Path):
     """Loads the graph structure and associated images/segmentations from disk."""
-    graph_path = os.path.join(load_dir, "graph.pkl")
+    graph_path = load_dir / "graph.pkl"
     with open(graph_path, "rb") as f:
         self.view_graph = pickle.load(f)
-
-    # Reload images and segmentations into the graph nodes
-    for node_id, data in self.view_graph.nodes(data=True):
-        node_data = data["data"]
-        se3_obj2cam = Se3(torch.tensor(node_data["Se3_obj2cam"]))
-        image = cv2.imread(node_data["image_path"])
-        segmentation = cv2.imread(node_data["seg_path"], cv2.IMREAD_GRAYSCALE)
-
-        # Restore the original ViewGraphNode
-        self.view_graph.nodes[node_id]["data"] = ViewGraphNode(
-            se3_obj2cam, FrameObservation(image, segmentation)
-        )
