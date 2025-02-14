@@ -305,7 +305,7 @@ class WriteResults:
         not_logged_keyframes = set(keyframe_graph.nodes) - set(self.logged_keyframe_graph.nodes)
         for kf_idx in sorted(not_logged_keyframes):
             keyframe_node = self.data_graph.get_frame_data(kf_idx)
-            template = keyframe_node.frame_observation.observed_image[0, 0].permute(1, 2, 0).detach().cpu()
+            template = keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).detach().cpu()
 
             annotation = f'{RerunAnnotations.keyframe_images}/{len(self.logged_keyframe_graph.nodes)}'
             template_path = self.write_folder / 'templates' / f'{len(keyframe_graph.nodes)}'
@@ -561,7 +561,7 @@ class WriteResults:
                 template_idx = len(self.logged_templates_3d_space)
 
                 keyframe_node = self.data_graph.get_frame_data(keyframe_node_idx)
-                template = keyframe_node.frame_observation.observed_image[0, 0].permute(1, 2, 0).numpy(force=True)
+                template = keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).numpy(force=True)
 
                 self.logged_templates_3d_space.append(keyframe_node_idx)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'

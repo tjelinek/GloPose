@@ -108,11 +108,11 @@ class RenderingKaolin(nn.Module):
             ren_features = ren_features * lighting
         rendering_rgb = ren_features.permute(0, 3, 1, 2)
 
-        renderings = rendering_rgb.unsqueeze(0)
-        segmentations = dibr_result.ren_mask.unsqueeze(1).unsqueeze(0)
-        rendered_object_camera_coords = dibr_result.ren_mesh_vertices_camera_coords.permute(0, 3, 1, 2).unsqueeze(0)
-        rendered_object_world_coords = dibr_result.ren_mesh_vertices_world_coords.permute(0, 3, 1, 2).unsqueeze(0)
-        rendered_object_face_normals_camera_coords = dibr_result.ren_face_normals.permute(0, 3, 1, 2).unsqueeze(0)
+        renderings = rendering_rgb
+        segmentations = dibr_result.ren_mask.unsqueeze(1)
+        rendered_object_camera_coords = dibr_result.ren_mesh_vertices_camera_coords.permute(0, 3, 1, 2)
+        rendered_object_world_coords = dibr_result.ren_mesh_vertices_world_coords.permute(0, 3, 1, 2)
+        rendered_object_face_normals_camera_coords = dibr_result.ren_face_normals.permute(0, 3, 1, 2)
 
         rendering_result = RenderingResult(rendered_image=renderings,
                                            rendered_image_segmentation=segmentations,

@@ -118,7 +118,7 @@ class PrecomputedFrameProvider(FrameProvider):
         image_tensor = transforms.ToTensor()(frame)[None].to(self.device)
 
         image_downsampled = F.interpolate(image_tensor, scale_factor=self.downsample_factor, mode='bilinear',
-                                          align_corners=False)[None]
+                                          align_corners=False)
         return image_downsampled
 
     def get_intrinsics_for_frame(self, frame_i):
@@ -185,7 +185,7 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
         segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation_resized = self.resize_transform(segmentation_p)[None, None, [1]].to(torch.bool).to(torch.float32)
+        segmentation_resized = self.resize_transform(segmentation_p)[None, [1]].to(torch.bool).to(torch.float32)
 
         return segmentation_resized
 
@@ -230,7 +230,7 @@ class SAM2OnlineSegmentationProvider(SegmentationProvider):
             out_obj_ids, out_mask_logits = self.predictor.track(image_sam_format)
 
         obj_seg_mask = out_mask_logits[0, 0] > 0
-        obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
+        obj_seg_mask_formatted = obj_seg_mask[None, None].to(torch.float32)
         return obj_seg_mask_formatted
 
 
@@ -317,7 +317,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             raise ValueError("Not predicted")
 
         obj_seg_mask = out_mask_logits[0, 0] > 0
-        obj_seg_mask_formatted = obj_seg_mask[None, None, None].to(torch.float32)
+        obj_seg_mask_formatted = obj_seg_mask[None, None].to(torch.float32)
 
         assert obj_seg_mask_formatted.shape[-2] == self.image_shape.height
         assert obj_seg_mask_formatted.shape[-1] == self.image_shape.width
