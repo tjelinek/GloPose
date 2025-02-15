@@ -2,15 +2,19 @@ import pickle
 from pathlib import Path
 
 import networkx as nx
+import pycolmap
+import torch
 import torchvision.utils as vutils
 from dataclasses import dataclass
-from kornia.geometry import Se3
+from kornia.geometry import Se3, Quaternion
+
+from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 
 
 @dataclass
 class ViewGraphNode:
-    Se3_obj2cam: Se3
+    Se3_cam2obj: Se3
     observation: FrameObservation
 
 
@@ -18,9 +22,9 @@ class ViewGraph:
     def __init__(self):
         self.view_graph = nx.DiGraph()
 
-    def add_node(self, node_id, se3_obj2cam, observation):
+    def add_node(self, node_id, se3_cam2obj, observation):
         """Adds a node with ViewGraphNode attributes."""
-        self.view_graph.add_node(node_id, data=ViewGraphNode(se3_obj2cam, observation))
+        self.view_graph.add_node(node_id, data=ViewGraphNode(se3_cam2obj, observation))
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
         """Returns the ViewGraphNode data for a given node ID."""
@@ -62,3 +66,27 @@ def view_graph_from_pickle(self, load_dir: Path):
     graph_path = load_dir / "graph.pkl"
     with open(graph_path, "rb") as f:
         self.view_graph = pickle.load(f)
+
+
+def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colmap_reconstruction:
+                              pycolmap.Reconstruction) -> ViewGraph:
+    all_image_names = [str(data_graph.get_frame_data(i).image_filename)
+                       for i in range(len(data_graph.G.nodes))]
+
+    view_graph = ViewGraph()
+
+    for image_id, image in colmap_reconstruction.images.items():
+        frame_index = all_image_names.index(image.name)
+
+        image_t_obj2cam = torch.tensor(image.cam_from_world.translation)[None]
+        image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)[None]
+        image_q_obj2cam_wxyz = image_q_obj2cam_xyzw[:, [3, 0, 1, 2]]
+
+        gt_Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
+        gt_Se3_cam2obj = gt_Se3_obj2cam.inverse()
+
+        frame_observation = data_graph.get_frame_data(frame_index)
+
+        view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation)
+
+    return view_graph

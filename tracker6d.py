@@ -12,6 +12,7 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import BaseTracker
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
+from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
@@ -125,6 +126,8 @@ class Tracker6D:
 
         self.write_gt_poses()
         self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
+
+        view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
 
         self.evaluate_reconstruction(reconstruction)
 
