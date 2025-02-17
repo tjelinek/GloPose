@@ -64,6 +64,9 @@ class Tracker6D:
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
+        self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
+                                              config.dataset / config.sequence)
+
         if self.gt_Se3_cam2obj is not None:
             Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(self.gt_Se3_cam2obj)
         else:
@@ -128,6 +131,7 @@ class Tracker6D:
         self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
+        view_graph.save(self.cache_folder_view_graph, save_images=True)
 
         self.evaluate_reconstruction(reconstruction)
 

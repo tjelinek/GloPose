@@ -78,3 +78,4 @@ class TrackerConfig:
 
     # BOP Config
     bop_config: BaseBOPConfig = None
+    export_view_graph: bool = False
