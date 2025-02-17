@@ -33,10 +33,19 @@ class ViewGraph:
         else:
             raise KeyError(f"Node {frame_idx} not found in the graph.")
 
-    def save(self, save_dir: Path, save_images: bool = False):
+    def save(self, save_dir: Path, save_images: bool = False, overwrite: bool = True):
         """Saves the graph structure and associated images/segmentations to disk."""
-        graph_path = save_dir / "graph.pkl"
-        graph_path.mkdir(exist_ok=True)
+        graph_path = save_dir / Path("graph.pkl")
+
+        if graph_path.exists() and overwrite:
+            if graph_path.is_dir():
+                graph_path.rmdir()
+            if graph_path.is_file():
+                graph_path.unlink()
+
+        graph_path.parent.mkdir(parents=True, exist_ok=True)
+        graph_path.is_file()
+
         with open(graph_path, "wb") as f:
             pickle.dump(self, f)
 
@@ -85,8 +94,12 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colm
         gt_Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
         gt_Se3_cam2obj = gt_Se3_obj2cam.inverse()
 
-        frame_observation = data_graph.get_frame_data(frame_index)
+        frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
         view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation)
+
+    for u, v in structure.edges:
+        if u not in view_graph.view_graph.nodes and v not in view_graph.view_graph.nodes:
+            view_graph.view_graph.add_edge(u, v)
 
     return view_graph
