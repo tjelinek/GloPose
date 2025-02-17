@@ -6,7 +6,8 @@ import torch
 from kornia.geometry import Se3, Quaternion
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.dataset_utils.bop_challenge import get_pinhole_params, read_obj_to_cam_transformations_from_gt
+from utils.dataset_utils.bop_challenge import get_pinhole_params, read_obj_to_cam_transformations_from_gt, \
+    load_gt_images_and_segmentations
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 from tracker6d import run_tracking_on_sequence
@@ -55,9 +56,7 @@ def main():
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
 
-        gt_segs = {int(file.stem.split('_')[0]): file for file in sorted(segmentation_folder.iterdir()) if
-                       file.stem.endswith('000000')}
-        gt_images = {int(file.stem): file for file in sorted(image_folder.iterdir()) if file.is_file()}
+        gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
 
         pose_json_path = sequence_folder / 'scene_gt.json'
 

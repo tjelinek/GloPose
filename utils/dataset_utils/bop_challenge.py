@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Dict, Tuple
 
 import numpy as np
@@ -51,3 +52,22 @@ def read_obj_to_cam_transformations_from_gt(pose_json_path) -> (
                 gt_rotations_obj_to_cam[obj_id][frame] = r_m2c
                 gt_translations_obj_to_cam[obj_id][frame] = t_m2c
     return gt_rotations_obj_to_cam, gt_translations_obj_to_cam
+
+
+def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Path, object_id: int = 0):
+    """Load ground truth images and segmentation files, filtering by object ID."""
+    object_id_str = f"{object_id:06d}"  # Ensure it's a zero-padded 6-digit string
+
+    gt_segs = {
+        int(file.stem.split('_')[0]): file
+        for file in sorted(segmentation_folder.iterdir())
+        if file.stem.endswith(object_id_str)  # Dynamically filter by object ID
+    }
+
+    gt_images = {
+        int(file.stem): file
+        for file in sorted(image_folder.iterdir())
+        if file.is_file()
+    }
+
+    return gt_images, gt_segs
