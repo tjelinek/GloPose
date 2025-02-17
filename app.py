@@ -75,38 +75,25 @@ def process_images(input_images):
     return segmentation_paths
 
 
-def get_keyframes_and_segmentations_passthrough(input_images, segmentations):
-    keyframes = input_images
-    keysegs = segmentations
-    matching_pairs = get_exhaustive_image_pairs(keyframes)
-    return [str(kf) for kf in keyframes], [str(seg) for seg in keysegs], matching_pairs
-
-
-def get_keyframes_and_segmentations(input_images, segmentations, global_vars, alg='passthrough', _skip_slider=1000,
-                                    _too_little_slider=0, _matchability_slider=.5, _min_certainty_slider=.95,
-                                    _device_radio='cpu', _matchability_radio=None,
+def get_keyframes_and_segmentations(input_images, segmentations, global_vars, frame_filter='passthrough',
+                                    _skip_slider=1000, _too_little_slider=0, _matchability_slider=.5,
+                                    _min_certainty_slider=.95, _device_radio='cpu', _matchability_radio=None,
                                     progress=gr.Progress()):
     input_images = [img for (img, _) in input_images]
     segmentations = [seg for (seg, _) in segmentations]
-    if alg == 'passthrough':
-        k, s, mp = get_keyframes_and_segmentations_passthrough(input_images, segmentations)
-    elif alg == 'sift':
-        opts = default_sift_keyframe_opts()
-        opts['device'] = _device_radio
-        opts['min_matches'] = _too_little_slider
-        opts['good_to_add_matches'] = _skip_slider
-        k, s, mp = get_keyframes_and_segmentations_sift(input_images, segmentations, opts, progress=progress)
-    elif alg == 'matchability':
-        opts = default_matchability_opts()
-        opts['device'] = _device_radio
-        opts['matchability_score'] = _matchability_slider
-        opts['matchability_algorithm'] = _matchability_radio
-        opts['roma_certainty'] = _min_certainty_slider
-        k, s, mp = get_keyframes_and_segmentations_roma(input_images, segmentations, opts, progress=progress,
-                                                        stop_event=stop_event)
-    else:
-        raise ValueError(f"Unknown algorithm {alg}")
+
+    config: TrackerConfig = load_config('configs/base_config.py')
+    config.device = _device_radio
+    config.frame_filter = frame_filter
+    config.sift_filter_min_matches = _too_little_slider
+    config.sift_filter_good_to_add_matches = _skip_slider
+    config.min_roma_certainty_threshold = _min_certainty_slider
+
+    k, s, mp = get_keyframes_and_segmentations_roma(input_images, segmentations, opts, progress=progress,
+                                                    stop_event=stop_event)
+
     global_vars["matching_pairs"].append(mp)
+
     return k, s, global_vars
 
 
@@ -202,7 +189,8 @@ with gr.Blocks() as demo:
 
 
     GLOBAL_VARS = gr.State({
-        "matching_pairs": [], })
+        'pipeline_wrapper': None
+    })
 
     with gr.Row():
         with gr.Column():
