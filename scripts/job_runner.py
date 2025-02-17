@@ -117,7 +117,7 @@ def main():
 
     sequences = {
         Datasets.SyntheticObjects: [
-            # 'Textured_Sphere_5_y',
+            'Textured_Sphere_5_y',
             # 'Textured_Sphere_5_x',
             # 'Textured_Sphere_5_z',
             # 'Textured_Cube_5_y',
@@ -193,12 +193,12 @@ def main():
             # 'rgbd_dataset_freiburg2_metallic_sphere',
             # 'rgbd_dataset_freiburg2_metallic_sphere2',
             # 'rgbd_dataset_freiburg2_pioneer_360',
-            'rgbd_dataset_freiburg2_pioneer_slam',
+            # 'rgbd_dataset_freiburg2_pioneer_slam',
             # 'rgbd_dataset_freiburg2_pioneer_slam2',
             # 'rgbd_dataset_freiburg2_pioneer_slam3',
             # 'rgbd_dataset_freiburg2_rpy',
             # 'rgbd_dataset_freiburg2_xyz',
-            'rgbd_dataset_freiburg3_cabinet',
+            # 'rgbd_dataset_freiburg3_cabinet',
             # 'rgbd_dataset_freiburg3_large_cabinet',
             # 'rgbd_dataset_freiburg3_long_office_household',
             # 'rgbd_dataset_freiburg3_sitting_halfsphere',
@@ -209,7 +209,7 @@ def main():
             # 'rgbd_dataset_freiburg3_walking_halfsphere',
             # 'rgbd_dataset_freiburg3_walking_rpy',
             # 'rgbd_dataset_freiburg3_walking_static',
-            'rgbd_dataset_freiburg3_walking_xyz',
+            # 'rgbd_dataset_freiburg3_walking_xyz',
         ],
     }
 
