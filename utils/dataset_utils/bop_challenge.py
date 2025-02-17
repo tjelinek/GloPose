@@ -10,52 +10,6 @@ from PIL import Image
 from kornia.geometry import Se3, Quaternion, PinholeCamera, rotation_matrix_to_axis_angle
 
 
-def bop_t_to_torch_tensor(json_t_value: list[float]) -> torch.Tensor:
-    return torch.tensor(json_t_value).unsqueeze(0)
-
-
-def bop_R_to_torch_tensor(json_R_value: list[float]) -> torch.Tensor:
-    return torch.tensor(json_R_value).reshape(3, 3).unsqueeze(0)
-
-
-def get_bop_segmentation_tensor(segmentation_path: Path) -> torch.Tensor:
-    segmentation = Image.open(segmentation_path)
-    segmentation_tensor = F.pil_to_tensor(segmentation)[None, None].to(torch.bool).to(torch.float32).cuda()
-
-    return segmentation_tensor
-
-
-def get_bop_image_tensor(rgb_path: Path) -> torch.Tensor:
-    rgb_image = Image.open(rgb_path)
-    rgb_image_tensor = F.pil_to_tensor(rgb_image).float()[None, None]
-    return rgb_image_tensor
-
-
-def get_Se3_world_to_cam_from_bop_json(json_data) -> Se3:
-    json_data_first_frame = json_data['0'][0]
-    cam_t_first_frame = bop_t_to_torch_tensor(json_data_first_frame['cam_t_m2c'])
-    cam_R_first_frame = bop_R_to_torch_tensor(json_data_first_frame['cam_R_m2c'])
-    Se3_cam_to_world = Se3(Quaternion.from_matrix(cam_R_first_frame), cam_t_first_frame)
-    Se3_world_to_cam = Se3_cam_to_world.inverse()
-
-    return Se3_world_to_cam
-
-
-def load_intrinsics_as_tensor(json_file_path) -> torch.Tensor:
-    with open(json_file_path, 'r') as json_file:
-        json_data = json.load(json_file)
-
-    cam_K_matrices = []
-    for key, value in json_data.items():
-        cam_K = value['cam_K']
-        cam_K_reshaped = torch.tensor(cam_K).view(3, 3)
-        cam_K_matrices.append(cam_K_reshaped)
-
-    cam_K_tensor = torch.stack(cam_K_matrices)
-
-    return cam_K_tensor
-
-
 def get_pinhole_params(json_file_path) -> List[PinholeCamera]:
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
