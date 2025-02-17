@@ -77,5 +77,5 @@ class TrackerConfig:
     sift_mapping_single_camera: bool = True
 
     # BOP Config
-    bop_config: BaseBOPConfig = None
+    bop_config: BaseBOPConfig = field(default_factory=BaseBOPConfig)
     export_view_graph: bool = False
