@@ -62,22 +62,11 @@ def main():
 
         pose_json_path = sequence_folder / 'scene_gt.json'
 
-        cam_intrinsics = {}
         gt_rotations_objs_to_cam, gt_translations_objs_to_cam = read_obj_to_cam_transformations_from_gt(pose_json_path)
         obj_ids = sorted(gt_rotations_objs_to_cam.keys())
         gt_rotations_obj_to_cam_dict = gt_rotations_objs_to_cam[obj_ids[0]]
         gt_translations_obj_to_cam_dict = gt_translations_objs_to_cam[obj_ids[0]]
 
-        camera_calibrations_json_path = sequence_folder / 'scene_camera.json'
-        with open(camera_calibrations_json_path, 'r') as file:
-            pose_json = json.load(file)
-            for frame, data in pose_json.items():
-                cam_K = data['cam_K']
-                K = np.array(cam_K).reshape(3, 3)
-
-                cam_intrinsics[int(frame)] = K
-
-        # config.camera_intrinsics = cam_intrinsics[0]
         pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
