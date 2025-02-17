@@ -1,4 +1,3 @@
-import json
 import time
 from pathlib import Path
 
@@ -67,8 +66,6 @@ def main():
         gt_translations_obj_to_cam_dict = gt_translations_objs_to_cam[obj_ids[0]]
 
         pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
-        config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
-        config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
 
         valid_indices = list(sorted(gt_segs.keys() & gt_images.keys() & gt_translations_obj_to_cam_dict.keys() &
                                     gt_rotations_obj_to_cam_dict.keys()))
@@ -91,6 +88,8 @@ def main():
 
         first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
+        config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
+        config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
         config.input_frames = len(gt_images)
         config.frame_provider = 'precomputed'
         config.segmentation_provider = 'SAM2'
