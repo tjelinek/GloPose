@@ -40,9 +40,6 @@ def main():
         config.dataset = dataset
         config.image_downsample = 1.0
 
-        # config.camera_position = (-5.0, -5.0, -5.0)
-        # config.camera_up = (0, 0, 1)
-
         skip_indices = 1
 
         if args.output_folder is not None:
