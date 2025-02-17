@@ -49,6 +49,7 @@ def main():
         t0 = time.time()
 
         onboarding_type = config.bop_config.onboarding_type
+        obj_id = 0
 
         sequence_folder = config.default_data_folder / 'bop' / 'hope' / f'onboarding_{onboarding_type}' / sequence
         image_folder = sequence_folder / 'rgb'

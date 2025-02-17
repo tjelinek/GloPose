@@ -28,6 +28,11 @@ class Tracker6D:
                  segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
                  initial_segmentation: torch.Tensor = None, ):
 
+        if os.path.exists(write_folder):
+            shutil.rmtree(write_folder)
+
+        write_folder.mkdir(exist_ok=True, parents=True)
+
         config.write_folder = write_folder
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
@@ -280,19 +285,6 @@ class Tracker6D:
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
-    if os.path.exists(write_folder):
-        shutil.rmtree(write_folder)
-
-    write_folder.mkdir(exist_ok=True, parents=True)
-
-    print('\n\n\n---------------------------------------------------')
-    print("Running tracking on dataset:", config.dataset)
-    print("Sequence:", config.sequence)
-    print('---------------------------------------------------\n\n')
-
-    t0 = time.time()
 
     sfb = Tracker6D(config, write_folder, **kwargs)
     sfb.run_filtering_with_reconstruction()
-
-    print(f'{config.input_frames} epochs took {(time.time() - t0) / 1} seconds.')
