@@ -10,7 +10,6 @@ import rerun.blueprint as rrb
 import torch
 from PIL import Image
 from kornia.geometry import Se3
-from kornia.image import ImageSize
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
@@ -25,10 +24,7 @@ from utils.general import normalize_vertices, extract_intrinsics_from_tensor
 
 class WriteResults:
 
-    def __init__(self, write_folder, shape: ImageSize, tracking_config: TrackerConfig, data_graph: DataGraph):
-
-        self.image_height = shape.height
-        self.image_width = shape.width
+    def __init__(self, write_folder, tracking_config: TrackerConfig, data_graph: DataGraph):
 
         self.data_graph: DataGraph = data_graph
 
@@ -585,10 +581,13 @@ class WriteResults:
                 frame_data = self.data_graph.get_frame_data(keyframe_node_idx)
                 fx, fy, cx, cy = extract_intrinsics_from_tensor(frame_data.gt_pinhole_K)
 
+                image_width = frame_data.image_shape.width
+                image_height = frame_data.image_shape.height
+
                 rr.log(
                     f'{RerunAnnotations.space_predicted_camera_keypoints}/{i}',
                     rr.Pinhole(
-                        resolution=[self.image_width, self.image_height],
+                        resolution=[image_width, image_height],
                         focal_length=[float(fx.item()),
                                       float(fy.item())],
                         camera_xyz=rr.ViewCoordinates.RUB,
@@ -644,14 +643,14 @@ class WriteResults:
         else:
             return
 
-        def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, sample_size=None):
+        def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, source_image_height, sample_size=None):
             if sample_size is not None:
                 random_indices = torch.randperm(min(sample_size, src_yx.shape[0]))
                 src_yx = src_yx[random_indices]
                 target_yx = target_yx[random_indices]
 
             target_yx_2nd_image = target_yx
-            target_yx_2nd_image[:, 0] = self.image_height + target_yx_2nd_image[:, 0]
+            target_yx_2nd_image[:, 0] = source_image_height + target_yx_2nd_image[:, 0]
 
             line_strips_xy = np.stack([src_yx[:, [1, 0]], target_yx_2nd_image[:, [1, 0]]], axis=1)
 
@@ -667,12 +666,13 @@ class WriteResults:
                 ),
             )
 
+        template_image_size = template_data.image_shape
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches_high_certainty, 100)
+                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 100)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotations.matches_low_certainty, 100)
+                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 100)
 
         if self.config.frame_filter == 'RoMa':
             reliability = arc_observation.reliability_score
@@ -800,8 +800,6 @@ class WriteResults:
         rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
     def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
-        assert flow_occlusion.shape == (self.image_height, self.image_width)
-        assert source_image_rgb.shape == (3, self.image_height, self.image_width)
 
         occlusion_mask = flow_occlusion.detach().unsqueeze(0).repeat(3, 1, 1)
         blended_image = alpha * occlusion_mask + (1 - alpha) * source_image_rgb
@@ -812,7 +810,7 @@ class WriteResults:
     def log_image(self, frame: int, image: torch.Tensor, rerun_annotation: str, save_path: Optional[Path] = None,
                   ignore_dimensions=False):
         if not ignore_dimensions:
-            assert image.shape == (self.image_height, self.image_width, 3)
+            assert len(image.shape) == 3 and image.shape[-1] == 3
 
         if self.config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame)

@@ -86,8 +86,8 @@ class Tracker6D:
                                    segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
         self.image_shape = self.tracker.get_image_size()
 
-        self.results_writer = WriteResults(write_folder=self.write_folder, shape=self.image_shape,
-                                           tracking_config=self.config, data_graph=self.data_graph)
+        self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
+                                           data_graph=self.data_graph)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
 
