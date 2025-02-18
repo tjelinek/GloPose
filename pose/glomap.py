@@ -12,7 +12,6 @@ import numpy as np
 import pycolmap
 import torch
 from PIL import Image
-from kornia.image import ImageSize
 from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
@@ -29,7 +28,7 @@ from utils.general import extract_intrinsics_from_tensor
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageSize, flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
+                 flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
         self.write_folder = write_folder
         self.config = tracking_config
 
@@ -44,9 +43,6 @@ class GlomapWrapper:
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
         self.feature_dir.mkdir(exist_ok=True, parents=True)
-
-        self.image_width = image_shape.width
-        self.image_height = image_shape.height
 
         self.data_graph = data_graph
 
@@ -229,8 +225,8 @@ class GlomapWrapper:
             cx, cy = (pred_reconstruction_cam.params[1], pred_reconstruction_cam.params[2])
             fx, fy = (pred_reconstruction_cam.params[0], pred_reconstruction_cam.params[0])
 
-        gt_w = int(self.image_width)
-        gt_h = int(self.image_height)
+        gt_w = reconstruction.cameras[1].width  # Assuming single camera only
+        gt_h = reconstruction.cameras[1].height
 
         gt_reconstruction_cam_id = 1
         cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, cx, cy]))

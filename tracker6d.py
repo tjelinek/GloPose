@@ -102,8 +102,7 @@ class Tracker6D:
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.image_shape,
                                                 sift_matcher)
 
-        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.image_shape,
-                                            self.flow_provider)
+        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
 
     def run_filtering_with_reconstruction(self):
 
