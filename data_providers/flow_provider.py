@@ -13,11 +13,10 @@ from flow import roma_warp_to_pixel_coordinates
 
 class RoMaFlowProviderDirect:
 
-    def __init__(self, data_graph: DataGraph, device, image_shape: ImageSize):
+    def __init__(self, data_graph: DataGraph, device):
         self.device = device
         self.data_graph: DataGraph = data_graph
         self.flow_model: roma_model = None
-        self.image_shape: ImageSize = image_shape
 
     def _init_flow_model(self):
         self.flow_model: roma_model = roma_outdoor(device=self.device)
@@ -49,8 +48,14 @@ class RoMaFlowProviderDirect:
         edge_data.roma_flow_warp = warp
         edge_data.roma_flow_certainty = certainty
 
-        h1 = h2 = self.image_shape.height
-        w1 = w2 = self.image_shape.width
+        source_frame_data = self.data_graph.get_frame_data(flow_source_frame)
+        target_frame_data = self.data_graph.get_frame_data(flow_target_frame)
+
+        h1 = source_frame_data.image_shape.height
+        w1 = source_frame_data.image_shape.width
+        h2 = target_frame_data.image_shape.height
+        w2 = target_frame_data.image_shape.width
+
         src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
 
         edge_data.src_pts_xy_roma = src_pts_xy_roma
@@ -59,9 +64,8 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, image_shape: ImageSize,
-                 allow_missing: bool = True):
-        super().__init__(data_graph, device, image_shape)
+    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True):
+        super().__init__(data_graph, device)
         self.flow_model: roma_model = roma_outdoor(device=device)
 
         self.saved_flow_paths = cache_dir
