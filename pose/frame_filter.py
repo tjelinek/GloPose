@@ -13,12 +13,11 @@ from tracker_config import TrackerConfig
 
 
 class BaseFrameFilter:
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, image_shape: ImageSize):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph):
         self.config: TrackerConfig = config
         self.data_graph: DataGraph = data_graph
         self.keyframe_graph: nx.DiGraph = nx.DiGraph()
 
-        self.image_size: ImageSize = image_shape
         self.n_frames = self.config.input_frames
 
     def get_keyframe_graph(self) -> nx.DiGraph:
@@ -38,7 +37,7 @@ class RoMaFrameFilter(BaseFrameFilter):
     def __init__(self, config: TrackerConfig, data_graph: DataGraph,
                  image_shape: ImageSize, flow_provider: RoMaFlowProviderDirect):
 
-        super().__init__(config, data_graph, image_shape)
+        super().__init__(config, data_graph)
 
         self.flow_provider: RoMaFlowProviderDirect = flow_provider
 
@@ -237,16 +236,14 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.add_new_flow(source_idx, target_idx)
         flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
 
-        H_A, W_A = self.image_size.height, self.image_size.width
+        H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
         src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(flow_arc_node.roma_flow_warp, H_A, W_A, H_A, W_A)
 
-        # src_pts_xy[:, 0] = torch.clamp(src_pts_xy[:, 0], max=self.image_size.width - 1)
-        # src_pts_xy[:, 1] = torch.clamp(src_pts_xy[:, 1], max=self.image_size.height - 1)
         src_pts_xy_int = torch.ceil(src_pts_xy).int() - 1
 
-        assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < self.image_size.width)).all()
-        assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < self.image_size.height)).all()
-        assert fg_segmentation_mask.shape[-2:] == (self.image_size.height, self.image_size.width)
+        assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
+        assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
+        assert fg_segmentation_mask.shape[-2:] == (H_A, W_A)
 
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
@@ -279,7 +276,7 @@ class FrameFilterSift(BaseFrameFilter):
     def __init__(self, config: TrackerConfig, data_graph: DataGraph, image_shape: ImageSize,
                  sift_matcher: SIFTMatchingProvider):
 
-        super().__init__(config, data_graph, image_shape)
+        super().__init__(config, data_graph)
 
         self.sift_matcher: SIFTMatchingProvider = sift_matcher
 

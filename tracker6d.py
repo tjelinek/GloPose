@@ -270,6 +270,7 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
+        frame_node.image_shape = self.tracker.get_image_size()
         frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[[frame_i]]
 
         if self.images_paths is not None:
