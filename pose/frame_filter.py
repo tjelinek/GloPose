@@ -34,8 +34,7 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph,
-                 image_shape: ImageSize, flow_provider: RoMaFlowProviderDirect):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, flow_provider: RoMaFlowProviderDirect):
 
         super().__init__(config, data_graph)
 
@@ -273,8 +272,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, image_shape: ImageSize,
-                 sift_matcher: SIFTMatchingProvider):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, sift_matcher: SIFTMatchingProvider):
 
         super().__init__(config, data_graph)
 

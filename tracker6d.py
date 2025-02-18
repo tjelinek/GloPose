@@ -92,14 +92,12 @@ class Tracker6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
 
         if self.config.frame_filter == 'RoMa':
-            self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.image_shape,
-                                                self.flow_provider)
+            self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
             sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph,
                                                            self.config.sift_matcher_config.sift_filter_num_feats,
                                                            cache_folder_SIFT, device=self.config.device)
-            self.frame_filter = FrameFilterSift(self.config, self.data_graph, self.image_shape,
-                                                sift_matcher)
+            self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
 
