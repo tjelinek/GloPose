@@ -6,7 +6,6 @@ from typing import Optional, List
 
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
-from kornia.image import ImageSize
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import BaseTracker
@@ -43,9 +42,6 @@ class Tracker6D:
         # Ground truth related
         self.gt_Se3_cam2obj: Optional[Se3] = gt_Se3_cam2obj
 
-        # Data graph
-        self.data_graph: Optional[DataGraph] = None
-
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
 
@@ -55,12 +51,11 @@ class Tracker6D:
         # Other utilities and flags
         self.results_writer = None
 
-        self.image_shape: Optional[ImageSize] = None
         self.write_folder = Path(write_folder)
         self.config = config
         self.device = 'cuda'
 
-        self.data_graph = DataGraph()
+        self.data_graph: DataGraph = DataGraph()
 
         cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
                                    config.roma_matcher_config.config_name / config.dataset / config.sequence)
@@ -143,7 +138,10 @@ class Tracker6D:
             self.init_datagraph_frame(frame_i)
 
             new_frame_observation = self.tracker.next(frame_i)
-            self.data_graph.get_frame_data(frame_i).frame_observation = new_frame_observation.send_to_device('cpu')
+
+            new_frame_node = self.data_graph.get_frame_data(frame_i)
+            new_frame_node.frame_observation = new_frame_observation.send_to_device('cpu')
+            new_frame_node.image_shape = self.tracker.get_image_size()
 
             start = time.time()
 
@@ -267,7 +265,6 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        frame_node.image_shape = self.tracker.get_image_size()
         frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[[frame_i]]
 
         if self.images_paths is not None:
@@ -282,6 +279,5 @@ class Tracker6D:
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
-
     sfb = Tracker6D(config, write_folder, **kwargs)
     sfb.run_filtering_with_reconstruction()
