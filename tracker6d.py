@@ -102,8 +102,6 @@ class Tracker6D:
         else:
             Se3_obj_1_to_obj_i = None
 
-        if self.sequence_starts is not None:
-
         self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
                                    gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
                                    initial_segmentation=initial_segmentation,
