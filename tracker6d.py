@@ -2,7 +2,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
@@ -23,9 +23,10 @@ class Tracker6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
                  images_paths: List[Path] = None, video_path: Optional[Path] = None,
-                 gt_Se3_cam2obj: Optional[Se3] = None, segmentation_video_path: Optional[Path] = None,
-                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor = None,
-                 initial_segmentation: torch.Tensor = None, ):
+                 gt_Se3_cam2obj: Optional[Se3] = None, initial_gt_Se3_cam2obj: Optional[Se3] = None,
+                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
+                 initial_image: torch.Tensor | List[torch.Tensor] = None,
+                 initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
 
         if os.path.exists(write_folder):
             shutil.rmtree(write_folder)
@@ -38,9 +39,11 @@ class Tracker6D:
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
         self.video_path: Optional[Path] = video_path
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
+        self.sequence_starts: Optional[List[int]] = sequence_starts
 
         # Ground truth related
-        self.gt_Se3_cam2obj: Optional[Se3] = gt_Se3_cam2obj
+        self.gt_Se3_cam2obj: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        self.initial_gt_Se3_cam2obj: Optional[Se3] = initial_gt_Se3_cam2obj
 
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
@@ -68,7 +71,15 @@ class Tracker6D:
                                               config.dataset / config.sequence)
 
         if self.gt_Se3_cam2obj is not None:
-            Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(self.gt_Se3_cam2obj)
+
+            if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
+                assert set(range(self.config.input_frames)).issubset(self.gt_Se3_cam2obj.keys()), \
+                    f"Missing keys: {set(range(self.config.input_frames)) - self.gt_Se3_cam2obj.keys()}"
+
+            all_gt_T_cam2obj = [gt_Se3_cam2obj[i].matrix() for i in sorted(self.gt_Se3_cam2obj.keys())]
+            gt_T_cam2obj = torch.stack(all_gt_T_cam2obj)
+            gt_Se3_cam2obj = Se3.from_matrix(gt_T_cam2obj)
+            Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam2obj)
         else:
             Se3_obj_1_to_obj_i = None
 
@@ -263,7 +274,7 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[[frame_i]]
+        frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[frame_i]
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
