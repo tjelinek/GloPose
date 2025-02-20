@@ -1,11 +1,11 @@
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 import numpy as np
 import torch
-from kornia.geometry import Se3, Quaternion, PinholeCamera, rotation_matrix_to_axis_angle
+from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 
 def get_pinhole_params(json_file_path) -> List[PinholeCamera]:
@@ -32,10 +32,8 @@ def get_pinhole_params(json_file_path) -> List[PinholeCamera]:
     return pinhole_cameras
 
 
-def read_obj_to_cam_transformations_from_gt(pose_json_path) -> (
-        Tuple)[Dict[int, Dict[int, torch.Tensor]], Dict[int, Dict[int, torch.Tensor]]]:
-    gt_translations_obj_to_cam = defaultdict(dict)
-    gt_rotations_obj_to_cam = defaultdict(dict)
+def read_obj2cam_Se3_from_gt(pose_json_path, device: str) -> Dict[int, Dict[int, Se3]]:
+    dict_gt_Se3_obj2cam = defaultdict(dict)
     with open(pose_json_path, 'r') as file:
         pose_json = json.load(file)
         for frame, data in pose_json.items():
@@ -43,20 +41,20 @@ def read_obj_to_cam_transformations_from_gt(pose_json_path) -> (
             for entry in data:
                 obj_id = entry['obj_id']
                 R_obj_to_cam = entry['cam_R_m2c']
-                R_m2c = torch.tensor(np.array(R_obj_to_cam).reshape(3, 3))
-                r_m2c = rotation_matrix_to_axis_angle(R_m2c).numpy()
+                R_m2c = torch.tensor(np.array(R_obj_to_cam).reshape(3, 3), device=device)
 
                 cam_t_m2c = entry['cam_t_m2c']
-                t_m2c = np.array(cam_t_m2c)
+                t_m2c = torch.tensor(cam_t_m2c, device=device)
 
-                gt_rotations_obj_to_cam[obj_id][frame] = r_m2c
-                gt_translations_obj_to_cam[obj_id][frame] = t_m2c
-    return gt_rotations_obj_to_cam, gt_translations_obj_to_cam
+                gt_Se3_obj2cam = Se3(Quaternion.from_matrix(R_m2c), t_m2c).to(torch.float32)
+                dict_gt_Se3_obj2cam[obj_id][frame] = gt_Se3_obj2cam
+
+    return dict_gt_Se3_obj2cam
 
 
-def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Path, object_id: int = 0):
+def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Path, object_id: int = 1):
     """Load ground truth images and segmentation files, filtering by object ID."""
-    object_id_str = f"{object_id:06d}"  # Ensure it's a zero-padded 6-digit string
+    object_id_str = f"{object_id - 1:06d}"  # Ensure it's a zero-padded 6-digit string
 
     gt_segs = {
         int(file.stem.split('_')[0]): file
@@ -71,3 +69,43 @@ def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Pa
     }
 
     return gt_images, gt_segs
+
+
+def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type):
+    if sequence_type == 'onboarding':
+        if onboarding_type == 'dynamic':
+            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / sequence
+            image_folder = sequence_folder / 'rgb'
+            segmentation_folder = sequence_folder / 'mask_visib'
+
+            gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+            sequence_starts = [0]
+
+        elif onboarding_type == 'static':
+            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_down'
+            image_folder = sequence_folder / 'rgb'
+            segmentation_folder = sequence_folder / 'mask_visib'
+
+            gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+
+            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_up'
+            image_folder = sequence_folder / 'rgb'
+            segmentation_folder = sequence_folder / 'mask_visib'
+
+            gt_images2, gt_segs2 = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+
+            sequence_starts = [0, len(gt_images)]
+            gt_images.extend(gt_images2)
+            gt_segs.extend(gt_segs2)
+        else:
+            raise ValueError(f'Unknown onboarding type {onboarding_type}')
+    elif sequence_type in ['test', 'val', 'train']:
+        sequence_folder = bop_folder / dataset / sequence_type / sequence
+        image_folder = sequence_folder / 'rgb'
+        segmentation_folder = sequence_folder / 'mask_visib'
+
+        gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+        sequence_starts = [0]
+    else:
+        raise ValueError(f'Unknown sequence type: {sequence_type}')
+    return gt_images, gt_segs, sequence_folder, sequence_starts
