@@ -20,8 +20,7 @@ from utils.image_utils import get_shape, get_intrinsics_from_exif, get_nth_video
 
 class SyntheticDataProvider:
 
-    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
-                 gt_translations: torch.Tensor, **kwargs):
+    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
         from models.rendering import RenderingKaolin
 
         self.image_shape: ImageSize = config.rendered_image_shape
@@ -30,8 +29,8 @@ class SyntheticDataProvider:
         faces = gt_mesh.faces
         self.gt_texture = gt_texture
 
-        self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, self.image_shape, gt_rotations,
-                                          gt_translations, config, self.device)
+        self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, gt_Se3_obj1_to_obj_i, self.image_shape, config,
+                                          self.device)
 
         self.renderer = RenderingKaolin(config, faces, self.image_shape.width,
                                         self.image_shape.height).to(self.device)
@@ -61,7 +60,7 @@ class SyntheticDataProvider:
 
 
 class FrameProvider(ABC):
-    def __init__(self, downsample_factor, config: TrackerConfig, device=torch.device('cuda')):
+    def __init__(self, downsample_factor, config: TrackerConfig, device='cuda'):
         self.downsample_factor = downsample_factor
         self.image_shape: Optional[ImageSize] = None
         self.device = device
@@ -78,11 +77,9 @@ class FrameProvider(ABC):
 
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
-    def __init__(self, config: TrackerConfig, gt_texture,
-                 gt_mesh, gt_rotations: torch.Tensor,
-                 gt_translations: torch.Tensor, **kwargs):
+    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
         FrameProvider.__init__(self, config.image_downsample, config, config.device)
-        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_image(self, frame_id):
         image = super().next(frame_id).observed_image
@@ -153,10 +150,9 @@ class WhiteSegmentationProvider(SegmentationProvider):
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_rotations: torch.Tensor,
-                 gt_translations: torch.Tensor):
+    def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i):
         SegmentationProvider.__init__(self, image_shape, config)
-        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_rotations, gt_translations)
+        SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_segmentation(self, frame_id, **kwargs):
         segmentation = super().next(frame_id).observed_segmentation
@@ -335,7 +331,7 @@ class BaseTracker:
         self.segmentation_provider: SegmentationProvider
 
         if config.frame_provider == 'synthetic':
-            self.frame_provider = SyntheticFrameProvider(config, **kwargs)
+            self.frame_provider = SyntheticFrameProvider(config, None, **kwargs)
         elif config.frame_provider == 'precomputed':
             self.frame_provider = PrecomputedFrameProvider(config, **kwargs)
         else:
@@ -344,7 +340,7 @@ class BaseTracker:
         self.image_shape: ImageSize = self.frame_provider.image_shape
 
         if config.segmentation_provider == 'synthetic':
-            self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
+            self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, None, **kwargs)
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'whites':
@@ -362,7 +358,7 @@ class BaseTracker:
                 assert kwargs.get('video_path')
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
-                synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
+                synthetic_segment_provider = SyntheticDataProvider(config, None, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation

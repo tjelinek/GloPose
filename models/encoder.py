@@ -173,8 +173,12 @@ class Encoder(nn.Module):
         return encoder_result, encoder_result_flow_frames
 
 
-def init_gt_encoder(gt_mesh: SurfaceMesh, gt_texture: torch.Tensor, image_shape: ImageSize, gt_rotations: torch.Tensor,
-                    gt_translations, tracker_config: TrackerConfig, device: str) -> Encoder:
+def init_gt_encoder(gt_mesh: SurfaceMesh, gt_texture: torch.Tensor, gt_Se3_obj1_to_obj_i: Se3, image_shape: ImageSize,
+                    tracker_config: TrackerConfig, device: str) -> Encoder:
+
+    gt_rotations = gt_Se3_obj1_to_obj_i.quaternion.to_axis_angle()
+    gt_translations = gt_Se3_obj1_to_obj_i.translation
+
     ivertices = normalize_vertices(gt_mesh.vertices).numpy()
     iface_features = gt_mesh.uvs[gt_mesh.face_uvs_idx].numpy()
     gt_encoder = Encoder(tracker_config, ivertices, iface_features,

@@ -73,8 +73,7 @@ class Tracker6D:
             Se3_obj_1_to_obj_i = None
 
         self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
-                                   gt_rotations=Se3_obj_1_to_obj_i.quaternion.to_axis_angle(),
-                                   gt_translations=Se3_obj_1_to_obj_i.translation,
+                                   gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
                                    initial_segmentation=initial_segmentation,
                                    initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                    segmentation_paths=segmentation_paths,
