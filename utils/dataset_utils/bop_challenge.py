@@ -126,7 +126,7 @@ def extract_gt_Se3_obj2cam(pose_json_path: Path, object_id: int = None, device: 
 
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
 
-    if object_id is not None:
+    if object_id is None:
         obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
         object_id = obj_ids[0]
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
