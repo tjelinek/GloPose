@@ -3,7 +3,6 @@ from typing import Union
 
 import torch
 import torchvision
-from kornia.image import ImageSize
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
