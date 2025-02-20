@@ -48,9 +48,6 @@ class Tracker6D:
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
 
-        # Tracker
-        self.tracker: Optional[BaseTracker] = None
-
         # Other utilities and flags
         self.results_writer = None
 
