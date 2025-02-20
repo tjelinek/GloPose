@@ -61,31 +61,12 @@ class Tracker6D:
                                    config.roma_matcher_config.config_name / config.dataset / config.sequence)
         cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
                                    config.sift_matcher_config.config_name / config.dataset / config.sequence)
-        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
-                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
 
         self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
                                               config.dataset / config.sequence)
 
-        if self.gt_Se3_cam2obj is not None:
-
-            if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
-                assert set(range(self.config.input_frames)).issubset(self.gt_Se3_cam2obj.keys()), \
-                    f"Missing keys: {set(range(self.config.input_frames)) - self.gt_Se3_cam2obj.keys()}"
-
-            all_gt_T_cam2obj = [gt_Se3_cam2obj[i].matrix() for i in sorted(self.gt_Se3_cam2obj.keys())]
-            gt_T_cam2obj = torch.stack(all_gt_T_cam2obj)
-            gt_Se3_cam2obj = Se3.from_matrix(gt_T_cam2obj)
-            Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam2obj)
-        else:
-            Se3_obj_1_to_obj_i = None
-
-        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
-                                   gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
-                                   initial_segmentation=initial_segmentation,
-                                   initial_image=initial_image, images_paths=images_paths, video_path=video_path,
-                                   segmentation_paths=segmentation_paths,
-                                   segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
+        self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
+                                       segmentation_paths, segmentation_video_path, video_path)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -101,6 +82,34 @@ class Tracker6D:
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
+
+    def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
+                                  initial_image: torch.Tensor, initial_segmentation: torch.Tensor,
+                                  segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path):
+        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
+                                   self.config.sift_matcher_config.config_name / self.config.dataset /
+                                   self.config.sequence)
+        if self.gt_Se3_cam2obj is not None:
+
+            if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
+                assert set(range(self.config.input_frames)).issubset(self.gt_Se3_cam2obj.keys()), \
+                    f"Missing keys: {set(range(self.config.input_frames)) - self.gt_Se3_cam2obj.keys()}"
+
+            all_gt_T_cam2obj = [self.gt_Se3_cam2obj[i].matrix() for i in sorted(self.gt_Se3_cam2obj.keys())]
+            gt_T_cam2obj = torch.stack(all_gt_T_cam2obj)
+            gt_Se3_cam2obj = Se3.from_matrix(gt_T_cam2obj)
+            Se3_obj_1_to_obj_i = Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(gt_Se3_cam2obj)
+        else:
+            Se3_obj_1_to_obj_i = None
+
+        if self.sequence_starts is not None:
+
+        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
+                                   gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
+                                   initial_segmentation=initial_segmentation,
+                                   initial_image=initial_image, images_paths=images_paths, video_path=video_path,
+                                   segmentation_paths=segmentation_paths,
+                                   segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
 
     def run_filtering_with_reconstruction(self):
 
