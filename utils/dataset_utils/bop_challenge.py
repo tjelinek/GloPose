@@ -16,13 +16,15 @@ def get_pinhole_params(json_file_path) -> List[PinholeCamera]:
     for key, value in json_data.items():
         cam_K = torch.tensor(value['cam_K']).view(3, 3)
 
-        cam_R_w2c = torch.tensor(value['cam_R_w2c']).view(3, 3)
-        cam_t_w2c = torch.tensor(value['cam_t_w2c'])
+        if 'cam_R_w2c' in value and 'cam_t_w2c' in value:
+            cam_R_w2c = torch.tensor(value['cam_R_w2c']).view(3, 3)
+            cam_t_w2c = torch.tensor(value['cam_t_w2c'])
+            cam_w2c_Se3 = Se3(Quaternion.from_matrix(cam_R_w2c), cam_t_w2c)
+        else:
+            cam_w2c_Se3 = Se3.identity()
 
         width = torch.tensor(value['width'])
         height = torch.tensor(value['height'])
-
-        cam_w2c_Se3 = Se3(Quaternion.from_matrix(cam_R_w2c), cam_t_w2c)
 
         pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c_Se3.matrix().unsqueeze(0),
                                        height.unsqueeze(0), width.unsqueeze(0))
