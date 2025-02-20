@@ -73,7 +73,8 @@ def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Pa
     return gt_images, gt_segs
 
 
-def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None, direction: str = None):
+def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None,
+                        direction: str = None):
     """Returns the sequence folder path based on sequence type and onboarding type."""
     if sequence_type == 'onboarding':
         if onboarding_type not in ['dynamic', 'static']:
@@ -95,11 +96,14 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
     sequence_starts = [0]
 
     if sequence_type == 'onboarding' and onboarding_type == 'static':
-        sequence_folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "down")
+        sequence_folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                                   "down")
         sequence_folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "up")
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb', sequence_folder_down / 'mask_visib')
-        gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb', sequence_folder_up / 'mask_visib')
+        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb',
+                                                              sequence_folder_down / 'mask_visib')
+        gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
+                                                                sequence_folder_up / 'mask_visib')
 
         sequence_starts.append(len(gt_images))
 
@@ -117,3 +121,16 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
 
     return gt_images, gt_segs, sequence_starts
 
+
+def extract_gt_Se3_obj2cam(pose_json_path: Path, object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
+
+    dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
+
+    if object_id is not None:
+        obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
+        object_id = obj_ids[0]
+    dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
+    gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()
+    gt_Se3_obj_to_cam = {frame: dict_gt_Se3_obj2cam[frame].inverse() for frame in gt_Se3_obj2cam_frames}
+
+    return gt_Se3_obj_to_cam
