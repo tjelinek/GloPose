@@ -1,30 +1,26 @@
 import time
 from pathlib import Path
 
-import numpy as np
-import torch
-from kornia.geometry import Se3, Quaternion
-
 from utils.data_utils import get_initial_image_and_segment
-from utils.dataset_utils.bop_challenge import get_pinhole_params, read_obj_to_cam_transformations_from_gt, \
-    load_gt_images_and_segmentations
+from utils.dataset_utils.bop_challenge import (get_pinhole_params, get_bop_images_and_segmentations,
+                                               get_sequence_folder, extract_gt_Se3_cam2obj)
 from utils.general import load_config
 from utils.runtime_utils import parse_args
-from tracker6d import run_tracking_on_sequence
+from tracker6d import Tracker6D
 
 
 def main():
-    dataset = 'HOPE'
+    dataset = 'hope'
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
         sequences = [
-            'obj_000001',  'obj_000006',  'obj_000011',  'obj_000016',  'obj_000021',  'obj_000026',
-            'obj_000002',  'obj_000007',  'obj_000012',  'obj_000017',  'obj_000022',  'obj_000027',
-            'obj_000003',  'obj_000008',  'obj_000013',  'obj_000018',  'obj_000023',  'obj_000028',
-            'obj_000004',  'obj_000009',  'obj_000014',  'obj_000019',  'obj_000024',
-            'obj_000005',  'obj_000010',  'obj_000015',  'obj_000020',  'obj_000025',
+            'obj_000001', 'obj_000006', 'obj_000011', 'obj_000016', 'obj_000021', 'obj_000026',
+            'obj_000002', 'obj_000007', 'obj_000012', 'obj_000017', 'obj_000022', 'obj_000027',
+            'obj_000003', 'obj_000008', 'obj_000013', 'obj_000018', 'obj_000023', 'obj_000028',
+            'obj_000004', 'obj_000009', 'obj_000014', 'obj_000019', 'obj_000024',
+            'obj_000005', 'obj_000010', 'obj_000015', 'obj_000020', 'obj_000025',
         ]
 
     for sequence in sequences:
@@ -52,42 +48,22 @@ def main():
         onboarding_type = config.bop_config.onboarding_type
         obj_id = 0
 
-        sequence_folder = config.default_data_folder / 'bop' / 'hope' / f'onboarding_{onboarding_type}' / sequence
-        image_folder = sequence_folder / 'rgb'
-        segmentation_folder = sequence_folder / 'mask_visib'
+        sequence_type = 'onboarding'
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+        bop_folder = config.default_data_folder / 'bop'
 
+        gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence,
+                                                                               sequence_type, onboarding_type)
+
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_gt.json'
 
-        gt_rotations_objs_to_cam, gt_translations_objs_to_cam = read_obj_to_cam_transformations_from_gt(pose_json_path)
-        obj_ids = sorted(gt_rotations_objs_to_cam.keys())
-        gt_rotations_obj_to_cam_dict = gt_rotations_objs_to_cam[obj_ids[0]]
-        gt_translations_obj_to_cam_dict = gt_translations_objs_to_cam[obj_ids[0]]
-
-        pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
-
-        valid_indices = list(sorted(gt_segs.keys() & gt_images.keys() & gt_translations_obj_to_cam_dict.keys() &
-                                    gt_rotations_obj_to_cam_dict.keys()))
-        valid_indices = valid_indices[::skip_indices]
-
-        # Filter the lists to include only valid elements
-        filtered_gt_rotations_obj_i_to_obj_i = [gt_rotations_obj_to_cam_dict[i] for i in valid_indices]
-        filtered_gt_translations_obj_1_to_obj_i = [gt_translations_obj_to_cam_dict[i] for i in valid_indices]
-        gt_images = [gt_images[i] for i in valid_indices]
-        gt_segs = [gt_segs[i] for i in valid_indices]
-
-        gt_rotations_obj_to_cam = torch.from_numpy(np.array(filtered_gt_rotations_obj_i_to_obj_i))
-        gt_translations_obj_to_cam = torch.from_numpy(np.array(filtered_gt_translations_obj_1_to_obj_i))
-
-        gt_rotations_obj_to_cam = gt_rotations_obj_to_cam.to(torch.float32).to(config.device)
-        gt_translations_obj_to_cam = gt_translations_obj_to_cam.to(torch.float32).to(config.device)
-
-        gt_Se3_obj_to_cam = Se3(Quaternion.from_axis_angle(gt_rotations_obj_to_cam), gt_translations_obj_to_cam)
-        gt_Se3_cam_to_obj = gt_Se3_obj_to_cam.inverse()
+        gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, device=config.device)
+        gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[0]
 
         first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
+        pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
         config.input_frames = len(gt_images)
@@ -96,9 +72,12 @@ def main():
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        run_tracking_on_sequence(config, write_folder, gt_Se3_cam2obj=gt_Se3_cam_to_obj,
-                                 images_paths=gt_images, segmentation_paths=gt_segs,
-                                 initial_segmentation=first_segmentation, initial_image=first_image)
+        tracker = Tracker6D(config, write_folder, initial_gt_Se3_cam2obj=gt_Se3_cam2obj_first_frame,
+                            images_paths=gt_images, segmentation_paths=gt_segs,
+                            initial_segmentation=first_segmentation, initial_image=first_image,
+                            sequence_starts=sequence_starts)
+
+        tracker.run_filtering_with_reconstruction()
 
 
 if __name__ == "__main__":
