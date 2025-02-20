@@ -71,41 +71,47 @@ def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Pa
     return gt_images, gt_segs
 
 
-def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type):
+def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None, direction: str = None):
+    """Returns the sequence folder path based on sequence type and onboarding type."""
     if sequence_type == 'onboarding':
-        if onboarding_type == 'dynamic':
-            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / sequence
-            image_folder = sequence_folder / 'rgb'
-            segmentation_folder = sequence_folder / 'mask_visib'
-
-            gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
-            sequence_starts = [0]
-
-        elif onboarding_type == 'static':
-            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_down'
-            image_folder = sequence_folder / 'rgb'
-            segmentation_folder = sequence_folder / 'mask_visib'
-
-            gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
-
-            sequence_folder = bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_up'
-            image_folder = sequence_folder / 'rgb'
-            segmentation_folder = sequence_folder / 'mask_visib'
-
-            gt_images2, gt_segs2 = load_gt_images_and_segmentations(image_folder, segmentation_folder)
-
-            sequence_starts = [0, len(gt_images)]
-            gt_images.extend(gt_images2)
-            gt_segs.extend(gt_segs2)
-        else:
+        if onboarding_type not in ['dynamic', 'static']:
             raise ValueError(f'Unknown onboarding type {onboarding_type}')
+
+        if onboarding_type == 'dynamic':
+            return bop_folder / dataset / f'onboarding_{onboarding_type}' / sequence
+        elif onboarding_type == 'static' and direction:
+            return bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_{direction}'
+
     elif sequence_type in ['test', 'val', 'train']:
-        sequence_folder = bop_folder / dataset / sequence_type / sequence
+        return bop_folder / dataset / sequence_type / sequence
+
+    raise ValueError(f'Unknown sequence type: {sequence_type}')
+
+
+def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type):
+    """Loads images and segmentations from BOP dataset based on sequence type."""
+    sequence_starts = [0]
+
+    if sequence_type == 'onboarding' and onboarding_type == 'static':
+        sequence_folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "down")
+        sequence_folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "up")
+
+        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb', sequence_folder_down / 'mask_visib')
+        gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb', sequence_folder_up / 'mask_visib')
+
+        sequence_starts.append(len(gt_images))
+
+        for frame in gt_images2.keys():
+            gt_images[len(gt_images) + frame] = gt_images2[frame]
+
+        for frame in gt_segs2.keys():
+            gt_segs[len(gt_segs) + frame] = gt_segs2[frame]
+
+    else:
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
-
         gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
-        sequence_starts = [0]
-    else:
-        raise ValueError(f'Unknown sequence type: {sequence_type}')
-    return gt_images, gt_segs, sequence_folder, sequence_starts
+
+    return gt_images, gt_segs, sequence_starts
+
