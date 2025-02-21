@@ -87,8 +87,8 @@ def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_
 
     elif sequence_type in ['test', 'val', 'train']:
         return bop_folder / dataset / sequence_type / sequence
-
-    raise ValueError(f'Unknown sequence type: {sequence_type}')
+    else:
+        raise ValueError(f'Unknown sequence type: {sequence_type}')
 
 
 def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type):
