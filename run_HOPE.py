@@ -2,8 +2,8 @@ import time
 from pathlib import Path
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.dataset_utils.bop_challenge import (get_pinhole_params, get_bop_images_and_segmentations,
-                                               get_sequence_folder, extract_gt_Se3_cam2obj)
+from utils.dataset_utils.bop_challenge import (get_bop_images_and_segmentations,
+                                               read_gt_Se3_cam2obj_transformations, read_pinhole_params)
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
@@ -34,7 +34,7 @@ def main():
         config.experiment_name = experiment_name
         config.sequence = sequence
         config.dataset = dataset
-        config.image_downsample = 1.0
+        config.image_downsample = 0.5
 
         skip_indices = 1
 
@@ -55,15 +55,16 @@ def main():
         gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence,
                                                                                sequence_type, onboarding_type)
 
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
-        pose_json_path = sequence_folder / 'scene_gt.json'
+        gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
+                                                             onboarding_type, sequence_starts, config.device)
 
-        gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, device=config.device)
+        pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type,
+                                             onboarding_type, sequence_starts)
+
         gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[0]
 
         first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
-        pinhole_params = get_pinhole_params(sequence_folder / 'scene_camera.json')
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
         config.input_frames = len(gt_images)
