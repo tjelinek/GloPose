@@ -122,7 +122,7 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
     return gt_images, gt_segs, sequence_starts
 
 
-def extract_gt_Se3_obj2cam(pose_json_path: Path, object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
+def extract_gt_Se3_cam2obj(pose_json_path: Path, object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
 
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
 
@@ -131,6 +131,6 @@ def extract_gt_Se3_obj2cam(pose_json_path: Path, object_id: int = None, device: 
         object_id = obj_ids[0]
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
     gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()
-    gt_Se3_obj_to_cam = {frame: dict_gt_Se3_obj2cam[frame].inverse() for frame in gt_Se3_obj2cam_frames}
+    gt_Se3_cam2obj = {frame: dict_gt_Se3_obj2cam[frame].inverse() for frame in gt_Se3_obj2cam_frames}
 
-    return gt_Se3_obj_to_cam
+    return gt_Se3_cam2obj
