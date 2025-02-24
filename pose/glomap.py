@@ -211,7 +211,7 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def normalize_reconstruction(self, reconstruction: pycolmap.Reconstruction) -> pycolmap.Reconstruction:
+    def align_with_kabsch(self, reconstruction: pycolmap.Reconstruction) -> pycolmap.Reconstruction:
         reconstruction = copy.deepcopy(reconstruction)
 
         gt_reconstruction = pycolmap.Reconstruction()

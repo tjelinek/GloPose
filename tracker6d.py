@@ -208,7 +208,13 @@ class Tracker6D:
                                                                                  matching_pairs)
         else:
             raise ValueError(f'Unknown matcher {self.config.frame_filter}')
-        reconstruction = self.glomap_wrapper.normalize_reconstruction(reconstruction)
+
+        if self.config.similarity_transformation == 'first_frame':
+            reconstruction = self.glomap_wrapper.align_with_first_pose(reconstruction, self.initial_gt_Se3_cam2obj, 0)
+        elif self.config.similarity_transformation == 'kabsch':
+            reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
+        else:
+            raise ValueError("Similarity transformation ")
 
         return reconstruction
 
