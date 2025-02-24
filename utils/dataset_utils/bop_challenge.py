@@ -116,18 +116,19 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
                                                    "down")
         sequence_folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "up")
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb',
-                                                              sequence_folder_down / 'mask_visib')
+        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb', sequence_folder_down / 'mask_visib')
         gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
                                                                 sequence_folder_up / 'mask_visib')
 
         sequence_starts.append(len(gt_images))
 
+        n_frames1 = len(gt_images)
         for frame in gt_images2.keys():
-            gt_images[len(gt_images) + frame] = gt_images2[frame]
+            gt_images[n_frames1 + frame] = gt_images2[frame]
 
+        n_frames1 = len(gt_segs)
         for frame in gt_segs2.keys():
-            gt_segs[len(gt_segs) + frame] = gt_segs2[frame]
+            gt_segs[n_frames1 + frame] = gt_segs2[frame]
 
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
