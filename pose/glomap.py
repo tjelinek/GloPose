@@ -12,7 +12,7 @@ import numpy as np
 import pycolmap
 import torch
 from PIL import Image
-from kornia.geometry import Se3
+from kornia.geometry import Se3, Quaternion
 from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
@@ -240,7 +240,8 @@ class GlomapWrapper:
             node_data = self.data_graph.get_frame_data(n)
 
             gt_Se3_world2cam = node_data.gt_Se3_cam2obj.inverse()
-            gt_q_xyzw_world2cam = gt_Se3_world2cam.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
+            gt_q_xyzw_world2cam = gt_Se3_world2cam.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(
+                np.float64)
             gt_t_world2cam = gt_Se3_world2cam.t.squeeze().numpy(force=True).astype(np.float64)
 
             image_name = node_data.image_filename
@@ -259,51 +260,31 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, initial_pose: Se3) -> pycolmap.Reconstruction:
+    def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, frame_i: int) -> (
+            pycolmap.Reconstruction):
+
         reconstruction = copy.deepcopy(reconstruction)
 
-        gt_reconstruction = pycolmap.Reconstruction()
+        frame_to_name = {frame: str(self.data_graph.get_frame_data(frame).image_filename)
+                         for frame in self.data_graph.G.nodes}
+        first_image_name = frame_to_name[frame_i]
 
-        gt_K = self.data_graph.get_frame_data(0).gt_pinhole_K
-        if gt_K is not None:
-            fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
-            fx = fx.item()
-            fy = fy.item()
-        else:
-            pred_reconstruction_cam = reconstruction.cameras[1]
-            cx, cy = (pred_reconstruction_cam.params[1], pred_reconstruction_cam.params[2])
-            fx, fy = (pred_reconstruction_cam.params[0], pred_reconstruction_cam.params[0])
+        reconstruction_name_to_key = {reconstruction.images[k].name: k for k in reconstruction.images.keys()}
 
-        gt_w = reconstruction.cameras[1].width  # Assuming single camera only
-        gt_h = reconstruction.cameras[1].height
+        first_image_colmap_index = reconstruction_name_to_key[first_image_name]
+        ref_image_Se3_world2cam = get_image_Se3_world2cam(reconstruction, first_image_colmap_index, self.config.device)
 
-        gt_reconstruction_cam_id = 1
-        cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, cx, cy]))
-        gt_reconstruction.add_camera(cam)
+        Se3_sim = gt_Se3_obj2cam * ref_image_Se3_world2cam.inverse()
+        scale = (torch.linalg.norm(ref_image_Se3_world2cam.translation) /
+                 (torch.linalg.norm(gt_Se3_obj2cam.translation) + 1e-10))
 
-        tgt_image_names = []
-        tgt_3d_locations = []
+        R_sim_np = Se3_sim.quaternion.matrix().numpy(force=True)
+        rot_3d = pycolmap.Rotation3d(R_sim_np)
+        t_np = Se3_sim.t.numpy(force=True)
 
-        for n in self.data_graph.G.nodes:
-            node_data = self.data_graph.get_frame_data(n)
+        sim_3D = pycolmap.Sim3d(scale.item(), rot_3d, t_np)
 
-            gt_Se3_world2cam = node_data.gt_Se3_cam2obj.inverse()
-            gt_q_xyzw_world2cam = gt_Se3_world2cam.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(np.float64)
-            gt_t_world2cam = gt_Se3_world2cam.t.squeeze().numpy(force=True).astype(np.float64)
-
-            image_name = node_data.image_filename
-            gt_image = pycolmap.Image(name=image_name, image_id=n, camera_id=gt_reconstruction_cam_id)
-            gt_world2cam = pycolmap.Rigid3d(rotation=gt_q_xyzw_world2cam, translation=gt_t_world2cam)
-            gt_image.cam_from_world = gt_world2cam
-            gt_reconstruction.add_image(gt_image)
-            gt_reconstruction.register_image(n)
-
-            tgt_image_names.append(image_name)
-            tgt_3d_locations.append(gt_t_world2cam)
-
-        sim3d = pycolmap.align_reconstructions_via_proj_centers(reconstruction, gt_reconstruction, 1.)
-
-        reconstruction.transform(sim3d)
+        reconstruction.transform(sim_3D)
 
         return reconstruction
 
@@ -393,7 +374,7 @@ class GlomapWrapper:
         else:
             index_pairs = matching_pairs
         print("Matching features")
-        
+
         match_features(keyframes, index_pairs, feature_dir=feature_dir, device=device,
                        alg='adalam')
         dirname = os.path.dirname(keyframes[0])  # Assume all images are in the same directory
@@ -413,7 +394,7 @@ class GlomapWrapper:
             print(reconstruction.summary())
         except Exception as e:
             print(e)
-        
+
         return reconstruction
 
 
@@ -427,3 +408,12 @@ def get_match_points_indices(keypoints, match_pts):
 
     match_pts_indices = kpts_and_match_pts_indices[N:]
     return match_pts_indices
+
+
+def get_image_Se3_world2cam(reconstruction, first_image_key, device: str):
+    image_world2cam: pycolmap.Rigid3d = reconstruction.images[first_image_key].cam_from_world
+    image_t_cam = torch.tensor(image_world2cam.translation).to(device).to(torch.float)
+    image_q_cam_xyzw = torch.tensor(image_world2cam.rotation.quat[[3, 0, 1, 2]]).to(device).to(torch.float)
+    Se3_image_world2cam = Se3(Quaternion(image_q_cam_xyzw), image_t_cam)
+
+    return Se3_image_world2cam
