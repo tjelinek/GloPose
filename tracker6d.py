@@ -91,7 +91,7 @@ class Tracker6D:
                                   initial_segmentation: torch.Tensor | List[torch.Tensor],
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
                                   frame_i: int):
-        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
+        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') /
                                    self.config.sift_matcher_config.config_name / self.config.dataset /
                                    self.config.sequence)
 
