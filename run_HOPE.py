@@ -63,7 +63,8 @@ def main():
 
         gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[0]
 
-        first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
+        first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0,
+                                                                        dataset_delimeters=sequence_starts)
 
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)

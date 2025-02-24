@@ -48,6 +48,9 @@ class Tracker6D:
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
 
+        # Frame provider
+        self.tracker: Optional[BaseTracker] = None
+
         # Other utilities and flags
         self.results_writer = None
 
@@ -66,7 +69,7 @@ class Tracker6D:
                                               config.dataset / config.sequence)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
-                                       segmentation_paths, segmentation_video_path, video_path)
+                                       segmentation_paths, segmentation_video_path, video_path, 0)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -84,11 +87,39 @@ class Tracker6D:
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
-                                  initial_image: torch.Tensor, initial_segmentation: torch.Tensor,
-                                  segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path):
+                                  initial_image: torch.Tensor | List[torch.Tensor],
+                                  initial_segmentation: torch.Tensor | List[torch.Tensor],
+                                  segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
+                                  frame_i: int):
         cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
                                    self.config.sift_matcher_config.config_name / self.config.dataset /
                                    self.config.sequence)
+
+        if self.sequence_starts is not None:
+            assert type(initial_segmentation) is list
+            assert type(initial_image) is list
+            assert len(initial_image) == len(self.sequence_starts)
+            assert len(initial_segmentation) == len(self.sequence_starts)
+            assert frame_i in self.sequence_starts
+
+            sequence_starts_idx = self.sequence_starts.index(frame_i)
+
+            initial_image = initial_image[sequence_starts_idx]
+            initial_segmentation = initial_segmentation[sequence_starts_idx]
+
+            first_image_frame = self.sequence_starts[sequence_starts_idx]
+            if sequence_starts_idx >= len(self.sequence_starts) - 1:
+                last_image_frame = len(self.sequence_starts)
+            else:
+                last_image_frame = self.sequence_starts[sequence_starts_idx + 1]
+
+            images_paths = [images_paths[i] for i in range(len(images_paths))]
+            segmentation_paths = [segmentation_paths[i] for i in range(len(images_paths))]
+
+            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
+                                       self.config.sift_matcher_config.config_name / self.config.dataset /
+                                       self.config.sequence) / f'{first_image_frame}_to_{last_image_frame}'
+
         if self.gt_Se3_cam2obj is not None:
 
             if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
@@ -148,6 +179,9 @@ class Tracker6D:
 
     def filter_frames(self):
         for frame_i in range(0, self.config.input_frames):
+            if self.sequence_starts is not None and frame_i in self.sequence_starts:
+                pass
+
             self.init_datagraph_frame(frame_i)
 
             new_frame_observation = self.tracker.next(frame_i)
@@ -278,7 +312,8 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[frame_i]
+        if self.gt_Se3_cam2obj is not None and frame_i in set(self.gt_Se3_cam2obj.keys()):
+            frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[frame_i]
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
