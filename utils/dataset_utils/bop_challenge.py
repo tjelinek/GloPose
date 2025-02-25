@@ -189,3 +189,17 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
     else:
         raise ValueError("Unknown onboarding type.")
     return pinhole_params
+
+
+def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path) -> None:
+    with bop_targets_path.open('r') as file:
+        test_annotations = json.load(file)
+
+    breakpoint()
+
+
+if __name__ == '__main__':
+    _bop_targets_path = Path('/mnt/personal/jelint19/data/bop/hope/hope/test_targets_bop24.json')
+    _view_graph_location = Path('/mnt/personal/jelint19/data/cache/view_graph_cache/hope')
+
+    predict_poses_for_bop_challenge(_bop_targets_path, _view_graph_location)
