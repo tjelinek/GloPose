@@ -186,17 +186,18 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
         return len(self.segmentations_paths)
 
     def next_segmentation(self, frame_i, **kwargs):
-        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i], self.image_shape)
+        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i], self.image_shape, self.device)
 
     @staticmethod
-    def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize) -> torch.Tensor:
+    def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize, device: str = 'cpu') \
+            -> torch.Tensor:
         # Load segmentation
         segmentation = imageio.v3.imread(segmentation_path)
 
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
 
-        segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)[None]
+        segmentation_p = torch.from_numpy(segmentation).to(device).permute(2, 0, 1)[None]
         segmentation_resized = F.interpolate(segmentation_p, size=[image_size.height, image_size.width], mode='nearest')
         segmentation_mask = segmentation_resized[:, [1]].to(torch.bool).to(torch.float32)
 
