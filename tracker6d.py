@@ -15,7 +15,7 @@ from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from tracker_config import TrackerConfig
-from utils.logging import WriteResults
+from utils.results_logging import WriteResults
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 
@@ -167,8 +167,8 @@ class Tracker6D:
         print(keyframe_graph.edges)
         reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
-        self.write_gt_poses()
-        self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
+        # self.write_gt_poses()
+        # self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
         view_graph.save(self.cache_folder_view_graph, save_images=True)
