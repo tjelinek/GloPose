@@ -11,7 +11,7 @@ from torchvision import transforms
 from PIL import Image, ExifTags
 
 
-def get_shape(image_path: Path, image_downsample: float = 1.0) -> ImageSize:
+def get_target_shape(image_path: Path, image_downsample: float = 1.0) -> ImageSize:
     if not image_path.is_file():
         raise FileNotFoundError(f"The file {image_path} does not exist.")
 

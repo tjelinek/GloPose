@@ -15,7 +15,7 @@ from torchvision.transforms import InterpolationMode
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
-from utils.image_utils import get_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length_in_frames
+from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length_in_frames
 
 
 class SyntheticDataProvider:
@@ -98,15 +98,27 @@ class PrecomputedFrameProvider(FrameProvider):
 
         assert images_paths is not None or video_path is not None
         ref_path = images_paths[0] if images_paths is not None else video_path
-        self.image_shape = get_shape(ref_path, self.downsample_factor)
+        self.image_shape = get_target_shape(ref_path, self.downsample_factor)
 
         self.images_paths: Optional[List[Path]] = images_paths
         self.video_path: Optional[Path] = video_path
 
-        self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
-                                                  interpolation=InterpolationMode.NEAREST)
+    @staticmethod
+    def load_and_downsample_image(image_path: Path, downsample_factor: float, device: str = 'cpu') -> torch.Tensor:
+        loaded_image = imageio.v3.imread(image_path)
+        image_tensor = transforms.ToTensor()(loaded_image)[None].to(device)
 
-    def next_image(self, frame_i):
+        image_downsampled = PrecomputedFrameProvider.downsample_image(image_tensor, downsample_factor)
+
+        return image_downsampled
+
+    @staticmethod
+    def downsample_image(image_tensor, downsample_factor: float) -> torch.Tensor:
+        image_downsampled = F.interpolate(image_tensor, scale_factor=downsample_factor, mode='bilinear',
+                                          align_corners=False)
+        return image_downsampled
+
+    def next_image(self, frame_i) -> torch.Tensor:
         if self.images_paths is not None:
             frame = imageio.v3.imread(self.images_paths[frame_i])
         else:
@@ -114,8 +126,8 @@ class PrecomputedFrameProvider(FrameProvider):
 
         image_tensor = transforms.ToTensor()(frame)[None].to(self.device)
 
-        image_downsampled = F.interpolate(image_tensor, scale_factor=self.downsample_factor, mode='bilinear',
-                                          align_corners=False)
+        image_downsampled = self.downsample_image(image_tensor, self.downsample_factor)
+
         return image_downsampled
 
     def get_intrinsics_for_frame(self, frame_i):
@@ -164,26 +176,31 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape: ImageSize, segmentations_paths: List[Path]):
+    def __init__(self, config: TrackerConfig, image_shape: ImageSize, segmentation_paths: List[Path], **kwargs):
         super().__init__(image_shape, config)
 
         self.image_shape: ImageSize = image_shape
-        self.segmentations_paths: List[Path] = segmentations_paths
-
-        self.resize_transform = transforms.Resize((self.image_shape.height, self.image_shape.width),
-                                                  interpolation=InterpolationMode.NEAREST)
+        self.segmentations_paths: List[Path] = segmentation_paths
 
     def get_sequence_length(self):
         return len(self.segmentations_paths)
 
     def next_segmentation(self, frame_i, **kwargs):
-        segmentation = imageio.v3.imread(self.segmentations_paths[frame_i])
+        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i], self.image_shape)
+
+    @staticmethod
+    def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize) -> torch.Tensor:
+        # Load segmentation
+        segmentation = imageio.v3.imread(segmentation_path)
+
         if len(segmentation.shape) == 2:
             segmentation = np.repeat(segmentation[:, :, np.newaxis], 3, axis=2)
-        segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)
-        segmentation_resized = self.resize_transform(segmentation_p)[None, [1]].to(torch.bool).to(torch.float32)
 
-        return segmentation_resized
+        segmentation_p = torch.from_numpy(segmentation).cuda().permute(2, 0, 1)[None]
+        segmentation_resized = F.interpolate(segmentation_p, size=[image_size.height, image_size.width], mode='nearest')
+        segmentation_mask = segmentation_resized[:, [1]].to(torch.bool).to(torch.float32)
+
+        return segmentation_mask
 
 
 class SAM2OnlineSegmentationProvider(SegmentationProvider):
