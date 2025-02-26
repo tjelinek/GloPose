@@ -261,7 +261,26 @@ class RoMaFrameFilter(BaseFrameFilter):
     def add_new_flow(self, source_frame, target_frame):
         if (source_frame, target_frame) not in self.data_graph.G.edges:
             self.data_graph.add_new_arc(source_frame, target_frame)
-        self.flow_provider.add_flows_into_datagraph(source_frame, target_frame)
+
+        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
+            warp, certainty = self.flow_provider.next_cache_flow_roma(source_frame, target_frame, sample=10000)
+        else:
+            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
+
+        edge_data.roma_flow_warp = warp
+        edge_data.roma_flow_certainty = certainty
+
+        source_frame_data = self.data_graph.get_frame_data(source_frame)
+        target_frame_data = self.data_graph.get_frame_data(target_frame)
+
+        h1, w1 = source_frame_data.image_shape.height, source_frame_data.image_shape.width
+        h2, w2 = target_frame_data.image_shape.height, target_frame_data.image_shape.width
+
+        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+
+        edge_data.src_pts_xy_roma = src_pts_xy_roma
+        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
 
         reliability = self.flow_reliability(source_frame, target_frame)
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)

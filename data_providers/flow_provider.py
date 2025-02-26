@@ -102,29 +102,3 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             return warp, certainty
 
         return None
-
-    def add_flows_into_datagraph(self, flow_source_frame: int, flow_target_frame: int):
-        edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
-        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
-            warp, certainty = self.next_cache_flow_roma(flow_source_frame, flow_target_frame, sample=10000)
-        else:
-            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
-
-        data_graph = self.data_graph
-
-        edge_data.roma_flow_warp = warp
-        edge_data.roma_flow_certainty = certainty
-
-        source_frame_data = data_graph.get_frame_data(flow_source_frame)
-        target_frame_data = data_graph.get_frame_data(flow_target_frame)
-
-        h1 = source_frame_data.image_shape.height
-        w1 = source_frame_data.image_shape.width
-        h2 = target_frame_data.image_shape.height
-        w2 = target_frame_data.image_shape.width
-
-        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
-
-        edge_data.src_pts_xy_roma = src_pts_xy_roma
-        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
-
