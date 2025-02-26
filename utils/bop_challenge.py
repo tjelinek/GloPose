@@ -7,6 +7,13 @@ import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
+from data_providers.flow_provider import RoMaFlowProviderDirect
+from data_providers.frame_provider import PrecomputedFrameProvider, PrecomputedSegmentationProvider
+from data_structures.view_graph import ViewGraph, load_view_graph
+from pose.glomap import predict_poses
+from tracker_config import TrackerConfig
+from utils.image_utils import get_target_shape
+
 
 def get_pinhole_params(json_file_path) -> Dict[int, PinholeCamera]:
     with open(json_file_path, 'r') as json_file:
@@ -191,15 +198,54 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
     return pinhole_params
 
 
-def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path) -> None:
+def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path, config: TrackerConfig) -> None:
     with bop_targets_path.open('r') as file:
         test_annotations = json.load(file)
 
-    breakpoint()
+    test_dataset_path = bop_targets_path.parent.parent / 'test'
+
+    for item in test_annotations:
+        im_id = item['im_id']
+        scene_id = item['scene_id']
+
+        scene_folder_name = f'{scene_id:06d}'
+        image_id_str = f'{im_id:06d}'
+        image_filename = f'{image_id_str}.png'
+
+        path_to_scene = test_dataset_path / scene_folder_name
+        path_to_image = path_to_scene / 'rgb' / image_filename
+        segmentation_paths = path_to_scene / 'mask_visib'
+
+        segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
+
+        view_graphs: List[ViewGraph] = []
+        for view_graph_dir in view_graph_save_paths.iterdir():
+            if view_graph_dir.is_dir():
+                view_graph = load_view_graph(view_graph_dir)
+                view_graphs.append(view_graph)
+
+        predict_all_poses_in_image(path_to_image, segmentation_files, view_graphs, config)
+
+
+def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path], view_graphs: List[ViewGraph],
+                               config: TrackerConfig) -> None:
+
+    target_shape = get_target_shape(image_path, config.image_downsample)
+    image = PrecomputedFrameProvider.load_and_downsample_image(image_path, config.image_downsample, config.device)
+
+    flow_provider = RoMaFlowProviderDirect(config.device)
+
+    for segmentation_paths in segmentation_paths:
+        segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,
+                                                                                        target_shape,
+                                                                                        config.device)
+
+        predict_poses(image, segmentation, flow_provider, config)
 
 
 if __name__ == '__main__':
     _bop_targets_path = Path('/mnt/personal/jelint19/data/bop/hope/hope/test_targets_bop24.json')
-    _view_graph_location = Path('/mnt/personal/jelint19/data/cache/view_graph_cache/hope')
+    _view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/hope')
 
-    predict_poses_for_bop_challenge(_bop_targets_path, _view_graph_location)
+    _config = TrackerConfig()
+    predict_poses_for_bop_challenge(_bop_targets_path, _view_graph_location, _config)

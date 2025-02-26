@@ -17,9 +17,12 @@ from torchvision import transforms
 from romatch import roma_outdoor
 from tqdm import tqdm
 
+from data_providers.matching_provider_sift import SIFTMatchingProvider
+from data_structures.view_graph import ViewGraph
+
 from utils.colmap.h5_to_db import import_into_colmap
 from utils.sift import detect_sift, get_exhaustive_image_pairs, match_features
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
@@ -417,3 +420,8 @@ def get_image_Se3_world2cam(reconstruction, first_image_key, device: str):
     Se3_image_world2cam = Se3(Quaternion(image_q_cam_xyzw), image_t_cam)
 
     return Se3_image_world2cam
+
+
+def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, view_graph: ViewGraph,
+                  flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig) -> torch.Tensor:
+    breakpoint()
