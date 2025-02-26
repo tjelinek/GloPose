@@ -410,8 +410,8 @@ def get_match_points_indices(keypoints, match_pts):
     return match_pts_indices
 
 
-def get_image_Se3_world2cam(reconstruction, first_image_key, device: str):
-    image_world2cam: pycolmap.Rigid3d = reconstruction.images[first_image_key].cam_from_world
+def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: int, device: str) -> Se3:
+    image_world2cam: pycolmap.Rigid3d = reconstruction.images[image_key].cam_from_world
     image_t_cam = torch.tensor(image_world2cam.translation).to(device).to(torch.float)
     image_q_cam_xyzw = torch.tensor(image_world2cam.rotation.quat[[3, 0, 1, 2]]).to(device).to(torch.float)
     Se3_image_world2cam = Se3(Quaternion(image_q_cam_xyzw), image_t_cam)
