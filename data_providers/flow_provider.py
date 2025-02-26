@@ -14,15 +14,10 @@ class RoMaFlowProviderDirect:
 
     def __init__(self, device):
         self.device = device
-        self.flow_model: roma_model = None
-
-    def _init_flow_model(self):
         self.flow_model: roma_model = roma_outdoor(device=self.device)
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None)\
             -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.flow_model is None:
-            self._init_flow_model()
 
         source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
         target_image_roma = torchvision.transforms.functional.to_pil_image(target_image_tensor.squeeze())
