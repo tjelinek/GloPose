@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 
 import torch
 import torchvision
@@ -12,20 +12,17 @@ from flow import roma_warp_to_pixel_coordinates
 
 class RoMaFlowProviderDirect:
 
-    def __init__(self, data_graph: DataGraph, device):
+    def __init__(self, device):
         self.device = device
-        self.data_graph: DataGraph = data_graph
         self.flow_model: roma_model = None
 
     def _init_flow_model(self):
         self.flow_model: roma_model = roma_outdoor(device=self.device)
 
-    def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
+    def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None)\
+            -> Tuple[torch.Tensor, torch.Tensor]:
         if self.flow_model is None:
             self._init_flow_model()
-
-        source_image_tensor = self.data_graph.get_frame_data(source_image_idx).frame_observation.observed_image
-        target_image_tensor = self.data_graph.get_frame_data(target_image_idx).frame_observation.observed_image
 
         source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
         target_image_roma = torchvision.transforms.functional.to_pil_image(target_image_tensor.squeeze())
@@ -36,37 +33,26 @@ class RoMaFlowProviderDirect:
 
         return warp, certainty
 
-    def add_flows_into_datagraph(self, flow_source_frame, flow_target_frame):
-        edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
-        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
-            warp, certainty = self.next_flow_roma(flow_source_frame, flow_target_frame, sample=10000)
-        else:
-            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
-            # TODO handle sampling when reading from datagraph
+    def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
+                                      sample=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample)
 
-        edge_data.roma_flow_warp = warp
-        edge_data.roma_flow_certainty = certainty
-
-        source_frame_data = self.data_graph.get_frame_data(flow_source_frame)
-        target_frame_data = self.data_graph.get_frame_data(flow_target_frame)
-
-        h1 = source_frame_data.image_shape.height
-        w1 = source_frame_data.image_shape.width
-        h2 = target_frame_data.image_shape.height
-        w2 = target_frame_data.image_shape.width
+        h1 = source_image_tensor.shape[-2]
+        w1 = source_image_tensor.shape[-1]
+        h2 = target_image_tensor.shape[-2]
+        w2 = target_image_tensor.shape[-1]
 
         src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
 
-        edge_data.src_pts_xy_roma = src_pts_xy_roma
-        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
+        return src_pts_xy_roma, dst_pts_xy_roma
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
     def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True):
-        super().__init__(data_graph, device)
-        self.flow_model: roma_model = roma_outdoor(device=device)
+        super().__init__(device)
 
+        self.data_graph = data_graph
         self.saved_flow_paths = cache_dir
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
@@ -76,7 +62,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
         self.allow_missing: bool = allow_missing
 
-    def next_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
+    def next_cache_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
 
         src_image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
         target_image_name = self.data_graph.get_frame_data(target_image_idx).image_filename
@@ -86,7 +72,9 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         certainty_filename = self.certainties_path / saved_filename
 
         if (not warp_filename.exists() or not certainty_filename.exists()) and self.allow_missing:
-            warp, certainty = super().next_flow_roma(source_image_idx, target_image_idx)
+            source_image_tensor = self.data_graph.get_frame_data(source_image_idx).frame_observation.observed_image
+            target_image_tensor = self.data_graph.get_frame_data(target_image_idx).frame_observation.observed_image
+            warp, certainty = super().next_flow_roma(source_image_tensor, target_image_tensor)
 
             torch.save(warp, warp_filename)
             torch.save(certainty, certainty_filename)
@@ -114,4 +102,29 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             return warp, certainty
 
         return None
+
+    def add_flows_into_datagraph(self, flow_source_frame: int, flow_target_frame: int):
+        edge_data = self.data_graph.get_edge_observations(flow_source_frame, flow_target_frame)
+        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
+            warp, certainty = self.next_cache_flow_roma(flow_source_frame, flow_target_frame, sample=10000)
+        else:
+            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
+
+        data_graph = self.data_graph
+
+        edge_data.roma_flow_warp = warp
+        edge_data.roma_flow_certainty = certainty
+
+        source_frame_data = data_graph.get_frame_data(flow_source_frame)
+        target_frame_data = data_graph.get_frame_data(flow_target_frame)
+
+        h1 = source_frame_data.image_shape.height
+        w1 = source_frame_data.image_shape.width
+        h2 = target_frame_data.image_shape.height
+        w2 = target_frame_data.image_shape.width
+
+        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+
+        edge_data.src_pts_xy_roma = src_pts_xy_roma
+        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
 

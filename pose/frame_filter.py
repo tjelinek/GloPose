@@ -3,9 +3,8 @@ from typing import List, Tuple
 
 import networkx as nx
 import torch
-from kornia.image import ImageSize
 
-from data_providers.flow_provider import RoMaFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from flow import roma_warp_to_pixel_coordinates
@@ -34,11 +33,11 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, flow_provider: RoMaFlowProviderDirect):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, flow_provider: PrecomputedRoMaFlowProviderDirect):
 
         super().__init__(config, data_graph)
 
-        self.flow_provider: RoMaFlowProviderDirect = flow_provider
+        self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
 
     def filter_frames_new(self, current_frame_idx: int):
 
