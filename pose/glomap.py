@@ -104,7 +104,7 @@ class GlomapWrapper:
         matches_data = defaultdict(dict)
         single_camera = True
         assert len(images) > 0
-        count = 0
+
         for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
 
             img1_path = Path(img1_path)
@@ -160,9 +160,6 @@ class GlomapWrapper:
 
             keypoints_data[img1_path.name] = src_pts_xy_roma_unique
             keypoints_data[img2_path.name] = dst_pts_xy_roma_unique
-
-            n_matches = src_pts_xy_roma_int.shape[0]
-            count += 1
 
             matches_data[img1_path.name] = {img2_path.name: (src_pts_xy_roma_int, dst_pts_xy_roma_int)}
 
@@ -423,5 +420,5 @@ def get_image_Se3_world2cam(reconstruction, first_image_key, device: str):
 
 
 def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, view_graph: ViewGraph,
-                  flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig) -> torch.Tensor:
+                  flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig):
     breakpoint()
