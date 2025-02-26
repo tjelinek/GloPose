@@ -70,11 +70,13 @@ class ViewGraph:
                 vutils.save_image(segmentation.float(), str(seg_path))
 
 
-def view_graph_from_pickle(self, load_dir: Path):
+def load_view_graph(load_dir: Path) -> ViewGraph:
     """Loads the graph structure and associated images/segmentations from disk."""
     graph_path = load_dir / "graph.pkl"
     with open(graph_path, "rb") as f:
-        self.view_graph = pickle.load(f)
+        view_graph = pickle.load(f)
+
+    return view_graph
 
 
 def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colmap_reconstruction:
