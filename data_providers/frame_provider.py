@@ -10,7 +10,6 @@ import torch.nn.functional as F
 from PIL import Image
 from kornia.image import ImageSize
 from torchvision import transforms
-from torchvision.transforms import InterpolationMode
 
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
