@@ -419,7 +419,7 @@ def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: 
     return Se3_image_world2cam
 
 
-def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, view_graph: ViewGraph,
+def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                   flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig):
 
     path_to_colmap_db = Path('/mnt/personal/jelint19/results/FlowTracker/hope/obj_000001/glomap_obj_000001/database.db')
@@ -430,13 +430,30 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, view_graph: V
 
     database = pycolmap.Database(str(path_to_colmap_db))
 
-    database_cache = pycolmap.DatabaseCache()
-    database_cache.create(database, 0, False, set())
+    h, w = image.shape[-2:]
+    f_x = float(camera_K[0, 0])
+    f_y = float(camera_K[1, 1])
+    c_x = float(camera_K[0, 2])
+    c_y = float(camera_K[1, 2])
+
+    new_camera_id = database.num_cameras + 1
+    new_camera = pycolmap.Camera(camera_id=new_camera_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
+                                 params=[f_x, f_y, c_x, c_y])
+
+    new_image_id = database.num_images + 1
+    new_database_image = pycolmap.Image(image_id=new_image_id, camera_id=new_camera_id, name='new_target')
+
+    database.write_camera(new_camera, use_camera_id=True)
+    database.write_image(new_database_image, use_image_id=True)
 
     if type(flow_provider) is RoMaFlowProviderDirect or True:
         pass
     else:
         raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
+
+    database_cache = pycolmap.DatabaseCache.create(database, 0, False, set())
+
+    breakpoint()
 
     mapper = pycolmap.IncrementalMapper(database_cache)
     mapper_options = pycolmap.IncrementalMapperOptions()
