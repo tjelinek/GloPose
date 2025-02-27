@@ -198,6 +198,17 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
     return pinhole_params
 
 
+def get_gop_camera_intrinsics(json_path: Path, image_id: int):
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    if str(image_id) not in data:
+        raise ValueError(f"Image ID {image_id} not found in the JSON file.")
+
+    cam_K = data[str(image_id)]['cam_K']
+    return np.array(cam_K).reshape(3, 3)
+
+
 def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path, config: TrackerConfig) -> None:
     with bop_targets_path.open('r') as file:
         test_annotations = json.load(file)
@@ -214,9 +225,11 @@ def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_path
 
         path_to_scene = test_dataset_path / scene_folder_name
         path_to_image = path_to_scene / 'rgb' / image_filename
+        path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
         segmentation_paths = path_to_scene / 'mask_visib'
 
         segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
+        camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
         view_graphs: List[ViewGraph] = []
         for view_graph_dir in view_graph_save_paths.iterdir():
@@ -224,10 +237,11 @@ def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_path
                 view_graph = load_view_graph(view_graph_dir)
                 view_graphs.append(view_graph)
 
-        predict_all_poses_in_image(path_to_image, segmentation_files, view_graphs, config)
+        predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics, view_graphs, config)
 
 
-def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path], view_graphs: List[ViewGraph],
+def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path], camera_K: np.ndarray,
+                               view_graphs: List[ViewGraph],
                                config: TrackerConfig) -> None:
 
     target_shape = get_target_shape(image_path, config.image_downsample)
@@ -240,7 +254,9 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
                                                                                         target_shape,
                                                                                         config.device)
 
-        predict_poses(image, segmentation, flow_provider, config)
+        # TODO iterate over all view graphs
+        predict_poses(image, segmentation, camera_K=camera_K, view_graph=view_graphs[0], flow_provider=flow_provider,
+                      config=config)
 
 
 if __name__ == '__main__':
