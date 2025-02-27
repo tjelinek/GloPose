@@ -116,7 +116,7 @@ class Tracker6D:
             images_paths = [images_paths[i] for i in range(len(images_paths))]
             segmentation_paths = [segmentation_paths[i] for i in range(len(images_paths))]
 
-            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache2') /
+            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') /
                                        self.config.sift_matcher_config.config_name / self.config.dataset /
                                        self.config.sequence) / f'{first_image_frame}_to_{last_image_frame}'
 
