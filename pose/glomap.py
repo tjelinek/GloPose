@@ -421,4 +421,46 @@ def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: 
 
 def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, view_graph: ViewGraph,
                   flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig):
+
+    path_to_colmap_db = Path('/mnt/personal/jelint19/results/FlowTracker/hope/obj_000001/glomap_obj_000001/database.db')
+    path_to_reconstruction = Path('/mnt/personal/jelint19/cache/view_graph_cache/hope/obj_000001/reconstruction')
+
+    reconstruction_manager = pycolmap.ReconstructionManager()
+    reconstruction_manager.read(path_to_reconstruction)
+
+    database = pycolmap.Database(str(path_to_colmap_db))
+
+    database_cache = pycolmap.DatabaseCache()
+    database_cache.create(database, 0, False, set())
+
+    if type(flow_provider) is RoMaFlowProviderDirect or True:
+        pass
+    else:
+        raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
+
+    mapper = pycolmap.IncrementalMapper(database_cache)
+    mapper_options = pycolmap.IncrementalMapperOptions()
+
+    reconstruction_idx = reconstruction_manager.add()
+    reconstruction = reconstruction_manager.get(reconstruction_idx)
+
+    mapper.begin_reconstruction(reconstruction)
+
     breakpoint()
+
+    new_image_id = max(database.image_ids())
+
+    # Register the new image
+    success = mapper.register_next_image(mapper_options, new_image_id)
+
+    breakpoint()
+
+    if success:
+        print(f"Successfully registered image {new_image_id} into the reconstruction.")
+        mapper.triangulate_image(
+            mapper_options.triangulation, new_image_id
+        )
+        reconstruction.normalize()
+    else:
+        print(f"Failed to register image {new_image_id}.")
+
