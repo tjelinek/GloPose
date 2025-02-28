@@ -16,13 +16,15 @@ from data_structures.keyframe_buffer import FrameObservation
 class ViewGraphNode:
     Se3_cam2obj: Se3
     observation: FrameObservation
+    colmap_db_image_id: int
+    colmap_db_image_name: str
 
 
 class ViewGraph:
     def __init__(self):
         self.view_graph = nx.DiGraph()
 
-    def add_node(self, node_id, se3_cam2obj, observation):
+    def add_node(self, node_id, se3_cam2obj, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
         self.view_graph.add_node(node_id, data=ViewGraphNode(se3_cam2obj, observation))
 
@@ -98,7 +100,7 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colm
 
         frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
-        view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation)
+        view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation, image_id, image.name)
 
     for u, v in structure.edges:
         if u not in view_graph.view_graph.nodes and v not in view_graph.view_graph.nodes:
