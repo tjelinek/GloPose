@@ -422,13 +422,24 @@ def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: 
 def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                   flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig):
 
-    path_to_colmap_db = Path('/mnt/personal/jelint19/results/FlowTracker/hope/obj_000001/glomap_obj_000001/database.db')
+    base_results_path = Path('/mnt/personal/jelint19/results/FlowTracker/')
+    db_relative_path = Path('hope/obj_000001/glomap_obj_000001/')
+    db_filename = Path('database.db')
+
+    path_to_colmap_db = base_results_path / db_relative_path / db_filename
     path_to_reconstruction = Path('/mnt/personal/jelint19/cache/view_graph_cache/hope/obj_000001/reconstruction')
+    path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / db_relative_path
+    cache_db_file = path_to_cache / db_filename
+
+    if path_to_cache.exists() and path_to_cache.is_dir():
+        shutil.rmtree(path_to_cache)
+    path_to_cache.mkdir(exist_ok=True, parents=True)
+    shutil.copy(path_to_colmap_db, cache_db_file)
 
     reconstruction_manager = pycolmap.ReconstructionManager()
     reconstruction_manager.read(path_to_reconstruction)
 
-    database = pycolmap.Database(str(path_to_colmap_db))
+    database = pycolmap.Database(str(cache_db_file))
 
     h, w = image.shape[-2:]
     f_x = float(camera_K[0, 0])
@@ -441,7 +452,7 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
                                  params=[f_x, f_y, c_x, c_y])
 
     new_image_id = database.num_images + 1
-    new_database_image = pycolmap.Image(image_id=new_image_id, camera_id=new_camera_id, name='new_target')
+    new_database_image = pycolmap.Image(image_id=new_image_id, camera_id=new_camera_id, name='tmp_target')
 
     database.write_camera(new_camera, use_camera_id=True)
     database.write_image(new_database_image, use_image_id=True)
