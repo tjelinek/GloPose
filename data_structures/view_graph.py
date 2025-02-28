@@ -26,7 +26,8 @@ class ViewGraph:
 
     def add_node(self, node_id, se3_cam2obj, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
-        self.view_graph.add_node(node_id, data=ViewGraphNode(se3_cam2obj, observation))
+        self.view_graph.add_node(node_id, data=ViewGraphNode(se3_cam2obj, observation, colmap_db_image_id,
+                                                             colmap_db_image_name))
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
         """Returns the ViewGraphNode data for a given node ID."""
