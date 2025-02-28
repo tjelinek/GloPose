@@ -15,22 +15,40 @@ class RoMaFlowProviderDirect:
     def __init__(self, device):
         self.device = device
         self.flow_model: roma_model = roma_outdoor(device=self.device)
+        self.roma_size_hw = (864, 864)
 
-    def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None)\
+    def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                       source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None) \
             -> Tuple[torch.Tensor, torch.Tensor]:
 
         source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
         target_image_roma = torchvision.transforms.functional.to_pil_image(target_image_tensor.squeeze())
 
         warp, certainty = self.flow_model.match(source_image_roma, target_image_roma, device=self.device)
+
+        roma_h, roma_w = self.roma_size_hw
+
+        certainty = certainty.clone()
+        if source_image_segmentation is not None:
+            source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation,
+                                                                                      size=self.roma_size_hw)
+            certainty[:, :roma_w] *= source_image_segment_roma_size.mT.squeeze().bool().float()
+        if target_image_segmentation is not None:
+            target_image_segment_roma_size = torchvision.transforms.functional.resize(target_image_segmentation,
+                                                                                      size=self.roma_size_hw)
+            certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.mT.squeeze().bool().float()
+
         if sample:
             warp, certainty = self.flow_model.sample(warp, certainty, sample)
 
         return warp, certainty
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
-                                      sample=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample)
+                                      sample=None, source_image_segmentation: torch.Tensor = None,
+                                      target_image_segmentation: torch.Tensor = None) \
+            -> Tuple[torch.Tensor, torch.Tensor]:
+        warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
+                                              source_image_segmentation, target_image_segmentation)
 
         h1 = source_image_tensor.shape[-2]
         w1 = source_image_tensor.shape[-1]
