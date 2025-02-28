@@ -1,6 +1,7 @@
 import copy
 import os
 import select
+import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -457,14 +458,44 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
     database.write_camera(new_camera, use_camera_id=True)
     database.write_image(new_database_image, use_image_id=True)
 
-    if type(flow_provider) is RoMaFlowProviderDirect or True:
-        pass
-    else:
-        raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
+    loaded_keypoints = {
+        img.image_id: database.read_keypoints(img.image_id) for img in database.read_all_images()
+    }
 
-    database_cache = pycolmap.DatabaseCache.create(database, 0, False, set())
+    database.clear_keypoints()
 
-    breakpoint()
+    image_pts_xy_all = []
+    for frame_idx in view_graph.view_graph.nodes():
+        view_graph_node = view_graph.get_node_data(frame_idx)
+
+        pose_graph_image = view_graph_node.observation.observed_image.to(config.device)
+        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(config.device)
+
+        if type(flow_provider) is RoMaFlowProviderDirect or True:
+            src_pts_xy, dst_pts_xy = flow_provider.get_source_target_points_roma(image, pose_graph_image,
+                                                                                 config.roma_sample_size, segmentation,
+                                                                                 pose_graph_segmentation, True)
+        else:
+            raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
+
+        image_pts_xy_all.append(src_pts_xy)
+
+        dst_pts_xy_db_np = torch.tensor(loaded_keypoints[view_graph_node.colmap_db_image_id])
+        dst_pts_xy_db = dst_pts_xy_db_np.to(config.device).to(torch.int)
+
+        pose_graph_pts_xy_all = torch.cat([dst_pts_xy_db, dst_pts_xy], dim=0)  # TODO check
+        pose_graph_pts_xy_unique, unique_indices = torch.unique(pose_graph_pts_xy_all, return_inverse=True, dim=0)
+        pose_graph_pts_xy_unique = pose_graph_pts_xy_unique.to(torch.float32).numpy(force=True)
+
+        database.write_keypoints(view_graph_node.colmap_db_image_id, pose_graph_pts_xy_unique)
+
+    image_pts_xy_all = torch.cat(image_pts_xy_all, dim=0)
+    image_pts_xy_unique = torch.unique(image_pts_xy_all, return_inverse=False, dim=0)
+    image_pts_xy_unique_np = image_pts_xy_unique.to(torch.float32).numpy(force=True)
+    database.write_keypoints(new_image_id, image_pts_xy_unique_np)
+
+    database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
+
 
     mapper = pycolmap.IncrementalMapper(database_cache)
     mapper_options = pycolmap.IncrementalMapperOptions()
