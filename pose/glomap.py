@@ -438,9 +438,6 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     path_to_cache.mkdir(exist_ok=True, parents=True)
     shutil.copy(path_to_colmap_db, cache_db_file)
 
-    reconstruction_manager = pycolmap.ReconstructionManager()
-    reconstruction_manager.read(path_to_reconstruction)
-
     database = pycolmap.Database(str(cache_db_file))
 
     h, w = query_img.shape[-2:]
@@ -529,12 +526,13 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     mapper = pycolmap.IncrementalMapper(database_cache)
     mapper_options = pycolmap.IncrementalMapperOptions()
 
+    reconstruction_manager = pycolmap.ReconstructionManager()
+    reconstruction_manager.read(path_to_reconstruction)
+
     reconstruction_idx = reconstruction_manager.add()
     reconstruction = reconstruction_manager.get(reconstruction_idx)
 
     mapper.begin_reconstruction(reconstruction)
-
-    new_image_id = max(database.image_ids())
 
     # Register the new image
     success = mapper.register_next_image(mapper_options, new_image_id)
