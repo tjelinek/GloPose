@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import h5py
 import imageio
@@ -465,8 +465,9 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
     database.clear_keypoints()
 
-    query_img_pts_xy_all = []
-    matching_pairs = {}
+    query_img_pts_xy_all_list = []
+    db_img_ids = []
+    matching_to_db_img: Dict[int, List] = {}
 
     for frame_idx in view_graph.view_graph.nodes():
         view_graph_node = view_graph.get_node_data(frame_idx)
@@ -476,15 +477,16 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device)
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
-            db_old_img_pts_xy, db_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
-                                                                                          config.roma_sample_size,
-                                                                                          query_img_segmentation,
-                                                                                          pose_graph_segmentation,
-                                                                                          True)
+            query_img_pts_xy, db_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
+                                                                                           config.roma_sample_size,
+                                                                                           query_img_segmentation,
+                                                                                           pose_graph_segmentation,
+                                                                                           True)
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
-        query_img_pts_xy_all.append(db_old_img_pts_xy)
+        query_img_pts_xy_all_list.append(query_img_pts_xy)
+        db_img_ids.append(db_img_id)
 
         db_old_img_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
         db_old_img_pts_xy = db_old_img_pts_xy_np.to(device).to(torch.int)
@@ -495,24 +497,34 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
 
         new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
-        assert new_db_matching_indices.max() < num_db_keypoints
+        # assert new_db_matching_indices.max() < num_db_keypoints
 
         database.write_keypoints(view_graph_node.colmap_db_image_id, db_img_pts_xy_unique)
 
-        matching_pairs[(new_image_id, db_img_id)] = (new_db_matching_indices, db_img_pts_xy)
+        matching_to_db_img[db_img_id] = [new_db_matching_indices, None]
 
-    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all, dim=0)
-    query_img_pts_xy_unique = torch.unique(query_img_pts_xy_all, return_inverse=True, dim=0)
+    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all_list, dim=0)
+    query_img_pts_xy_unique, query_img_unique_indices = torch.unique(query_img_pts_xy_all, return_inverse=True, dim=0)
+
+    total_pts = 0
+    for query_img_pts_xy, db_img_id in zip(query_img_pts_xy_all_list, db_img_ids):
+        query_img_num_pts = query_img_pts_xy.shape[0]
+
+        query_img_indices = query_img_unique_indices[total_pts:total_pts+query_img_num_pts]
+        total_pts += query_img_num_pts
+
+        matching_to_db_img[db_img_id][1] = query_img_indices
+
     query_img_pts_xy_unique_np = query_img_pts_xy_unique.to(torch.float32).numpy(force=True)
     database.write_keypoints(new_image_id, query_img_pts_xy_unique_np)
 
-    for (source_image_idx, target_image_idx), (match_src_pts_xy, match_dst_pts_xy) in matching_pairs.items():
-        src_keypoints_xy = torch.from_numpy(database.read_keypoints(source_image_idx)).to(device).to(torch.int)
-        dst_keypoints_xy = torch.from_numpy(database.read_keypoints(target_image_idx)).to(device).to(torch.int)
+    for db_image_id, (db_img_match_indices, query_img_match_indices) in matching_to_db_img.items():
+        matching_indices = torch.stack([db_img_match_indices, query_img_match_indices], dim=1)
+        matching_indices_np = matching_indices.numpy(force=True)
 
+        database.write_matches(db_image_id, new_image_id, matching_indices_np)
 
     database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
-    # TODO Write matches
 
     mapper = pycolmap.IncrementalMapper(database_cache)
     mapper_options = pycolmap.IncrementalMapperOptions()
