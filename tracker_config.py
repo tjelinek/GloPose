@@ -24,6 +24,7 @@ class TrackerConfig:
 
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
+    large_images_results_write_frequency: int = 5
 
     # Input data settings
     input_frames: int = 0

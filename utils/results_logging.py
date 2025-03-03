@@ -596,7 +596,7 @@ class WriteResults:
 
     def visualize_flow_with_matching_rerun(self, frame_i):
 
-        if frame_i == 0:
+        if frame_i == 0 or (frame_i % self.config.large_images_results_write_frequency != 0):
             return
 
         datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
@@ -772,6 +772,9 @@ class WriteResults:
         imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
 
     def visualize_observed_data(self, frame_i):
+
+        if frame_i % self.config.large_images_results_write_frequency != 0:
+            return
 
         observed_image_annotation = RerunAnnotations.observed_image
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
