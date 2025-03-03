@@ -475,10 +475,10 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
             query_img_pts_xy, db_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
-                                                                                           config.roma_sample_size,
-                                                                                           query_img_segmentation,
-                                                                                           pose_graph_segmentation,
-                                                                                           True)
+                                                                                          config.roma_sample_size,
+                                                                                          query_img_segmentation,
+                                                                                          pose_graph_segmentation,
+                                                                                          True)
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
