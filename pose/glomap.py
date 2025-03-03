@@ -420,9 +420,10 @@ def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: 
     return Se3_image_world2cam
 
 
-def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
-                  flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig):
-
+def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor, camera_K: np.ndarray,
+                  view_graph: ViewGraph, flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider,
+                  config: TrackerConfig):
+    device = config.device
     base_results_path = Path('/mnt/personal/jelint19/results/FlowTracker/')
     db_relative_path = Path('hope/obj_000001/glomap_obj_000001/')
     db_filename = Path('database.db')
@@ -442,7 +443,7 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
 
     database = pycolmap.Database(str(cache_db_file))
 
-    h, w = image.shape[-2:]
+    h, w = query_img.shape[-2:]
     f_x = float(camera_K[0, 0])
     f_y = float(camera_K[1, 1])
     c_x = float(camera_K[0, 2])
@@ -465,37 +466,52 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
     database.clear_keypoints()
 
     image_pts_xy_all = []
+    matching_pairs = {}
+
     for frame_idx in view_graph.view_graph.nodes():
         view_graph_node = view_graph.get_node_data(frame_idx)
+        db_img_id = view_graph_node.colmap_db_image_id
 
-        pose_graph_image = view_graph_node.observation.observed_image.to(config.device)
-        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(config.device)
+        pose_graph_image = view_graph_node.observation.observed_image.to(device)
+        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device)
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
-            src_pts_xy, dst_pts_xy = flow_provider.get_source_target_points_roma(image, pose_graph_image,
-                                                                                 config.roma_sample_size, segmentation,
-                                                                                 pose_graph_segmentation, True)
+            db_img_pts_xy, query_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
+                                                                                          config.roma_sample_size,
+                                                                                          query_img_segmentation,
+                                                                                          pose_graph_segmentation,
+                                                                                          True)
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
-        image_pts_xy_all.append(src_pts_xy)
+        image_pts_xy_all.append(db_img_pts_xy)
 
-        dst_pts_xy_db_np = torch.tensor(loaded_keypoints[view_graph_node.colmap_db_image_id])
-        dst_pts_xy_db = dst_pts_xy_db_np.to(config.device).to(torch.int)
+        db_img_dst_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
+        db_img_pts_xy = db_img_dst_pts_xy_np.to(device).to(torch.int)
+        num_db_keypoints = db_img_pts_xy.shape[0]
 
-        pose_graph_pts_xy_all = torch.cat([dst_pts_xy_db, dst_pts_xy], dim=0)  # TODO check
-        pose_graph_pts_xy_unique, unique_indices = torch.unique(pose_graph_pts_xy_all, return_inverse=True, dim=0)
-        pose_graph_pts_xy_unique = pose_graph_pts_xy_unique.to(torch.float32).numpy(force=True)
+        db_img_pts_xy_all = torch.cat([db_img_pts_xy, query_img_pts_xy], dim=0)  # TODO check
+        db_img_pts_xy_unique, db_img_unique_indices = torch.unique(db_img_pts_xy_all, return_inverse=True, dim=0)
+        db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
 
-        database.write_keypoints(view_graph_node.colmap_db_image_id, pose_graph_pts_xy_unique)
+        db_img_unique_indices[num_db_keypoints:]
+
+        database.write_keypoints(view_graph_node.colmap_db_image_id, db_img_pts_xy_unique)
+
+        matching_pairs[(new_image_id, db_img_id)] = (db_img_pts_xy, query_img_pts_xy)
 
     image_pts_xy_all = torch.cat(image_pts_xy_all, dim=0)
     image_pts_xy_unique = torch.unique(image_pts_xy_all, return_inverse=False, dim=0)
     image_pts_xy_unique_np = image_pts_xy_unique.to(torch.float32).numpy(force=True)
     database.write_keypoints(new_image_id, image_pts_xy_unique_np)
 
-    database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
+    for (source_image_idx, target_image_idx), (match_src_pts_xy, match_dst_pts_xy) in matching_pairs.items():
+        src_keypoints_xy = torch.from_numpy(database.read_keypoints(source_image_idx)).to(device).to(torch.int)
+        dst_keypoints_xy = torch.from_numpy(database.read_keypoints(target_image_idx)).to(device).to(torch.int)
 
+
+    database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
+    # TODO Write matches
 
     mapper = pycolmap.IncrementalMapper(database_cache)
     mapper_options = pycolmap.IncrementalMapperOptions()
@@ -505,14 +521,10 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
 
     mapper.begin_reconstruction(reconstruction)
 
-    breakpoint()
-
     new_image_id = max(database.image_ids())
 
     # Register the new image
     success = mapper.register_next_image(mapper_options, new_image_id)
-
-    breakpoint()
 
     if success:
         print(f"Successfully registered image {new_image_id} into the reconstruction.")
@@ -522,4 +534,3 @@ def predict_poses(image: torch.Tensor, segmentation: torch.Tensor, camera_K: np.
         reconstruction.normalize()
     else:
         print(f"Failed to register image {new_image_id}.")
-
