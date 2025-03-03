@@ -465,7 +465,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
     database.clear_keypoints()
 
-    image_pts_xy_all = []
+    query_img_pts_xy_all = []
     matching_pairs = {}
 
     for frame_idx in view_graph.view_graph.nodes():
@@ -476,7 +476,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device)
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
-            db_img_pts_xy, query_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
+            db_old_img_pts_xy, db_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
                                                                                           config.roma_sample_size,
                                                                                           query_img_segmentation,
                                                                                           pose_graph_segmentation,
@@ -484,26 +484,27 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
-        image_pts_xy_all.append(db_img_pts_xy)
+        query_img_pts_xy_all.append(db_old_img_pts_xy)
 
-        db_img_dst_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
-        db_img_pts_xy = db_img_dst_pts_xy_np.to(device).to(torch.int)
-        num_db_keypoints = db_img_pts_xy.shape[0]
+        db_old_img_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
+        db_old_img_pts_xy = db_old_img_pts_xy_np.to(device).to(torch.int)
+        num_db_keypoints = db_old_img_pts_xy.shape[0]
 
-        db_img_pts_xy_all = torch.cat([db_img_pts_xy, query_img_pts_xy], dim=0)  # TODO check
+        db_img_pts_xy_all = torch.cat([db_old_img_pts_xy, db_img_pts_xy], dim=0)  # TODO check
         db_img_pts_xy_unique, db_img_unique_indices = torch.unique(db_img_pts_xy_all, return_inverse=True, dim=0)
         db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
 
-        db_img_unique_indices[num_db_keypoints:]
+        new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
+        assert new_db_matching_indices.max() < num_db_keypoints
 
         database.write_keypoints(view_graph_node.colmap_db_image_id, db_img_pts_xy_unique)
 
-        matching_pairs[(new_image_id, db_img_id)] = (db_img_pts_xy, query_img_pts_xy)
+        matching_pairs[(new_image_id, db_img_id)] = (new_db_matching_indices, db_img_pts_xy)
 
-    image_pts_xy_all = torch.cat(image_pts_xy_all, dim=0)
-    image_pts_xy_unique = torch.unique(image_pts_xy_all, return_inverse=False, dim=0)
-    image_pts_xy_unique_np = image_pts_xy_unique.to(torch.float32).numpy(force=True)
-    database.write_keypoints(new_image_id, image_pts_xy_unique_np)
+    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all, dim=0)
+    query_img_pts_xy_unique = torch.unique(query_img_pts_xy_all, return_inverse=True, dim=0)
+    query_img_pts_xy_unique_np = query_img_pts_xy_unique.to(torch.float32).numpy(force=True)
+    database.write_keypoints(new_image_id, query_img_pts_xy_unique_np)
 
     for (source_image_idx, target_image_idx), (match_src_pts_xy, match_dst_pts_xy) in matching_pairs.items():
         src_keypoints_xy = torch.from_numpy(database.read_keypoints(source_image_idx)).to(device).to(torch.int)
