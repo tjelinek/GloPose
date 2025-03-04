@@ -521,6 +521,33 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         print(f"Failed to register image {new_image_id}.")
 
 
+def unique_preserve_order_vectorized(keypoints: torch.Tensor):
+
+    keypoints_np = keypoints.numpy(force=True)
+    unique_sorted, inverse_indices = torch.unique(keypoints, return_inverse=True, sorted=True, dim=0)
+
+    # Find first occurrence of each unique value
+    perm = torch.arange(len(inverse_indices), device=keypoints.device)
+
+    breakpoint()
+    first_occurrence = torch.zeros(len(unique_sorted), dtype=torch.long, device=keypoints.device)
+
+    # For each position in the original tensor, we only keep the first occurrence
+    for i, p in enumerate(perm):
+        idx = inverse_indices[i]
+        if first_occurrence[idx] == 0:
+            first_occurrence[idx] = i + 1  # +1 to distinguish from initialized zeros
+
+    # Get indices of first occurrences (subtract 1 to get back to 0-indexed)
+    first_indices = first_occurrence - 1
+
+    # Sort by position of first occurrence
+    sorted_indices = torch.argsort(first_indices)
+
+    # Return unique elements in order of first appearance
+    return unique_sorted[sorted_indices]
+
+
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
                                   existing_database: pycolmap.Database, device: str) -> Dict[int, torch.Tensor]:
     G = nx.DiGraph()
@@ -551,6 +578,7 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
         keypoints_u_all_lists = existing_keypoints_u + keypoints_u_incoming_list + keypoints_u_outgoing_list
         keypoints_u_all = torch.cat(keypoints_u_all_lists)
 
+        unique = unique_preserve_order_vectorized(keypoints_u_all)
         breakpoint()
 
 
