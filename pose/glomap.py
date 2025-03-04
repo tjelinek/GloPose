@@ -487,7 +487,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
 
-    unique_keypoints_from_matches(matching_edges, database)
+    unique_keypoints_from_matches(matching_edges, database, device)
 
     for db_image_id, (db_img_match_indices, query_img_match_indices) in matching_to_db_img.items():
         matching_indices = torch.stack([db_img_match_indices, query_img_match_indices], dim=1)
@@ -522,40 +522,36 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
 
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
-                                  existing_database: pycolmap.Database) -> Dict[int, torch.Tensor]:
+                                  existing_database: pycolmap.Database, device: str) -> Dict[int, torch.Tensor]:
     G = nx.DiGraph()
     G.add_edges_from(matching_edges.keys())
 
-    for u, v in G.edges():
-        query_img_pts_xy_all_list.append(query_img_pts_xy)
-        db_img_ids.append(db_img_id)
+    existing_database_image_ids = []
+    if existing_database is not None:
+        existing_database_image_ids = [img.image_id for img in existing_database.read_all_images()]
 
-        db_old_img_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
-        db_old_img_pts_xy = db_old_img_pts_xy_np.to(device).to(torch.int)
-        num_db_keypoints = db_old_img_pts_xy.shape[0]
+    keypoints_for_node: Dict[int, torch.Tensor] = {}
 
-        db_img_pts_xy_all = torch.cat([db_old_img_pts_xy, db_img_pts_xy], dim=0)  # TODO check
-        db_img_pts_xy_unique, db_img_unique_indices = torch.unique(db_img_pts_xy_all, return_inverse=True, dim=0)
-        db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
+    for u in G.nodes():
 
-        new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
-        # assert new_db_matching_indices.max() < num_db_keypoints
+        incoming_edges = list(G.in_edges(u))
+        outgoing_edges = list(G.out_edges(u))
 
-        database.write_keypoints(db_img_id, db_img_pts_xy_unique)
+        if u in existing_database_image_ids and existing_database.read_keypoints(u).shape[0] > 0:
+            existing_keypoints_u = [torch.from_numpy(existing_database.read_keypoints(u)).to(device)]
+        else:
+            existing_keypoints_u = [torch.zeros((0, 2)).to(torch.int).to(device)]
+        existing_keypoints_lengths = [existing_keypoints_u[0].shape[0]]
 
-        matching_to_db_img[db_img_id] = [new_db_matching_indices, None]
+        keypoints_u_incoming_list = [matching_edges[v, u][1] for v, _ in incoming_edges]
+        keypoints_u_incoming_list_lengths = [matching_edges[v, u][1].shape[0] for v, _ in incoming_edges]
+        keypoints_u_outgoing_list = [matching_edges[u, v][0] for _, v in outgoing_edges]
+        keypoints_u_outgoing_list_lengths = [matching_edges[u, v][0].shape[0] for _, v in outgoing_edges]
 
-    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all_list, dim=0)
-    query_img_pts_xy_unique, query_img_unique_indices = torch.unique(query_img_pts_xy_all, return_inverse=True,
-                                                                     dim=0)
+        keypoints_u_all_lists = existing_keypoints_u + keypoints_u_incoming_list + keypoints_u_outgoing_list
+        keypoints_u_all = torch.cat(keypoints_u_all_lists)
 
-    total_pts = 0
-    for query_img_pts_xy, db_img_id in zip(query_img_pts_xy_all_list, db_img_ids):
-        query_img_num_pts = query_img_pts_xy.shape[0]
+        breakpoint()
 
-        query_img_indices = query_img_unique_indices[total_pts:total_pts + query_img_num_pts]
-        total_pts += query_img_num_pts
 
-        matching_to_db_img[db_img_id][1] = query_img_indices
-
-    query_img_pts_xy_unique_np = query_img_pts_xy_unique.to(torch.float32).numpy(force=True)
+    return keypoints_for_node
