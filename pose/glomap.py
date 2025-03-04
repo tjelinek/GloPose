@@ -466,7 +466,11 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     db_img_ids = []
     matching_to_db_img: Dict[int, List] = {}
 
-    for frame_idx in view_graph.view_graph.nodes():
+    image_tensors = [query_img]
+    image_segmentation_tensors = [query_img_segmentation]
+    matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
+
+    for i, frame_idx in enumerate(view_graph.view_graph.nodes()):
         view_graph_node = view_graph.get_node_data(frame_idx)
         db_img_id = view_graph_node.colmap_db_image_id
 
@@ -482,6 +486,10 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
+        image_tensors.append(pose_graph_image)
+        image_segmentation_tensors.append(pose_graph_segmentation)
+
+        matching_edges[(0, i + 1)] = (query_img_pts_xy, db_img_pts_xy)
         query_img_pts_xy_all_list.append(query_img_pts_xy)
         db_img_ids.append(db_img_id)
 
