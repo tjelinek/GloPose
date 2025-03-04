@@ -496,7 +496,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
         # assert new_db_matching_indices.max() < num_db_keypoints
 
-        database.write_keypoints(view_graph_node.colmap_db_image_id, db_img_pts_xy_unique)
+        database.write_keypoints(db_img_id, db_img_pts_xy_unique)
 
         matching_to_db_img[db_img_id] = [new_db_matching_indices, None]
 
