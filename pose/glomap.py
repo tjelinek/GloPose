@@ -484,7 +484,6 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
-        matching_edges[(0, i + 1)] = (query_img_pts_xy, db_img_pts_xy)
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
 
         query_img_pts_xy_all_list.append(query_img_pts_xy)
