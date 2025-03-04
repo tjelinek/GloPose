@@ -9,6 +9,7 @@ from typing import List, Tuple, Optional, Dict
 
 import h5py
 import imageio
+import networkx as nx
 import numpy as np
 import pycolmap
 import torch
@@ -486,38 +487,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
 
-        query_img_pts_xy_all_list.append(query_img_pts_xy)
-        db_img_ids.append(db_img_id)
-
-        db_old_img_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
-        db_old_img_pts_xy = db_old_img_pts_xy_np.to(device).to(torch.int)
-        num_db_keypoints = db_old_img_pts_xy.shape[0]
-
-        db_img_pts_xy_all = torch.cat([db_old_img_pts_xy, db_img_pts_xy], dim=0)  # TODO check
-        db_img_pts_xy_unique, db_img_unique_indices = torch.unique(db_img_pts_xy_all, return_inverse=True, dim=0)
-        db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
-
-        new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
-        # assert new_db_matching_indices.max() < num_db_keypoints
-
-        database.write_keypoints(db_img_id, db_img_pts_xy_unique)
-
-        matching_to_db_img[db_img_id] = [new_db_matching_indices, None]
-
-    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all_list, dim=0)
-    query_img_pts_xy_unique, query_img_unique_indices = torch.unique(query_img_pts_xy_all, return_inverse=True, dim=0)
-
-    total_pts = 0
-    for query_img_pts_xy, db_img_id in zip(query_img_pts_xy_all_list, db_img_ids):
-        query_img_num_pts = query_img_pts_xy.shape[0]
-
-        query_img_indices = query_img_unique_indices[total_pts:total_pts+query_img_num_pts]
-        total_pts += query_img_num_pts
-
-        matching_to_db_img[db_img_id][1] = query_img_indices
-
-    query_img_pts_xy_unique_np = query_img_pts_xy_unique.to(torch.float32).numpy(force=True)
-    database.write_keypoints(new_image_id, query_img_pts_xy_unique_np)
+    unique_keypoints_from_matches(matching_edges, database)
 
     for db_image_id, (db_img_match_indices, query_img_match_indices) in matching_to_db_img.items():
         matching_indices = torch.stack([db_img_match_indices, query_img_match_indices], dim=1)
@@ -549,3 +519,43 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         reconstruction.normalize()
     else:
         print(f"Failed to register image {new_image_id}.")
+
+
+def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
+                                  existing_database: pycolmap.Database) -> Dict[int, torch.Tensor]:
+    G = nx.DiGraph()
+    G.add_edges_from(matching_edges.keys())
+
+    for u, v in G.edges():
+        query_img_pts_xy_all_list.append(query_img_pts_xy)
+        db_img_ids.append(db_img_id)
+
+        db_old_img_pts_xy_np = torch.tensor(loaded_keypoints[db_img_id])
+        db_old_img_pts_xy = db_old_img_pts_xy_np.to(device).to(torch.int)
+        num_db_keypoints = db_old_img_pts_xy.shape[0]
+
+        db_img_pts_xy_all = torch.cat([db_old_img_pts_xy, db_img_pts_xy], dim=0)  # TODO check
+        db_img_pts_xy_unique, db_img_unique_indices = torch.unique(db_img_pts_xy_all, return_inverse=True, dim=0)
+        db_img_pts_xy_unique = db_img_pts_xy_unique.to(torch.float32).numpy(force=True)
+
+        new_db_matching_indices = db_img_unique_indices[num_db_keypoints:]
+        # assert new_db_matching_indices.max() < num_db_keypoints
+
+        database.write_keypoints(db_img_id, db_img_pts_xy_unique)
+
+        matching_to_db_img[db_img_id] = [new_db_matching_indices, None]
+
+    query_img_pts_xy_all = torch.cat(query_img_pts_xy_all_list, dim=0)
+    query_img_pts_xy_unique, query_img_unique_indices = torch.unique(query_img_pts_xy_all, return_inverse=True,
+                                                                     dim=0)
+
+    total_pts = 0
+    for query_img_pts_xy, db_img_id in zip(query_img_pts_xy_all_list, db_img_ids):
+        query_img_num_pts = query_img_pts_xy.shape[0]
+
+        query_img_indices = query_img_unique_indices[total_pts:total_pts + query_img_num_pts]
+        total_pts += query_img_num_pts
+
+        matching_to_db_img[db_img_id][1] = query_img_indices
+
+    query_img_pts_xy_unique_np = query_img_pts_xy_unique.to(torch.float32).numpy(force=True)
