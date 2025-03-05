@@ -536,7 +536,17 @@ def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tens
     index = torch.from_numpy(index_np).to(keypoints.device)
 
     unique_order_preserving = keypoints[index[index_sort_permutation]]
-    inverse_indices_order_preserving = inverse_indices[index[index_sort_permutation]]
+
+    idx_mapping = torch.zeros(len(index_sort_permutation), dtype=torch.long).to(keypoints.device)
+
+    # Use scatter_ to place indices at the positions specified by index_sort_permutation
+    # This creates our mapping from original positions to new positions after reordering
+    idx_mapping.scatter_(0, index_sort_permutation, torch.arange(len(index_sort_permutation), device=keypoints.device))
+
+    # Apply the mapping to get correct inverse indices
+    inverse_indices_order_preserving = idx_mapping[inverse_indices]
+
+    assert torch.all(torch.eq(keypoints, unique_order_preserving[inverse_indices_order_preserving]).view(-1))
 
     return unique_order_preserving, inverse_indices_order_preserving
 
