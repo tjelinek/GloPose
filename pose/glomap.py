@@ -562,7 +562,7 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
         existing_database_image_ids = [img.image_id for img in existing_database.read_all_images()]
 
     keypoints_for_node: Dict[int, torch.Tensor] = {}
-    edge_match_indices: Dict[Tuple[int, int, str], torch.Tensor] = {}
+    edge_match_indices: Dict[Tuple[int, int, int], torch.Tensor] = defaultdict(lambda: torch.zeros(0, ).to(device))
 
     for u in G.nodes():
 
@@ -602,7 +602,9 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
                                                                    keypoints_u_incoming_list_lengths)
 
             for i, (v, _) in enumerate(incoming_edges):
-                edge_match_indices[v, u, 'v'] = keypoints_matches_incoming_indices_split[i]
+                # Handle if both (u, v), and (v, u) exists
+                edge_match_indices[v, u, 1] = torch.cat([edge_match_indices[v, u, 1],
+                                                         keypoints_matches_incoming_indices_split[i]], dim=0)
 
         if match_indices_outgoing.shape[0] > 0:
             keypoints_matches_outgoing_indices = match_indices_order_preserving[match_indices_delimiters[1]:]
@@ -610,12 +612,15 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
                                                                    keypoints_u_outgoing_list_lengths)
 
             for i, (_, v) in enumerate(outgoing_edges):
-                edge_match_indices[u, v, 'u'] = keypoints_matches_outgoing_indices_split[i]
+                # Handle if both (u, v), and (v, u) exists
+                edge_match_indices[u, v, 0] = torch.cat([edge_match_indices[u, v, 0],
+                                                         keypoints_matches_outgoing_indices_split[i]], dim=0)
 
         keypoints_for_node[u] = keypoints_u_unique
 
     edge_match_indices_concatenated: Dict[Tuple[int, int], torch.Tensor] = {
-        (u, v): torch.stack([edge_match_indices[u, v, 'u'], edge_match_indices[u, v, 'u']], dim=1) for u, v in G.edges()
+        (u, v): torch.stack([edge_match_indices[u, v, 0], edge_match_indices[u, v, 1]], dim=1)
+        for u, v in G.to_undirected().edges()
     }
 
     return keypoints_for_node, edge_match_indices_concatenated
