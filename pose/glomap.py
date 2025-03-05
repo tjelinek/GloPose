@@ -581,8 +581,39 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
         keypoints_u_all_lists = existing_keypoints_u + keypoints_u_incoming_list + keypoints_u_outgoing_list
         keypoints_u_all = torch.cat(keypoints_u_all_lists)
 
-        unique = unique_preserve_order_vectorized(keypoints_u_all)
-        breakpoint()
+        keypoints_u_unique, match_indices_order_preserving = keypoints_unique_preserve_order(keypoints_u_all)
 
+        num_existing = existing_keypoints_lengths[0]
+        num_incoming = int(np.sum(keypoints_u_incoming_list_lengths))
+        num_outgoing = int(np.sum(keypoints_u_outgoing_list_lengths))
+        match_indices_sizes = [num_existing, num_incoming, num_outgoing]
+        match_indices_delimiters = np.cumsum(match_indices_sizes)
 
-    return keypoints_for_node
+        match_indices_existing, match_indices_incoming, match_indices_outgoing = (
+            torch.split(match_indices_order_preserving, match_indices_sizes))
+
+        if match_indices_incoming.shape[0] > 0:
+            keypoints_matches_incoming_indices = match_indices_order_preserving[match_indices_delimiters[0]:
+                                                                                match_indices_delimiters[1]]
+
+            keypoints_matches_incoming_indices_split = torch.split(keypoints_matches_incoming_indices,
+                                                                   keypoints_u_incoming_list_lengths)
+
+            for i, (v, _) in enumerate(incoming_edges):
+                edge_match_indices[v, u, 'v'] = keypoints_matches_incoming_indices_split[i]
+
+        if match_indices_outgoing.shape[0] > 0:
+            keypoints_matches_outgoing_indices = match_indices_order_preserving[match_indices_delimiters[1]:]
+            keypoints_matches_outgoing_indices_split = torch.split(keypoints_matches_outgoing_indices,
+                                                                   keypoints_u_outgoing_list_lengths)
+
+            for i, (_, v) in enumerate(outgoing_edges):
+                edge_match_indices[u, v, 'u'] = keypoints_matches_outgoing_indices_split[i]
+
+        keypoints_for_node[u] = keypoints_u_unique
+
+    edge_match_indices_concatenated: Dict[Tuple[int, int], torch.Tensor] = {
+        (u, v): torch.stack([edge_match_indices[u, v, 'u'], edge_match_indices[u, v, 'u']], dim=1) for u, v in G.edges()
+    }
+
+    return keypoints_for_node, edge_match_indices_concatenated
