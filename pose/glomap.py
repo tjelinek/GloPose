@@ -521,31 +521,24 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         print(f"Failed to register image {new_image_id}.")
 
 
-def unique_preserve_order_vectorized(keypoints: torch.Tensor):
+def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    # Need to use numpy because sort=False argument of torch.unique() does not work
 
     keypoints_np = keypoints.numpy(force=True)
-    unique_sorted, inverse_indices = torch.unique(keypoints, return_inverse=True, sorted=True, dim=0)
 
-    # Find first occurrence of each unique value
-    perm = torch.arange(len(inverse_indices), device=keypoints.device)
+    # NumPy has a built-in way to get unique elements with indices
+    _, index_np, inverse_indices_np = np.unique(keypoints_np, return_index=True, return_inverse=True, axis=0)
 
-    breakpoint()
-    first_occurrence = torch.zeros(len(unique_sorted), dtype=torch.long, device=keypoints.device)
+    # Sort indices to get elements in order of appearance
+    index_sort_permutation_np = np.argsort(index_np)
+    index_sort_permutation = torch.from_numpy(index_sort_permutation_np).to(keypoints.device)
+    inverse_indices = torch.from_numpy(inverse_indices_np).to(keypoints.device)
+    index = torch.from_numpy(index_np).to(keypoints.device)
 
-    # For each position in the original tensor, we only keep the first occurrence
-    for i, p in enumerate(perm):
-        idx = inverse_indices[i]
-        if first_occurrence[idx] == 0:
-            first_occurrence[idx] = i + 1  # +1 to distinguish from initialized zeros
+    unique_order_preserving = keypoints[index[index_sort_permutation]]
+    inverse_indices_order_preserving = inverse_indices[index[index_sort_permutation]]
 
-    # Get indices of first occurrences (subtract 1 to get back to 0-indexed)
-    first_indices = first_occurrence - 1
-
-    # Sort by position of first occurrence
-    sorted_indices = torch.argsort(first_indices)
-
-    # Return unique elements in order of first appearance
-    return unique_sorted[sorted_indices]
+    return unique_order_preserving, inverse_indices_order_preserving
 
 
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
