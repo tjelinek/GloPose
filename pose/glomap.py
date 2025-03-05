@@ -487,13 +487,16 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
 
-    unique_keypoints_from_matches(matching_edges, database, device)
+    keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database, device)
 
-    for db_image_id, (db_img_match_indices, query_img_match_indices) in matching_to_db_img.items():
-        matching_indices = torch.stack([db_img_match_indices, query_img_match_indices], dim=1)
-        matching_indices_np = matching_indices.numpy(force=True)
+    database.clear_keypoints()
+    for colmap_image_id in keypoints.keys():
+        keypoints_np = keypoints[colmap_image_id].numpy(force=True)
+        database.write_keypoints(colmap_image_id, keypoints_np)
 
-        database.write_matches(db_image_id, new_image_id, matching_indices_np)
+    for colmap_image_u, colmap_image_v in edge_match_indices.keys():
+        match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
+        database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
     database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
 
