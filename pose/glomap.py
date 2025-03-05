@@ -407,7 +407,7 @@ def get_match_points_indices(keypoints, match_pts):
 
     if kpts_and_match_pts_indices.max() >= N:
         raise ValueError("Not all src_pts included in keypoints")
-
+    assert torch.equal(keypoints[kpts_and_match_pts_indices[:N]], keypoints)
     match_pts_indices = kpts_and_match_pts_indices[N:]
     return match_pts_indices
 
