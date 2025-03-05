@@ -552,7 +552,8 @@ def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tens
 
 
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
-                                  existing_database: pycolmap.Database, device: str) -> Dict[int, torch.Tensor]:
+                                  existing_database: pycolmap.Database, device: str) -> (
+        Tuple)[Dict[int, torch.Tensor], Dict[Tuple[int, int], torch.Tensor]]:
     G = nx.DiGraph()
     G.add_edges_from(matching_edges.keys())
 
@@ -561,6 +562,7 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
         existing_database_image_ids = [img.image_id for img in existing_database.read_all_images()]
 
     keypoints_for_node: Dict[int, torch.Tensor] = {}
+    edge_match_indices: Dict[Tuple[int, int, str], torch.Tensor] = {}
 
     for u in G.nodes():
 
