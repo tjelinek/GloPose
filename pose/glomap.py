@@ -457,16 +457,6 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     database.write_camera(new_camera, use_camera_id=True)
     database.write_image(new_database_image, use_image_id=True)
 
-    loaded_keypoints = {
-        img.image_id: database.read_keypoints(img.image_id) for img in database.read_all_images()
-    }
-
-    database.clear_keypoints()
-
-    query_img_pts_xy_all_list = []
-    db_img_ids = []
-    matching_to_db_img: Dict[int, List] = {}
-
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
 
     for frame_idx in view_graph.view_graph.nodes():
