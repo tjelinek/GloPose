@@ -54,12 +54,14 @@ def main():
     skip_frames = 1
     gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
     gt_mesh = load_mesh(Path(config.gt_mesh_path))
+    gt_rotations = scenarios.generate_rotations_y(step=5)
+    breakpoint()
     gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).to(torch.float32).to(config.device)
     images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
 
     images_paths = images_paths[::skip_frames]
     gt_rotations = gt_rotations[::skip_frames]
-    gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations
+    gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations * 0
     gt_translations = gt_translations.to(config.device)
 
     gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
