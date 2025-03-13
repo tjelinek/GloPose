@@ -7,7 +7,6 @@ import torch
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
-from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 
 
@@ -235,7 +234,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
 
         H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
-        src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(flow_arc_node.roma_flow_warp, H_A, W_A, H_A, W_A)
+        src_pts_xy = flow_arc_node.src_pts_xy_roma
 
         src_pts_xy_int = torch.ceil(src_pts_xy).int() - 1
 
@@ -245,8 +244,8 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-        assert flow_arc_node.roma_flow_certainty.shape == in_segmentation_mask_yx.shape
-        fg_certainties = flow_arc_node.roma_flow_certainty.to(dev)[in_segmentation_mask_yx]
+        assert flow_arc_node.src_dst_certainty_roma.shape == in_segmentation_mask_yx.shape
+        fg_certainties = flow_arc_node.src_dst_certainty_roma[in_segmentation_mask_yx]
         fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
@@ -263,27 +262,28 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.data_graph.add_new_arc(source_frame, target_frame)
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
-        if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
-            warp, certainty = self.flow_provider.next_flow_roma(source_frame, target_frame, sample=10000)
-        else:
-            warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
-
-        edge_data.roma_flow_warp = warp
-        edge_data.roma_flow_certainty = certainty
 
         source_frame_data = self.data_graph.get_frame_data(source_frame)
         target_frame_data = self.data_graph.get_frame_data(target_frame)
+        source_frame_image = source_frame_data.frame_observation.observed_image
+        target_frame_image = target_frame_data.frame_observation.observed_image
+        source_frame_segmentation = source_frame_data.frame_observation.observed_segmentation
+        target_frame_segmentation = target_frame_data.frame_observation.observed_segmentation
+        source_image_name = source_frame_data.image_filename
+        target_image_name = target_frame_data.image_filename
 
-        h1, w1 = source_frame_data.image_shape.height, source_frame_data.image_shape.width
-        h2, w2 = target_frame_data.image_shape.height, target_frame_data.image_shape.width
-
-        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+        num_samples = self.config.roma_sample_size
+        src_pts_xy_roma, dst_pts_xy_roma, certainty = (
+            self.flow_provider.get_source_target_points_roma(source_frame_image, target_frame_image, num_samples,
+                                                             source_frame_segmentation, target_frame_segmentation,
+                                                             source_image_name, target_image_name))
 
         edge_data.src_pts_xy_roma = src_pts_xy_roma
         edge_data.dst_pts_xy_roma = dst_pts_xy_roma
+        edge_data.src_dst_certainty_roma = certainty
 
         reliability = self.flow_reliability(source_frame, target_frame)
-        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= self.config.flow_reliability_threshold
 

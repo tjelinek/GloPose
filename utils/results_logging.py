@@ -618,7 +618,7 @@ class WriteResults:
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
         if self.config.frame_filter == 'RoMa':
-            certainties = arc_observation.roma_flow_certainty.numpy(force=True)
+            certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
             above_threshold_mask = certainties >= self.config.min_roma_certainty_threshold
             src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
             dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)

@@ -76,7 +76,8 @@ class CrossFrameData(DataGraphStorage):
     observed_flow: FlowObservation = None
 
     roma_flow_warp: torch.Tensor = None  # [W, H] format
-    roma_flow_certainty: torch.Tensor = None  # [W, H] format
+    roma_flow_warp_certainty: torch.Tensor = None  # [W, H] format
+
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
     src_dst_certainty_roma: torch.Tensor = None
