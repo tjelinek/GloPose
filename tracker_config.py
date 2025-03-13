@@ -45,9 +45,9 @@ class TrackerConfig:
     # Mesh settings
     mesh_normalize: bool = False
     texture_size: int = 1000
-    gt_mesh_path: str = None
+    gt_mesh_path: Path = None
     optimize_shape: bool = False
-    gt_texture_path: str = None
+    gt_texture_path: Path = None
 
     # Tracking initialization
     tran_init: Tuple[float] = (0., 0., 0.)  # (0., 0., 0.)
