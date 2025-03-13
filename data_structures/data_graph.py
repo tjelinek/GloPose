@@ -12,6 +12,8 @@ from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObserv
 
 @dataclass
 class CommonFrameData:
+    _storage_device: str = 'cpu'
+    _out_device: str = 'cpu'
 
     # Input data
     frame_observation: FrameObservation = None
@@ -46,8 +48,15 @@ class CommonFrameData:
 
     def __setattr__(self, name, value):
         if isinstance(value, torch.Tensor):
-            value = value.cpu()  # Move the tensor to CPU
+            value = value.to(self._storage_device)
         super().__setattr__(name, value)
+
+    def __getattribute__(self, name):
+        super_val = super().__getattribute__(name)
+        if isinstance(super_val, torch.Tensor):
+            breakpoint()
+            return super_val.to(self._out_device)
+        return super_val
 
 
 @dataclass
@@ -61,6 +70,7 @@ class CrossFrameData:
     roma_flow_certainty: torch.Tensor = None  # [W, H] format
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
+    src_dst_certainty_roma: torch.Tensor = None
 
     sift_keypoint_indices: torch.Tensor = None
     sift_dists: torch.Tensor = None
@@ -86,9 +96,12 @@ class CrossFrameData:
         super().__setattr__(name, value)
 
 
-@dataclass
 class DataGraph:
-    G: nx.DiGraph = field(default_factory=nx.DiGraph)
+
+    def __init__(self, out_device: 'str', storage_device: 'str' = 'cpu'):
+        self.G: nx.DiGraph = nx.DiGraph()
+        self.out_device = out_device
+        self.storage_device = storage_device
 
     def add_new_frame(self, frame_idx: int) -> None:
         assert not self.G.has_node(frame_idx)
