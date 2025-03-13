@@ -103,8 +103,9 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colm
 
         view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation, image_id, image.name)
 
-    for u, v in structure.edges:
-        if u not in view_graph.view_graph.nodes and v not in view_graph.view_graph.nodes:
-            view_graph.view_graph.add_edge(u, v)
+    # TODO this causes errors when COLMAP does not register an image
+    # for u, v in structure.edges:
+    #     if u not in view_graph.view_graph.nodes and v not in view_graph.view_graph.nodes:
+    #         view_graph.view_graph.add_edge(u, v)
 
     return view_graph
