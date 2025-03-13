@@ -348,7 +348,7 @@ class BaseTracker:
         self.segmentation_provider: SegmentationProvider
 
         if config.frame_provider == 'synthetic':
-            self.frame_provider = SyntheticFrameProvider(config, None, **kwargs)
+            self.frame_provider = SyntheticFrameProvider(config, **kwargs)
         elif config.frame_provider == 'precomputed':
             self.frame_provider = PrecomputedFrameProvider(config, **kwargs)
         else:
@@ -357,7 +357,7 @@ class BaseTracker:
         self.image_shape: ImageSize = self.frame_provider.image_shape
 
         if config.segmentation_provider == 'synthetic':
-            self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, None, **kwargs)
+            self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'precomputed':
             self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'whites':
@@ -375,7 +375,7 @@ class BaseTracker:
                 assert kwargs.get('video_path')
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
-                synthetic_segment_provider = SyntheticDataProvider(config, None, **kwargs)
+                synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
