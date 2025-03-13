@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from typing import Union, Tuple
 
@@ -66,13 +67,19 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True):
+    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True,
+                 purge_cache: bool = False):
         super().__init__(device)
 
         self.data_graph = data_graph
         self.saved_flow_paths = cache_dir
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
+
+        if purge_cache and self.warps_path.exists():
+            shutil.rmtree(self.warps_path)
+        if purge_cache and self.certainties_path.exists():
+            shutil.rmtree(self.certainties_path)
 
         self.warps_path.mkdir(exist_ok=True, parents=True)
         self.certainties_path.mkdir(exist_ok=True, parents=True)

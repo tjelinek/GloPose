@@ -267,6 +267,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
         self.predictor: Optional[SamPredictor] = None
         self.cache_folder: Optional[Path] = sam2_cache_folder
         if self.cache_folder is not None:
+            if config.purge_cache:
+                shutil.rmtree(self.cache_folder)
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
         if self.cache_folder is not None:

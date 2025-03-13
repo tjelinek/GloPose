@@ -5,7 +5,7 @@ from dataset_generators import scenarios
 from models.rendering import get_Se3_obj_to_cam_from_kaolin_params
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from utils.runtime_utils import parse_args
-from tracker6d import run_tracking_on_sequence
+from tracker6d import Tracker6D
 from utils.data_utils import load_mesh, load_texture
 from utils.general import load_config
 from pathlib import Path
@@ -51,12 +51,14 @@ def main():
     config.sequence = sequence
     config.dataset = dataset
 
+    config.large_images_results_write_frequency = 1
+
     skip_frames = 1
     gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
     gt_mesh = load_mesh(Path(config.gt_mesh_path))
-    gt_rotations = scenarios.generate_rotations_y(step=5)
-    breakpoint()
-    gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).to(torch.float32).to(config.device)
+    gt_rotations = torch.deg2rad(scenarios.generate_rotations_y(step=5).rotations).to(config.device)
+    gt_rotations = torch.cat([gt_rotations, gt_rotations], dim=0)
+    # gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).to(torch.float32).to(config.device)
     images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
 
     images_paths = images_paths[::skip_frames]
@@ -81,8 +83,10 @@ def main():
 
     config.input_frames = gt_rotations.shape[0]
 
-    run_tracking_on_sequence(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
-                             gt_Se3_cam2obj=gt_Se3_cam2obj, images_paths=images_paths)
+    tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
+                        gt_Se3_cam2obj=gt_Se3_cam2obj, images_paths=images_paths)
+
+    tracker.run_filtering_with_reconstruction()
 
 
 if __name__ == "__main__":
