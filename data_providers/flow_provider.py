@@ -29,6 +29,16 @@ class RoMaFlowProviderDirect:
 
         roma_h, roma_w = self.roma_size_hw
 
+        certainty = self.zero_certainty_outside_segmentation(certainty, roma_w, source_image_segmentation,
+                                                             target_image_segmentation)
+
+        if sample:
+            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+
+        return warp, certainty
+
+    def zero_certainty_outside_segmentation(self, certainty, roma_w, source_image_segmentation,
+                                            target_image_segmentation):
         certainty = certainty.clone()
         if source_image_segmentation is not None:
             source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation,
@@ -38,11 +48,7 @@ class RoMaFlowProviderDirect:
             target_image_segment_roma_size = torchvision.transforms.functional.resize(target_image_segmentation,
                                                                                       size=self.roma_size_hw)
             certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.mT.squeeze().bool().float()
-
-        if sample:
-            warp, certainty = self.flow_model.sample(warp, certainty, sample)
-
-        return warp, certainty
+        return certainty
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
                                       sample=None, source_image_segmentation: torch.Tensor = None,
