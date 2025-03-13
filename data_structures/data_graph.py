@@ -61,7 +61,10 @@ class CommonFrameData:
 
 @dataclass
 class CrossFrameData:
-    
+
+    _storage_device: str = 'cpu'
+    _out_device: str = 'cpu'
+
     # Optical Flow observations
     synthetic_flow_result: SyntheticFlowObservation = None
     observed_flow: FlowObservation = None
@@ -92,27 +95,36 @@ class CrossFrameData:
 
     def __setattr__(self, name, value):
         if isinstance(value, torch.Tensor):
-            value = value.cpu()  # Move the tensor to CPU
+            value = value.to(self._storage_device)
         super().__setattr__(name, value)
+
+    def __getattribute__(self, name):
+        super_val = super().__getattribute__(name)
+        if isinstance(super_val, torch.Tensor):
+            breakpoint()
+            return super_val.to(self._out_device)
+        return super_val
 
 
 class DataGraph:
 
     def __init__(self, out_device: 'str', storage_device: 'str' = 'cpu'):
         self.G: nx.DiGraph = nx.DiGraph()
-        self.out_device = out_device
-        self.storage_device = storage_device
+        self.out_device: str = out_device
+        self.storage_device: str = storage_device
 
     def add_new_frame(self, frame_idx: int) -> None:
         assert not self.G.has_node(frame_idx)
 
-        self.G.add_node(frame_idx, frame_data=CommonFrameData())
+        self.G.add_node(frame_idx, frame_data=CommonFrameData(_storage_device=self.storage_device,
+                                                              _out_device=self.out_device))
 
     def add_new_arc(self, source_frame_idx: int, target_frame_idx: int) -> None:
         assert not self.G.has_edge(source_frame_idx, target_frame_idx)
 
         self.G.add_edge(source_frame_idx, target_frame_idx,
-                        edge_observations=CrossFrameData())
+                        edge_observations=CrossFrameData(_storage_device=self.storage_device,
+                                                         _out_device=self.out_device))
 
     def get_frame_data(self, frame_idx: int) -> CommonFrameData:
         assert self.G.has_node(frame_idx)
