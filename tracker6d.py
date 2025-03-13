@@ -23,7 +23,7 @@ class Tracker6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
                  images_paths: List[Path] = None, video_path: Optional[Path] = None,
-                 gt_Se3_cam2obj: Optional[Se3] = None, initial_gt_Se3_cam2obj: Optional[Se3] = None,
+                 gt_Se3_cam2obj: Optional[Se3 | Dict[int, Se3]] = None, initial_gt_Se3_cam2obj: Optional[Se3] = None,
                  segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
                  initial_image: torch.Tensor | List[torch.Tensor] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
@@ -41,9 +41,16 @@ class Tracker6D:
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
 
+        self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None
         # Ground truth related
-        self.gt_Se3_cam2obj: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        if type(gt_Se3_cam2obj) is dict:
+            self.gt_Se3_cam2obj: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        elif type(gt_Se3_cam2obj) is Se3:
+            self.gt_Se3_cam2obj: Optional[Dict[Se3]] = {i: gt_Se3_cam2obj[i] for i in range(gt_Se3_cam2obj.t.shape[0])}
+
         self.initial_gt_Se3_cam2obj: Optional[Se3] = initial_gt_Se3_cam2obj
+        if initial_gt_Se3_cam2obj is None and self.gt_Se3_cam2obj is not None and self.gt_Se3_cam2obj.get(0):
+            self.initial_gt_Se3_cam2obj = self.gt_Se3_cam2obj.get(0)
 
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
