@@ -7,7 +7,6 @@ import torchvision
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
-from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 
 
@@ -19,7 +18,8 @@ class RoMaFlowProviderDirect:
         self.roma_size_hw = (864, 864)
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
-                       source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None) \
+                       source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                       source_image_name: str = None, target_image_name: str = None) \
             -> Tuple[torch.Tensor, torch.Tensor]:
 
         source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
@@ -57,11 +57,6 @@ class RoMaFlowProviderDirect:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
                                               source_image_segmentation, target_image_segmentation)
 
-        return self._get_source_target_points_roma(warp, source_image_tensor, target_image_tensor, as_int)
-
-    @staticmethod
-    def _get_source_target_points_roma(warp, source_image_tensor, target_image_tensor, as_int) -> (
-            Tuple)[torch.Tensor, torch.Tensor]:
         h1 = source_image_tensor.shape[-2]
         w1 = source_image_tensor.shape[-1]
         h2 = target_image_tensor.shape[-2]
@@ -70,17 +65,16 @@ class RoMaFlowProviderDirect:
         if as_int:
             src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
             dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
-
-        return src_pts_xy_roma, dst_pts_xy_roma
+        result = src_pts_xy_roma, dst_pts_xy_roma
+        return result
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, device, cache_dir: Path, allow_missing: bool = True,
+    def __init__(self, device, cache_dir: Path, allow_missing: bool = True,
                  purge_cache: bool = False):
         super().__init__(device)
 
-        self.data_graph = data_graph
         self.saved_flow_paths = cache_dir
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
@@ -95,20 +89,21 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
         self.allow_missing: bool = allow_missing
 
-    def next_cache_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None,
-                             source_image_segmentation: torch.Tensor = None,
-                             target_image_segmentation: torch.Tensor = None):
+    def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                       source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                       source_image_name: Path = None, target_image_name: Path = None) -> (
+            Tuple)[torch.Tensor, torch.Tensor]:
 
-        src_image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
-        target_image_name = self.data_graph.get_frame_data(target_image_idx).image_filename
-        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+        if source_image_name is None or target_image_name is None:
+            return super().next_flow_roma(source_image_tensor, target_image_tensor, sample, source_image_segmentation,
+                                          target_image_segmentation)
+
+        saved_filename = f'{source_image_name.stem}___{target_image_name.stem}.pt'
 
         warp_filename = self.warps_path / saved_filename
         certainty_filename = self.certainties_path / saved_filename
 
         if (not warp_filename.exists() or not certainty_filename.exists()) and self.allow_missing:
-            source_image_tensor = self.data_graph.get_frame_data(source_image_idx).frame_observation.observed_image
-            target_image_tensor = self.data_graph.get_frame_data(target_image_idx).frame_observation.observed_image
             warp, certainty = super().next_flow_roma(source_image_tensor, target_image_tensor)
 
             torch.save(warp, warp_filename)

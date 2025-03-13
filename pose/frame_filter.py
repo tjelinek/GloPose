@@ -264,7 +264,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
         if edge_data.roma_flow_warp is None or edge_data.roma_flow_certainty is None:
-            warp, certainty = self.flow_provider.next_cache_flow_roma(source_frame, target_frame, sample=10000)
+            warp, certainty = self.flow_provider.next_flow_roma(source_frame, target_frame, sample=10000)
         else:
             warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_certainty
 
