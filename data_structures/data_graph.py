@@ -7,11 +7,29 @@ import torch
 from kornia.geometry import Se3
 from kornia.image import ImageSize
 
-from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation
+from data_structures.keyframe_buffer import FlowObservation, SyntheticFlowObservation, FrameObservation, Observation
 
 
 @dataclass
-class CommonFrameData:
+class DataGraphStorage:
+    def __setattr__(self, name, value):
+        if isinstance(value, torch.Tensor):
+            value = value.to(self._storage_device)
+        elif isinstance(value, Observation):
+            value = value.send_to_device(self._storage_device)
+        super().__setattr__(name, value)
+
+    def __getattribute__(self, name):
+        super_val = super().__getattribute__(name)
+        if isinstance(super_val, torch.Tensor):
+            return super_val.to(self._out_device)
+        elif isinstance(super_val, Observation):
+            return super_val.send_to_device(self._out_device)
+        return super_val
+
+
+@dataclass
+class CommonFrameData(DataGraphStorage):
     _storage_device: str = 'cpu'
     _out_device: str = 'cpu'
 
@@ -46,21 +64,9 @@ class CommonFrameData:
     # Timings
     pose_estimation_time: float = None
 
-    def __setattr__(self, name, value):
-        if isinstance(value, torch.Tensor):
-            value = value.to(self._storage_device)
-        super().__setattr__(name, value)
-
-    def __getattribute__(self, name):
-        super_val = super().__getattribute__(name)
-        if isinstance(super_val, torch.Tensor):
-            breakpoint()
-            return super_val.to(self._out_device)
-        return super_val
-
 
 @dataclass
-class CrossFrameData:
+class CrossFrameData(DataGraphStorage):
 
     _storage_device: str = 'cpu'
     _out_device: str = 'cpu'
@@ -92,18 +98,6 @@ class CrossFrameData:
 
     # SIFT
     num_matches: int = None
-
-    def __setattr__(self, name, value):
-        if isinstance(value, torch.Tensor):
-            value = value.to(self._storage_device)
-        super().__setattr__(name, value)
-
-    def __getattribute__(self, name):
-        super_val = super().__getattribute__(name)
-        if isinstance(super_val, torch.Tensor):
-            breakpoint()
-            return super_val.to(self._out_device)
-        return super_val
 
 
 class DataGraph:
