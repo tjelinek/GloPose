@@ -669,10 +669,10 @@ class WriteResults:
         template_image_size = template_data.image_shape
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 100)
+                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 20)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 100)
+                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
 
         if self.config.frame_filter == 'RoMa':
             reliability = arc_observation.reliability_score
