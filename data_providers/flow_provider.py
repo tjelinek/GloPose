@@ -27,9 +27,7 @@ class RoMaFlowProviderDirect:
 
         warp, certainty = self.flow_model.match(source_image_roma, target_image_roma, device=self.device)
 
-        roma_h, roma_w = self.roma_size_hw
-
-        certainty = self.zero_certainty_outside_segmentation(certainty, roma_w, source_image_segmentation,
+        certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
                                                              target_image_segmentation)
 
         if sample:
@@ -37,8 +35,10 @@ class RoMaFlowProviderDirect:
 
         return warp, certainty
 
-    def zero_certainty_outside_segmentation(self, certainty, roma_w, source_image_segmentation,
-                                            target_image_segmentation):
+    def zero_certainty_outside_segmentation(self, certainty, source_image_segmentation, target_image_segmentation) ->\
+            torch.Tensor:
+        roma_h, roma_w = self.roma_size_hw
+
         certainty = certainty.clone()
         if source_image_segmentation is not None:
             source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation,
@@ -57,13 +57,16 @@ class RoMaFlowProviderDirect:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
                                               source_image_segmentation, target_image_segmentation)
 
+        return self._get_source_target_points_roma(warp, source_image_tensor, target_image_tensor, as_int)
+
+    @staticmethod
+    def _get_source_target_points_roma(warp, source_image_tensor, target_image_tensor, as_int) -> (
+            Tuple)[torch.Tensor, torch.Tensor]:
         h1 = source_image_tensor.shape[-2]
         w1 = source_image_tensor.shape[-1]
         h2 = target_image_tensor.shape[-2]
         w2 = target_image_tensor.shape[-1]
-
         src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
-
         if as_int:
             src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
             dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
@@ -92,7 +95,9 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
         self.allow_missing: bool = allow_missing
 
-    def next_cache_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None):
+    def next_cache_flow_roma(self, source_image_idx: int, target_image_idx: int, sample=None,
+                             source_image_segmentation: torch.Tensor = None,
+                             target_image_segmentation: torch.Tensor = None):
 
         src_image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
         target_image_name = self.data_graph.get_frame_data(target_image_idx).image_filename
@@ -111,6 +116,9 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         else:
             warp = torch.load(warp_filename, weights_only=True).to(self.device)
             certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
+
+        certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
+                                                             target_image_segmentation)
 
         if sample:
             warp, certainty = self.flow_model.sample(warp, certainty, sample)
