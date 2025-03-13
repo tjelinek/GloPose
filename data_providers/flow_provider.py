@@ -52,10 +52,12 @@ class RoMaFlowProviderDirect:
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
                                       sample=None, source_image_segmentation: torch.Tensor = None,
-                                      target_image_segmentation: torch.Tensor = None, as_int: bool = False) \
-            -> Tuple[torch.Tensor, torch.Tensor]:
+                                      target_image_segmentation: torch.Tensor = None,
+                                      source_image_name: Path = None, target_image_name: Path = None,
+                                      as_int: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
-                                              source_image_segmentation, target_image_segmentation)
+                                              source_image_segmentation, target_image_segmentation,
+                                              source_image_name, target_image_name)
 
         h1 = source_image_tensor.shape[-2]
         w1 = source_image_tensor.shape[-1]
@@ -65,8 +67,13 @@ class RoMaFlowProviderDirect:
         if as_int:
             src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
             dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
-        result = src_pts_xy_roma, dst_pts_xy_roma
-        return result
+
+        if len(src_pts_xy_roma.shape) == 3:
+            src_pts_xy_roma = src_pts_xy_roma.flatten(0, 1)
+        if len(dst_pts_xy_roma.shape) == 3:
+            dst_pts_xy_roma = dst_pts_xy_roma.flatten(0, 1)
+
+        return src_pts_xy_roma, dst_pts_xy_roma, certainty
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
