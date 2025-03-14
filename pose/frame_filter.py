@@ -123,8 +123,6 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.data_graph.get_frame_data(0).reliable_sources = {0}
             self.data_graph.get_frame_data(0).matching_source_keyframe = 0
             return
-        if frame_i >= self.n_frames - 1:
-            self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
 
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
