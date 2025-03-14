@@ -2,8 +2,8 @@ import time
 from pathlib import Path
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.dataset_utils.bop_challenge import (get_bop_images_and_segmentations,
-                                               read_gt_Se3_cam2obj_transformations, read_pinhole_params)
+from utils.bop_challenge import (get_bop_images_and_segmentations,
+                                 read_gt_Se3_cam2obj_transformations, read_pinhole_params)
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
@@ -63,8 +63,7 @@ def main():
 
         gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[0]
 
-        first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0,
-                                                                        dataset_delimeters=sequence_starts)
+        first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
         config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
         config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
