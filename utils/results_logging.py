@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 from typing import List, Optional
 
@@ -344,36 +345,56 @@ class WriteResults:
         # Create a directed graph from the pose graph
         pose_graph = nx.DiGraph()
         pose_graph.add_nodes_from(self.data_graph.G.nodes)
-        pose_graph.add_edges_from((u, v) for (u, v) in self.data_graph.G.edges
-                                  if self.data_graph.get_edge_observations(u, v).is_match_reliable)
+        # pose_graph.add_edges_from((u, v) for (u, v) in self.data_graph.G.edges
+        #                           if self.data_graph.get_edge_observations(u, v).is_match_reliable)
+        pose_graph.add_edges_from((n, self.data_graph.get_frame_data(n).matching_source_keyframe)
+                                  for n in self.data_graph.G.nodes)
+        pose_graph.remove_edges_from((n, n) for n in self.data_graph.G.nodes)
 
-        # Separate keyframes and ordinary frames
+        white_node = [255, 255, 255]
+        red_node = [255, 0, 0]
+
         kfs = set(keyframe_graph.nodes)
-        all_nodes = list(pose_graph.nodes)
+        all_nodes = list(kfs)
+        node_labels = {kf: str(kf) for kf in kfs}
 
+        for kf in kfs:
+            neighbors = sorted({e[0] for e in pose_graph.in_edges(kf)})
+            pose_graph.remove_edges_from((kf, n) for n in neighbors if n not in kfs)
+            pose_graph.remove_edges_from((n, kf) for n in neighbors if n not in kfs)
+
+            for k, g in itertools.groupby(enumerate(neighbors),
+                                          key=lambda t: t[1] - t[0]):
+                g = list(g)
+                start = g[0][1]
+                end = g[-1][1]
+                pose_graph.add_edge(start, kf)
+                all_nodes.append(start)
+                node_labels[start] = f'{start}..{end}'
+
+        all_nodes_sorted = sorted(all_nodes)
         # Define y-axis positions for keyframes and ordinary frames
         positions = [
-            (n * 50, 200.0) if n in kfs else (n * 50, 0.0) for n in all_nodes
+            (i * 100, 200.0) if n in kfs else (i * 100, 0.0) for i, n in enumerate(all_nodes_sorted)
         ]
 
         # Define colors for keyframes and ordinary frames
-        white_node = [255, 255, 255]
-        red_node = [255, 0, 0]
         colors = [
-            red_node if n in kfs else white_node for n in all_nodes
+            red_node if n in kfs else white_node for n in all_nodes_sorted
         ]
 
         # Log nodes with their positions, colors, and labels
         rr.log(
             RerunAnnotations.view_graph,
             rr.GraphNodes(
-                node_ids=list(all_nodes),
+                node_ids=all_nodes_sorted,
                 positions=positions,
-                labels=[str(n) for n in all_nodes],
+                labels=[node_labels[n] for n in all_nodes_sorted],
                 colors=colors,
             )
         )
 
+        all_nodes_set = set(all_nodes)
         # Log edges of the graph
         rr.log(
             RerunAnnotations.view_graph,
