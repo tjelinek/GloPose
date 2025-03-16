@@ -65,7 +65,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         while not reliable_keyframe_found:
 
-            reliability = self.add_new_flow(keyframe_idx, current_frame_idx)
+            reliability = self.flow_reliability(keyframe_idx, current_frame_idx)
 
             if reliability >= min_reliability:
                 self.keyframe_graph.add_edge(current_frame_idx, keyframe_idx)
@@ -129,10 +129,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
         preceding_source = preceding_frame_node.matching_source_keyframe
-        self.add_new_flow(preceding_source, preceding_frame_idx)
-
-        # for preceding_frame in range(frame_i):
-        #     self.add_new_flow(preceding_frame, frame_i)
+        self.flow_reliability(preceding_source, preceding_frame_idx)
 
         reliable_flows_sources = set()
         edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
@@ -161,7 +158,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         datagraph_node = self.data_graph.get_frame_data(frame_i)
         datagraph_node.pose_estimation_time = duration
 
-        flow_reliability = self.add_new_flow(long_jump_source, long_jump_target)
+        flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
 
         datagraph_node.reliable_sources = ({long_jump_source} | reliable_flows_sources)
@@ -176,7 +173,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         current_keyframe_graph_nodes = list(self.keyframe_graph.nodes)
         for source_node_idx in current_keyframe_graph_nodes:
 
-            self.add_new_flow(source_node_idx, frame_i)
+            self.flow_reliability(source_node_idx, frame_i)
             flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
             flow_reliability = flow_edge_data.reliability_score
 
@@ -199,7 +196,7 @@ class RoMaFrameFilter(BaseFrameFilter):
                                                     range(preceding_source, frame_i)]
 
         for source_node_idx, node in nodes:
-            self.add_new_flow(source_node_idx, frame_i)
+            self.flow_reliability(source_node_idx, frame_i)
             flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
             flow_reliability = flow_edge_data.reliability_score
 
@@ -213,15 +210,14 @@ class RoMaFrameFilter(BaseFrameFilter):
             return set(), None
         return reliable_flows, source
 
-    def flow_reliability(self, source_idx: int, target_idx: int) -> float:
-
+    def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         dev = self.config.device
-        source_datagraph_node = self.data_graph.get_frame_data(source_idx)
+        source_datagraph_node = self.data_graph.get_frame_data(source_frame)
         fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
 
         H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
         src_pts_xy_int, dst_pts_xy_int, certainty = (
-            self.flow_provider.get_source_target_points_roma_datagraph(source_idx, target_idx,
+            self.flow_provider.get_source_target_points_roma_datagraph(source_frame, target_frame,
                                                                        self.config.roma_sample_size, as_int=True))
 
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
@@ -240,17 +236,9 @@ class RoMaFrameFilter(BaseFrameFilter):
                                        self.config.min_number_of_reliable_matches)
 
         reliability *= float(sufficient_reliable_matches)
-
-        return reliability.item()
-
-    def add_new_flow(self, source_frame, target_frame) -> float:
-        if (source_frame, target_frame) not in self.data_graph.G.edges:
-            self.data_graph.add_new_arc(source_frame, target_frame)
+        reliability = reliability.item()
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
-
-        reliability = self.flow_reliability(source_frame, target_frame)
-
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= self.config.flow_reliability_threshold
 
