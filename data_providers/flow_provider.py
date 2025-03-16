@@ -141,15 +141,15 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                 torch.save(certainty, certainty_filename)
 
             if self.data_graph is not None:
-                if (source_image_index is not None and target_image_index is not None and
-                        not self.data_graph.G.has_edge(source_image_index, target_image_index)):
-                    self.data_graph.add_new_arc(source_image_index, target_image_index)
+                if source_image_index is not None and target_image_index is not None:
+                    if not self.data_graph.G.has_edge(source_image_index, target_image_index):
+                        self.data_graph.add_new_arc(source_image_index, target_image_index)
 
-                edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
-                if edge_data.roma_flow_warp is None:
-                    edge_data.roma_flow_warp = warp
-                if edge_data.roma_flow_warp_certainty is None:
-                    edge_data.roma_flow_warp_certainty = certainty
+                    edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
+                    if edge_data.roma_flow_warp is None:
+                        edge_data.roma_flow_warp = warp
+                    if edge_data.roma_flow_warp_certainty is None:
+                        edge_data.roma_flow_warp_certainty = certainty
 
         certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
                                                              target_image_segmentation)
@@ -182,7 +182,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                                                       source_image_name, target_image_name,
                                                       source_image_index, target_image_index, as_int=False))
 
-        if self.data_graph is not None and not self.data_graph.G.has_edge(source_image_index, target_image_index):
+        if (self.data_graph is not None and source_image_index is not None and target_image_index is not None and
+                not self.data_graph.G.has_edge(source_image_index, target_image_index)):
             self.data_graph.add_new_arc(source_image_index, target_image_index)
 
         if self._datagraph_edge_exists(source_image_index, target_image_index):
@@ -200,6 +201,19 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
 
         return src_pts_xy_roma, dst_pts_xy_roma, certainty
+
+    def get_source_target_points_roma_datagraph(self, source_image_index: int, target_image_index: int,
+                                                sample: int = None, as_int: bool = False) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        source_data = self.data_graph.get_frame_data(source_image_index)
+        target_data = self.data_graph.get_frame_data(target_image_index)
+
+        return self.get_source_target_points_roma(source_data.frame_observation.observed_image,
+                                                  target_data.frame_observation.observed_image, sample,
+                                                  source_data.frame_observation.observed_segmentation,
+                                                  target_data.frame_observation.observed_segmentation,
+                                                  source_data.image_filename, target_data.image_filename,
+                                                  source_image_index, target_image_index, as_int)
 
     def _datagraph_edge_exists(self, source_image_index, target_image_index):
         return (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
