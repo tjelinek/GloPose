@@ -54,9 +54,9 @@ class RoMaFlowProviderDirect:
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
                                       sample=None, source_image_segmentation: torch.Tensor = None,
-                                      target_image_segmentation: torch.Tensor = None,
-                                      source_image_name: Path = None, target_image_name: Path = None,
-                                      source_image_index: int = None, target_image_index: int = None,
+                                      target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
+                                      target_image_name: Path = None, source_image_index: int = None,
+                                      target_image_index: int = None,
                                       as_int: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
                                               source_image_segmentation, target_image_segmentation, source_image_name,
@@ -74,10 +74,24 @@ class RoMaFlowProviderDirect:
             dst_pts_xy_roma = dst_pts_xy_roma.flatten(0, 1)
 
         if as_int:
-            src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
-            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
+            src_pts_xy_roma, dst_pts_xy_roma = self.keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma,
+                                                                     source_image_tensor, target_image_tensor)
 
         return src_pts_xy_roma, dst_pts_xy_roma, certainty
+
+    @staticmethod
+    def keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma, source_image_tensor, target_image_tensor):
+        h1 = source_image_tensor.shape[-2]
+        w1 = source_image_tensor.shape[-1]
+        h2 = target_image_tensor.shape[-2]
+        w2 = target_image_tensor.shape[-1]
+        src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
+        dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
+        src_pts_xy_roma[:, 0] = torch.clamp(src_pts_xy_roma[:, 0], 0, w1 - 1)
+        src_pts_xy_roma[:, 1] = torch.clamp(src_pts_xy_roma[:, 1], 0, h1 - 1)
+        dst_pts_xy_roma[:, 0] = torch.clamp(dst_pts_xy_roma[:, 0], 0, w2 - 1)
+        dst_pts_xy_roma[:, 1] = torch.clamp(dst_pts_xy_roma[:, 1], 0, h2 - 1)
+        return src_pts_xy_roma, dst_pts_xy_roma
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
@@ -161,9 +175,9 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
                                       sample=None, source_image_segmentation: torch.Tensor = None,
-                                      target_image_segmentation: torch.Tensor = None,
-                                      source_image_name: Path = None, target_image_name: Path = None,
-                                      source_image_index: int = None, target_image_index: int = None,
+                                      target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
+                                      target_image_name: Path = None, source_image_index: int = None,
+                                      target_image_index: int = None,
                                       as_int: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         src_pts_xy_roma = None
         dst_pts_xy_roma = None
@@ -179,8 +193,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             src_pts_xy_roma, dst_pts_xy_roma, certainty = (
                 super().get_source_target_points_roma(source_image_tensor, target_image_tensor, sample,
                                                       source_image_segmentation, target_image_segmentation,
-                                                      source_image_name, target_image_name,
-                                                      source_image_index, target_image_index, as_int=False))
+                                                      source_image_name, target_image_name, source_image_index,
+                                                      target_image_index, as_int=False))
 
         if (self.data_graph is not None and source_image_index is not None and target_image_index is not None and
                 not self.data_graph.G.has_edge(source_image_index, target_image_index)):
@@ -197,8 +211,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                 edge_data.src_dst_certainty_roma = certainty
 
         if as_int:
-            src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
-            dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
+            src_pts_xy_roma, dst_pts_xy_roma = self.keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma,
+                                                                     source_image_tensor, target_image_tensor)
 
         return src_pts_xy_roma, dst_pts_xy_roma, certainty
 
@@ -213,7 +227,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                                                   source_data.frame_observation.observed_segmentation,
                                                   target_data.frame_observation.observed_segmentation,
                                                   source_data.image_filename, target_data.image_filename,
-                                                  source_image_index, target_image_index, as_int)
+                                                  source_image_index, target_image_index, as_int=as_int)
 
     def _datagraph_edge_exists(self, source_image_index, target_image_index):
         return (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
