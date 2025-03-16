@@ -65,7 +65,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         while not reliable_keyframe_found:
 
-            reliability = self.flow_reliability(keyframe_idx, current_frame_idx)
+            reliability = self.add_new_flow(keyframe_idx, current_frame_idx)
 
             if reliability >= min_reliability:
                 self.keyframe_graph.add_edge(current_frame_idx, keyframe_idx)
@@ -123,6 +123,8 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.data_graph.get_frame_data(0).reliable_sources = {0}
             self.data_graph.get_frame_data(0).matching_source_keyframe = 0
             return
+        if frame_i >= self.n_frames - 1 and False:
+            self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
 
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
@@ -140,36 +142,26 @@ class RoMaFrameFilter(BaseFrameFilter):
         elif frame_i > 1:
             reliable_flows_sources_prime, best_source = self.match_to_all_keyframes(frame_i)
             if best_source is None:
-                reliable_flows_sources_prime, best_source = self.match_to_frames_from_last_kf(frame_i, preceding_source)
+                source = preceding_source
 
-                if best_source is None:
-                    source = preceding_source
-                else:
-                    source = best_source
-                    max_kf = max(self.keyframe_graph.nodes())
-                    self.keyframe_graph.add_edge(source, frame_i)
-                    self.keyframe_graph.add_edge(max_kf, source)
+                self.keyframe_graph.add_node(frame_i - 1)
+                self.keyframe_graph.add_edge(preceding_source, frame_i - 1)
 
-                    self.keyframe_graph.add_node(best_source)
-                reliable_flows_sources |= reliable_flows_sources_prime
+                reliable_flows_sources |= {source}
             else:
                 source = best_source
+                if reliable_flows_sources_prime is not None:
+                    reliable_flows_sources |= reliable_flows_sources_prime
         else:
             source = 0
         flow_arc_long_jump = (source, frame_i)
-
-        self.add_new_flow(source, frame_i)
-
         long_jump_source, long_jump_target = flow_arc_long_jump
 
         duration = time() - start_time
         datagraph_node = self.data_graph.get_frame_data(frame_i)
         datagraph_node.pose_estimation_time = duration
 
-        datagraph_long_edge = self.data_graph.get_edge_observations(*flow_arc_long_jump)
-
-        flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
-        datagraph_long_edge.reliability_score = flow_reliability
+        flow_reliability = self.add_new_flow(long_jump_source, long_jump_target)
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
 
         datagraph_node.reliable_sources = ({long_jump_source} | reliable_flows_sources)
@@ -227,14 +219,10 @@ class RoMaFrameFilter(BaseFrameFilter):
         source_datagraph_node = self.data_graph.get_frame_data(source_idx)
         fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
 
-        if not self.data_graph.G.has_edge(source_idx, target_idx):
-            self.add_new_flow(source_idx, target_idx)
-        flow_arc_node = self.data_graph.get_edge_observations(source_idx, target_idx)
-
         H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
-        src_pts_xy = flow_arc_node.src_pts_xy_roma
-
-        src_pts_xy_int = torch.ceil(src_pts_xy).int() - 1
+        src_pts_xy_int, dst_pts_xy_int, certainty = (
+            self.flow_provider.get_source_target_points_roma_datagraph(source_idx, target_idx,
+                                                                       self.config.roma_sample_size, as_int=True))
 
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
@@ -242,8 +230,8 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-        assert flow_arc_node.src_dst_certainty_roma.shape == in_segmentation_mask_yx.shape
-        fg_certainties = flow_arc_node.src_dst_certainty_roma[in_segmentation_mask_yx]
+        assert certainty.shape == in_segmentation_mask_yx.shape
+        fg_certainties = certainty[in_segmentation_mask_yx]
         fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
@@ -255,35 +243,18 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         return reliability.item()
 
-    def add_new_flow(self, source_frame, target_frame):
+    def add_new_flow(self, source_frame, target_frame) -> float:
         if (source_frame, target_frame) not in self.data_graph.G.edges:
             self.data_graph.add_new_arc(source_frame, target_frame)
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
 
-        source_frame_data = self.data_graph.get_frame_data(source_frame)
-        target_frame_data = self.data_graph.get_frame_data(target_frame)
-        source_frame_image = source_frame_data.frame_observation.observed_image
-        target_frame_image = target_frame_data.frame_observation.observed_image
-        source_frame_segmentation = source_frame_data.frame_observation.observed_segmentation
-        target_frame_segmentation = target_frame_data.frame_observation.observed_segmentation
-        source_image_name = source_frame_data.image_filename
-        target_image_name = target_frame_data.image_filename
-
-        num_samples = self.config.roma_sample_size
-        src_pts_xy_roma, dst_pts_xy_roma, certainty = (
-            self.flow_provider.get_source_target_points_roma(source_frame_image, target_frame_image, num_samples,
-                                                             source_frame_segmentation, target_frame_segmentation,
-                                                             source_image_name, target_image_name))
-
-        edge_data.src_pts_xy_roma = src_pts_xy_roma
-        edge_data.dst_pts_xy_roma = dst_pts_xy_roma
-        edge_data.src_dst_certainty_roma = certainty
-
         reliability = self.flow_reliability(source_frame, target_frame)
 
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= self.config.flow_reliability_threshold
+
+        return reliability
 
 
 class FrameFilterSift(BaseFrameFilter):
