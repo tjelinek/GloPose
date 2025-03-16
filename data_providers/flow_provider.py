@@ -1,12 +1,13 @@
 import shutil
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 
 import torch
 import torchvision
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
+from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 
 
@@ -19,7 +20,8 @@ class RoMaFlowProviderDirect:
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                        source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
-                       source_image_name: str = None, target_image_name: str = None) \
+                       source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                       target_image_index: int = None) \
             -> Tuple[torch.Tensor, torch.Tensor]:
 
         source_image_roma = torchvision.transforms.functional.to_pil_image(source_image_tensor.squeeze())
@@ -56,8 +58,8 @@ class RoMaFlowProviderDirect:
                                       source_image_name: Path = None, target_image_name: Path = None,
                                       as_int: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
-                                              source_image_segmentation, target_image_segmentation,
-                                              source_image_name, target_image_name)
+                                              source_image_segmentation, target_image_segmentation, source_image_name,
+                                              target_image_name)
 
         h1 = source_image_tensor.shape[-2]
         w1 = source_image_tensor.shape[-1]
@@ -78,13 +80,14 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, device, cache_dir: Path, allow_missing: bool = True,
+    def __init__(self, device, cache_dir: Path, data_graph: DataGraph = None, allow_missing: bool = True,
                  purge_cache: bool = False):
         super().__init__(device)
 
         self.saved_flow_paths = cache_dir
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
+        self.data_graph: Optional[DataGraph] = data_graph
 
         if purge_cache and self.warps_path.exists():
             shutil.rmtree(self.warps_path)
@@ -98,7 +101,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                        source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
-                       source_image_name: Path = None, target_image_name: Path = None) -> (
+                       source_image_name: Path = None, target_image_name: Path = None, source_image_index: int=None,
+                       target_image_index: int = None) -> (
             Tuple)[torch.Tensor, torch.Tensor]:
 
         if source_image_name is None or target_image_name is None:
