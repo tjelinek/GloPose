@@ -47,11 +47,11 @@ class RoMaFlowProviderDirect:
 
         certainty = certainty.clone()
         if source_image_segmentation is not None:
-            source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation,
+            source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation[None],
                                                                                       size=self.roma_size_hw)
             certainty[:, :roma_w] *= source_image_segment_roma_size.squeeze().bool().float()
         if target_image_segmentation is not None:
-            target_image_segment_roma_size = torchvision.transforms.functional.resize(target_image_segmentation,
+            target_image_segment_roma_size = torchvision.transforms.functional.resize(target_image_segmentation[None],
                                                                                       size=self.roma_size_hw)
             certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.squeeze().bool().float()
         return certainty
@@ -83,6 +83,18 @@ class RoMaFlowProviderDirect:
                                                                          source_image_tensor, target_image_tensor)
         if as_int:
             src_pts_xy_roma, dst_pts_xy_roma = src_pts_xy_roma_int, dst_pts_xy_roma_int
+
+        if only_foreground_matches:
+            assert source_image_segmentation is not None and target_image_segmentation is not None
+            assert len(source_image_segmentation.shape) == 2 and len(target_image_segmentation.shape) == 2
+            in_segment_mask_src = source_image_segmentation[src_pts_xy_roma_int[:, 1], src_pts_xy_roma_int[:, 0]].bool()
+            in_segment_mask_tgt = target_image_segmentation[dst_pts_xy_roma_int[:, 1], dst_pts_xy_roma_int[:, 0]].bool()
+
+            fg_matches = in_segment_mask_src * in_segment_mask_tgt
+
+            src_pts_xy_roma = src_pts_xy_roma[fg_matches]
+            dst_pts_xy_roma = dst_pts_xy_roma[fg_matches]
+            certainty = certainty[fg_matches]
 
         return src_pts_xy_roma, dst_pts_xy_roma, certainty
 
@@ -235,10 +247,10 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         source_data = self.data_graph.get_frame_data(source_image_index)
         target_data = self.data_graph.get_frame_data(target_image_index)
 
-        return self.get_source_target_points_roma(source_data.frame_observation.observed_image,
-                                                  target_data.frame_observation.observed_image, sample,
-                                                  source_data.frame_observation.observed_segmentation,
-                                                  target_data.frame_observation.observed_segmentation,
+        return self.get_source_target_points_roma(source_data.frame_observation.observed_image.squeeze(),
+                                                  target_data.frame_observation.observed_image.squeeze(), sample,
+                                                  source_data.frame_observation.observed_segmentation.squeeze(),
+                                                  target_data.frame_observation.observed_segmentation.squeeze(),
                                                   source_data.image_filename, target_data.image_filename,
                                                   source_image_index, target_image_index, as_int,
                                                   zero_certainty_outside_segmentation, only_foreground_matches)

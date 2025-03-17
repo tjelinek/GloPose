@@ -219,7 +219,8 @@ class RoMaFrameFilter(BaseFrameFilter):
         src_pts_xy_int, dst_pts_xy_int, certainty = (
             self.flow_provider.get_source_target_points_roma_datagraph(source_frame, target_frame,
                                                                        self.config.roma_sample_size, as_int=True,
-                                                                       zero_certainty_outside_segmentation=True))
+                                                                       zero_certainty_outside_segmentation=True,
+                                                                       only_foreground_matches=True))
 
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
