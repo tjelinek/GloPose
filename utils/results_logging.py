@@ -670,8 +670,8 @@ class WriteResults:
         rerun_segment = rr.SegmentationImage(template_target_segment_np)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
-        rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
-        rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
+        # rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
+        # rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
 
         if self.config.frame_filter == 'RoMa':
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
@@ -741,10 +741,10 @@ class WriteResults:
         template_image_size = template_data.image_shape
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 1000)
+                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 20)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 1000)
+                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
 
         if self.config.frame_filter == 'RoMa':
             reliability = arc_observation.reliability_score
