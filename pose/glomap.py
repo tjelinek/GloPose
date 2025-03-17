@@ -13,12 +13,11 @@ import networkx as nx
 import numpy as np
 import pycolmap
 import torch
-from PIL import Image
 from kornia.geometry import Se3, Quaternion
-from torchvision import transforms
-from romatch import roma_outdoor
+from kornia.image import ImageSize
 from tqdm import tqdm
 
+from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.view_graph import ViewGraph
 
@@ -89,15 +88,13 @@ class GlomapWrapper:
             raise ValueError("Needed at least 1 match.")
 
         device = self.config.device
-        dtype = torch.float16 if 'cuda' in str(device) else torch.float32
-        matcher = roma_outdoor(device, amp_dtype=dtype)
 
         database_path = self.colmap_db_path
 
         image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
         segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
 
-        transform_from_PIL = transforms.ToTensor()
+        sample_size = self.config.roma_sample_size
 
         assert not database_path.exists()
         img_ext = 'png'
@@ -114,45 +111,25 @@ class GlomapWrapper:
 
             assert img1_path.parent == img2_path.parent
 
-            img1_PIL = Image.open(str(img1_path)).convert('RGB')
-            img2_PIL = Image.open(str(img2_path)).convert('RGB')
+            downsample_factor = self.config.image_downsample
+            img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, downsample_factor, device)
+            img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, downsample_factor, device)
 
-            h1, w1 = img1_PIL.size
-            h2, w2 = img2_PIL.size
+            h1, w1 = img1.shape[-2:]
+            h2, w2 = img2.shape[-2:]
             if h1 != h2 or w1 != w2:
                 single_camera = False
-            img1_seg = transform_from_PIL(Image.open(seg1_path).convert('L')).to(device)
-            img2_seg = transform_from_PIL(Image.open(seg2_path).convert('L')).to(device)
 
-            roma_size_hw = (864, 864)
-            roma_h, roma_w = roma_size_hw
+            seg1_size = ImageSize(h1, w1)
+            seg2_size = ImageSize(h2, w2)
+            img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_path, seg1_size, device)
+            img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
 
-            img1_seg_roma_size = transforms.functional.resize(img1_seg.clone(), size=roma_size_hw)
-            img2_seg_roma_size = transforms.functional.resize(img2_seg.clone(), size=roma_size_hw)
-            if len(img1_seg_roma_size.shape) > 2:
-                img1_seg_roma_size = img1_seg_roma_size.mean(dim=0)
-            if len(img2_seg_roma_size.shape) > 2:
-                img2_seg_roma_size = img2_seg_roma_size.mean(dim=0)
-
-            result = None
-            if self.flow_provider is not None:
-                result = self.flow_provider.cached_flow_from_filenames(img1_path.name, img2_path.name)
-            if result is None or True:
-                warp, certainty = matcher.match(img1_PIL, img2_PIL, device=device)
-            else:
-                warp, certainty = result
-
-            certainty = certainty.clone()
-            certainty[:, :roma_w] *= img1_seg_roma_size.mT.squeeze().bool().float()
-            certainty[:, roma_w:2 * roma_w] *= img2_seg_roma_size.mT.squeeze().bool().float()
-
-            warp, certainty = matcher.sample(warp, certainty, self.config.roma_sample_size)
-            warp = warp[certainty > 0]
-
-            src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
-
-            src_pts_xy_roma_int = src_pts_xy_roma.to(torch.int)
-            dst_pts_xy_roma_int = dst_pts_xy_roma.to(torch.int)
+            src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
+                self.flow_provider.get_source_target_points_roma(img1, img2, sample_size, img1_seg.squeeze(),
+                                                                 img2_seg.squeeze(), Path(img1_path.name),
+                                                                 Path(img2_path.name), as_int=True,
+                                                                 only_foreground_matches=True)
 
             src_pts_xy_roma_all = torch.cat([keypoints_data[img1_path.name], src_pts_xy_roma_int])
             dst_pts_xy_roma_all = torch.cat([keypoints_data[img2_path.name], dst_pts_xy_roma_int])
@@ -554,7 +531,7 @@ def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tens
 
 
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
-                                  existing_database: pycolmap.Database, device: str) -> (
+                                  existing_database: pycolmap.Database = None, device: str = 'cpu') -> (
         Tuple)[Dict[int, torch.Tensor], Dict[Tuple[int, int], torch.Tensor]]:
     G = nx.DiGraph()
     G.add_edges_from(matching_edges.keys())
