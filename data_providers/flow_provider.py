@@ -38,9 +38,12 @@ class RoMaFlowProviderDirect:
 
         return warp, certainty
 
-    def zero_certainty_outside_segmentation(self, certainty, source_image_segmentation, target_image_segmentation) ->\
+    def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
+                                            source_image_segmentation: torch.Tensor = None,
+                                            target_image_segmentation: torch.Tensor = None) ->\
             torch.Tensor:
         roma_h, roma_w = self.roma_size_hw
+        assert source_image_segmentation is not None or target_image_segmentation is not None
 
         certainty = certainty.clone()
         if source_image_segmentation is not None:
