@@ -111,7 +111,7 @@ def get_initial_image_and_segment(images_list, segmentations_list, dataset_delim
 
         images.append(first_image_tensor), segmentations.append(first_segment_tensor)
 
-    if dataset_delimeters is None:
+    if len(dataset_delimeters) == 1:
         images = images[0]
         segmentations = segmentations[0]
 
