@@ -129,6 +129,7 @@ class GlomapWrapper:
                 self.flow_provider.get_source_target_points_roma(img1, img2, sample_size, img1_seg.squeeze(),
                                                                  img2_seg.squeeze(), Path(img1_path.name),
                                                                  Path(img2_path.name), as_int=True,
+                                                                 zero_certainty_outside_segmentation=True,
                                                                  only_foreground_matches=True)
 
             src_pts_xy_roma_all = torch.cat([keypoints_data[img1_path.name], src_pts_xy_roma_int])
