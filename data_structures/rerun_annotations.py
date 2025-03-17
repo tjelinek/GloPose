@@ -20,6 +20,8 @@ class RerunAnnotations:
     # Matching
     matches_high_certainty: Final[str] = '/matching/high_certainty'
     matches_low_certainty: Final[str] = '/matching/low_certainty'
+    matches_high_certainty_segmentation: Final[str] = '/matching/high_certainty/segmentation'
+    matches_low_certainty_segmentation: Final[str] = '/matching/low_certainty/segmentation'
     matching_reliability_plot: Final[str] = '/matching/reliability_plot'
     matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
     matching_reliability_threshold_roma: Final[str] = '/matching/reliability_plot/reliability_threshold'

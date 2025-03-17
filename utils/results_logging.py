@@ -653,11 +653,17 @@ class WriteResults:
         target_data = self.data_graph.get_frame_data(flow_arc_target)
         template_image = template_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
         target_image = target_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
+        source_segment = template_data.frame_observation.observed_segmentation.squeeze().numpy(force=True)
+        target_segment = target_data.frame_observation.observed_segmentation.squeeze().numpy(force=True)
 
         template_target_image = np.concatenate([template_image, target_image], axis=0)
+        template_target_segment = np.concatenate([source_segment, target_segment], axis=0)
         rerun_image = rr.Image(template_target_image)
+        rerun_segment = rr.SegmentationImage(template_target_segment)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
+        rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
+        rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
 
         if self.config.frame_filter == 'RoMa':
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
