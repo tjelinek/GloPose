@@ -7,7 +7,7 @@ class BaseBOPConfig:
     scene_id: int = None
     tracked_obj_ids: List = field(default_factory=list)
     frame_id_to_im_id: Dict = field(default_factory=dict)
-    onboarding_type: str = 'static'  # Either 'static' or 'dynamic'
+    onboarding_type: str = 'dynamic'  # Either 'static' or 'dynamic'
 
     def __post_init__(self):
         self.config_name = self.__class__.__name__
