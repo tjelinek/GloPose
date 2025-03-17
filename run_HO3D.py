@@ -1,15 +1,13 @@
 import numpy as np
 import torch
 import time
-import torchvision.transforms as transforms
 from pathlib import Path
 
-from PIL import Image
-from kornia.geometry import Quaternion, Se3, quaternion_to_axis_angle
+from kornia.geometry import Quaternion, Se3
 
 from utils.data_utils import get_initial_image_and_segment
 from utils.runtime_utils import parse_args
-from tracker6d import run_tracking_on_sequence
+from tracker6d import Tracker6D
 from utils.general import load_config
 
 
@@ -85,14 +83,15 @@ def main():
 
         config.input_frames = len(gt_images_list)
 
-        cam_to_obj_rotations = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.device)
-        cam_to_obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
+        cam2obj_rotations = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.device)
+        cam2obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
 
-        Se3_cam_to_obj = Se3(Quaternion.from_axis_angle(cam_to_obj_rotations), cam_to_obj_translations)
+        Se3_cam2obj = Se3(Quaternion.from_axis_angle(cam2obj_rotations), cam2obj_translations)
+        gt_Se3_obj2cam_frame0 = Se3_cam2obj[0]
 
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
-        T_obj_to_cam = Se3_cam_to_obj.inverse().matrix().squeeze()
+        T_obj_to_cam = Se3_cam2obj.inverse().matrix().squeeze()
 
         config.camera_intrinsics = cam_intrinsics_list[0]
         config.camera_extrinsics = T_obj_to_cam.numpy(force=True)
@@ -103,10 +102,11 @@ def main():
         first_image_tensor, first_segment_tensor = get_initial_image_and_segment(gt_images_list, gt_segmentations_list,
                                                                                  segmentation_channel=1)
 
-        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_Se3_cam_to_obj=Se3_cam_to_obj,
-                                 images_paths=gt_images_list, segmentation_paths=gt_segmentations_list,
-                                 initial_segmentation=first_segment_tensor, initial_image=first_image_tensor)
+        sfb = Tracker6D(config, write_folder, initial_gt_Se3_cam2obj=gt_Se3_obj2cam_frame0,
+                        gt_Se3_cam2obj=Se3_cam2obj, images_paths=gt_images_list,
+                        segmentation_paths=gt_segmentations_list, initial_segmentation=first_segment_tensor,
+                        initial_image=first_image_tensor)
+        sfb.run_filtering_with_reconstruction()
         exit()
 
 
