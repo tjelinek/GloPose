@@ -45,11 +45,11 @@ class RoMaFlowProviderDirect:
         if source_image_segmentation is not None:
             source_image_segment_roma_size = torchvision.transforms.functional.resize(source_image_segmentation,
                                                                                       size=self.roma_size_hw)
-            certainty[:, :roma_w] *= source_image_segment_roma_size.mT.squeeze().bool().float()
+            certainty[:, :roma_w] *= source_image_segment_roma_size.squeeze().bool().float()
         if target_image_segmentation is not None:
             target_image_segment_roma_size = torchvision.transforms.functional.resize(target_image_segmentation,
                                                                                       size=self.roma_size_hw)
-            certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.mT.squeeze().bool().float()
+            certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.squeeze().bool().float()
         return certainty
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
