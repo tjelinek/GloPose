@@ -425,12 +425,13 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
                   view_graph: ViewGraph, flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider,
                   config: TrackerConfig):
     device = config.device
-    base_results_path = Path('/mnt/personal/jelint19/results/FlowTracker/')
-    db_relative_path = Path('hope/obj_000001/glomap_obj_000001/')
+    sequence = 'obj_000005'
+    base_results_path = Path(f'/mnt/personal/jelint19/results/FlowTracker/')
+    db_relative_path = Path(f'hope/{sequence}/glomap_{sequence}/')
     db_filename = Path('database.db')
 
     path_to_colmap_db = base_results_path / db_relative_path / db_filename
-    path_to_reconstruction = Path('/mnt/personal/jelint19/cache/view_graph_cache/hope/obj_000001/reconstruction')
+    path_to_reconstruction = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/hope/{sequence}/reconstruction')
     path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / db_relative_path
     cache_db_file = path_to_cache / db_filename
 
@@ -463,15 +464,15 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         view_graph_node = view_graph.get_node_data(frame_idx)
         db_img_id = view_graph_node.colmap_db_image_id
 
-        pose_graph_image = view_graph_node.observation.observed_image.to(device)
-        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device)
+        pose_graph_image = view_graph_node.observation.observed_image.to(device).squeeze()
+        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
-            query_img_pts_xy, db_img_pts_xy = flow_provider.get_source_target_points_roma(query_img, pose_graph_image,
-                                                                                          config.roma_sample_size,
-                                                                                          query_img_segmentation,
-                                                                                          pose_graph_segmentation,
-                                                                                          True)
+            query_img_pts_xy, db_img_pts_xy, _ = (
+                flow_provider.get_source_target_points_roma(query_img, pose_graph_image, config.roma_sample_size,
+                                                            query_img_segmentation, pose_graph_segmentation,
+                                                            as_int=True, zero_certainty_outside_segmentation=True,
+                                                            only_foreground_matches=True))
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
@@ -505,7 +506,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     reconstruction_manager.read(path_to_reconstruction)
 
     reconstruction_idx = reconstruction_manager.add()
-    reconstruction = reconstruction_manager.get(reconstruction_idx)
+    reconstruction = pycolmap.Reconstruction(path_to_reconstruction)
 
     mapper.begin_reconstruction(reconstruction)
 
