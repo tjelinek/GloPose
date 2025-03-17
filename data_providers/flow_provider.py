@@ -162,6 +162,10 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                 torch.save(warp, warp_filename)
                 torch.save(certainty, certainty_filename)
 
+        if zero_certainty_outside_segmentation:
+            certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
+                                                                 target_image_segmentation)
+
         if self.data_graph is not None:
             if source_image_index is not None and target_image_index is not None:
                 if not self.data_graph.G.has_edge(source_image_index, target_image_index):
@@ -172,10 +176,6 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                     edge_data.roma_flow_warp = warp
                 if edge_data.roma_flow_warp_certainty is None:
                     edge_data.roma_flow_warp_certainty = certainty
-
-        if zero_certainty_outside_segmentation:
-            certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
-                                                                 target_image_segmentation)
 
         if sample:
             warp, certainty = self.flow_model.sample(warp, certainty, sample)
