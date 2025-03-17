@@ -9,6 +9,7 @@ import pycolmap
 import rerun as rr
 import rerun.blueprint as rrb
 import torch
+import torchvision
 from PIL import Image
 from kornia.geometry import Se3
 from matplotlib import pyplot as plt
@@ -21,6 +22,7 @@ from flow import (source_coords_to_target_coords_image)
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
+from utils.image_utils import overlay_mask
 
 
 class WriteResults:
@@ -171,6 +173,9 @@ class WriteResults:
                                                               origin=RerunAnnotations.matches_high_certainty),
                                             rrb.Spatial2DView(name="RoMa Matches Low Certainty",
                                                               origin=RerunAnnotations.matches_low_certainty),
+                                            *([rrb.Spatial2DView(name="RoMa Matching Certainty",
+                                                                 origin=RerunAnnotations.matching_certainty)]
+                                              if self.config.frame_filter == 'RoMa' else [])
                                         ],
                                         name='Matching'
                                     ),
@@ -294,6 +299,7 @@ class WriteResults:
                    ),
                    static=True)
 
+        rr.log("/", rr.AnnotationContext([(1, "blue", (0, 255, 0))]), static=True)
         rr.send_blueprint(blueprint)
 
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
@@ -651,15 +657,17 @@ class WriteResults:
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
-        template_image = template_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
-        target_image = target_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).numpy(force=True)
-        source_segment = template_data.frame_observation.observed_segmentation.squeeze().numpy(force=True)
-        target_segment = target_data.frame_observation.observed_segmentation.squeeze().numpy(force=True)
+        template_image = template_data.frame_observation.observed_image.squeeze()
+        target_image = target_data.frame_observation.observed_image.squeeze()
+        source_segment = template_data.frame_observation.observed_segmentation.squeeze()
+        target_segment = target_data.frame_observation.observed_segmentation.squeeze()
 
-        template_target_image = np.concatenate([template_image, target_image], axis=0)
-        template_target_segment = np.concatenate([source_segment, target_segment], axis=0)
-        rerun_image = rr.Image(template_target_image)
-        rerun_segment = rr.SegmentationImage(template_target_segment)
+        template_target_image = torch.cat([template_image, target_image], dim=-2)
+        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True)
+        template_target_segment = torch.cat([source_segment, target_segment], dim=-2)
+        template_target_segment_np = template_target_segment.numpy(force=True)
+        rerun_image = rr.Image(template_target_image_np)
+        rerun_segment = rr.SegmentationImage(template_target_segment_np)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
@@ -675,6 +683,22 @@ class WriteResults:
             inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
             outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
             outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+
+            roma_certainty_map = arc_observation.roma_flow_warp_certainty
+            roma_h, roma_w = roma_certainty_map.shape[0], roma_certainty_map.shape[1] // 2
+            certainty_map_column = torch.zeros(roma_h * 2, roma_w).to(roma_certainty_map.device)
+            certainty_map_column[:roma_h, :roma_w] = roma_certainty_map[:roma_h, :roma_w]
+            certainty_map_column[roma_h:, :roma_w] = roma_certainty_map[:roma_h, roma_w:]
+            certainty_map_column = certainty_map_column[None]
+            roma_certainty_map_image_size = (
+                torchvision.transforms.functional.resize(certainty_map_column, size=template_target_image.shape[1:]))
+
+            roma_certainty_map_im_size_np = roma_certainty_map_image_size.numpy(force=True)
+            template_target_blacks = np.ones_like(template_target_image_np)
+            template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
+
+            rerun_certainty_img = rr.Image(template_target_image_certainty_np)
+            rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
         elif self.config.frame_filter == 'SIFT':
             keypoints_matching_indices = arc_observation.sift_keypoint_indices
 
@@ -717,10 +741,10 @@ class WriteResults:
         template_image_size = template_data.image_shape
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 10)
+                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 1000)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 10)
+                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 1000)
 
         if self.config.frame_filter == 'RoMa':
             reliability = arc_observation.reliability_score
@@ -833,7 +857,7 @@ class WriteResults:
         last_frame_observation = current_datagraph_node.frame_observation
 
         new_image_path = self.observations_path / Path(f'image_{frame_i}.png')
-        last_observed_image = last_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
+        last_observed_image = last_frame_observation.observed_image.squeeze().permute(1, 2, 0)
 
         self.log_image(frame_i, last_observed_image, observed_image_annotation, new_image_path)
 
@@ -841,13 +865,13 @@ class WriteResults:
 
         if frame_i == 0 or prev_frame.matching_source_keyframe != current_datagraph_node.matching_source_keyframe:
             template_frame_observation = current_datagraph_node.frame_observation
-            template = template_frame_observation.observed_image.squeeze().cpu().permute(1, 2, 0)
-            template_segment = template_frame_observation.observed_segmentation
+            template = template_frame_observation.observed_image.squeeze().permute(1, 2, 0)
+            template_segment = template_frame_observation.observed_segmentation.numpy(force=True)
             template_path = Path('')
             self.log_image(frame_i, template, RerunAnnotations.template_image, template_path)
             rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(template_segment))
 
-        image_segmentation = last_frame_observation.observed_segmentation
+        image_segmentation = last_frame_observation.observed_segmentation.numpy(force=True)
         rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
 
     def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
