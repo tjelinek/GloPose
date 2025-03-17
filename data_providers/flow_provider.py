@@ -195,7 +195,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         return warp, certainty
 
     def get_source_target_points_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
-                                      sample=None, source_image_segmentation: torch.Tensor = None,
+                                      sample: int = None, source_image_segmentation: torch.Tensor = None,
                                       target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
                                       target_image_name: Path = None, source_image_index: int = None,
                                       target_image_index: int = None, as_int: bool = False,
