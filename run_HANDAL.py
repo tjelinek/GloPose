@@ -34,6 +34,7 @@ def main():
         config.sequence = sequence
         config.dataset = dataset
         config.image_downsample = 0.5
+        config.large_images_results_write_frequency = 4
 
         skip_indices = 1
 
@@ -77,6 +78,8 @@ def main():
                         initial_segmentation=first_segmentation,
                         initial_image=first_image)
         sfb.run_filtering_with_reconstruction()
+
+        exit()
 
 
 if __name__ == "__main__":
