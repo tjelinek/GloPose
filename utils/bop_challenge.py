@@ -142,6 +142,7 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
         gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+        sequence_starts = None
 
     return gt_images, gt_segs, sequence_starts
 
