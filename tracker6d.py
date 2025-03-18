@@ -41,6 +41,9 @@ class Tracker6D:
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
 
+        self.reconstruction_error: bool = False
+        self.alignment_error: bool = False
+
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None
         # Ground truth related
         if type(gt_Se3_cam2obj) is dict:
@@ -214,21 +217,27 @@ class Tracker6D:
                   self.config.input_frames)
 
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs):
-        if self.config.reconstruction_matches == 'RoMa':
-            reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                            matching_pairs)
-        elif self.config.reconstruction_matches == 'SIFT':
-            reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
-                                                                                 matching_pairs)
-        else:
-            raise ValueError(f'Unknown matcher {self.config.frame_filter}')
+        try:
+            if self.config.reconstruction_matches == 'RoMa':
+                reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
+                                                                                matching_pairs)
+            elif self.config.reconstruction_matches == 'SIFT':
+                reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
+                                                                                     matching_pairs)
+            else:
+                raise ValueError(f'Unknown matcher {self.config.frame_filter}')
+        except:
+            self.reconstruction_error = True
 
-        if self.config.similarity_transformation == 'first_frame':
-            reconstruction = self.glomap_wrapper.align_with_first_pose(reconstruction, self.initial_gt_Se3_cam2obj, 0)
-        elif self.config.similarity_transformation == 'kabsch':
-            reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
-        else:
-            raise ValueError("Similarity transformation ")
+        try:
+            if self.config.similarity_transformation == 'first_frame':
+                reconstruction = self.glomap_wrapper.align_with_first_pose(reconstruction, self.initial_gt_Se3_cam2obj, 0)
+            elif self.config.similarity_transformation == 'kabsch':
+                reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
+            else:
+                raise ValueError("Similarity transformation ")
+        except KeyError:
+            self.alignment_error = True
 
         return reconstruction
 
