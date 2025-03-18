@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict
 
+import pandas as pd
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
@@ -11,7 +12,7 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import BaseTracker
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
-from data_structures.view_graph import view_graph_from_datagraph
+from data_structures.view_graph import view_graph_from_datagraph, ViewGraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
 from scripts.simulate_camera_translation_scaling import Se3_obj2_to_obj1_unscaled
@@ -191,7 +192,10 @@ class Tracker6D:
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
         view_graph.save(self.cache_folder_view_graph, save_images=True)
 
-        self.evaluate_reconstruction(reconstruction)
+        csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
+        csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
+        self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
+        self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph)
 
         return
 
@@ -242,7 +246,7 @@ class Tracker6D:
 
         return reconstruction
 
-    def evaluate_reconstruction(self, reconstruction, csv_output_path: Optional[Path] = None):
+    def evaluate_reconstruction(self, reconstruction, csv_output_path: Path):
         """
         Evaluate the reconstruction and save statistics to a CSV file.
 
@@ -250,13 +254,8 @@ class Tracker6D:
             reconstruction: The reconstructed data.
             csv_output_path: Path to the output CSV file.
         """
-        import pandas as pd
-        import os
 
         stats = []
-
-        if csv_output_path is None:
-            csv_output_path = self.write_folder.parent.parent / 'stats.csv'
 
         images_paths_to_frame_index = {str(self.data_graph.get_frame_data(i).image_filename.name): i
                                        for i in range(self.config.input_frames)}
@@ -303,6 +302,90 @@ class Tracker6D:
             updated_df.to_csv(csv_output_path, index=False)
         else:
             stats_df.to_csv(csv_output_path, index=False)
+
+    def update_global_statistics(self, csv_per_frame_stats: Path, csv_per_sequence_stats: Path, view_graph: ViewGraph):
+
+        # Read the input CSV file containing reconstruction data
+        if not csv_per_frame_stats.exists():
+            print(f"Error: Input file {csv_per_frame_stats} does not exist.")
+            return
+
+        df = pd.read_csv(csv_per_frame_stats)
+
+        # Group by dataset and sequence
+        grouped = df.groupby(['dataset', 'sequence'])
+
+        stats_list = []
+
+        for (dataset, sequence), group in grouped:
+            # Initialize error accumulators
+            rotation_errors = []
+            translation_errors = []
+
+            for _, row in group.iterrows():
+                # Skip if ground truth is not available
+                if row['gt_rotation'] is None or row['gt_translation'] is None:
+                    continue
+
+                # Parse the string representations of lists back to actual lists
+                gt_rot_matrix = np.array(eval(row['gt_rotation'])) if isinstance(row['gt_rotation'], str) else np.array(
+                    row['gt_rotation'])
+                pred_rot_matrix = np.array(eval(row['pred_rotation'])) if isinstance(row['pred_rotation'],
+                                                                                     str) else np.array(
+                    row['pred_rotation'])
+
+                gt_trans = np.array(eval(row['gt_translation'])) if isinstance(row['gt_translation'],
+                                                                               str) else np.array(row['gt_translation'])
+                pred_trans = np.array(eval(row['pred_translation'])) if isinstance(row['pred_translation'],
+                                                                                   str) else np.array(
+                    row['pred_translation'])
+
+                # Calculate rotation error (in degrees)
+                gt_rot = Rotation.from_matrix(gt_rot_matrix)
+                pred_rot = Rotation.from_matrix(pred_rot_matrix)
+                rel_rot = gt_rot.inv() * pred_rot
+                rotation_error_deg = np.degrees(np.linalg.norm(rel_rot.as_rotvec()))
+                rotation_errors.append(rotation_error_deg)
+
+                # Calculate translation error (Euclidean distance in the original units)
+                translation_error = np.linalg.norm(gt_trans - pred_trans)
+                translation_errors.append(translation_error)
+
+            # Calculate statistics
+            if rotation_errors and translation_errors:
+                stats = {
+                    'dataset': dataset,
+                    'sequence': sequence,
+                    'num_frames': len(group),
+                    'avg_rotation_error_deg': np.mean(rotation_errors),
+                    'median_rotation_error_deg': np.median(rotation_errors),
+                    'min_rotation_error_deg': np.min(rotation_errors),
+                    'max_rotation_error_deg': np.max(rotation_errors),
+                    'std_rotation_error_deg': np.std(rotation_errors),
+                    'avg_translation_error': np.mean(translation_errors),
+                    'median_translation_error': np.median(translation_errors),
+                    'min_translation_error': np.min(translation_errors),
+                    'max_translation_error': np.max(translation_errors),
+                    'std_translation_error': np.std(translation_errors)
+                }
+                stats_list.append(stats)
+
+        # Create DataFrame from statistics
+        stats_df = pd.DataFrame(stats_list)
+
+        # Write to CSV
+        if os.path.exists(csv_per_sequence_stats):
+            existing_df = pd.read_csv(csv_per_sequence_stats)
+            # Remove existing entries for the same datasets and sequences
+            filtered_df = existing_df[~existing_df.set_index(['dataset', 'sequence']).index.isin(
+                stats_df.set_index(['dataset', 'sequence']).index)]
+            updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+            updated_df.to_csv(csv_per_sequence_stats, index=False)
+        else:
+            stats_df.to_csv(csv_per_sequence_stats, index=False)
+
+        print(f"Statistics written to {csv_per_sequence_stats}")
+        return stats_df
 
     def init_datagraph_frame(self, frame_i):
         self.data_graph.add_new_frame(frame_i)
