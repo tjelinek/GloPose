@@ -7,7 +7,8 @@ from typing import Optional, List, Dict
 import numpy as np
 import pandas as pd
 import torch
-from kornia.geometry import Quaternion, Se3, PinholeCamera
+from kornia.geometry import Quaternion, Se3, PinholeCamera, So3
+from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import BaseTracker
@@ -43,8 +44,8 @@ class Tracker6D:
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
 
-        self.reconstruction_error: bool = False
-        self.alignment_error: bool = False
+        self.reconstruction_success: bool = True
+        self.alignment_success: bool = True
 
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None
         # Ground truth related
@@ -195,7 +196,7 @@ class Tracker6D:
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
         self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
         self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph, self.config.dataset,
-                                      self.config.sequence)
+                                      reconstruction, self.config.sequence, self.reconstruction_success, self.alignment_success)
 
         return
 
@@ -232,7 +233,7 @@ class Tracker6D:
             else:
                 raise ValueError(f'Unknown matcher {self.config.frame_filter}')
         except:
-            self.reconstruction_error = True
+            self.reconstruction_success = False
 
         try:
             if self.config.similarity_transformation == 'first_frame':
@@ -242,7 +243,7 @@ class Tracker6D:
             else:
                 raise ValueError("Similarity transformation ")
         except KeyError:
-            self.alignment_error = True
+            self.alignment_success = False
 
         return reconstruction
 
@@ -304,7 +305,8 @@ class Tracker6D:
             stats_df.to_csv(csv_output_path, index=False)
 
     def update_global_statistics(self, csv_per_frame_stats: Path, csv_per_sequence_stats: Path, view_graph: ViewGraph,
-                                 dataset, sequence):
+                                 reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success,
+                                 pose_alignment_success):
 
         # Read the input CSV file containing reconstruction data
         if not csv_per_frame_stats.exists():
@@ -314,11 +316,8 @@ class Tracker6D:
         df = pd.read_csv(csv_per_frame_stats)
         sequence_df = df[(df['dataset'] == dataset) & (df['sequence'] == sequence)]
 
-        pred_rotations: List[Quaternion] = []
-        gt_rotations: List[Quaternion] = []
-
-        pred_translations: List[torch.Tensor] = []
-        gt_translations: List[torch.Tensor] = []
+        rotation_errors: List[float] = []
+        translation_errors: List[float] = []
 
         for _, row in sequence_df.iterrows():
             # Skip if ground truth is not available
@@ -338,30 +337,32 @@ class Tracker6D:
             if gt_rot_matrix is None or pred_rot_matrix is None or gt_trans is None or pred_trans is None:
                 continue
 
-            gt_Se3 = Se3(Quaternion.from_matrix(gt_rot_matrix), gt_trans)
-            pred_rot = Se3(Quaternion.from_matrix(pred_rot_matrix), gt_trans)
-            rel_rot = gt_rot.inv() * pred_rot
-            rotation_error_deg = np.degrees(np.linalg.norm(rel_rot.as_rotvec()))
+            gt_So3 = So3(Quaternion.from_matrix(gt_rot_matrix))
+            pred_So3 = So3(Quaternion.from_matrix(pred_rot_matrix))
+
+            rel_rot: So3 = gt_So3.inverse() * pred_So3
+
+            rotation_error_deg = torch.rad2deg(torch.linalg.norm(rel_rot.q.to_axis_angle())).item()
             rotation_errors.append(rotation_error_deg)
 
-            # Calculate translation error (Euclidean distance in the original units)
-            translation_error = np.linalg.norm(gt_trans - pred_trans)
+            translation_error = torch.linalg.norm(gt_trans - pred_trans).item()
             translation_errors.append(translation_error)
 
-        # Calculate statistics
-        if rotation_errors and translation_errors:
-            stats = {
-                'dataset': dataset,
-                'sequence': sequence,
-                'num_frames': len(group),
-                'median_rotation_error_deg': np.median(rotation_errors),
-                'min_rotation_error_deg': np.min(rotation_errors),
-                'max_rotation_error_deg': np.max(rotation_errors),
-            }
-            stats_list.append(stats)
+        rotation_errors_np = np.asarray(rotation_errors)
+        translation_errors_np = np.asarray(translation_errors)
 
-        # Create DataFrame from statistics
-        stats_df = pd.DataFrame(stats_list)
+        stats = {
+            'dataset': dataset,
+            'sequence': sequence,
+            'num_keyframes': len(view_graph.view_graph.nodes),
+            'colmap_registered_keyframes': reconstruction.num_reg_images(),
+            'mean_rotation_error': np.mean(rotation_errors_np),
+            'rot_error_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
+            'mean_translation_error': np.min(translation_errors_np),
+            'note': str()
+        }
+
+        stats_df = pd.DataFrame(st)
 
         # Write to CSV
         if os.path.exists(csv_per_sequence_stats):
