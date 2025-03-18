@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict
 
+import numpy as np
 import pandas as pd
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
@@ -15,10 +16,9 @@ from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph, ViewGraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
-from scripts.simulate_camera_translation_scaling import Se3_obj2_to_obj1_unscaled
 from tracker_config import TrackerConfig
 from utils.results_logging import WriteResults
-from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i, Se3_obj_relative_to_Se3_cam2obj
+from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 
 class Tracker6D:
@@ -186,7 +186,6 @@ class Tracker6D:
         reconstruction_path.mkdir(exist_ok=True, parents=True)
         reconstruction.write(str(reconstruction_path))
 
-        self.write_gt_poses()
         self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
@@ -195,7 +194,8 @@ class Tracker6D:
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
         self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
-        self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph)
+        self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph, self.config.dataset,
+                                      self.config.sequence)
 
         return
 
@@ -303,7 +303,8 @@ class Tracker6D:
         else:
             stats_df.to_csv(csv_output_path, index=False)
 
-    def update_global_statistics(self, csv_per_frame_stats: Path, csv_per_sequence_stats: Path, view_graph: ViewGraph):
+    def update_global_statistics(self, csv_per_frame_stats: Path, csv_per_sequence_stats: Path, view_graph: ViewGraph,
+                                 dataset, sequence):
 
         # Read the input CSV file containing reconstruction data
         if not csv_per_frame_stats.exists():
@@ -311,64 +312,53 @@ class Tracker6D:
             return
 
         df = pd.read_csv(csv_per_frame_stats)
+        sequence_df = df[(df['dataset'] == dataset) & (df['sequence'] == sequence)]
 
-        # Group by dataset and sequence
-        grouped = df.groupby(['dataset', 'sequence'])
+        pred_rotations: List[Quaternion] = []
+        gt_rotations: List[Quaternion] = []
 
-        stats_list = []
+        pred_translations: List[torch.Tensor] = []
+        gt_translations: List[torch.Tensor] = []
 
-        for (dataset, sequence), group in grouped:
-            # Initialize error accumulators
-            rotation_errors = []
-            translation_errors = []
+        for _, row in sequence_df.iterrows():
+            # Skip if ground truth is not available
+            if row['gt_rotation'] is None or row['gt_translation'] is None:
+                continue
 
-            for _, row in group.iterrows():
-                # Skip if ground truth is not available
-                if row['gt_rotation'] is None or row['gt_translation'] is None:
-                    continue
+            gt_rot_val = eval(row['gt_rotation'])
+            gt_trans_val = eval(row['gt_translation'])
+            pred_rot_val = eval(row['pred_rotation'])
+            pred_trans_val = eval(row['pred_translation'])
 
-                # Parse the string representations of lists back to actual lists
-                gt_rot_matrix = np.array(eval(row['gt_rotation'])) if isinstance(row['gt_rotation'], str) else np.array(
-                    row['gt_rotation'])
-                pred_rot_matrix = np.array(eval(row['pred_rotation'])) if isinstance(row['pred_rotation'],
-                                                                                     str) else np.array(
-                    row['pred_rotation'])
+            gt_rot_matrix = torch.Tensor(gt_rot_val) if gt_rot_val is not None else None
+            pred_rot_matrix = torch.Tensor(pred_rot_val) if pred_rot_val is not None else None
+            gt_trans = torch.Tensor(gt_trans_val) if gt_trans_val is not None else None
+            pred_trans = torch.Tensor(pred_trans_val) if pred_trans_val is not None else None
 
-                gt_trans = np.array(eval(row['gt_translation'])) if isinstance(row['gt_translation'],
-                                                                               str) else np.array(row['gt_translation'])
-                pred_trans = np.array(eval(row['pred_translation'])) if isinstance(row['pred_translation'],
-                                                                                   str) else np.array(
-                    row['pred_translation'])
+            if gt_rot_matrix is None or pred_rot_matrix is None or gt_trans is None or pred_trans is None:
+                continue
 
-                # Calculate rotation error (in degrees)
-                gt_rot = Rotation.from_matrix(gt_rot_matrix)
-                pred_rot = Rotation.from_matrix(pred_rot_matrix)
-                rel_rot = gt_rot.inv() * pred_rot
-                rotation_error_deg = np.degrees(np.linalg.norm(rel_rot.as_rotvec()))
-                rotation_errors.append(rotation_error_deg)
+            gt_Se3 = Se3(Quaternion.from_matrix(gt_rot_matrix), gt_trans)
+            pred_rot = Se3(Quaternion.from_matrix(pred_rot_matrix), gt_trans)
+            rel_rot = gt_rot.inv() * pred_rot
+            rotation_error_deg = np.degrees(np.linalg.norm(rel_rot.as_rotvec()))
+            rotation_errors.append(rotation_error_deg)
 
-                # Calculate translation error (Euclidean distance in the original units)
-                translation_error = np.linalg.norm(gt_trans - pred_trans)
-                translation_errors.append(translation_error)
+            # Calculate translation error (Euclidean distance in the original units)
+            translation_error = np.linalg.norm(gt_trans - pred_trans)
+            translation_errors.append(translation_error)
 
-            # Calculate statistics
-            if rotation_errors and translation_errors:
-                stats = {
-                    'dataset': dataset,
-                    'sequence': sequence,
-                    'num_frames': len(group),
-                    'avg_rotation_error_deg': np.mean(rotation_errors),
-                    'median_rotation_error_deg': np.median(rotation_errors),
-                    'min_rotation_error_deg': np.min(rotation_errors),
-                    'max_rotation_error_deg': np.max(rotation_errors),
-                    'std_rotation_error_deg': np.std(rotation_errors),
-                    'avg_translation_error': np.mean(translation_errors),
-                    'median_translation_error': np.median(translation_errors),
-                    'min_translation_error': np.min(translation_errors),
-                    'max_translation_error': np.max(translation_errors),
-                    'std_translation_error': np.std(translation_errors)
-                }
-                stats_list.append(stats)
+        # Calculate statistics
+        if rotation_errors and translation_errors:
+            stats = {
+                'dataset': dataset,
+                'sequence': sequence,
+                'num_frames': len(group),
+                'median_rotation_error_deg': np.median(rotation_errors),
+                'min_rotation_error_deg': np.min(rotation_errors),
+                'max_rotation_error_deg': np.max(rotation_errors),
+            }
+            stats_list.append(stats)
 
         # Create DataFrame from statistics
         stats_df = pd.DataFrame(stats_list)
