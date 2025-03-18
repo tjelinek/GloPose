@@ -63,9 +63,8 @@ class Tracker6D:
 
         self.write_folder = Path(write_folder)
         self.config = config
-        self.device = 'cuda'
 
-        self.data_graph: DataGraph = DataGraph()
+        self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
         cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
                                    config.roma_matcher_config.config_name / config.dataset / config.sequence)
@@ -81,7 +80,7 @@ class Tracker6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.data_graph, self.config.device, cache_folder_RoMA)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, cache_folder_RoMA, self.data_graph)
 
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
@@ -172,10 +171,18 @@ class Tracker6D:
 
         assert len(keyframe_nodes_idxs) > 2
         print(keyframe_graph.edges)
+        self.results_writer.log_keyframe_info(keyframe_graph)
         reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
-        # self.write_gt_poses()
-        # self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
+        view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
+        view_graph.save(self.cache_folder_view_graph, save_images=True)
+
+        reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
+        reconstruction_path.mkdir(exist_ok=True, parents=True)
+        reconstruction.write(str(reconstruction_path))
+
+        self.write_gt_poses()
+        self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
         view_graph.save(self.cache_folder_view_graph, save_images=True)
