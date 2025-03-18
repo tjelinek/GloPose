@@ -14,9 +14,10 @@ from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
 from pose.glomap import GlomapWrapper
+from scripts.simulate_camera_translation_scaling import Se3_obj2_to_obj1_unscaled
 from tracker_config import TrackerConfig
 from utils.results_logging import WriteResults
-from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
+from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i, Se3_obj_relative_to_Se3_cam2obj
 
 
 class Tracker6D:
@@ -266,17 +267,18 @@ class Tracker6D:
             t_cam_pred = torch.tensor(image.cam_from_world.translation)
             q_cam_xyzw_pred = torch.tensor(image.cam_from_world.rotation.quat)
             q_cam_wxyz_pred = q_cam_xyzw_pred[[3, 0, 1, 2]]
-            Se3_cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
+            Se3_obj2cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
 
             frame_data = self.data_graph.get_frame_data(image_frame_id)
-            Se3_cam_gt = frame_data.gt_Se3_cam2obj
+            Se3_cam2obj_gt = frame_data.gt_Se3_cam2obj
+            Se3_obj2cam_gt = Se3_cam2obj_gt.inverse() if Se3_cam2obj_gt is not None else None
 
             # Ground-truth rotation and translation
-            gt_rotation = Se3_cam_gt.rotation.matrix().tolist()
-            gt_translation = Se3_cam_gt.translation.tolist()
+            gt_rotation = Se3_obj2cam_gt.rotation.matrix().tolist() if Se3_obj2cam_gt is not None else None
+            gt_translation = Se3_obj2cam_gt.translation.tolist() if Se3_obj2cam_gt is not None else None
 
-            pred_rotation = Se3_cam_pred.rotation.matrix().tolist()
-            pred_translation = Se3_cam_pred.translation.tolist()
+            pred_rotation = Se3_obj2cam_pred.rotation.matrix().tolist()
+            pred_translation = Se3_obj2cam_pred.translation.tolist()
 
             # Add stats for the current image frame
             stats.append({
