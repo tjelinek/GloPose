@@ -178,7 +178,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
         dataset,
         sequence,
         sequence_type,
-        None,
+        onboarding_type,
         sequence_starts
     )
 
