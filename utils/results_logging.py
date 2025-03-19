@@ -721,6 +721,8 @@ class WriteResults:
                 src_yx = src_yx[random_indices]
                 target_yx = target_yx[random_indices]
 
+            if len(src_yx.shape) == 1 or src_yx.shape[1] == 0:
+                return  # No matches to draw
             target_yx_2nd_image = target_yx
             target_yx_2nd_image[:, 0] = source_image_height + target_yx_2nd_image[:, 0]
 
