@@ -2,8 +2,8 @@ import time
 from pathlib import Path
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.bop_challenge import get_pinhole_params, load_gt_images_and_segmentations, extract_gt_Se3_cam2obj, \
-    read_gt_Se3_cam2obj_transformations
+from utils.bop_challenge import (get_pinhole_params, read_gt_Se3_cam2obj_transformations,
+                                 get_bop_images_and_segmentations)
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
@@ -50,15 +50,12 @@ def main():
         bop_folder = config.default_data_folder / 'bop'
 
         sequence_folder = config.default_data_folder / 'bop' / dataset / sequence_type / sequence
-        image_folder = sequence_folder / 'rgb'
-        segmentation_folder = sequence_folder / 'mask_visib'
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
-
-        pose_json_path = sequence_folder / 'scene_gt.json'
+        gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence,
+                                                                               sequence_type, None)
 
         dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
-                                                                    None, None, config.device)
+                                                                None, sequence_starts, config.device)
 
         gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
 

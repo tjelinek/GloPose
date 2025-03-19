@@ -114,7 +114,8 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, object_id: int = None, device: 
     return gt_Se3_cam2obj
 
 
-def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type):
+def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
+                                     onboarding_type: str = None):
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
 
