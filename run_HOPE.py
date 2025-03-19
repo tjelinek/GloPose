@@ -26,9 +26,6 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-        if config.gt_flow_source == 'GenerateSynthetic':
-            exit()
-
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
