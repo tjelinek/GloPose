@@ -124,7 +124,8 @@ def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: s
                                                    "down")
         sequence_folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "up")
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb', sequence_folder_down / 'mask_visib')
+        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb',
+                                                              sequence_folder_down / 'mask_visib')
         gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
                                                                 sequence_folder_up / 'mask_visib')
 
