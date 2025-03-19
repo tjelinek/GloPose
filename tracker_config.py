@@ -22,6 +22,7 @@ class TrackerConfig:
     dataset: str = None
     sequence: str = None
     experiment_name: str = None
+    special_hash: str = None
 
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
