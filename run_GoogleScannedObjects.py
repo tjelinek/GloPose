@@ -50,6 +50,7 @@ def main():
     config.experiment_name = experiment_name
     config.sequence = sequence
     config.dataset = dataset
+    config.purge_cache = True
 
     config.large_images_results_write_frequency = 1
 
