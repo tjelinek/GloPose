@@ -34,7 +34,7 @@ def main():
         onboarding_type = None
 
         run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, skip_indices,
-                             onboarding_type)
+                             onboarding_type, True)
 
 
 if __name__ == "__main__":
