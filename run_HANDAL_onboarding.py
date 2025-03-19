@@ -15,7 +15,7 @@ def main():
             'obj_000020',
             'obj_000030',
             'obj_000040',
-        ]
+        ][::0]
 
     for sequence in sequences:
         config = load_config(args.config)
