@@ -7,13 +7,10 @@ import torch
 from kornia.geometry import So3, Quaternion
 from pycolmap import Reconstruction
 
-from data_structures.view_graph import ViewGraph
 
-
-def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, view_graph: ViewGraph,
-                             reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success,
-                             pose_alignment_success):
-
+def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, num_keyframes: int,
+                             reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success: bool,
+                             pose_alignment_success: bool):
     # Read the input CSV file containing reconstruction data
     if not csv_per_frame_stats.exists():
         print(f"Error: Input file {csv_per_frame_stats} does not exist.")
@@ -28,8 +25,8 @@ def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: 
     stats = {
         'dataset': dataset,
         'sequence': sequence,
-        'num_keyframes': len(view_graph.view_graph.nodes),
-        'colmap_registered_keyframes': reconstruction.num_reg_images(),
+        'num_keyframes': num_keyframes,
+        'colmap_registered_keyframes': reconstruction.num_reg_images() if reconstruction is not None else None,
         'mean_rotation_error': None,
         'rot_accuracy_at_5_deg': None,
         'mean_translation_error': None,

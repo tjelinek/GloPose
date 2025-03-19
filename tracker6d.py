@@ -2,11 +2,12 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 import pandas as pd
 import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
+from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.frame_provider import BaseTracker
@@ -42,9 +43,6 @@ class Tracker6D:
         self.video_path: Optional[Path] = video_path
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
-
-        self.reconstruction_success: bool = True
-        self.alignment_success: bool = True
 
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None
         # Ground truth related
@@ -178,26 +176,30 @@ class Tracker6D:
         assert len(keyframe_nodes_idxs) > 2
         print(keyframe_graph.edges)
         self.results_writer.log_keyframe_info(keyframe_graph)
-        reconstruction = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
+        reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
-        view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
-        view_graph.save(self.cache_folder_view_graph, save_images=True)
+        if reconstruction is not None and alignment_success:
+            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
+            view_graph.save(self.cache_folder_view_graph, save_images=True)
 
-        reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
-        reconstruction_path.mkdir(exist_ok=True, parents=True)
-        reconstruction.write(str(reconstruction_path))
+            reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
+            reconstruction_path.mkdir(exist_ok=True, parents=True)
+            reconstruction.write(str(reconstruction_path))
 
-        self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
+            self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
-        view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
-        view_graph.save(self.cache_folder_view_graph, save_images=True)
+            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
+            view_graph.save(self.cache_folder_view_graph, save_images=True)
 
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
         self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
-        update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph, reconstruction,
-                                 self.config.dataset, self.config.sequence, self.reconstruction_success,
-                                 self.alignment_success)
+
+        num_keyframes = len(keyframe_graph.nodes)
+        reconstruction_success = reconstruction is not None
+        update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, num_keyframes, reconstruction,
+                                 self.config.dataset, self.config.sequence, reconstruction_success,
+                                 alignment_success)
 
         return
 
@@ -223,7 +225,11 @@ class Tracker6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
-    def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs):
+    def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) ->\
+            Tuple[Optional[Reconstruction], bool]:
+
+        alignment_success = True
+        reconstruction = None
         try:
             if self.config.reconstruction_matches == 'RoMa':
                 reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
@@ -234,7 +240,7 @@ class Tracker6D:
             else:
                 raise ValueError(f'Unknown matcher {self.config.frame_filter}')
         except:
-            self.reconstruction_success = False
+            pass
 
         try:
             if self.config.similarity_transformation == 'first_frame':
@@ -244,9 +250,9 @@ class Tracker6D:
             else:
                 raise ValueError("Similarity transformation ")
         except KeyError:
-            self.alignment_success = False
+            alignment_success = False
 
-        return reconstruction
+        return reconstruction, alignment_success
 
     def evaluate_reconstruction(self, reconstruction, csv_output_path: Path):
         """
