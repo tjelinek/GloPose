@@ -9,7 +9,7 @@ from tracker6d import Tracker6D
 
 
 def main():
-    dataset = 'HANDAL'
+    dataset = 'handal'
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
