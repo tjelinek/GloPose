@@ -148,28 +148,37 @@ def get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_typ
 
 
 def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
-                                        onboarding_type: str, sequence_starts: List[int], device: str):
-    if onboarding_type == 'dynamic':
+                                        onboarding_type: str = None, sequence_starts: List[int] = None,
+                                        device: str = 'cpu') -> Dict[int, Se3]:
+    if sequence_type in ['test', 'val', 'train']:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_gt.json'
         gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, device=device)
-    elif onboarding_type == 'static':
-        sequence_down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
-                                                   onboarding_type, 'down')
-        pose_json_path_down = sequence_down_folder / 'scene_gt.json'
+    elif sequence_type == 'onboarding':
+        if onboarding_type == 'dynamic':
+            sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+            pose_json_path = sequence_folder / 'scene_gt.json'
+            gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, device=device)
+        elif onboarding_type == 'static':
+            sequence_down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
+                                                       onboarding_type, 'down')
+            pose_json_path_down = sequence_down_folder / 'scene_gt.json'
 
-        sequence_up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
-                                                 onboarding_type, 'up')
-        pose_json_path_up = sequence_up_folder / 'scene_gt.json'
+            sequence_up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
+                                                     onboarding_type, 'up')
+            pose_json_path_up = sequence_up_folder / 'scene_gt.json'
 
-        gt_Se3_cam2obj_down = extract_gt_Se3_cam2obj(pose_json_path_down, device=device)
-        gt_Se3_cam2obj_up = extract_gt_Se3_cam2obj(pose_json_path_up, device=device)
+            gt_Se3_cam2obj_down = extract_gt_Se3_cam2obj(pose_json_path_down, device=device)
+            gt_Se3_cam2obj_up = extract_gt_Se3_cam2obj(pose_json_path_up, device=device)
 
-        gt_Se3_cam2obj = gt_Se3_cam2obj_down
-        gt_Se3_cam2obj = gt_Se3_cam2obj | {frm + sequence_starts[1]: gt_Se3_cam2obj_up[frm]
-                                           for frm in gt_Se3_cam2obj_up.keys()}
+            gt_Se3_cam2obj = gt_Se3_cam2obj_down
+            gt_Se3_cam2obj = gt_Se3_cam2obj | {frm + sequence_starts[1]: gt_Se3_cam2obj_up[frm]
+                                               for frm in gt_Se3_cam2obj_up.keys()}
+        else:
+            raise ValueError("Unknown onboarding type.")
     else:
-        raise ValueError("Unknown onboarding type.")
+        raise ValueError(f"Unknown sequence type: {sequence_type}")
+
     return gt_Se3_cam2obj
 
 

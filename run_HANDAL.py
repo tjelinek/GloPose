@@ -2,14 +2,15 @@ import time
 from pathlib import Path
 
 from utils.data_utils import get_initial_image_and_segment
-from utils.bop_challenge import get_pinhole_params, load_gt_images_and_segmentations, extract_gt_Se3_cam2obj
+from utils.bop_challenge import get_pinhole_params, load_gt_images_and_segmentations, extract_gt_Se3_cam2obj, \
+    read_gt_Se3_cam2obj_transformations
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
 
 
 def main():
-    dataset = 'HANDAL'
+    dataset = 'handal'
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -45,7 +46,10 @@ def main():
 
         t0 = time.time()
 
-        sequence_folder = config.default_data_folder / 'bop' / 'handal' / 'val' / sequence
+        sequence_type = 'val'
+        bop_folder = config.default_data_folder / 'bop'
+
+        sequence_folder = config.default_data_folder / 'bop' / dataset / sequence_type / sequence
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
 
@@ -53,7 +57,9 @@ def main():
 
         pose_json_path = sequence_folder / 'scene_gt.json'
 
-        dict_gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, None, config.device)
+        dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
+                                                                    None, None, config.device)
+
         gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
 
         valid_indices = sorted(list(dict_gt_Se3_cam2obj.keys()))[::skip_indices]
