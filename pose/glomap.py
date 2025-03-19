@@ -187,7 +187,7 @@ class GlomapWrapper:
         try:
             print(reconstruction.summary())
         except Exception as e:
-            print(e)
+            raise Exception("Reconstruction failed", e)
 
         return reconstruction
 
