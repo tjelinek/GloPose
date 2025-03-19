@@ -21,7 +21,7 @@ def main():
             'obj_000003', 'obj_000008', 'obj_000013', 'obj_000018', 'obj_000023', 'obj_000028',
             'obj_000004', 'obj_000009', 'obj_000014', 'obj_000019', 'obj_000024',
             'obj_000005', 'obj_000010', 'obj_000015', 'obj_000020', 'obj_000025',
-        ]
+        ][:1]
 
     for sequence in sequences:
         config = load_config(args.config)

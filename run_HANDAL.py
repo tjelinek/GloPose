@@ -15,13 +15,10 @@ def main():
             '000003',
             '000004',
             '000005',
-        ]
+        ][:1]
 
     for sequence in sequences:
         config = load_config(args.config)
-
-        if config.gt_flow_source == 'GenerateSynthetic':
-            exit()
 
         experiment_name = args.experiment
 
