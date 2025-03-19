@@ -195,8 +195,9 @@ class Tracker6D:
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
         self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
-        self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph, self.config.dataset,
-                                      reconstruction, self.config.sequence, self.reconstruction_success, self.alignment_success)
+        self.update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, view_graph, reconstruction,
+                                      self.config.dataset, self.config.sequence, self.reconstruction_success,
+                                      self.alignment_success)
 
         return
 
@@ -319,50 +320,66 @@ class Tracker6D:
         rotation_errors: List[float] = []
         translation_errors: List[float] = []
 
-        for _, row in sequence_df.iterrows():
-            # Skip if ground truth is not available
-            if row['gt_rotation'] is None or row['gt_translation'] is None:
-                continue
-
-            gt_rot_val = eval(row['gt_rotation'])
-            gt_trans_val = eval(row['gt_translation'])
-            pred_rot_val = eval(row['pred_rotation'])
-            pred_trans_val = eval(row['pred_translation'])
-
-            gt_rot_matrix = torch.Tensor(gt_rot_val) if gt_rot_val is not None else None
-            pred_rot_matrix = torch.Tensor(pred_rot_val) if pred_rot_val is not None else None
-            gt_trans = torch.Tensor(gt_trans_val) if gt_trans_val is not None else None
-            pred_trans = torch.Tensor(pred_trans_val) if pred_trans_val is not None else None
-
-            if gt_rot_matrix is None or pred_rot_matrix is None or gt_trans is None or pred_trans is None:
-                continue
-
-            gt_So3 = So3(Quaternion.from_matrix(gt_rot_matrix))
-            pred_So3 = So3(Quaternion.from_matrix(pred_rot_matrix))
-
-            rel_rot: So3 = gt_So3.inverse() * pred_So3
-
-            rotation_error_deg = torch.rad2deg(torch.linalg.norm(rel_rot.q.to_axis_angle())).item()
-            rotation_errors.append(rotation_error_deg)
-
-            translation_error = torch.linalg.norm(gt_trans - pred_trans).item()
-            translation_errors.append(translation_error)
-
-        rotation_errors_np = np.asarray(rotation_errors)
-        translation_errors_np = np.asarray(translation_errors)
-
         stats = {
             'dataset': dataset,
             'sequence': sequence,
             'num_keyframes': len(view_graph.view_graph.nodes),
             'colmap_registered_keyframes': reconstruction.num_reg_images(),
-            'mean_rotation_error': np.mean(rotation_errors_np),
-            'rot_error_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
-            'mean_translation_error': np.min(translation_errors_np),
+            'mean_rotation_error': None,
+            'rot_error_at_5_deg': None,
+            'mean_translation_error': None,
             'note': str()
         }
+        if not pose_alignment_success:
+            stats['note'] = ('Pose alignment with the reference pose failed.'
+                             'This happens when COLMAP does not register the 1st image.')
+        elif not reconstruction_success:
+            stats['note'] = 'SfM reconstruction failed.'
+        else:
+            for _, row in sequence_df.iterrows():
+                # Skip if ground truth is not available
+                if row['gt_rotation'] is None or row['gt_translation'] is None:
+                    continue
 
-        stats_df = pd.DataFrame(st)
+                gt_rot_val = eval(row['gt_rotation'])
+                gt_trans_val = eval(row['gt_translation'])
+                pred_rot_val = eval(row['pred_rotation'])
+                pred_trans_val = eval(row['pred_translation'])
+
+                gt_rot_matrix = torch.Tensor(gt_rot_val) if gt_rot_val is not None else None
+                pred_rot_matrix = torch.Tensor(pred_rot_val) if pred_rot_val is not None else None
+                gt_trans = torch.Tensor(gt_trans_val) if gt_trans_val is not None else None
+                pred_trans = torch.Tensor(pred_trans_val) if pred_trans_val is not None else None
+
+                if gt_rot_matrix is None or pred_rot_matrix is None or gt_trans is None or pred_trans is None:
+                    continue
+
+                gt_So3 = So3(Quaternion.from_matrix(gt_rot_matrix))
+                pred_So3 = So3(Quaternion.from_matrix(pred_rot_matrix))
+
+                rel_rot: So3 = gt_So3.inverse() * pred_So3
+
+                rotation_error_deg = torch.rad2deg(torch.linalg.norm(rel_rot.q.to_axis_angle())).item()
+                rotation_errors.append(rotation_error_deg)
+
+                translation_error = torch.linalg.norm(gt_trans - pred_trans).item()
+                translation_errors.append(translation_error)
+
+            rotation_errors_np = np.asarray(rotation_errors)
+            translation_errors_np = np.asarray(translation_errors)
+
+            stats = {
+                'dataset': dataset,
+                'sequence': sequence,
+                'num_keyframes': len(view_graph.view_graph.nodes),
+                'colmap_registered_keyframes': reconstruction.num_reg_images(),
+                'mean_rotation_error': np.mean(rotation_errors_np),
+                'rot_error_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
+                'mean_translation_error': np.min(translation_errors_np),
+                'note': str()
+            }
+
+        stats_df = pd.DataFrame(stats)
 
         # Write to CSV
         if os.path.exists(csv_per_sequence_stats):
