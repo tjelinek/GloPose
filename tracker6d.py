@@ -249,7 +249,7 @@ class Tracker6D:
                 reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
             else:
                 raise ValueError("Similarity transformation ")
-        except KeyError:
+        except:
             alignment_success = False
 
         return reconstruction, alignment_success
