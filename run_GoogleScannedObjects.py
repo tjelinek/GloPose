@@ -56,8 +56,8 @@ def main():
     skip_frames = 1
     gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
     gt_mesh = load_mesh(Path(config.gt_mesh_path))
-    gt_rotations = torch.deg2rad(scenarios.generate_rotations_y(step=5).rotations).to(config.device)
-    gt_rotations = torch.cat([gt_rotations, gt_rotations], dim=0)
+    gt_rotations = torch.deg2rad(scenarios.generate_rotations_z(step=5).rotations).to(config.device)
+    # gt_rotations = torch.cat([gt_rotations, gt_rotations], dim=0)
     # gt_rotations = torch.deg2rad(scenarios.random_walk_on_a_sphere().rotations).to(torch.float32).to(config.device)
     images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
 
