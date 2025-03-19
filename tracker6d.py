@@ -326,10 +326,11 @@ class Tracker6D:
             'num_keyframes': len(view_graph.view_graph.nodes),
             'colmap_registered_keyframes': reconstruction.num_reg_images(),
             'mean_rotation_error': None,
-            'rot_error_at_5_deg': None,
+            'rot_accuracy_at_5_deg': None,
             'mean_translation_error': None,
             'note': str()
         }
+
         if not pose_alignment_success:
             stats['note'] = ('Pose alignment with the reference pose failed.'
                              'This happens when COLMAP does not register the 1st image.')
@@ -368,16 +369,12 @@ class Tracker6D:
             rotation_errors_np = np.asarray(rotation_errors)
             translation_errors_np = np.asarray(translation_errors)
 
-            stats = {
-                'dataset': dataset,
-                'sequence': sequence,
-                'num_keyframes': len(view_graph.view_graph.nodes),
-                'colmap_registered_keyframes': reconstruction.num_reg_images(),
+            # Update the existing stats dictionary instead of creating a new one
+            stats.update({
                 'mean_rotation_error': np.mean(rotation_errors_np),
                 'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
-                'mean_translation_error': np.min(translation_errors_np),
-                'note': str()
-            }
+                'mean_translation_error': np.min(translation_errors_np)
+            })
 
         stats_df = pd.DataFrame([stats])
 
