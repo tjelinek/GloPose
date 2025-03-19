@@ -10,11 +10,11 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            'obj_000001_down',
-            'obj_000010_up',
-            'obj_000020_down',
-            'obj_000030_up',
-            'obj_000040_down',
+            'obj_000001',
+            'obj_000010',
+            'obj_000020',
+            'obj_000030',
+            'obj_000040',
         ]
 
     for sequence in sequences:
@@ -31,10 +31,10 @@ def main():
         skip_indices = 4
 
         sequence_type = 'onboarding'
-        onboarding_type = 'dynamic'
+        onboarding_type = 'static'
 
         run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, skip_indices,
-                             onboarding_type)
+                             onboarding_type, True)
 
 
 if __name__ == "__main__":
