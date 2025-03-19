@@ -65,16 +65,6 @@ def main():
         else:
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
-        renderings_folder = 'renderings'
-
-        t0 = time.time()
-
-        files = np.array(
-            glob.glob(os.path.join(config.default_data_folder, dataset, sequence, renderings_folder, '*.*')))
-        files.sort()
-
-        print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
-
         skip_frames = 1
         gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
         gt_mesh = load_mesh(Path(config.gt_mesh_path))
