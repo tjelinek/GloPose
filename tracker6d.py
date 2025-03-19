@@ -374,17 +374,17 @@ class Tracker6D:
                 'num_keyframes': len(view_graph.view_graph.nodes),
                 'colmap_registered_keyframes': reconstruction.num_reg_images(),
                 'mean_rotation_error': np.mean(rotation_errors_np),
-                'rot_error_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
+                'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
                 'mean_translation_error': np.min(translation_errors_np),
                 'note': str()
             }
 
-        stats_df = pd.DataFrame(stats)
+        stats_df = pd.DataFrame([stats])
 
         # Write to CSV
-        if os.path.exists(csv_per_sequence_stats):
+        if csv_per_sequence_stats.exists():
             existing_df = pd.read_csv(csv_per_sequence_stats)
-            # Remove existing entries for the same datasets and sequences
+
             filtered_df = existing_df[~existing_df.set_index(['dataset', 'sequence']).index.isin(
                 stats_df.set_index(['dataset', 'sequence']).index)]
             updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
