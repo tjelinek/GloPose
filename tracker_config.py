@@ -16,6 +16,7 @@ class TrackerConfig:
     default_data_folder: Path = Path('/mnt/personal/jelint19/data/').expanduser()
     default_results_folder: Path = Path('/mnt/personal/jelint19/results/FlowTracker/').expanduser()
     write_folder: Path = None
+    purge_cache: bool = False
 
     matching_visualization_type: str = 'matching'  # Either 'dots' or 'matching'
     dataset: str = None
@@ -24,7 +25,7 @@ class TrackerConfig:
 
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
-    large_images_results_write_frequency: int = 5
+    large_images_results_write_frequency: int = 1
 
     # Input data settings
     input_frames: int = 0
@@ -35,9 +36,9 @@ class TrackerConfig:
     image_downsample: float = 1.0
 
     # Renderer settings
-    camera_position: Tuple[float] = (0, 0, 5.0)
-    camera_up: Tuple[float] = (0, 1, 0)
-    obj_center: Tuple[float] = (0, 0, 0)
+    camera_position: Tuple[float, float, float] = (0, 0, 5.0)
+    camera_up: Tuple[float, float, float] = (0, 1, 0)
+    obj_center: Tuple[float, float, float] = (0, 0, 0)
     rendered_image_shape: ImageSize = ImageSize(500, 500)
     sigmainv: float = 7000
     features: str = 'deep'
