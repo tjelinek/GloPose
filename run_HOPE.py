@@ -61,12 +61,17 @@ def main():
         pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type,
                                              onboarding_type, sequence_starts)
 
-        gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[0]
+        gt_Se3_cam2obj_first_frame = gt_Se3_cam2obj[min(gt_Se3_cam2obj.keys())]
+
+        valid_indices = sorted(list(gt_Se3_cam2obj.keys()))[::skip_indices]
+        gt_images = [gt_images[i] for i in valid_indices]
+        gt_segs = [gt_segs[i] for i in valid_indices]
+        gt_Se3_cam2obj = {i: gt_Se3_cam2obj[frame] for i, frame in enumerate(valid_indices)}
 
         first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
 
-        config.camera_intrinsics = pinhole_params[0].intrinsics.squeeze().numpy(force=True)
-        config.camera_extrinsics = pinhole_params[0].extrinsics.squeeze().numpy(force=True)
+        config.camera_intrinsics = pinhole_params[min(valid_indices)].intrinsics.squeeze().numpy(force=True)
+        config.camera_extrinsics = pinhole_params[min(valid_indices)].extrinsics.squeeze().numpy(force=True)
         config.input_frames = len(gt_images)
         config.frame_provider = 'precomputed'
         config.segmentation_provider = 'SAM2'
@@ -74,6 +79,7 @@ def main():
         print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
         tracker = Tracker6D(config, write_folder, initial_gt_Se3_cam2obj=gt_Se3_cam2obj_first_frame,
+                            gt_Se3_cam2obj=gt_Se3_cam2obj,
                             images_paths=gt_images, segmentation_paths=gt_segs,
                             initial_segmentation=first_segmentation, initial_image=first_image,
                             sequence_starts=sequence_starts)
