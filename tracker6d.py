@@ -327,7 +327,7 @@ class Tracker6D:
         if self.segmentation_paths is not None:
             frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i].name)
         elif self.segmentation_video_path is not None:
-            frame_node.image_filename = Path(f'{self.segmentation_video_path.stem}_{frame_i}.png')
+            frame_node.segmentation_filename = Path(f'{self.segmentation_video_path.stem}_{frame_i}.png')
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
