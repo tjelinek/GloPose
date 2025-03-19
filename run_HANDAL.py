@@ -48,33 +48,103 @@ def main():
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
                          config: TrackerConfig, skip_indices: int, onboarding_type: str = None):
+    """
+    Run the 6D tracker on BOP dataset sequences.
+
+    Args:
+        dataset: The dataset name (e.g., 'hope', 'handal')
+        experiment_name: Name of the experiment
+        sequence: Sequence identifier
+        sequence_type: Type of sequence (e.g., 'val', 'onboarding')
+        args: Command line arguments
+        config: Tracker configuration
+        skip_indices: Number of frames to skip when processing
+        onboarding_type: Type of onboarding data, if applicable
+
+    Returns:
+        None
+    """
+    # Determine output folder
     if args.output_folder is not None:
         write_folder = Path(args.output_folder) / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / sequence
+
+    # Path to BOP dataset
     bop_folder = config.default_data_folder / 'bop'
-    gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence,
-                                                                           sequence_type, onboarding_type)
-    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
-                                                              onboarding_type, sequence_starts, config.device)
+
+    # Load images and segmentations
+    gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(
+        bop_folder,
+        dataset,
+        sequence,
+        sequence_type,
+        onboarding_type
+    )
+
+    # Get camera-to-object transformations
+    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(
+        bop_folder,
+        dataset,
+        sequence,
+        sequence_type,
+        onboarding_type,
+        sequence_starts,
+        config.device
+    )
+
+    # Get first frame camera pose
     gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
+
+    # Apply frame skipping
     valid_indices = sorted(list(dict_gt_Se3_cam2obj.keys()))[::skip_indices]
     gt_images = [gt_images[i] for i in valid_indices]
     gt_segs = [gt_segs[i] for i in valid_indices]
-    dict_gt_Se3_cam2obj = {i: dict_gt_Se3_cam2obj[frame] for i, frame in enumerate(valid_indices)}
-    first_image, first_segmentation = get_initial_image_and_segment(gt_images, gt_segs, segmentation_channel=0)
-    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type,
-                                         None, sequence_starts)
-    config.camera_intrinsics = pinhole_params[min(valid_indices)].intrinsics.squeeze().numpy(force=True)
-    config.camera_extrinsics = pinhole_params[min(valid_indices)].extrinsics.squeeze().numpy(force=True)
+    dict_gt_Se3_cam2obj = {
+        i: dict_gt_Se3_cam2obj[frame]
+        for i, frame in enumerate(valid_indices)
+    }
+
+    # Get initial image and segmentation
+    first_image, first_segmentation = get_initial_image_and_segment(
+        gt_images,
+        gt_segs,
+        segmentation_channel=0
+    )
+
+    # Get camera parameters
+    pinhole_params = read_pinhole_params(
+        bop_folder,
+        dataset,
+        sequence,
+        sequence_type,
+        None,
+        sequence_starts
+    )
+
+    # Set camera parameters in config
+    min_index = min(valid_indices)
+    config.camera_intrinsics = pinhole_params[min_index].intrinsics.squeeze().numpy(force=True)
+    config.camera_extrinsics = pinhole_params[min_index].extrinsics.squeeze().numpy(force=True)
+
+    # Update config with frame information
     config.input_frames = len(gt_images)
     config.frame_provider = 'precomputed'
     config.segmentation_provider = 'SAM2'
-    sfb = Tracker6D(config, write_folder, initial_gt_Se3_cam2obj=gt_Se3_obj2cam_frame0,
-                    gt_Se3_cam2obj=dict_gt_Se3_cam2obj, images_paths=gt_images, segmentation_paths=gt_segs,
-                    initial_segmentation=first_segmentation,
-                    initial_image=first_image)
-    sfb.run_filtering_with_reconstruction()
+
+    # Initialize and run the tracker
+    tracker = Tracker6D(
+        config,
+        write_folder,
+        initial_gt_Se3_cam2obj=gt_Se3_obj2cam_frame0,
+        gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
+        images_paths=gt_images,
+        segmentation_paths=gt_segs,
+        initial_segmentation=first_segmentation,
+        initial_image=first_image
+    )
+
+    tracker.run_filtering_with_reconstruction()
 
 
 if __name__ == "__main__":
