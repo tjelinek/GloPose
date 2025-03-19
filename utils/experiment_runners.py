@@ -107,7 +107,8 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
-                         config: TrackerConfig, skip_indices: int, onboarding_type: str = None):
+                         config: TrackerConfig, skip_indices: int, onboarding_type: str = None,
+                         only_frames_with_known_poses: bool = False):
     """
     Run the 6D tracker on BOP dataset sequences.
 
@@ -120,6 +121,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
         config: Tracker configuration
         skip_indices: Number of frames to skip when processing
         onboarding_type: Type of onboarding data, if applicable
+        only_frames_with_known_poses: Skip frames without known poses
 
     Returns:
         None
@@ -157,12 +159,17 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
 
     # Apply frame skipping
-    valid_indices = sorted(list(dict_gt_Se3_cam2obj.keys()))[::skip_indices]
+    if only_frames_with_known_poses:
+        valid_indices = sorted(list(dict_gt_Se3_cam2obj.keys()))
+    else:
+        valid_indices = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
+
+    valid_indices = valid_indices[::skip_indices]
     gt_images = [gt_images[i] for i in valid_indices]
     gt_segs = [gt_segs[i] for i in valid_indices]
     dict_gt_Se3_cam2obj = {
         i: dict_gt_Se3_cam2obj[frame]
-        for i, frame in enumerate(valid_indices)
+        for i, frame in enumerate(valid_indices) if frame in dict_gt_Se3_cam2obj.keys()
     }
 
     # Get initial image and segmentation
