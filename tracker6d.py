@@ -72,10 +72,11 @@ class Tracker6D:
         cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
                                    config.roma_matcher_config.config_name / config.dataset / config.sequence)
         cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
-                                   config.sift_matcher_config.config_name / config.dataset / config.sequence)
+                                   config.sift_matcher_config.config_name / config.dataset /
+                                   f'{config.sequence}_{config.special_hash}')
 
         self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
-                                              config.dataset / config.sequence)
+                                              config.dataset / f'{config.sequence}_{config.special_hash}')
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
                                        segmentation_paths, segmentation_video_path, video_path, 0)
@@ -101,9 +102,8 @@ class Tracker6D:
                                   initial_segmentation: torch.Tensor | List[torch.Tensor],
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
                                   frame_i: int):
-        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') /
-                                   self.config.sift_matcher_config.config_name / self.config.dataset /
-                                   self.config.sequence)
+        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+                                   f'{self.config.sequence}_{self.config.special_hash}')
 
         if self.sequence_starts is not None:
             assert type(initial_segmentation) is list
@@ -126,9 +126,9 @@ class Tracker6D:
             images_paths = [images_paths[i] for i in range(len(images_paths))]
             segmentation_paths = [segmentation_paths[i] for i in range(len(images_paths))]
 
-            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') /
-                                       self.config.sift_matcher_config.config_name / self.config.dataset /
-                                       self.config.sequence) / f'{first_image_frame}_to_{last_image_frame}'
+            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+                                       f'{self.config.sequence}_{self.config.special_hash}' /
+                                       f'{first_image_frame}_to_{last_image_frame}')
 
         if self.gt_Se3_cam2obj is not None:
 

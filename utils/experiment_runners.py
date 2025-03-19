@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 import torch
 from kornia.geometry import Se3, Quaternion
@@ -5,10 +6,8 @@ from kornia.geometry import Se3, Quaternion
 from dataset_generators import scenarios
 from models.rendering import get_Se3_obj_to_cam_from_kaolin_params
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
-from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
 from utils.data_utils import load_texture, load_mesh
-from utils.general import load_config
 
 
 def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
@@ -45,7 +44,7 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
     config.experiment_name = experiment
     config.sequence = sequence
     config.dataset = dataset
-    config.purge_cache = True
+    config.purge_cache = False
     config.large_images_results_write_frequency = 1
 
     # Set mesh and texture paths
@@ -61,6 +60,7 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
         rotation_generator = scenarios.generate_rotations_y
 
     gt_rotations = torch.deg2rad(rotation_generator(step=5).rotations).to(config.device)
+    gt_rotations = torch.cat([gt_rotations, gt_rotations], dim=0)
     gt_rotations = gt_rotations[::skip_frames]
 
     # Create image paths
@@ -70,6 +70,9 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
     # Generate translations (zero by default)
     gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations * 0
     gt_translations = gt_translations.to(config.device)
+
+    trace_hash = hashlib.md5(gt_rotations.numpy(force=True).tobytes() + gt_translations.numpy(force=True).tobytes())
+    config.special_hash = trace_hash.hexdigest()
 
     # Create Se3 transformations
     gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
