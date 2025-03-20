@@ -305,7 +305,8 @@ class WriteResults:
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
         rr.set_time_sequence('frame', frame_i)
 
-        not_logged_keyframes = set(keyframe_graph.nodes) - set(self.logged_keyframe_graph.nodes)
+        kfs = set(keyframe_graph.nodes)
+        not_logged_keyframes = kfs - set(self.logged_keyframe_graph.nodes)
         for kf_idx in sorted(not_logged_keyframes):
             keyframe_node = self.data_graph.get_frame_data(kf_idx)
             template = keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).detach().cpu()
