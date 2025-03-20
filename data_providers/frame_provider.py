@@ -406,7 +406,7 @@ class BaseTracker:
 
             # Define the output file name
             if images_paths is not None:
-                output_file = output_path / f"{Path(images_paths[frame_i]).stem}.JPEG"
+                output_file = output_path / f"{frame_i:05d}_{Path(images_paths[frame_i]).stem}.JPEG"
             else:
                 output_file = output_path / f"{frame_i:05d}.JPEG"
 
