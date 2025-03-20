@@ -173,7 +173,6 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
         pose_json_path = sequence_folder / 'scene_gt.json'
         gt_Se3_cam2obj = extract_gt_Se3_cam2obj(pose_json_path, device=device)
 
-
     return gt_Se3_cam2obj
 
 

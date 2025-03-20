@@ -160,16 +160,16 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
 
     # Apply frame skipping
     if only_frames_with_known_poses:
-        valid_indices = sorted(list(dict_gt_Se3_cam2obj.keys()))
+        valid_frames = list(dict_gt_Se3_cam2obj.keys())
     else:
-        valid_indices = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
+        valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
 
-    valid_indices = valid_indices[::skip_indices]
-    gt_images = [gt_images[i] for i in valid_indices]
-    gt_segs = [gt_segs[i] for i in valid_indices]
+    valid_frames = valid_frames[::skip_indices]
+    gt_images = [gt_images[i] for i in valid_frames]
+    gt_segs = [gt_segs[i] for i in valid_frames]
     dict_gt_Se3_cam2obj = {
         i: dict_gt_Se3_cam2obj[frame]
-        for i, frame in enumerate(valid_indices) if frame in dict_gt_Se3_cam2obj.keys()
+        for i, frame in enumerate(valid_frames)
     }
 
     # Get initial image and segmentation
@@ -190,7 +190,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     )
 
     # Set camera parameters in config
-    min_index = min(valid_indices)
+    min_index = min(valid_frames)
     config.camera_intrinsics = pinhole_params[min_index].intrinsics.squeeze().numpy(force=True)
     config.camera_extrinsics = pinhole_params[min_index].extrinsics.squeeze().numpy(force=True)
 
