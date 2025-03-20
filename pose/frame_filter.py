@@ -140,9 +140,9 @@ class RoMaFrameFilter(BaseFrameFilter):
             reliable_flows_sources_prime, best_source = self.match_to_all_keyframes(frame_i)
             if best_source is None:
                 source = preceding_source
-
-                self.keyframe_graph.add_node(frame_i - 1)
-                self.keyframe_graph.add_edge(preceding_source, frame_i - 1)
+                new_source = frame_i - 1
+                self.keyframe_graph.add_node(new_source)
+                self.keyframe_graph.add_edge(preceding_source, new_source)
 
                 reliable_flows_sources |= {source}
             else:
