@@ -40,7 +40,7 @@ class RoMaFlowProviderDirect:
 
     def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
                                             source_image_segmentation: torch.Tensor = None,
-                                            target_image_segmentation: torch.Tensor = None) ->\
+                                            target_image_segmentation: torch.Tensor = None) -> \
             torch.Tensor:
         roma_h, roma_w = self.roma_size_hw
         assert source_image_segmentation is not None or target_image_segmentation is not None
@@ -61,7 +61,7 @@ class RoMaFlowProviderDirect:
                                       target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
                                       target_image_name: Path = None, source_image_index: int = None,
                                       target_image_index: int = None, as_int: bool = False,
-                                      zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False)\
+                                      zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False) \
             -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         warp, certainty = self.next_flow_roma(source_image_tensor, target_image_tensor, sample,
                                               source_image_segmentation, target_image_segmentation, source_image_name,
@@ -145,7 +145,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
             warp_filename = self.warps_path / saved_filename
             certainty_filename = self.certainties_path / saved_filename
         elif (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
-                self.data_graph.G.has_node(source_image_index) and self.data_graph.G.has_node(source_image_index)):
+              self.data_graph.G.has_node(source_image_index) and self.data_graph.G.has_node(source_image_index)):
             source_data = self.data_graph.get_frame_data(source_image_index)
             target_data = self.data_graph.get_frame_data(target_image_index)
 
@@ -190,7 +190,13 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                     edge_data.roma_flow_warp_certainty = certainty
 
         if sample:
-            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+            if ((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
+                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5) and
+                    zero_certainty_outside_segmentation):  # This should prevent the sampling to fail due to CUDA error
+                warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
+                certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
+            else:
+                warp, certainty = self.flow_model.sample(warp, certainty, sample)
 
         return warp, certainty
 
@@ -199,7 +205,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                                       target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
                                       target_image_name: Path = None, source_image_index: int = None,
                                       target_image_index: int = None, as_int: bool = False,
-                                      zero_certainty_outside_segmentation=False, only_foreground_matches=False) ->\
+                                      zero_certainty_outside_segmentation=False, only_foreground_matches=False) -> \
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         src_pts_xy_roma = None
         dst_pts_xy_roma = None
