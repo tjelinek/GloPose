@@ -193,7 +193,9 @@ class Tracker6D:
 
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
-        self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
+
+        if reconstruction is not None:
+            self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
 
         num_keyframes = len(keyframe_graph.nodes)
         reconstruction_success = reconstruction is not None
