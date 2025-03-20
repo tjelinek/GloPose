@@ -1,6 +1,3 @@
-import time
-from pathlib import Path
-
 from utils.experiment_runners import run_on_bop_sequences
 from utils.general import load_config
 from utils.runtime_utils import parse_args
