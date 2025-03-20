@@ -173,9 +173,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         current_keyframe_graph_nodes = list(self.keyframe_graph.nodes)
         for source_node_idx in current_keyframe_graph_nodes:
 
-            self.flow_reliability(source_node_idx, frame_i)
-            flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
-            flow_reliability = flow_edge_data.reliability_score
+            flow_reliability = self.flow_reliability(source_node_idx, frame_i)
 
             if flow_reliability > best_source_reliability:
                 best_source = source_node_idx
