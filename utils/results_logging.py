@@ -319,8 +319,8 @@ class WriteResults:
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphNodes(node_ids=list(keyframe_graph.nodes),
                                                               labels=[str(kf) for kf in keyframe_graph.nodes]))
 
-        not_logged_keyframe_edges = set(keyframe_graph.edges) - set(self.logged_keyframe_graph.edges)
-        self.logged_keyframe_graph.add_edges_from(not_logged_keyframe_edges)
+        # not_logged_keyframe_edges = set(keyframe_graph.edges) - set(self.logged_keyframe_graph.edges)
+        # self.logged_keyframe_graph.add_edges_from(not_logged_keyframe_edges)
 
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in keyframe_graph.edges]))
 
