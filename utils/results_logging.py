@@ -854,8 +854,10 @@ class WriteResults:
         observed_image_annotation = RerunAnnotations.observed_image
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
 
+        prev_visualized_frame_idx = self.config.large_images_results_write_frequency
         # Save the images to disk
-        prev_frame = self.data_graph.get_frame_data(frame_i - 1) if frame_i > 0 else None
+        prev_frame = self.data_graph.get_frame_data(frame_i - prev_visualized_frame_idx) \
+            if frame_i >= prev_visualized_frame_idx else None
         current_datagraph_node = self.data_graph.get_frame_data(frame_i)
         last_frame_observation = current_datagraph_node.frame_observation
 
@@ -867,7 +869,8 @@ class WriteResults:
         rr.set_time_sequence("frame", frame_i)
 
         if frame_i == 0 or prev_frame.matching_source_keyframe != current_datagraph_node.matching_source_keyframe:
-            template_frame_observation = current_datagraph_node.frame_observation
+            template_frame_node = self.data_graph.get_frame_data(current_datagraph_node.matching_source_keyframe)
+            template_frame_observation = template_frame_node.frame_observation
             template = template_frame_observation.observed_image.squeeze().permute(1, 2, 0)
             template_segment = template_frame_observation.observed_segmentation.numpy(force=True)
             template_path = Path('')
@@ -876,14 +879,6 @@ class WriteResults:
 
         image_segmentation = last_frame_observation.observed_segmentation.numpy(force=True)
         rr.log(observed_image_segmentation_annotation, rr.SegmentationImage(image_segmentation))
-
-    def visualize_1D_feature_map_using_overlay(self, source_image_rgb, flow_occlusion, alpha):
-
-        occlusion_mask = flow_occlusion.detach().unsqueeze(0).repeat(3, 1, 1)
-        blended_image = alpha * occlusion_mask + (1 - alpha) * source_image_rgb
-        blended_image = (blended_image * 255).to(torch.uint8).squeeze().permute(1, 2, 0)
-
-        return blended_image
 
     def log_image(self, frame: int, image: torch.Tensor, rerun_annotation: str, save_path: Optional[Path] = None,
                   ignore_dimensions=False):
