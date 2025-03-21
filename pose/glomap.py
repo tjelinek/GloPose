@@ -25,7 +25,6 @@ from utils.colmap.h5_to_db import import_into_colmap
 from utils.sift import detect_sift, get_exhaustive_image_pairs, match_features
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
-from flow import roma_warp_to_pixel_coordinates
 from tracker_config import TrackerConfig
 from utils.general import extract_intrinsics_from_tensor
 
@@ -328,6 +327,9 @@ class GlomapWrapper:
 
         elif mapper == 'pycolmap':
             opts = pycolmap.IncrementalPipelineOptions()
+            opts.triangulation.ignore_two_view_tracks = False
+            opts.min_num_matches = 0
+            opts.ignore_watermarks = False
             opts.triangulation.ignore_two_view_tracks = False
             pycolmap.match_exhaustive(self.colmap_db_path)
             maps = pycolmap.incremental_mapping(self.colmap_db_path, self.colmap_image_path, self.colmap_output_path,
