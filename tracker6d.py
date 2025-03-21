@@ -230,7 +230,7 @@ class Tracker6D:
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) ->\
             Tuple[Optional[Reconstruction], bool]:
 
-        alignment_success = True
+        align_success = True
         reconstruction = None
         try:
             if self.config.reconstruction_matches == 'RoMa':
@@ -244,17 +244,15 @@ class Tracker6D:
         except:
             pass
 
-        try:
-            if self.config.similarity_transformation == 'first_frame':
-                reconstruction = self.glomap_wrapper.align_with_first_pose(reconstruction, self.initial_gt_Se3_cam2obj, 0)
-            elif self.config.similarity_transformation == 'kabsch':
-                reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
-            else:
-                raise ValueError("Similarity transformation ")
-        except:
-            alignment_success = False
+        if self.config.similarity_transformation == 'first_frame':
+            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose_direct(reconstruction,
+                                                                                      self.initial_gt_Se3_cam2obj, 0)
+        elif self.config.similarity_transformation == 'kabsch':
+            reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
+        else:
+            raise ValueError(f'Unknown similarity transform method {self.config.similarity_transformation}')
 
-        return reconstruction, alignment_success
+        return reconstruction, align_success
 
     def evaluate_reconstruction(self, reconstruction, csv_output_path: Path):
         """
