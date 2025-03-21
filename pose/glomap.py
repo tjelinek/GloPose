@@ -240,32 +240,38 @@ class GlomapWrapper:
         return reconstruction
 
     def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, frame_i: int) -> (
-            pycolmap.Reconstruction):
+            Tuple[pycolmap.Reconstruction, bool]):
 
         reconstruction = copy.deepcopy(reconstruction)
 
-        frame_to_name = {frame: str(self.data_graph.get_frame_data(frame).image_filename)
-                         for frame in self.data_graph.G.nodes}
-        first_image_name = frame_to_name[frame_i]
+        first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
 
-        reconstruction_name_to_key = {reconstruction.images[k].name: k for k in reconstruction.images.keys()}
+        if first_image_colmap_index := reconstruction.find_image_with_name(first_image_name) is None:
+            return reconstruction, False
 
-        first_image_colmap_index = reconstruction_name_to_key[first_image_name]
         ref_image_Se3_world2cam = get_image_Se3_world2cam(reconstruction, first_image_colmap_index, self.config.device)
 
         Se3_sim = gt_Se3_obj2cam * ref_image_Se3_world2cam.inverse()
-        scale = (torch.linalg.norm(ref_image_Se3_world2cam.translation) /
-                 (torch.linalg.norm(gt_Se3_obj2cam.translation) + 1e-10))
+
+        ref_translation_norm = torch.linalg.norm(ref_image_Se3_world2cam.translation)
+        gt_translation_norm = torch.linalg.norm(gt_Se3_obj2cam.translation)
+
+        if gt_translation_norm < 1e-10:
+            # Handle near-zero GT translation case
+            scale = 1.0
+        else:
+            scale = ref_translation_norm / gt_translation_norm
 
         R_sim_np = Se3_sim.quaternion.matrix().numpy(force=True)
         rot_3d = pycolmap.Rotation3d(R_sim_np)
         t_np = Se3_sim.t.numpy(force=True)
 
+        # Create and apply the similarity transformation
         sim_3D = pycolmap.Sim3d(scale.item(), rot_3d, t_np)
-
         reconstruction.transform(sim_3D)
 
         return reconstruction
+        return reconstruction, True
 
     def run_mapper(self, mapper: str = 'pycolmap'):
 
