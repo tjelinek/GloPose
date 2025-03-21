@@ -273,6 +273,81 @@ class GlomapWrapper:
         return reconstruction
         return reconstruction, True
 
+    def align_with_first_pose_direct(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3,
+                                     frame_i: int) -> (
+            Tuple[pycolmap.Reconstruction, bool]):
+
+        reconstruction = copy.deepcopy(reconstruction)
+
+        first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
+
+        if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
+            return reconstruction, False
+
+        # Get current camera pose
+        cam_from_world = first_image_colmap.cam_from_world
+
+        # Get ground truth pose
+        gt_R_np = gt_Se3_obj2cam.quaternion.matrix().numpy(force=True)
+        gt_t_np = gt_Se3_obj2cam.translation.numpy(force=True)
+        gt_rot = pycolmap.Rotation3d(gt_R_np)
+        gt_pose = pycolmap.Rigid3d(gt_rot, gt_t_np)
+
+        # Calculate transformation parameters
+        R_cam = cam_from_world.rotation.matrix()
+        R_gt = gt_R_np
+        R_transform = np.dot(R_gt, R_cam.T)
+        rot_transform = pycolmap.Rotation3d(R_transform)
+
+        t_cam = cam_from_world.translation
+        cam_trans_norm = np.linalg.norm(t_cam)
+        gt_trans_norm = np.linalg.norm(gt_t_np)
+        scale = gt_trans_norm / cam_trans_norm if cam_trans_norm > 1e-10 else 1.0
+
+        # Calculate translation
+        t_transform = gt_t_np - scale * np.dot(R_transform, t_cam)
+
+        # Now manually transform each element in the reconstruction
+
+        # First, transform the camera poses
+        for image_id, image in reconstruction.images.items():
+            orig_pose = image.cam_from_world
+            orig_R = orig_pose.rotation.matrix()
+            orig_t = orig_pose.translation
+
+            # Apply rotation
+            new_R = np.dot(R_transform, orig_R)
+            new_rot = pycolmap.Rotation3d(new_R)
+
+            # Apply scale and translation
+            new_t = scale * np.dot(R_transform, orig_t) + t_transform
+
+            # Set the new pose
+            new_pose = pycolmap.Rigid3d(new_rot, new_t)
+            image.cam_from_world = new_pose
+
+        # Then transform the 3D points
+        for point3D_id, point3D in reconstruction.points3D.items():
+            orig_xyz = point3D.xyz
+
+            # Apply rotation, scale, and translation
+            new_xyz = scale * np.dot(R_transform, orig_xyz) + t_transform
+            point3D.xyz = new_xyz
+
+        # Verify
+        first_image_colmap_new = reconstruction.find_image_with_name(first_image_name)
+        new_pose = first_image_colmap_new.cam_from_world
+        new_R = new_pose.rotation.matrix()
+        new_t = new_pose.translation
+
+        print("GT R:\n", gt_R_np)
+        print("New R:\n", new_R)
+        print("GT t:", gt_t_np)
+        print("New t:", new_t)
+
+        breakpoint()
+        return reconstruction, True
+
     def run_mapper(self, mapper: str = 'pycolmap'):
 
         pycolmap.match_exhaustive(str(self.colmap_db_path))
