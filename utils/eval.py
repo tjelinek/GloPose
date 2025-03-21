@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -30,6 +31,7 @@ def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: 
         'mean_rotation_error': None,
         'rot_accuracy_at_5_deg': None,
         'mean_translation_error': None,
+        'timestamp': datetime.now().strftime("%d.%m.%Y, %H:%M:%S"),
         'note': str()
     }
 
