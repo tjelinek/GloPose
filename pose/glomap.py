@@ -246,10 +246,10 @@ class GlomapWrapper:
 
         first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
 
-        if first_image_colmap_index := reconstruction.find_image_with_name(first_image_name) is None:
+        if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
             return reconstruction, False
 
-        ref_image_Se3_world2cam = get_image_Se3_world2cam(reconstruction, first_image_colmap_index, self.config.device)
+        ref_image_Se3_world2cam = get_image_Se3_world2cam(first_image_colmap, self.config.device)
 
         Se3_sim = gt_Se3_obj2cam * ref_image_Se3_world2cam.inverse()
 
@@ -398,8 +398,8 @@ def get_match_points_indices(keypoints, match_pts):
     return match_pts_indices
 
 
-def get_image_Se3_world2cam(reconstruction: pycolmap.Reconstruction, image_key: int, device: str) -> Se3:
-    image_world2cam: pycolmap.Rigid3d = reconstruction.images[image_key].cam_from_world
+def get_image_Se3_world2cam(image: pycolmap.Image, device: str) -> Se3:
+    image_world2cam: pycolmap.Rigid3d = image.cam_from_world
     image_t_cam = torch.tensor(image_world2cam.translation).to(device).to(torch.float)
     image_q_cam_xyzw = torch.tensor(image_world2cam.rotation.quat[[3, 0, 1, 2]]).to(device).to(torch.float)
     Se3_image_world2cam = Se3(Quaternion(image_q_cam_xyzw), image_t_cam)
