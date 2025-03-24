@@ -15,6 +15,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
+from pycolmap import Sim3d
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -249,182 +250,14 @@ class GlomapWrapper:
         if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
             return reconstruction, False
 
-        ref_image_Se3_world2cam = get_image_Se3_world2cam(first_image_colmap, self.config.device)
+        gt_R_obj2cam_np = gt_Se3_obj2cam.rotation.matrix().numpy(force=True)
+        gt_t_obj2cam_np = gt_Se3_obj2cam.t.numpy(force=True)
+        gt_Sim3D_obj2cam = Sim3d(1.0, gt_R_obj2cam_np, gt_t_obj2cam_np)
 
-        Se3_sim = gt_Se3_obj2cam * ref_image_Se3_world2cam.inverse()
+        pred_Sim3D_obj2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
+        Sim3d_gt_from_pred_obj2cam: Sim3d = gt_Sim3D_obj2cam.inverse() * pred_Sim3D_obj2cam
+        reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
 
-        ref_translation_norm = torch.linalg.norm(ref_image_Se3_world2cam.translation)
-        gt_translation_norm = torch.linalg.norm(gt_Se3_obj2cam.translation)
-
-        if gt_translation_norm < 1e-10:
-            # Handle near-zero GT translation case
-            scale = 1.0
-        else:
-            scale = ref_translation_norm / gt_translation_norm
-
-        R_sim_np = Se3_sim.quaternion.matrix().numpy(force=True)
-        rot_3d = pycolmap.Rotation3d(R_sim_np)
-        t_np = Se3_sim.t.numpy(force=True)
-
-        # Create and apply the similarity transformation
-        sim_3D = pycolmap.Sim3d(scale.item(), rot_3d, t_np)
-        reconstruction.transform(sim_3D)
-
-        return reconstruction, True
-
-    def align_with_first_pose2(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, frame_i: int) -> (
-            Tuple[pycolmap.Reconstruction, bool]):
-
-        reconstruction = copy.deepcopy(reconstruction)
-
-        first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
-
-        if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
-            return reconstruction, False
-
-        # Get current camera pose (Rigid3d)
-        cam_from_world = first_image_colmap.cam_from_world
-
-        # Get ground truth pose
-        gt_R_np = gt_Se3_obj2cam.quaternion.matrix().numpy(force=True)
-        gt_t_np = gt_Se3_obj2cam.translation.numpy(force=True)
-        gt_rot = pycolmap.Rotation3d(gt_R_np)
-
-        # Now we need to find new_from_old_world such that:
-        # TransformCameraWorld(new_from_old_world, cam_from_world) == gt_pose
-
-        # From the TransformCameraWorld function, we have:
-        # cam_from_new_world = Sim3d(1, cam_from_world.rot, cam_from_world.trans) * Inverse(new_from_old_world)
-        # Which gives us:
-        # gt_pose.rotation = cam_from_new_world.rotation
-        # gt_pose.translation = cam_from_new_world.translation * new_from_old_world.scale
-
-        # We need to solve for new_from_old_world
-
-        # First, convert cam_from_world to Sim3d
-        cam_sim3d = pycolmap.Sim3d(1.0, cam_from_world.rotation, cam_from_world.translation)
-
-        # Now we need:
-        # cam_sim3d * Inverse(new_from_old_world) = gt_sim3d
-        # Therefore:
-        # Inverse(new_from_old_world) = cam_sim3d.inverse() * gt_sim3d
-        # new_from_old_world = (cam_sim3d.inverse() * gt_sim3d).inverse()
-
-        # Create gt_sim3d (scale = 1 initially, we'll adjust it)
-        gt_sim3d = pycolmap.Sim3d(1.0, gt_rot, gt_t_np)
-
-        # Calculate scale - use the ratio of translation norms
-        gt_trans_norm = np.linalg.norm(gt_t_np)
-        cam_trans_norm = np.linalg.norm(cam_from_world.translation)
-
-        if gt_trans_norm < 1e-10:
-            scale = 1.0
-        else:
-            scale = cam_trans_norm / gt_trans_norm
-
-        # Update the scale in gt_sim3d
-        gt_sim3d.scale = scale
-
-        # Get the inverse of cam_sim3d
-        inv_cam_sim3d = cam_sim3d.inverse()
-
-        # Calculate intermediate transformation
-        intermediate = inv_cam_sim3d * gt_sim3d
-
-        # Get the final transformation
-        new_from_old_world = intermediate.inverse()
-
-        # Apply the transformation
-        reconstruction.transform(new_from_old_world)
-
-        # Verify
-        first_image_colmap_new = reconstruction.find_image_with_name(first_image_name)
-        new_pose = first_image_colmap_new.cam_from_world
-        new_R = new_pose.rotation.matrix()
-        new_t = new_pose.translation
-
-        print("GT R:\n", gt_R_np)
-        print("New R:\n", new_R)
-        print("GT t:", gt_t_np)
-        print("New t:", new_t)
-
-        breakpoint()
-
-        return reconstruction, True
-
-    def align_with_first_pose_direct(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3,
-                                     frame_i: int) -> (
-            Tuple[pycolmap.Reconstruction, bool]):
-
-        reconstruction = copy.deepcopy(reconstruction)
-
-        first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
-
-        if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
-            return reconstruction, False
-
-        # Get current camera pose
-        cam_from_world = first_image_colmap.cam_from_world
-
-        # Get ground truth pose
-        gt_R_np = gt_Se3_obj2cam.quaternion.matrix().numpy(force=True)
-        gt_t_np = gt_Se3_obj2cam.translation.numpy(force=True)
-        gt_rot = pycolmap.Rotation3d(gt_R_np)
-        gt_pose = pycolmap.Rigid3d(gt_rot, gt_t_np)
-
-        # Calculate transformation parameters
-        R_cam = cam_from_world.rotation.matrix()
-        R_gt = gt_R_np
-        R_transform = np.dot(R_gt, R_cam.T)
-        rot_transform = pycolmap.Rotation3d(R_transform)
-
-        t_cam = cam_from_world.translation
-        cam_trans_norm = np.linalg.norm(t_cam)
-        gt_trans_norm = np.linalg.norm(gt_t_np)
-        scale = gt_trans_norm / cam_trans_norm if cam_trans_norm > 1e-10 else 1.0
-
-        # Calculate translation
-        t_transform = gt_t_np - scale * np.dot(R_transform, t_cam)
-
-        # Now manually transform each element in the reconstruction
-
-        # First, transform the camera poses
-        for image_id, image in reconstruction.images.items():
-            orig_pose = image.cam_from_world
-            orig_R = orig_pose.rotation.matrix()
-            orig_t = orig_pose.translation
-
-            # Apply rotation
-            new_R = np.dot(R_transform, orig_R)
-            new_rot = pycolmap.Rotation3d(new_R)
-
-            # Apply scale and translation
-            new_t = scale * np.dot(R_transform, orig_t) + t_transform
-
-            # Set the new pose
-            new_pose = pycolmap.Rigid3d(new_rot, new_t)
-            image.cam_from_world = new_pose
-
-        # Then transform the 3D points
-        for point3D_id, point3D in reconstruction.points3D.items():
-            orig_xyz = point3D.xyz
-
-            # Apply rotation, scale, and translation
-            new_xyz = scale * np.dot(R_transform, orig_xyz) + t_transform
-            point3D.xyz = new_xyz
-
-        # Verify
-        first_image_colmap_new = reconstruction.find_image_with_name(first_image_name)
-        new_pose = first_image_colmap_new.cam_from_world
-        new_R = new_pose.rotation.matrix()
-        new_t = new_pose.translation
-
-        print("GT R:\n", gt_R_np)
-        print("New R:\n", new_R)
-        print("GT t:", gt_t_np)
-        print("New t:", new_t)
-
-        breakpoint()
         return reconstruction, True
 
     def run_mapper(self, mapper: str = 'pycolmap'):

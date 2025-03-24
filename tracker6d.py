@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Tuple
 
 import pandas as pd
 import torch
-from kornia.geometry import Quaternion, Se3, PinholeCamera
+from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
@@ -15,7 +15,7 @@ from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvide
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
-from pose.glomap import GlomapWrapper
+from pose.glomap import GlomapWrapper, get_image_Se3_world2cam
 from tracker_config import TrackerConfig
 from utils.eval import update_global_statistics
 from utils.results_logging import WriteResults
@@ -245,8 +245,8 @@ class Tracker6D:
             pass
 
         if self.config.similarity_transformation == 'first_frame':
-            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose2(reconstruction,
-                                                                                       self.initial_gt_Se3_cam2obj, 0)
+            gt_Se3_obj2cam = self.initial_gt_Se3_cam2obj.inverse()
+            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose(reconstruction, gt_Se3_obj2cam, 0)
         elif self.config.similarity_transformation == 'kabsch':
             reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
         else:
@@ -264,10 +264,7 @@ class Tracker6D:
         for image in reconstruction.images.values():
             image_frame_id = images_paths_to_frame_index[image.name]
 
-            t_cam_pred = torch.tensor(image.cam_from_world.translation)
-            q_cam_xyzw_pred = torch.tensor(image.cam_from_world.rotation.quat)
-            q_cam_wxyz_pred = q_cam_xyzw_pred[[3, 0, 1, 2]]
-            Se3_obj2cam_pred = Se3(Quaternion(q_cam_wxyz_pred), t_cam_pred)
+            Se3_obj2cam_pred = get_image_Se3_world2cam(image, 'cpu')
 
             frame_data = self.data_graph.get_frame_data(image_frame_id)
             Se3_cam2obj_gt = frame_data.gt_Se3_cam2obj
