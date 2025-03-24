@@ -186,7 +186,7 @@ class Tracker6D:
             reconstruction_path.mkdir(exist_ok=True, parents=True)
             reconstruction.write(str(reconstruction_path))
 
-            self.results_writer.visualize_colmap_track(1, reconstruction)
+            self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
 
             view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
             view_graph.save(self.cache_folder_view_graph, save_images=True)
