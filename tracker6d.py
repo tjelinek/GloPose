@@ -195,7 +195,7 @@ class Tracker6D:
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
 
         if reconstruction is not None:
-            self.evaluate_reconstruction(reconstruction, csv_detailed_stats)
+            self.evaluate_reconstruction(reconstruction, csv_detailed_stats, self.config.dataset, self.config.sequence)
 
         num_keyframes = len(keyframe_graph.nodes)
         reconstruction_success = reconstruction is not None
@@ -245,8 +245,8 @@ class Tracker6D:
             pass
 
         if self.config.similarity_transformation == 'first_frame':
-            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose_direct(reconstruction,
-                                                                                      self.initial_gt_Se3_cam2obj, 0)
+            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose2(reconstruction,
+                                                                                       self.initial_gt_Se3_cam2obj, 0)
         elif self.config.similarity_transformation == 'kabsch':
             reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
         else:
@@ -254,14 +254,7 @@ class Tracker6D:
 
         return reconstruction, align_success
 
-    def evaluate_reconstruction(self, reconstruction, csv_output_path: Path):
-        """
-        Evaluate the reconstruction and save statistics to a CSV file.
-
-        Parameters:
-            reconstruction: The reconstructed data.
-            csv_output_path: Path to the output CSV file.
-        """
+    def evaluate_reconstruction(self, reconstruction, csv_output_path: Path, dataset: str, sequence: str):
 
         stats = []
 
@@ -289,8 +282,8 @@ class Tracker6D:
 
             # Add stats for the current image frame
             stats.append({
-                'dataset': self.config.dataset,
-                'sequence': self.config.sequence,
+                'dataset': dataset,
+                'sequence': sequence,
                 'image_frame_id': image_frame_id,
                 'gt_rotation': gt_rotation,
                 'gt_translation': gt_translation,
@@ -304,8 +297,8 @@ class Tracker6D:
         # If the CSV file exists, append; otherwise, create a new one
         if os.path.exists(csv_output_path):
             existing_df = pd.read_csv(csv_output_path)
-            filtered_df = existing_df[~((existing_df['dataset'] == self.config.dataset) &
-                                        (existing_df['sequence'] == self.config.sequence))]
+            filtered_df = existing_df[~((existing_df['dataset'] == dataset) &
+                                        (existing_df['sequence'] == sequence))]
             updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
             updated_df.to_csv(csv_output_path, index=False)
         else:
