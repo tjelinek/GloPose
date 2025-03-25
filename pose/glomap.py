@@ -187,6 +187,7 @@ class GlomapWrapper:
         try:
             print(reconstruction.summary())
         except Exception as e:
+            print(e)
             raise Exception("Reconstruction failed", e)
 
         return reconstruction
@@ -248,6 +249,7 @@ class GlomapWrapper:
         first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
 
         if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
+            print("Alignment error. The 1st image wast not registered.")
             return reconstruction, False
 
         gt_R_obj2cam_np = gt_Se3_obj2cam.rotation.matrix().numpy(force=True)
