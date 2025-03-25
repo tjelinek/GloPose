@@ -102,8 +102,10 @@ class Tracker6D:
                                   initial_segmentation: torch.Tensor | List[torch.Tensor],
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
                                   frame_i: int):
-        cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
-                                   f'{self.config.sequence}_{self.config.special_hash}')
+
+        cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+                                   f'{self.config.sequence}_{self.config.special_hash}') /
+                                   str(self.config.image_downsample))
 
         if self.sequence_starts is not None:
             assert type(initial_segmentation) is list
@@ -126,9 +128,7 @@ class Tracker6D:
             images_paths = [images_paths[i] for i in range(len(images_paths))]
             segmentation_paths = [segmentation_paths[i] for i in range(len(images_paths))]
 
-            cache_folder_SAM2: Path = (Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
-                                       f'{self.config.sequence}_{self.config.special_hash}' /
-                                       f'{first_image_frame}_to_{last_image_frame}')
+            cache_folder_SAM2: Path = cache_folder_SAM2 / f'{first_image_frame}_to_{last_image_frame}'
 
         if self.gt_Se3_cam2obj is not None:
 
