@@ -321,9 +321,6 @@ class GlomapWrapper:
         elif mapper == 'pycolmap':
             opts = pycolmap.IncrementalPipelineOptions()
             opts.triangulation.ignore_two_view_tracks = False
-            opts.min_num_matches = 0
-            opts.ignore_watermarks = False
-            opts.triangulation.ignore_two_view_tracks = False
             pycolmap.match_exhaustive(self.colmap_db_path)
             maps = pycolmap.incremental_mapping(self.colmap_db_path, self.colmap_image_path, self.colmap_output_path,
                                                 options=opts)
