@@ -233,17 +233,13 @@ class Tracker6D:
         align_success = True
         reconstruction = None
         try:
-            if self.config.reconstruction_matches == 'RoMa':
-                reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                                matching_pairs)
-            elif self.config.reconstruction_matches == 'SIFT':
-                reconstruction = self.glomap_wrapper.run_glomap_from_image_list_sift(images_paths, segmentation_paths,
-                                                                                     matching_pairs)
-            else:
-                raise ValueError(f'Unknown matcher {self.config.frame_filter}')
+            reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
+                                                                            matching_pairs)
         except:
             pass
 
+        if reconstruction is None:
+            return reconstruction, False
         if self.config.similarity_transformation == 'first_frame':
             gt_Se3_obj2cam = self.initial_gt_Se3_cam2obj.inverse()
             reconstruction, align_success = self.glomap_wrapper.align_with_first_pose(reconstruction, gt_Se3_obj2cam, 0)

@@ -1,5 +1,4 @@
 import copy
-import os
 import select
 import shutil
 import subprocess
@@ -23,7 +22,6 @@ from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.view_graph import ViewGraph
 
 from utils.colmap.h5_to_db import import_into_colmap
-from utils.sift import detect_sift, get_exhaustive_image_pairs, match_features
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
@@ -334,45 +332,6 @@ class GlomapWrapper:
                 print(maps[0].summary())
         else:
             raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
-
-    def run_glomap_from_image_list_sift(self, keyframes: List[Path], segmentations: List[Path], matching_pairs=None):
-
-        feature_dir = self.feature_dir
-        device = self.config.device
-        database_path = self.colmap_db_path
-
-        detect_sift(keyframes,
-                    segmentations,
-                    self.config.sift_filter_num_feats,
-                    device=self.config.device,
-                    feature_dir=feature_dir)
-        if matching_pairs is None:
-            index_pairs = get_exhaustive_image_pairs(keyframes)
-        else:
-            index_pairs = matching_pairs
-        print("Matching features")
-
-        match_features(keyframes, index_pairs, feature_dir=feature_dir, device=device,
-                       alg='adalam')
-        dirname = os.path.dirname(keyframes[0])  # Assume all images are in the same directory
-        print("Dirname", dirname)
-
-        import_into_colmap(dirname, feature_dir=feature_dir, database_path=database_path, img_ext='png')
-        print("Reconstruction")
-
-        self.run_mapper(self.config.mapper)
-
-        path_to_rec = self.colmap_output_path / '0'
-
-        from time import sleep
-        sleep(1)  # Wait for the rec to be written
-        reconstruction = pycolmap.Reconstruction(path_to_rec)
-        try:
-            print(reconstruction.summary())
-        except Exception as e:
-            print(e)
-
-        return reconstruction
 
 
 def get_match_points_indices(keypoints, match_pts):
