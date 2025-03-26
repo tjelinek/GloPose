@@ -59,10 +59,10 @@ class SyntheticDataProvider:
 
 
 class FrameProvider(ABC):
-    def __init__(self, downsample_factor, config: TrackerConfig, device='cuda'):
+    def __init__(self, downsample_factor, config: TrackerConfig):
         self.downsample_factor = downsample_factor
         self.image_shape: Optional[ImageSize] = None
-        self.device = device
+        self.device = config.device
         self.sequence_length: int = config.input_frames
 
     @abstractmethod
@@ -77,7 +77,7 @@ class FrameProvider(ABC):
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
     def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
-        FrameProvider.__init__(self, config.image_downsample, config, config.device)
+        FrameProvider.__init__(self, config.image_downsample, config)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_image(self, frame_id):
