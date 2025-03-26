@@ -16,6 +16,7 @@ class RoMaFlowProviderDirect:
     def __init__(self, device):
         self.device = device
         self.flow_model: roma_model = roma_outdoor(device=self.device)
+        self.flow_model.sample_mode = 'balanced'  # This ensures that the matches are
         self.roma_size_hw = (864, 864)
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
