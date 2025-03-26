@@ -93,10 +93,6 @@ class CrossFrameData(DataGraphStorage):
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
 
-    # Predicted SE3 transformations
-    predicted_obj_delta_se3: Se3 = Se3.identity(1, 'cuda')
-    predicted_cam_delta_se3: Se3 = Se3.identity(1, 'cuda')
-
     # SIFT
     num_matches: int = None
 
