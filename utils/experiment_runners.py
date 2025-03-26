@@ -135,25 +135,20 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     # Path to BOP dataset
     bop_folder = config.default_data_folder / 'bop'
 
+    if onboarding_type == 'static':
+        static_onboarding_sequence = config.bop_config.static_onboarding_sequence
+        config.special_hash = static_onboarding_sequence
+    else:
+        static_onboarding_sequence = None
+
     # Load images and segmentations
-    gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(
-        bop_folder,
-        dataset,
-        sequence,
-        sequence_type,
-        onboarding_type
-    )
+    gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type,
+                                                                           onboarding_type, static_onboarding_sequence)
 
     # Get camera-to-object transformations
-    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(
-        bop_folder,
-        dataset,
-        sequence,
-        sequence_type,
-        onboarding_type,
-        sequence_starts,
-        config.device
-    )
+    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
+                                                              onboarding_type, sequence_starts,
+                                                              static_onboarding_sequence, device=config.device)
 
     # Get first frame camera pose
     gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
@@ -180,14 +175,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     )
 
     # Get camera parameters
-    pinhole_params = read_pinhole_params(
-        bop_folder,
-        dataset,
-        sequence,
-        sequence_type,
-        onboarding_type,
-        sequence_starts
-    )
+    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                         static_onboarding_sequence, sequence_starts)
 
     # Set camera parameters in config
     min_index = min(valid_frames)

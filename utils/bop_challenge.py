@@ -115,7 +115,7 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, object_id: int = None, device: 
 
 
 def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
-                                     onboarding_type: str = None):
+                                     onboarding_type: str = None, static_onboarding_sequence=None):
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
 
@@ -129,15 +129,22 @@ def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: s
         gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
                                                                 sequence_folder_up / 'mask_visib')
 
-        sequence_starts.append(len(gt_images))
+        if static_onboarding_sequence == 'both':
+            sequence_starts.append(len(gt_images))
 
-        n_frames1 = len(gt_images)
-        for frame in gt_images2.keys():
-            gt_images[n_frames1 + frame] = gt_images2[frame]
+            n_frames1 = len(gt_images)
+            for frame in gt_images2.keys():
+                gt_images[n_frames1 + frame] = gt_images2[frame]
 
-        n_frames1 = len(gt_segs)
-        for frame in gt_segs2.keys():
-            gt_segs[n_frames1 + frame] = gt_segs2[frame]
+            n_frames1 = len(gt_segs)
+            for frame in gt_segs2.keys():
+                gt_segs[n_frames1 + frame] = gt_segs2[frame]
+        elif static_onboarding_sequence == 'down':
+            pass
+        elif static_onboarding_sequence == 'up':
+            gt_images, gt_segs = gt_images2, gt_segs2
+        else:
+            raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
 
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
@@ -151,7 +158,7 @@ def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: s
 
 def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
                                         onboarding_type: str = None, sequence_starts: List[int] = None,
-                                        device: str = 'cpu') -> Dict[int, Se3]:
+                                        static_onboarding_sequence=None, device: str = 'cpu') -> Dict[int, Se3]:
 
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         sequence_down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
@@ -165,9 +172,16 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
         gt_Se3_cam2obj_down = extract_gt_Se3_cam2obj(pose_json_path_down, device=device)
         gt_Se3_cam2obj_up = extract_gt_Se3_cam2obj(pose_json_path_up, device=device)
 
-        gt_Se3_cam2obj = gt_Se3_cam2obj_down
-        gt_Se3_cam2obj = gt_Se3_cam2obj | {frm + sequence_starts[1]: gt_Se3_cam2obj_up[frm]
-                                           for frm in gt_Se3_cam2obj_up.keys()}
+        if static_onboarding_sequence == 'both':
+            gt_Se3_cam2obj = gt_Se3_cam2obj_down
+            gt_Se3_cam2obj = gt_Se3_cam2obj | {frm + sequence_starts[1]: gt_Se3_cam2obj_up[frm]
+                                               for frm in gt_Se3_cam2obj_up.keys()}
+        elif static_onboarding_sequence == 'down':
+            gt_Se3_cam2obj = gt_Se3_cam2obj_down
+        elif static_onboarding_sequence == 'up':
+            gt_Se3_cam2obj = gt_Se3_cam2obj_up
+        else:
+            raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_gt.json'
@@ -176,8 +190,8 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
     return gt_Se3_cam2obj
 
 
-def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
-                        onboarding_type: str = None, sequence_starts: List[int] = None) -> dict[int, PinholeCamera]:
+def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None,
+                        sequence_starts: List[int] = None, static_onboarding_sequence=None) -> dict[int, PinholeCamera]:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         sequence_down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
                                                    onboarding_type, 'down')
@@ -190,9 +204,16 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
         pinhole_params_down = get_pinhole_params(pose_json_path_down)
         pinhole_params_up = get_pinhole_params(pose_json_path_up)
 
-        pinhole_params = pinhole_params_down
-        pinhole_params = pinhole_params | {frm + sequence_starts[1]: pinhole_params_up[frm]
-                                           for frm in pinhole_params_up.keys()}
+        if static_onboarding_sequence == 'both':
+            pinhole_params = pinhole_params_down
+            pinhole_params = pinhole_params | {frm + sequence_starts[1]: pinhole_params_up[frm]
+                                               for frm in pinhole_params_up.keys()}
+        elif static_onboarding_sequence == 'down':
+            pinhole_params = pinhole_params_down
+        elif static_onboarding_sequence == 'up':
+            pinhole_params = pinhole_params_up
+        else:
+            raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_camera.json'
