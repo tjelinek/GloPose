@@ -191,7 +191,7 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None,
-                        sequence_starts: List[int] = None, static_onboarding_sequence=None) -> dict[int, PinholeCamera]:
+                        static_onboarding_sequence=None, sequence_starts: List[int] = None) -> dict[int, PinholeCamera]:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         sequence_down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type,
                                                    onboarding_type, 'down')
