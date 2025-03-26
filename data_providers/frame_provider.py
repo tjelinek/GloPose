@@ -309,8 +309,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
                     torch.save((out_frame_idx, out_obj_ids, out_mask_logits), self.cache_paths[out_frame_idx])
         else:
             for cache_path in self.cache_paths:
-                out_frame_idx, out_obj_ids, out_mask_logits = torch.load(cache_path, weights_only=True)
-                out_mask_logits = out_mask_logits.to(self.device)
+                out_frame_idx, out_obj_ids, out_mask_logits = torch.load(cache_path, weights_only=True,
+                                                                         map_location=self.device)
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
 
     def get_sequence_length(self):

@@ -164,8 +164,8 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
         if (warp is None or certainty is None) and warp_filename is not None and certainty_filename is not None:
             if warp_filename.exists() and certainty_filename.exists():
-                warp = torch.load(warp_filename, weights_only=True).to(self.device)
-                certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
+                warp = torch.load(warp_filename, weights_only=True, map_location=self.device)
+                certainty = torch.load(certainty_filename, weights_only=True, map_location=self.device)
 
         if warp is None or certainty is None:
             warp, certainty = super().next_flow_roma(source_image_tensor, target_image_tensor)
