@@ -109,9 +109,8 @@ class GlomapWrapper:
 
             assert img1_path.parent == img2_path.parent
 
-            downsample_factor = self.config.image_downsample
-            img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, downsample_factor, device)
-            img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, downsample_factor, device)
+            img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, 1., device)
+            img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, 1., device)
 
             h1, w1 = img1.shape[-2:]
             h2, w2 = img2.shape[-2:]
