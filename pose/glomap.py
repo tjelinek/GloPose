@@ -176,6 +176,8 @@ class GlomapWrapper:
 
         from time import sleep
         sleep(1)
+        pycolmap.match_exhaustive(str(self.colmap_db_path))
+
         run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, self.config.mapper)
 
         path_to_rec = self.colmap_output_path / '0'
@@ -263,11 +265,9 @@ class GlomapWrapper:
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap'):
 
-    pycolmap.match_exhaustive(colmap_db_path)
     colmap_output_path.mkdir(exist_ok=True, parents=True)
     if mapper in ['colmap', 'glomap']:
         if mapper == 'glomap':
-            pycolmap.match_exhaustive(colmap_db_path)
             command = [
                 "glomap",
                 "mapper",
@@ -278,7 +278,6 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
             ]
 
         elif mapper == 'colmap':
-            pycolmap.match_exhaustive(colmap_db_path)
             command = [
                 "colmap",
                 "mapper",
