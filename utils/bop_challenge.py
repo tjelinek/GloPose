@@ -124,12 +124,21 @@ def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: s
                                                    "down")
         sequence_folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, "up")
 
-        gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb',
-                                                              sequence_folder_down / 'mask_visib')
-        gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
-                                                                sequence_folder_up / 'mask_visib')
+        if sequence_folder_down.exists():
+            gt_images, gt_segs = load_gt_images_and_segmentations(sequence_folder_down / 'rgb',
+                                                                  sequence_folder_down / 'mask_visib')
+        else:
+            gt_images, gt_segs = None, None
+        if sequence_folder_up.exists():
+            gt_images2, gt_segs2 = load_gt_images_and_segmentations(sequence_folder_up / 'rgb',
+                                                                    sequence_folder_up / 'mask_visib')
+        else:
+            gt_images2, gt_segs2 = None, None
 
         if static_onboarding_sequence == 'both':
+            assert gt_images is not None
+            assert gt_segs is not None
+
             sequence_starts.append(len(gt_images))
 
             n_frames1 = len(gt_images)
@@ -142,6 +151,8 @@ def get_bop_images_and_segmentations(bop_folder: Path, dataset: str, sequence: s
         elif static_onboarding_sequence == 'down':
             pass
         elif static_onboarding_sequence == 'up':
+            assert gt_images2 is not None
+            assert gt_segs2 is not None
             gt_images, gt_segs = gt_images2, gt_segs2
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
@@ -169,16 +180,27 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
                                                  onboarding_type, 'up')
         pose_json_path_up = sequence_up_folder / 'scene_gt.json'
 
-        gt_Se3_cam2obj_down = extract_gt_Se3_cam2obj(pose_json_path_down, device=device)
-        gt_Se3_cam2obj_up = extract_gt_Se3_cam2obj(pose_json_path_up, device=device)
+        if pose_json_path_down.exists():
+            gt_Se3_cam2obj_down = extract_gt_Se3_cam2obj(pose_json_path_down, device=device)
+        else:
+            gt_Se3_cam2obj_down = None
+        if pose_json_path_up.exists():
+            gt_Se3_cam2obj_up = extract_gt_Se3_cam2obj(pose_json_path_up, device=device)
+        else:
+            gt_Se3_cam2obj_up = None
 
         if static_onboarding_sequence == 'both':
+            assert gt_Se3_cam2obj_down is not None
+            assert gt_Se3_cam2obj_up is not None
+
             gt_Se3_cam2obj = gt_Se3_cam2obj_down
             gt_Se3_cam2obj = gt_Se3_cam2obj | {frm + sequence_starts[1]: gt_Se3_cam2obj_up[frm]
                                                for frm in gt_Se3_cam2obj_up.keys()}
         elif static_onboarding_sequence == 'down':
+            assert gt_Se3_cam2obj_down is not None
             gt_Se3_cam2obj = gt_Se3_cam2obj_down
         elif static_onboarding_sequence == 'up':
+            assert gt_Se3_cam2obj_up is not None
             gt_Se3_cam2obj = gt_Se3_cam2obj_up
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
@@ -201,16 +223,29 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
                                                  onboarding_type, 'up')
         pose_json_path_up = sequence_up_folder / 'scene_camera.json'
 
-        pinhole_params_down = get_pinhole_params(pose_json_path_down)
-        pinhole_params_up = get_pinhole_params(pose_json_path_up)
+        if pose_json_path_down.exists():
+            pinhole_params_down = get_pinhole_params(pose_json_path_down)
+        else:
+            pinhole_params_down = None
+        if pose_json_path_up.exists():
+            pinhole_params_up = get_pinhole_params(pose_json_path_up)
+        else:
+            pinhole_params_up = None
 
         if static_onboarding_sequence == 'both':
+            assert pinhole_params_down is not None
+            assert pose_json_path_up is not None
+
             pinhole_params = pinhole_params_down
             pinhole_params = pinhole_params | {frm + sequence_starts[1]: pinhole_params_up[frm]
                                                for frm in pinhole_params_up.keys()}
         elif static_onboarding_sequence == 'down':
+            assert pinhole_params_down is not None
+
             pinhole_params = pinhole_params_down
         elif static_onboarding_sequence == 'up':
+            assert pinhole_params_up is not None
+
             pinhole_params = pinhole_params_up
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
@@ -271,7 +306,7 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
     target_shape = get_target_shape(image_path, config.image_downsample)
     image = PrecomputedFrameProvider.load_and_downsample_image(image_path, config.image_downsample, config.device)
 
-    flow_provider = RoMaFlowProviderDirect(config.device)
+    flow_provider = RoMaFlowProviderDirect('cpu')
 
     for segmentation_paths in segmentation_paths:
         segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,
