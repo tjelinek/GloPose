@@ -2,7 +2,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Union
 
 import pandas as pd
 import torch
@@ -87,6 +87,7 @@ class Tracker6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, cache_folder_RoMA, self.data_graph,
                                                                purge_cache=self.config.purge_cache)
 
+        self.frame_filter: Union[FrameFilterSift, RoMaFrameFilter]
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
@@ -94,6 +95,8 @@ class Tracker6D:
                                                            self.config.sift_matcher_config.sift_filter_num_feats,
                                                            cache_folder_SIFT, device=self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
+        else:
+            raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
 
         self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
 
