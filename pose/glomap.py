@@ -263,6 +263,29 @@ class GlomapWrapper:
         return reconstruction, True
 
 
+def run_custom_matcher(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path,
+                       images_pairs: List[Tuple[Path, Path]]) -> None:
+    opts = pycolmap.IncrementalPipelineOptions()
+    opts.triangulation.ignore_two_view_tracks = False
+
+    db = pycolmap.Database(colmap_db_path_)
+    first_im_id = db.read_image(images_pairs[0][0].name).image_id
+    second_im_id = db.read_image(images_pairs[0][1].name).image_id
+
+    opts.init_image_id1 = first_im_id
+    opts.init_image_id2 = second_im_id
+
+    maps = pycolmap.incremental_mapping(colmap_db_path, colmap_image_path, colmap_output_path, options=opts)
+
+    if colmap_output_path.exists():
+        shutil.rmtree(colmap_output_path)
+    colmap_output_path.mkdir(parents=True, exist_ok=True)
+
+    for i in range(len(maps)):
+        maps[i].write(colmap_output_path)
+        print(maps[i].summary())
+
+
 def two_view_geometry(colmap_db_path: Path):
     opts = TwoViewGeometryOptions()
     opts.detect_watermark = False
