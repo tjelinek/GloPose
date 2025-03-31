@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
-from pycolmap import Sim3d, SiftMatchingOptions
+from pycolmap import Sim3d, TwoViewGeometryOptions
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -264,9 +264,9 @@ class GlomapWrapper:
 
 
 def two_view_geometry(colmap_db_path: Path):
-    opts = SiftMatchingOptions()
+    opts = TwoViewGeometryOptions()
     opts.detect_watermark = False
-    pycolmap.match_exhaustive(str(colmap_db_path), sift_options=opts)
+    pycolmap.match_exhaustive(str(colmap_db_path), verification_options=opts)
 
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap'):
