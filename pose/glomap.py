@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
-from pycolmap import Sim3d
+from pycolmap import Sim3d, SiftMatchingOptions
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -176,7 +176,7 @@ class GlomapWrapper:
 
         from time import sleep
         sleep(1)
-        pycolmap.match_exhaustive(str(self.colmap_db_path))
+        two_view_geometry(str(self.colmap_db_path))
 
         run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, self.config.mapper)
 
@@ -263,6 +263,12 @@ class GlomapWrapper:
         return reconstruction, True
 
 
+def two_view_geometry(colmap_db_path: Path):
+    opts = SiftMatchingOptions()
+    opts.detect_watermark = False
+    pycolmap.match_exhaustive(str(colmap_db_path), sift_options=opts)
+
+
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap'):
 
     colmap_output_path.mkdir(exist_ok=True, parents=True)
@@ -321,7 +327,6 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
     elif mapper == 'pycolmap':
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = False
-        pycolmap.match_exhaustive(str(colmap_db_path))
         maps = pycolmap.incremental_mapping(str(colmap_db_path), str(colmap_image_path), str(colmap_output_path),
                                             options=opts)
         if len(maps) > 0:
