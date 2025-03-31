@@ -322,11 +322,11 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
     elif mapper == 'pycolmap':
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = False
-        pycolmap.match_exhaustive(colmap_db_path)
-        maps = pycolmap.incremental_mapping(colmap_db_path, colmap_image_path, colmap_output_path,
+        pycolmap.match_exhaustive(str(colmap_db_path))
+        maps = pycolmap.incremental_mapping(str(colmap_db_path), str(colmap_image_path), str(colmap_output_path),
                                             options=opts)
         if len(maps) > 0:
-            maps[0].write(colmap_output_path)
+            maps[0].write(str(colmap_output_path))
             print(maps[0].summary())
     else:
         raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
