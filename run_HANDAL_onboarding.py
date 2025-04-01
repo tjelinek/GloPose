@@ -20,14 +20,14 @@ def main():
     for sequence in sequences:
         config = load_config(args.config)
 
-
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
         config.sequence = sequence
         config.dataset = dataset
-        config.image_downsample = 0.5
-
+        config.image_downsample = 0.25
+        config.large_images_results_write_frequency = 2
+        config.bop_config.static_onboarding_sequence = 'down'
         skip_indices = 4
 
         sequence_type = 'onboarding'
