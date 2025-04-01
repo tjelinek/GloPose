@@ -584,3 +584,38 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
     }
 
     return keypoints_for_node, edge_match_indices_concatenated
+
+
+if __name__ == '__main__':
+    im_pairs = [
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000001.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000056.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000056.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000172.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000172.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000202.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000202.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000255.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000255.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000308.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000308.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000453.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000453.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000482.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000482.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000565.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000565.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000622.jpg')),
+        (Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000622.jpg'),
+         Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000706.jpg'))]
+
+    colmap_db_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000010/glomap_obj_000010/database.db')
+    colmap_img_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images')
+    colmap_output_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/output')
+
+    print("COLMAP Python bindings path:", pycolmap.__file__)
+    # time.sleep(20)
+    # run_custom_matcher(colmap_output_path_, colmap_db_path_, colmap_img_path_, im_pairs)
+
+    # run_mapper(colmap_output_path_, colmap_db_path_, colmap_img_path_, mapper = 'glomap')
+    two_view_geometry(colmap_db_path_)
