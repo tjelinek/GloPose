@@ -157,6 +157,11 @@ class GlomapWrapper:
             for img1_key, match_data in matches_data.items():
                 group = f_match.require_group(str(img1_key))
                 for img2_key, (src_pts, dst_pts) in match_data.items():
+
+                    src_dst_pts = torch.cat([src_pts, dst_pts], dim=1)
+                    src_dst_pts_unique = torch.unique(src_dst_pts, dim=0)
+                    src_pts, dst_pts = torch.split(src_dst_pts_unique, [2, 2], dim=1)
+
                     keypoints_image1 = keypoints_data[img1_key].to(torch.int)
                     keypoints_image2 = keypoints_data[img2_key].to(torch.int)
 
