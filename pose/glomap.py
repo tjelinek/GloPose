@@ -296,7 +296,8 @@ def two_view_geometry(colmap_db_path: Path):
     pycolmap.match_exhaustive(str(colmap_db_path), verification_options=opts)
 
 
-def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap'):
+def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
+               first_image_id=1, second_image_id=2):
 
     colmap_output_path.mkdir(exist_ok=True, parents=True)
     if mapper in ['colmap', 'glomap']:
@@ -318,6 +319,8 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 "--output_path", str(colmap_output_path),
                 "--image_path", str(colmap_image_path),
                 "--Mapper.tri_ignore_two_view_tracks", str(0),
+                "--Mapper.init_image_id1", str(first_image_id),
+                "--Mapper.init_image_id2", str(second_image_id),
                 "--log_to_stderr", str(1),
             ]
         else:
@@ -354,6 +357,9 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
     elif mapper == 'pycolmap':
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = False
+        opts.init_image_id1 = first_image_id
+        opts.init_image_id2 = second_image_id
+
         maps = pycolmap.incremental_mapping(str(colmap_db_path), str(colmap_image_path), str(colmap_output_path),
                                             options=opts)
         if len(maps) > 0:
