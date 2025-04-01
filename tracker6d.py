@@ -87,7 +87,7 @@ class Tracker6D:
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, cache_folder_RoMA, self.data_graph,
                                                                purge_cache=self.config.purge_cache)
 
-        self.frame_filter: Union[FrameFilterSift, RoMaFrameFilter]
+        self.frame_filter: Union[RoMaFrameFilter, FrameFilterSift]
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
@@ -224,6 +224,8 @@ class Tracker6D:
             start = time.time()
 
             self.frame_filter.filter_frames(frame_i)
+            if self.config.densify_view_graph:
+                self.frame_filter.densify()
 
             self.results_writer.write_results(frame_i=frame_i, keyframe_graph=self.frame_filter.keyframe_graph)
 

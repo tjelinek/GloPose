@@ -65,6 +65,7 @@ class TrackerConfig:
     min_roma_certainty_threshold: float = 0.95
     flow_reliability_threshold: float = 0.5
     min_number_of_reliable_matches: int = 0
+    densify_view_graph: bool = True
     frame_filter: str = 'RoMa'  # Either 'RoMa', 'SIFT', or 'passthrough'
     reconstruction_matches: str = 'RoMa'
 

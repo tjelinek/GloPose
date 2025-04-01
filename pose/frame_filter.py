@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from time import time
 from typing import List, Tuple
 
@@ -29,6 +30,10 @@ class BaseFrameFilter:
 
         return self.keyframe_graph
 
+    @abstractmethod
+    def densify(self):
+        pass
+
 
 class RoMaFrameFilter(BaseFrameFilter):
 
@@ -37,6 +42,15 @@ class RoMaFrameFilter(BaseFrameFilter):
         super().__init__(config, data_graph)
 
         self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
+
+    def densify(self):
+        keyframe_nodes = sorted(self.keyframe_graph.nodes)
+        for n in range(1, len(keyframe_nodes) - 1):
+            u = keyframe_nodes[n - 1]
+            v = keyframe_nodes[n + 1]
+            reliability = self.flow_reliability(u, v)
+            if reliability > 0.75 * self.config.flow_reliability_threshold:
+                self.keyframe_graph.add_edge(u, v)
 
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
