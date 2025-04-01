@@ -240,8 +240,8 @@ class Tracker6D:
         try:
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                             matching_pairs)
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
         if reconstruction is None:
             return reconstruction, False
