@@ -49,7 +49,7 @@ class RoMaFrameFilter(BaseFrameFilter):
             u = keyframe_nodes[n - 1]
             v = keyframe_nodes[n + 1]
             reliability = self.flow_reliability(u, v)
-            if reliability > 0.75 * self.config.flow_reliability_threshold:
+            if reliability > self.config.flow_reliability_densification_threshold:
                 self.keyframe_graph.add_edge(u, v)
 
     @torch.no_grad()
