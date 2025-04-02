@@ -77,7 +77,7 @@ def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: 
         stats.update({
             'mean_rotation_error': np.mean(rotation_errors_np),
             'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
-            'mean_translation_error': np.min(translation_errors_np)
+            'mean_translation_error': np.mean(translation_errors_np)
         })
 
     stats_df = pd.DataFrame([stats])
