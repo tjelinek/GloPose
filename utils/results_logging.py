@@ -459,15 +459,15 @@ class WriteResults:
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
 
-            image_t_cam = torch.tensor(image.cam_from_world.translation)
-            image_q_cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
+            pred_t_obj2cam = torch.tensor(image.cam_from_world.translation)
+            pred_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
 
-            image_id_to_poses[image_id] = image_t_cam
+            image_id_to_poses[image_id] = pred_t_obj2cam
 
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
-                rr.Transform3D(translation=image_t_cam,
-                               rotation=rr.Quaternion(xyzw=image_q_cam_xyzw),
+                rr.Transform3D(translation=pred_t_obj2cam,
+                               rotation=rr.Quaternion(xyzw=pred_q_obj2cam_xyzw),
                                from_parent=True),
                 static=True
             )
