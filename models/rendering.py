@@ -373,9 +373,6 @@ class RenderingKaolin(nn.Module):
 
         return synthetic_flow_cpu
 
-    def Se3_obj_center_to_camera(self) -> Se3:
-        return get_Se3_obj_to_cam_from_kaolin_params(self.camera_trans, self.camera_up, self.obj_center)
-
     @staticmethod
     def rotations_translations_batched(encoder_out_frame_1, encoder_out_frame_2, flow_arcs_indices):
 
