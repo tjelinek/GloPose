@@ -390,6 +390,14 @@ def get_image_Se3_world2cam(image: pycolmap.Image, device: str) -> Se3:
     return Se3_image_world2cam
 
 
+def world2cam_from_reconstruction(reconstruction: pycolmap.Reconstruction) -> Dict[int, Se3]:
+    poses = {}
+    for image_id, image in reconstruction.images.items():
+        Se3_world2cam = get_image_Se3_world2cam(image, 'cpu')
+        poses[image_id] = Se3_world2cam
+    return poses
+
+
 def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor, camera_K: np.ndarray,
                   view_graph: ViewGraph, flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider,
                   config: TrackerConfig):

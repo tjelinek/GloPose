@@ -19,6 +19,7 @@ from matplotlib.colors import Normalize
 from data_structures.data_graph import DataGraph
 from data_structures.rerun_annotations import RerunAnnotations
 from flow import (source_coords_to_target_coords_image)
+from pose.glomap import world2cam_from_reconstruction
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
@@ -426,6 +427,13 @@ class WriteResults:
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
         rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
 
+        all_image_names = [str(self.data_graph.get_frame_data(i).image_filename)
+                           for i in range(len(self.data_graph.G.nodes))]
+
+        pred_Se3_obj2cam_colmap_frames = world2cam_from_reconstruction(colmap_reconstruction)
+        pred_Se3_obj2cam = {all_image_names.index(colmap_reconstruction.images[colmap_idx].name): Se3_pose
+                            for colmap_idx, Se3_pose in pred_Se3_obj2cam_colmap_frames.items()}
+
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
@@ -433,19 +441,29 @@ class WriteResults:
         gt_obj2cam_Se3 = gt_cam2obj_Se3s.inverse()
 
         gt_t_cam = gt_obj2cam_Se3.translation.numpy(force=True)
+        pred_t_cam = np.stack([pred_Se3_obj2cam[frm].inverse().t.numpy(force=True) for frm in sorted(pred_Se3_obj2cam)])
 
         cmap_gt = plt.get_cmap('Reds')
+        cmap_pred = plt.get_cmap('Blues')
         gradient = np.linspace(1., 0.5, self.config.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
+        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_cam))]) * 255).astype(np.uint8)
 
         strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
+        strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
 
-        strips_radii_factor = (max(torch.max(torch.cat([gt_obj2cam_Se3.translation]).norm(dim=1)).item(), 5.) / 5.)
-        strips_radii = [0.01 * strips_radii_factor] * n_poses
+        object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
+        strips_radii = [0.005 * object_size] * n_poses
 
-        rr.log(RerunAnnotations.colmap_gt_camera_track,
-               rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
-                               colors=colors_gt,
+        # rr.log(RerunAnnotations.colmap_gt_camera_track,
+        #        rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
+        #                        colors=colors_gt,
+        #                        radii=strips_radii),
+        #        static=True)
+
+        rr.log(RerunAnnotations.colmap_pred_camera_track,
+               rr.LineStrips3D(strips=strips_pred,  # gt_t_cam
+                               colors=colors_pred,
                                radii=strips_radii),
                static=True)
 
@@ -454,8 +472,6 @@ class WriteResults:
 
         G_reliable = nx.Graph()
 
-        all_image_names = [str(self.data_graph.get_frame_data(i).image_filename)
-                           for i in range(len(self.data_graph.G.nodes))]
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
 

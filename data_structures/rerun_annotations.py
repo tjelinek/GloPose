@@ -46,6 +46,7 @@ class RerunAnnotations:
     colmap_pointcloud: Final[str] = '/3d_colmap/pointcloud'
     colmap_gt_camera_pose: Final[str] = '/3d_colmap/gt_camera_pose'
     colmap_gt_camera_track: Final[str] = '/3d_colmap/gt_camera_track'
+    colmap_pred_camera_track: Final[str] = '/3d_colmap/pred_camera_track'
     colmap_predicted_camera_poses: Final[str] = '/3d_colmap/predicted_camera_keypoints'
     colmap_predicted_reliable_templates: Final[str] = '/3d_colmap/predicted_reliable_templates'
     colmap_predicted_line_strips_reliable: Final[str] = '/3d_colmap/line_strips_reliable'
