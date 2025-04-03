@@ -32,6 +32,7 @@ class TrackerConfig:
     input_frames: int = 0
     skip_indices: int = 1
     frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
+    black_background: bool = True
     segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2', 'whites', or 'synthetic'
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     image_downsample: float = 1.0

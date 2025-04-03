@@ -345,6 +345,7 @@ class BaseTracker:
         self.downsample_factor = config.image_downsample
         self.image_shape: Optional[ImageSize] = None
         self.device = config.device
+        self.black_background: bool = config.black_background
 
         self.frame_provider: FrameProvider
         self.segmentation_provider: SegmentationProvider
@@ -421,6 +422,9 @@ class BaseTracker:
 
         image_squeezed = image.squeeze()
         segmentation = self.segmentation_provider.next_segmentation(frame_i, image=image_squeezed)
+
+        if self.black_background:
+            image = image * segmentation
 
         frame_observation = FrameObservation(observed_image=image, observed_segmentation=segmentation)
 
