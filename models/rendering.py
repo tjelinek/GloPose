@@ -514,8 +514,8 @@ def pinhole_intrinsics_to_tensor(intrinsics: kaolin.render.camera.PinholeIntrins
     return intrinsics_tensor
 
 
-def get_Se3_obj_to_cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up: torch.Tensor,
-                                          obj_center: torch.Tensor) -> Se3:
+def get_Se3_obj2cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up: torch.Tensor,
+                                       obj_center: torch.Tensor) -> Se3:
     R_obj_to_cam, t_obj_to_cam = (
         kaolin.render.camera.generate_rotate_translate_matrices(camera_position=camera_trans,
                                                                 camera_up_direction=camera_up,

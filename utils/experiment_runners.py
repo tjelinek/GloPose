@@ -4,7 +4,7 @@ import torch
 from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
-from models.rendering import get_Se3_obj_to_cam_from_kaolin_params
+from models.rendering import get_Se3_obj2cam_from_kaolin_params
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params
@@ -85,7 +85,7 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
     up = torch.FloatTensor(config.camera_up)[None].to(config.device)
     obj_center = torch.FloatTensor(config.obj_center)[None].to(config.device)
 
-    gt_Se3_obj2cam = get_Se3_obj_to_cam_from_kaolin_params(camera_trans, up, obj_center)
+    gt_Se3_obj2cam = get_Se3_obj2cam_from_kaolin_params(camera_trans, up, obj_center)
     gt_Se3_cam2obj = Se3_obj_relative_to_Se3_cam2obj(gt_obj_1_to_obj_i_Se3, gt_Se3_obj2cam)
 
     # Set up output folder
