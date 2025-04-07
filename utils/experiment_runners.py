@@ -151,7 +151,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
                                                               static_onboarding_sequence, device=config.device)
 
     # Get first frame camera pose
-    gt_Se3_obj2cam_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
+    gt_Se3_cam2obj_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
 
     # Apply frame skipping
     if only_frames_with_known_poses:
@@ -192,7 +192,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     tracker = Tracker6D(
         config,
         write_folder,
-        initial_gt_Se3_cam2obj=gt_Se3_obj2cam_frame0,
+        initial_gt_Se3_cam2obj=gt_Se3_cam2obj_frame0,
         gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
         images_paths=gt_images,
         segmentation_paths=gt_segs,
