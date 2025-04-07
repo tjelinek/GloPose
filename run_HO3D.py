@@ -102,10 +102,9 @@ def main():
         first_image_tensor, first_segment_tensor = get_initial_image_and_segment(gt_images_list, gt_segmentations_list,
                                                                                  segmentation_channel=1)
 
-        sfb = Tracker6D(config, write_folder, initial_gt_Se3_cam2obj=gt_Se3_obj2cam_frame0,
-                        gt_Se3_cam2obj=Se3_cam2obj, images_paths=gt_images_list,
-                        segmentation_paths=gt_segmentations_list, initial_segmentation=first_segment_tensor,
-                        initial_image=first_image_tensor)
+        sfb = Tracker6D(config, write_folder, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj,
+                        segmentation_paths=gt_segmentations_list, initial_image=first_image_tensor,
+                        initial_segmentation=first_segment_tensor)
         sfb.run_filtering_with_reconstruction()
         exit()
 

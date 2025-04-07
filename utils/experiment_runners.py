@@ -77,6 +77,9 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
     trace_hash = hashlib.md5(gt_rotations.numpy(force=True).tobytes() + gt_translations.numpy(force=True).tobytes())
     config.special_hash = trace_hash.hexdigest()
 
+    # Set number of input frames
+    config.input_frames = gt_rotations.shape[0]
+
     # Create Se3 transformations
     gt_obj_1_to_obj_i_Se3 = Se3(Quaternion.from_axis_angle(gt_rotations), gt_translations)
 
@@ -87,19 +90,19 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
 
     gt_Se3_obj2cam = get_Se3_obj2cam_from_kaolin_params(camera_trans, up, obj_center)
     gt_Se3_cam2obj = Se3_obj_relative_to_Se3_cam2obj(gt_obj_1_to_obj_i_Se3, gt_Se3_obj2cam)
+    gt_Se3_cam2obj_dict = {i: gt_Se3_cam2obj[i] for i in range(config.input_frames)}
+
+    gt_Se3_world2cam = Se3.identity(config.input_frames, config.device)
+    gt_Se3_world2cam_dict = {i: gt_Se3_world2cam[i] for i in range(config.input_frames)}
 
     # Set up output folder
     if output_folder is not None:
         write_folder = Path(output_folder) / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment / dataset / sequence
-
-    # Set number of input frames
-    config.input_frames = gt_rotations.shape[0]
-
     # Create and run tracker
-    tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh,
-                        gt_Se3_cam2obj=gt_Se3_cam2obj, images_paths=images_paths)
+    tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, images_paths=images_paths,
+                        gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
     tracker.run_filtering_with_reconstruction()
 
@@ -189,15 +192,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     config.segmentation_provider = 'SAM2'
 
     # Initialize and run the tracker
-    tracker = Tracker6D(
-        config,
-        write_folder,
-        initial_gt_Se3_cam2obj=gt_Se3_cam2obj_frame0,
-        gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-        images_paths=gt_images,
-        segmentation_paths=gt_segs,
-        initial_segmentation=first_segmentation,
-        initial_image=first_image
-    )
+    tracker = Tracker6D(config, write_folder, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
+                        segmentation_paths=gt_segs, initial_image=first_image, initial_segmentation=first_segmentation)
 
     tracker.run_filtering_with_reconstruction()
