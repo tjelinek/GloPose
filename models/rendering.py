@@ -521,6 +521,5 @@ def get_Se3_obj2cam_from_kaolin_params(camera_trans: torch.Tensor, camera_up: to
                                                                 camera_up_direction=camera_up,
                                                                 look_at=obj_center))
 
-    Se3_obj_to_cam = Se3(Quaternion.from_matrix(R_obj_to_cam), t_obj_to_cam).inverse()
-
+    Se3_obj_to_cam = Se3(Quaternion.from_matrix(R_obj_to_cam), t_obj_to_cam)
     return Se3_obj_to_cam
