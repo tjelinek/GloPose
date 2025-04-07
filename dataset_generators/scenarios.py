@@ -4,8 +4,6 @@ import torch
 from kornia.geometry.conversions import axis_angle_to_quaternion, quaternion_to_axis_angle, quaternion_from_euler
 from typing import List
 
-import numpy as np
-
 
 def default_initial_rotation():
     return torch.Tensor([0., 0., 0.])
