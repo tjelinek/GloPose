@@ -245,7 +245,7 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, frame_i: int) -> (
+    def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam: Se3, frame_i: int) -> (
             Tuple[pycolmap.Reconstruction, bool]):
 
         reconstruction = copy.deepcopy(reconstruction)
@@ -256,12 +256,12 @@ class GlomapWrapper:
             print("Alignment error. The 1st image wast not registered.")
             return reconstruction, False
 
-        gt_R_obj2cam_np = gt_Se3_obj2cam.rotation.matrix().numpy(force=True)
-        gt_t_obj2cam_np = gt_Se3_obj2cam.t.numpy(force=True)
-        gt_Sim3D_obj2cam = Sim3d(1.0, gt_R_obj2cam_np, gt_t_obj2cam_np)
+        gt_R_world2cam_np = gt_Se3_world2cam.rotation.matrix().numpy(force=True)
+        gt_t_world2cam_np = gt_Se3_world2cam.t.numpy(force=True)
+        gt_Sim3D_world2cam = Sim3d(1.0, gt_R_world2cam_np, gt_t_world2cam_np)
 
-        pred_Sim3D_obj2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
-        Sim3d_gt_from_pred_obj2cam: Sim3d = gt_Sim3D_obj2cam.inverse() * pred_Sim3D_obj2cam
+        pred_Sim3D_world2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
+        Sim3d_gt_from_pred_obj2cam: Sim3d = gt_Sim3D_world2cam.inverse() * pred_Sim3D_world2cam
         reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
 
         return reconstruction, True
