@@ -245,12 +245,10 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def align_with_first_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam: Se3, frame_i: int) -> (
-            Tuple[pycolmap.Reconstruction, bool]):
+    def align_reconstruction_with_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam: Se3,
+                                       first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
 
         reconstruction = copy.deepcopy(reconstruction)
-
-        first_image_name = str(self.data_graph.get_frame_data(frame_i).image_filename)
 
         if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
             print("Alignment error. The 1st image wast not registered.")
@@ -260,10 +258,17 @@ class GlomapWrapper:
         gt_t_world2cam_np = gt_Se3_world2cam.t.numpy(force=True)
         gt_Sim3D_world2cam = Sim3d(1.0, gt_R_world2cam_np, gt_t_world2cam_np)
 
+        camera_center_pred = gt_Sim3D_world2cam.inverse().translation
+        camera_center_gt = gt_Sim3D_world2cam.inverse().translation
+
         pred_Sim3D_world2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
-        Sim3d_gt_from_pred_obj2cam: Sim3d = gt_Sim3D_world2cam.inverse() * pred_Sim3D_world2cam
+        Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam * gt_Sim3D_world2cam.inverse()
+        # Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam.inverse() * gt_Sim3D_world2cam
         reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
 
+        print(f'Translation: pred {reconstruction.images[1].cam_from_world.translation}, gt {gt_Se3_world2cam.t.numpy(force=True)}')
+        print(f'Quaternion: pred {reconstruction.images[1].cam_from_world.rotation}, gt {gt_Se3_world2cam.quaternion.q[[1, 2, 3, 0]].numpy(force=True)}')
+        breakpoint()
         return reconstruction, True
 
 

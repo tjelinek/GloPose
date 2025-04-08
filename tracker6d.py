@@ -46,11 +46,8 @@ class Tracker6D:
 
         # Ground truth related
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
-        self.gt_Se3_world2cam: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        self.gt_Se3_world2cam: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
         self.gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = gt_pinhole_params
-
-        if self.gt_Se3_cam2obj is not None and self.gt_Se3_cam2obj.get(0):
-            self.initial_gt_Se3_cam2obj = self.gt_Se3_cam2obj.get(0)
 
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
@@ -243,8 +240,13 @@ class Tracker6D:
         if reconstruction is None:
             return reconstruction, False
         if self.config.similarity_transformation == 'first_frame':
-            gt_Se3_obj2cam = self.initial_gt_Se3_cam2obj.inverse()
-            reconstruction, align_success = self.glomap_wrapper.align_with_first_pose(reconstruction, gt_Se3_obj2cam, 0)
+
+            gt_Se3_obj2cam = self.gt_Se3_cam2obj.get(0).inverse()
+            gt_Se3_world2cam = self.gt_Se3_world2cam.get(0)
+            first_image_filename = self.data_graph.get_frame_data(0).image_filename
+
+            reconstruction, align_success = self.glomap_wrapper.align_reconstruction_with_pose(reconstruction, gt_Se3_world2cam,
+                                                                                               first_image_filename, 0)
         elif self.config.similarity_transformation == 'kabsch':
             reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
         else:
