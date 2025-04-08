@@ -245,32 +245,6 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def align_reconstruction_with_pose(self, reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam: Se3,
-                                       first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
-
-        reconstruction = copy.deepcopy(reconstruction)
-
-        if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
-            print("Alignment error. The 1st image wast not registered.")
-            return reconstruction, False
-
-        gt_R_world2cam_np = gt_Se3_world2cam.rotation.matrix().numpy(force=True)
-        gt_t_world2cam_np = gt_Se3_world2cam.t.numpy(force=True)
-        gt_Sim3D_world2cam = Sim3d(1.0, gt_R_world2cam_np, gt_t_world2cam_np)
-
-        camera_center_pred = gt_Sim3D_world2cam.inverse().translation
-        camera_center_gt = gt_Sim3D_world2cam.inverse().translation
-
-        pred_Sim3D_world2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
-        Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam * gt_Sim3D_world2cam.inverse()
-        # Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam.inverse() * gt_Sim3D_world2cam
-        reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
-
-        print(f'Translation: pred {reconstruction.images[1].cam_from_world.translation}, gt {gt_Se3_world2cam.t.numpy(force=True)}')
-        print(f'Quaternion: pred {reconstruction.images[1].cam_from_world.rotation}, gt {gt_Se3_world2cam.quaternion.q[[1, 2, 3, 0]].numpy(force=True)}')
-        breakpoint()
-        return reconstruction, True
-
 
 def run_custom_matcher(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path,
                        images_pairs: List[Tuple[Path, Path]]) -> None:
@@ -608,6 +582,33 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
     }
 
     return keypoints_for_node, edge_match_indices_concatenated
+
+
+def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam: Se3,
+                                   first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
+
+    reconstruction = copy.deepcopy(reconstruction)
+
+    if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
+        print("Alignment error. The 1st image wast not registered.")
+        return reconstruction, False
+
+    gt_R_world2cam_np = gt_Se3_world2cam.rotation.matrix().numpy(force=True)
+    gt_t_world2cam_np = gt_Se3_world2cam.t.numpy(force=True)
+    gt_Sim3D_world2cam = Sim3d(1.0, gt_R_world2cam_np, gt_t_world2cam_np)
+
+    camera_center_pred = gt_Sim3D_world2cam.inverse().translation
+    camera_center_gt = gt_Sim3D_world2cam.inverse().translation
+
+    pred_Sim3D_world2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
+    Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam * gt_Sim3D_world2cam.inverse()
+    # Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam.inverse() * gt_Sim3D_world2cam
+    reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
+
+    print(f'Translation: pred {reconstruction.images[1].cam_from_world.translation}, gt {gt_Se3_world2cam.t.numpy(force=True)}')
+    print(f'Quaternion: pred {reconstruction.images[1].cam_from_world.rotation}, gt {gt_Se3_world2cam.quaternion.q[[1, 2, 3, 0]].numpy(force=True)}')
+    breakpoint()
+    return reconstruction, True
 
 
 if __name__ == '__main__':
