@@ -7,7 +7,7 @@ from dataset_generators import scenarios
 from models.rendering import get_Se3_obj2cam_from_kaolin_params
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
-    read_pinhole_params
+    read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from tracker6d import Tracker6D
 from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segment
@@ -153,9 +153,6 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
                                                               onboarding_type, sequence_starts,
                                                               static_onboarding_sequence, device=config.device)
 
-    # Get first frame camera pose
-    gt_Se3_cam2obj_frame0 = dict_gt_Se3_cam2obj[min(dict_gt_Se3_cam2obj.keys())]
-
     # Apply frame skipping
     if only_frames_with_known_poses:
         valid_frames = list(dict_gt_Se3_cam2obj.keys())
@@ -178,13 +175,16 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     )
 
     # Get camera parameters
-    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, onboarding_type,
-                                         static_onboarding_sequence, sequence_starts)
+    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.image_downsample,
+                                         onboarding_type, static_onboarding_sequence, sequence_starts, config.device)
 
-    # Set camera parameters in config
-    min_index = min(valid_frames)
-    config.camera_intrinsics = pinhole_params[min_index].intrinsics.squeeze().numpy(force=True)
-    config.camera_extrinsics = pinhole_params[min_index].extrinsics.squeeze().numpy(force=True)
+    gt_Se3_world2cam = None
+    if onboarding_type == 'static':
+        gt_Se3_world2cam = read_static_onboarding_world2cam(bop_folder, dataset, sequence, sequence_type,
+                                                            onboarding_type, static_onboarding_sequence,
+                                                            sequence_starts, config.device)
+    if gt_Se3_world2cam is not None:
+        pinhole_params = add_extrinsics_to_pinhole_params(pinhole_params, gt_Se3_world2cam)
 
     # Update config with frame information
     config.input_frames = len(gt_images)
@@ -193,6 +193,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
 
     # Initialize and run the tracker
     tracker = Tracker6D(config, write_folder, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                        segmentation_paths=gt_segs, initial_image=first_image, initial_segmentation=first_segmentation)
+                        segmentation_paths=gt_segs, initial_image=first_image, initial_segmentation=first_segmentation,
+                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params)
 
     tracker.run_filtering_with_reconstruction()

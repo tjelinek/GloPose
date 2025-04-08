@@ -15,7 +15,7 @@ from tracker_config import TrackerConfig
 from utils.image_utils import get_target_shape
 
 
-def get_pinhole_params(json_file_path) -> Dict[int, PinholeCamera]:
+def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -> Dict[int, PinholeCamera]:
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
 
@@ -23,14 +23,15 @@ def get_pinhole_params(json_file_path) -> Dict[int, PinholeCamera]:
     for frame_str, value in json_data.items():
         frame_int = int(frame_str)
         frame_data = json_data[frame_str]
-        cam_K = torch.tensor(frame_data['cam_K']).view(3, 3)
-        cam_w2c = Se3.identity().matrix()
+        cam_K = torch.tensor(frame_data['cam_K'], device=device).view(3, 3)
+        cam_w2c = Se3.identity(device=device).matrix()
 
-        width = torch.tensor(frame_data['width'])
-        height = torch.tensor(frame_data['height'])
+        width = torch.tensor(frame_data['width'], device=device)
+        height = torch.tensor(frame_data['height'], device=device)
 
         pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
                                        height.unsqueeze(0), width.unsqueeze(0))
+        pinhole_camera = pinhole_camera.scale(torch.tensor(scale, device=device).unsqueeze(0))
 
         pinhole_cameras[frame_int] = pinhole_camera
 
@@ -215,15 +216,9 @@ def read_gt_Se3_cam2obj_transformations(
         return extract_gt_Se3_cam2obj(pose_json_path, device=device)
 
 
-def read_pinhole_params(
-    bop_folder: Path,
-    dataset: str,
-    sequence: str,
-    sequence_type: str,
-    onboarding_type: str = None,
-    static_onboarding_sequence: Optional[str] = None,
-    sequence_starts: Optional[List[int]] = None
-) -> dict[int, PinholeCamera]:
+def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,
+                        onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
+                        sequence_starts: Optional[List[int]] = None, device='cpu') -> dict[int, PinholeCamera]:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         return load_static_onboarding_parts(
             bop_folder,
@@ -232,13 +227,23 @@ def read_pinhole_params(
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: get_pinhole_params(p / 'scene_camera.json'),
+            loader_fn=lambda p: get_pinhole_params(p / 'scene_camera.json', scale, device=device),
             sequence_starts=sequence_starts
         )
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_camera.json'
-        return get_pinhole_params(pose_json_path)
+        return get_pinhole_params(pose_json_path, scale, device=device)
+
+
+def add_extrinsics_to_pinhole_params(pinhole_params: Dict[int, PinholeCamera], gt_Se3_world2cam: dict[int, Se3]) -> (
+        Dict)[int, PinholeCamera]:
+    for frm_i in pinhole_params.keys():
+        pinhole = pinhole_params[frm_i]
+        gt_T_world2cam = gt_Se3_world2cam[frm_i].matrix().unsqueeze(0)
+        pinhole_params[frm_i] = PinholeCamera(pinhole.intrinsics, gt_T_world2cam, pinhole.width, pinhole.height)
+
+    return pinhole_params
 
 
 def get_gop_camera_intrinsics(json_path: Path, image_id: int):

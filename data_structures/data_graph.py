@@ -43,6 +43,7 @@ class CommonFrameData(DataGraphStorage):
 
     # Ground truth data
     gt_Se3_cam2obj: Se3 = None
+    gt_Se3_world2cam: Se3 = None
     gt_pinhole_K: torch.Tensor = None
     image_shape: ImageSize = None
 

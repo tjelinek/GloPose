@@ -27,8 +27,8 @@ class Tracker6D:
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
                  images_paths: List[Path] = None, video_path: Optional[Path] = None,
                  gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
-                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
-                 initial_image: torch.Tensor | List[torch.Tensor] = None,
+                 gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None, segmentation_video_path: Optional[Path] = None,
+                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
 
         if os.path.exists(write_folder):
@@ -44,14 +44,10 @@ class Tracker6D:
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
 
-        self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None
         # Ground truth related
-        if gt_Se3_cam2obj is not None:
-            self.gt_Se3_cam2obj: Optional[Dict[Se3]] = gt_Se3_cam2obj
-
-        self.gt_Se3_world2cam: Optional[Dict[int, Se3]] = None
-        if gt_Se3_world2cam is not None:
-            self.gt_Se3_world2cam: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
+        self.gt_Se3_world2cam: Optional[Dict[Se3]] = gt_Se3_cam2obj
+        self.gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = gt_pinhole_params
 
         if self.gt_Se3_cam2obj is not None and self.gt_Se3_cam2obj.get(0):
             self.initial_gt_Se3_cam2obj = self.gt_Se3_cam2obj.get(0)
@@ -308,8 +304,14 @@ class Tracker6D:
 
         frame_node = self.data_graph.get_frame_data(frame_i)
 
-        if self.gt_Se3_cam2obj is not None and frame_i in set(self.gt_Se3_cam2obj.keys()):
-            frame_node.gt_Se3_cam2obj = self.gt_Se3_cam2obj[frame_i]
+        if self.gt_Se3_cam2obj is not None and (gt_Se3_cam2obj := self.gt_Se3_cam2obj.get(frame_i)):
+            frame_node.gt_Se3_cam2obj = gt_Se3_cam2obj
+
+        if self.gt_pinhole_params is not None and (gt_pinhole_params := self.gt_pinhole_params.get(frame_i)):
+            frame_node.gt_pinhole_K = gt_pinhole_params.intrinsics.squeeze()
+
+        if self.gt_Se3_world2cam is not None and (gt_Se3_world2cam := self.gt_Se3_world2cam.get(frame_i)):
+            frame_node.gt_Se3_world2cam = gt_Se3_world2cam
 
         if self.images_paths is not None:
             frame_node.image_filename = Path(self.images_paths[frame_i].name)
