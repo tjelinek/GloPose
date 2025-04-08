@@ -24,18 +24,12 @@ def get_pinhole_params(json_file_path) -> Dict[int, PinholeCamera]:
         frame_int = int(frame_str)
         frame_data = json_data[frame_str]
         cam_K = torch.tensor(frame_data['cam_K']).view(3, 3)
-
-        if 'cam_R_w2c' in frame_data and 'cam_t_w2c' in frame_data:
-            cam_R_w2c = torch.tensor(frame_data['cam_R_w2c']).view(3, 3)
-            cam_t_w2c = torch.tensor(frame_data['cam_t_w2c'])
-            cam_w2c_Se3 = Se3(Quaternion.from_matrix(cam_R_w2c), cam_t_w2c)
-        else:
-            cam_w2c_Se3 = Se3.identity()
+        cam_w2c = Se3.identity().matrix()
 
         width = torch.tensor(frame_data['width'])
         height = torch.tensor(frame_data['height'])
 
-        pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c_Se3.matrix().unsqueeze(0),
+        pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
                                        height.unsqueeze(0), width.unsqueeze(0))
 
         pinhole_cameras[frame_int] = pinhole_camera
@@ -256,6 +250,55 @@ def get_gop_camera_intrinsics(json_path: Path, image_id: int):
 
     cam_K = data[str(image_id)]['cam_K']
     return np.array(cam_K).reshape(3, 3)
+
+
+def read_gt_Se3_world2cam(pose_json_path: Path, device: str = 'cpu') -> dict[int, Se3]:
+    data = json.loads(pose_json_path.read_text())
+    result = {}
+    for frame_id_str, frame_data in data.items():
+        R = torch.tensor(frame_data['cam_R_w2c'], dtype=torch.float32, device=device).reshape(3, 3)
+        t = torch.tensor(frame_data['cam_t_w2c'], dtype=torch.float32, device=device).reshape(3)
+        result[int(frame_id_str)] = Se3(Quaternion.from_matrix(R), t)
+    return result
+
+
+def read_depth_scales(pose_json_path: Path) -> dict[int, float]:
+    data = json.loads(pose_json_path.read_text())
+    return {int(k): v['depth_scale'] for k, v in data.items()}
+
+
+def read_static_onboarding_world2cam(
+    bop_folder: Path,
+    dataset: str,
+    sequence: str,
+    sequence_type: str,
+    onboarding_type: str,
+    static_onboarding_sequence: Optional[str],
+    sequence_starts: Optional[List[int]] = None,
+    device: str = 'cpu'
+) -> dict[int, Se3]:
+    return load_static_onboarding_parts(
+        bop_folder,
+        dataset,
+        sequence,
+        sequence_type,
+        onboarding_type,
+        static_onboarding_sequence,
+        loader_fn=lambda p: read_gt_Se3_world2cam(p / 'scene_camera.json', device=device),
+        sequence_starts=sequence_starts
+    )
+
+
+def read_dynamic_onboarding_depth_scales(
+    bop_folder: Path,
+    dataset: str,
+    sequence: str,
+    sequence_type: str,
+    onboarding_type: str
+) -> dict[int, float]:
+    sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+    pose_json_path = sequence_folder / 'scene_camera.json'
+    return read_depth_scales(pose_json_path)
 
 
 def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path, config: TrackerConfig) -> None:
