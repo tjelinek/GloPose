@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
-from pycolmap import Sim3d, TwoViewGeometryOptions
+from pycolmap import TwoViewGeometryOptions, Rigid3d
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -251,7 +251,7 @@ def run_custom_matcher(colmap_output_path: Path, colmap_db_path: Path, colmap_im
     opts = pycolmap.IncrementalPipelineOptions()
     opts.triangulation.ignore_two_view_tracks = False
 
-    db = pycolmap.Database(colmap_db_path_)
+    db = pycolmap.Database(colmap_db_path)
     first_im_id = db.read_image(images_pairs[0][0].name).image_id
     second_im_id = db.read_image(images_pairs[0][1].name).image_id
 
@@ -590,12 +590,16 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
     reconstruction = copy.deepcopy(reconstruction)
 
     if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
-        print("Alignment error. The 1st image wast not registered.")
+        print("Alignment error. The 1st image was not registered.")
         return reconstruction, False
 
     gt_R_obj2cam_np = gt_Se3_obj2cam.rotation.matrix().numpy(force=True)
     gt_t_obj2cam_np = gt_Se3_obj2cam.t.numpy(force=True)
-    gt_Sim3D_obj2cam = Sim3d(1.0, gt_R_obj2cam_np, gt_t_obj2cam_np)
+    gt_first_image_obj2cam = pycolmap.Rigid3d(gt_R_obj2cam_np, gt_t_obj2cam_np)
+
+    colmap_first_image_world2cam = first_image_colmap.cam_from_world
+
+    sorted_image_ids = sorted(reconstruction.images.keys())
 
     pred_Sim3D_obj2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
     Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_obj2cam * gt_Sim3D_obj2cam.inverse()
