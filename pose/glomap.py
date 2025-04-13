@@ -341,9 +341,6 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
 
         maps = pycolmap.incremental_mapping(str(colmap_db_path), str(colmap_image_path), str(colmap_output_path),
                                             options=opts)
-        if len(maps) > 0:
-            maps[0].write(str(colmap_output_path))
-            print(maps[0].summary())
     else:
         raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 
