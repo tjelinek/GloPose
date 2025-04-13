@@ -25,6 +25,7 @@ from utils.colmap.h5_to_db import import_into_colmap
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
+from utils.conversions import Se3_to_Rigid3d
 from utils.general import extract_intrinsics_from_tensor
 
 
@@ -590,9 +591,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
         print("Alignment error. The 1st image was not registered.")
         return reconstruction, False
 
-    gt_R_obj2cam_np = gt_Se3_obj2cam.rotation.matrix().numpy(force=True)
-    gt_t_obj2cam_np = gt_Se3_obj2cam.t.numpy(force=True)
-    gt_first_image_obj2cam = pycolmap.Rigid3d(gt_R_obj2cam_np, gt_t_obj2cam_np)
+    gt_first_image_obj2cam = Se3_to_Rigid3d(gt_Se3_obj2cam)
 
     colmap_first_image_world2cam = first_image_colmap.cam_from_world
 
