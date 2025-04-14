@@ -595,6 +595,18 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
 
     colmap_first_image_world2cam = first_image_colmap.cam_from_world
 
+    camera_center_colmap = colmap_first_image_world2cam.inverse().translation
+    camera_center_gt = gt_first_image_obj2cam.inverse().translation
+
+    alignment_transform: Rigid3d = gt_first_image_obj2cam * colmap_first_image_world2cam
+
+    camera_center_colmap_aligned = alignment_transform * camera_center_colmap
+
+    scale = np.linalg.norm(camera_center_gt) / np.linalg.norm(camera_center_colmap_aligned)
+
+    colmap_pose_aligned = alignment_transform * colmap_first_image_world2cam
+    camera_center_colmap_aligned = colmap_pose_aligned.inverse().translation
+
     sorted_image_ids = sorted(reconstruction.images.keys())
 
     pred_Sim3D_obj2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
