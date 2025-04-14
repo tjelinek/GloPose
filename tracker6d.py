@@ -231,9 +231,10 @@ class Tracker6D:
 
         align_success = True
         reconstruction = None
+        first_frame_obj2cam = self.gt_Se3_cam2obj.get(0).inverse()
         try:
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                            matching_pairs)
+                                                                            matching_pairs, first_frame_obj2cam)
         except Exception as e:
             print(e)
 
@@ -241,11 +242,9 @@ class Tracker6D:
             return reconstruction, False
         if self.config.similarity_transformation == 'first_frame':
 
-            gt_Se3_obj2cam = self.gt_Se3_cam2obj.get(0).inverse()
-            gt_Se3_world2cam = self.gt_Se3_world2cam.get(0)
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
-            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_world2cam,
+            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, first_frame_obj2cam,
                                                                            first_image_filename)
         elif self.config.similarity_transformation == 'kabsch':
             reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
