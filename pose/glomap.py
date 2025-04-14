@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
-from pycolmap import TwoViewGeometryOptions, Rigid3d
+from pycolmap import TwoViewGeometryOptions, Rigid3d, Sim3d
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -584,7 +584,7 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
 
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3,
                                    first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
-
+    # Th alignment assume that the COLMAP and GT spaces have the same origins.
     reconstruction = copy.deepcopy(reconstruction)
 
     if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
@@ -595,28 +595,33 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
 
     colmap_first_image_world2cam = first_image_colmap.cam_from_world
 
-    camera_center_colmap = colmap_first_image_world2cam.inverse().translation
-    camera_center_gt = gt_first_image_obj2cam.inverse().translation
+    C_gt = gt_first_image_obj2cam.inverse().translation  # metric
+    C_colmap = colmap_first_image_world2cam.inverse().translation  # non-metric
 
-    alignment_transform: Rigid3d = gt_first_image_obj2cam * colmap_first_image_world2cam
+    R_gt = gt_first_image_obj2cam.rotation.matrix()
+    R_colmap = colmap_first_image_world2cam.rotation.matrix()
+    R_align = R_gt @ R_colmap.T  # maps COLMAP orientation to GT
 
-    camera_center_colmap_aligned = alignment_transform * camera_center_colmap
+    C_colmap_rotated = R_align @ C_colmap
 
-    scale = np.linalg.norm(camera_center_gt) / np.linalg.norm(camera_center_colmap_aligned)
+    scale = np.linalg.norm(C_gt) / np.linalg.norm(C_colmap_rotated)
 
-    colmap_pose_aligned = alignment_transform * colmap_first_image_world2cam
-    camera_center_colmap_aligned = colmap_pose_aligned.inverse().translation
+    t_align = C_gt - scale * C_colmap_rotated
 
     sorted_image_ids = sorted(reconstruction.images.keys())
+    for image_id in sorted_image_ids:
+        image = reconstruction.image(image_id)
+        R = image.cam_from_world.rotation.matrix()
+        t = image.cam_from_world.translation
+        R_new = R_align @ R
+        t_new = scale * (R_align @ t) + t_align
+        reconstruction.images[image_id].cam_from_world = Rigid3d(R_new, t_new)
 
-    pred_Sim3D_obj2cam = Sim3d(first_image_colmap.cam_from_world.matrix())
-    Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_obj2cam * gt_Sim3D_obj2cam.inverse()
-    # Sim3d_gt_from_pred_obj2cam: Sim3d = pred_Sim3D_world2cam.inverse() * gt_Sim3D_obj2cam
-    reconstruction.transform(Sim3d_gt_from_pred_obj2cam)
+    Sim3d_align = Sim3d(scale, R_align, t_align)
+    for point3D_id, point3D in reconstruction.points3D.items():
+        # point3D.xyz = scale * (R_align @ point3D.xyz) + t_align
+        point3D.xyz = Sim3d_align * point3D.xyz
 
-    print(f'Translation: pred {reconstruction.images[1].cam_from_world.translation}, gt {gt_Se3_obj2cam.t.numpy(force=True)}')
-    print(f'Quaternion: pred {reconstruction.images[1].cam_from_world.rotation}, gt {gt_Se3_obj2cam.quaternion.q[[1, 2, 3, 0]].numpy(force=True)}')
-    breakpoint()
     return reconstruction, True
 
 
