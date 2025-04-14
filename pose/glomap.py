@@ -586,7 +586,7 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
 
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3,
                                    first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
-    # Th alignment assume that the COLMAP and GT spaces have the same origins.
+    # The alignment assume that the COLMAP and GT spaces have the same origins.
     reconstruction = copy.deepcopy(reconstruction)
 
     if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
