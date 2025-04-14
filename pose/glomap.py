@@ -82,7 +82,8 @@ class GlomapWrapper:
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]]) -> pycolmap.Reconstruction:
+                                   matching_pairs: List[Tuple[int, int]], first_frame_obj2cam: Se3) \
+            -> pycolmap.Reconstruction:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
@@ -181,9 +182,10 @@ class GlomapWrapper:
 
         from time import sleep
         sleep(1)
-        two_view_geometry(str(self.colmap_db_path))
+        two_view_geometry(self.colmap_db_path)
 
-        run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, self.config.mapper)
+        run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, self.config.mapper,
+                   first_frame_obj2cam=first_frame_obj2cam)
 
         path_to_rec = self.colmap_output_path / '0'
         print(path_to_rec)
@@ -277,7 +279,7 @@ def two_view_geometry(colmap_db_path: Path):
 
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
-               first_image_id=1, second_image_id=2):
+               first_image_id=1, second_image_id=2, first_frame_obj2cam=Se3.identity(device='cpu')):
 
     colmap_output_path.mkdir(exist_ok=True, parents=True)
     if mapper in ['colmap', 'glomap']:
