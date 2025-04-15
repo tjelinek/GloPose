@@ -472,7 +472,7 @@ class WriteResults:
 
         G_reliable = nx.Graph()
 
-        for image_id, image in colmap_reconstruction.images.items():
+        for image_id, image in sorted(colmap_reconstruction.images.items(), key=lambda x: x[0]):
             frame_index = all_image_names.index(image.name)
 
             pred_t_obj2cam = torch.tensor(image.cam_from_world.translation)
