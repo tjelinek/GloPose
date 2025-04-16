@@ -314,6 +314,8 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 raise subprocess.CalledProcessError(process.returncode, command, output=None, stderr=error_message)
 
     elif mapper == 'pycolmap':
+        first_frame_obj2cam_Rigid3d = Se3_to_Rigid3d(first_frame_obj2cam)
+
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = False
         opts.init_image_id1 = first_image_id
@@ -323,8 +325,6 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                                             options=opts)
         if len(maps) > 0:
             maps[0].write(str(colmap_output_path))
-
-            print(maps[0].summary())
     else:
         raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 
