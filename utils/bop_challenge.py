@@ -58,8 +58,19 @@ def read_obj2cam_Se3_from_gt(pose_json_path, device: str) -> Dict[int, Dict[int,
     return dict_gt_Se3_obj2cam
 
 
-def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Path, object_id: int = 1):
-    """Load ground truth images and segmentation files, filtering by object ID."""
+def load_gt_images(image_folder: Path):
+    """Load ground truth images."""
+    gt_images = {
+        int(file.stem): file
+        for file in sorted(image_folder.iterdir())
+        if file.is_file()
+    }
+
+    return gt_images
+
+
+def load_gt_segmentations(segmentation_folder: Path, object_id: int = 1):
+    """Load segmentation files, filtering by object ID."""
     object_id_str = f"{object_id - 1:06d}"  # Ensure it's a zero-padded 6-digit string
 
     gt_segs = {
@@ -68,13 +79,7 @@ def load_gt_images_and_segmentations(image_folder: Path, segmentation_folder: Pa
         if file.stem.endswith(object_id_str)  # Dynamically filter by object ID
     }
 
-    gt_images = {
-        int(file.stem): file
-        for file in sorted(image_folder.iterdir())
-        if file.is_file()
-    }
-
-    return gt_images, gt_segs
+    return gt_segs
 
 
 def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None,
@@ -151,33 +156,39 @@ def get_bop_images_and_segmentations(
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
 
-    def load_fn(folder: Path):
-        return load_gt_images_and_segmentations(folder / 'rgb', folder / 'mask_visib')
+    def load_segs(folder: Path):
+        return load_gt_segmentations(folder / 'mask_visib')
 
     if sequence_type == 'onboarding' and onboarding_type == 'static':
-        data_down = load_fn(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down'))
-        data_up = load_fn(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up'))
+        down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
+        up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
+        
+        images_down = load_gt_images(down_folder / 'rgb')
+        images_up = load_gt_images(up_folder / 'rgb')
+        segs_down = load_segs(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down'))
+        segs_up = load_segs(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up'))
 
         if static_onboarding_sequence == 'both':
-            assert data_down is not None and data_up is not None
-            sequence_starts.append(len(data_down[0]))
+            assert images_down is not None and images_up is not None
+            assert segs_down is not None and segs_up is not None
+            sequence_starts.append(len(images_down))
 
-            merged_images = data_down[0]
-            merged_segmentations = data_down[1]
+            merged_images = images_down
+            merged_segmentations = images_up
 
             offset = sequence_starts[1]
-            for frame, img in data_up[0].items():
+            for frame, img in images_down.items():
                 merged_images[offset + frame] = img
-            for frame, seg in data_up[1].items():
+            for frame, seg in images_up.items():
                 merged_segmentations[offset + frame] = seg
 
             return merged_images, merged_segmentations, sequence_starts
 
         elif static_onboarding_sequence == 'down':
-            return data_down[0], data_down[1], sequence_starts
+            return images_down, segs_down, sequence_starts
 
         elif static_onboarding_sequence == 'up':
-            return data_up[0], data_up[1], sequence_starts
+            return images_up, segs_up, sequence_starts
 
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
@@ -185,7 +196,8 @@ def get_bop_images_and_segmentations(
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
-        gt_images, gt_segs = load_gt_images_and_segmentations(image_folder, segmentation_folder)
+        gt_images = load_gt_images(image_folder)
+        gt_segs = load_gt_segmentations(segmentation_folder)
         return gt_images, gt_segs, None
 
 
