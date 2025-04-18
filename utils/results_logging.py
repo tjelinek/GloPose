@@ -437,19 +437,19 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        gt_world2cam_Se3 = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
+        gt_Se3_world2cam = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
 
-        gt_t_cam = gt_world2cam_Se3.translation.numpy(force=True)
-        pred_t_cam = np.stack([pred_Se3_obj2cam[frm].inverse().t.numpy(force=True) for frm in sorted(pred_Se3_obj2cam)])
+        gt_t_world2cam = gt_Se3_world2cam.translation.numpy(force=True)
+        pred_t_world2cam = np.stack([pred_Se3_obj2cam[frm].inverse().t.numpy(force=True) for frm in sorted(pred_Se3_obj2cam)])
 
         cmap_gt = plt.get_cmap('Reds')
         cmap_pred = plt.get_cmap('Blues')
         gradient = np.linspace(1., 0.5, self.config.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
-        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_cam))]) * 255).astype(np.uint8)
+        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(np.uint8)
 
-        strips_gt = np.stack([gt_t_cam[:-1], gt_t_cam[1:]], axis=1)
-        strips_pred = np.stack([pred_t_cam[:-1], pred_t_cam[1:]], axis=1)
+        strips_gt = np.stack([gt_t_world2cam[:-1], gt_t_world2cam[1:]], axis=1)
+        strips_pred = np.stack([pred_t_world2cam[:-1], pred_t_world2cam[1:]], axis=1)
 
         object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
         strips_radii = [0.005 * object_size] * n_poses
@@ -461,7 +461,7 @@ class WriteResults:
         #        static=True)
 
         rr.log(RerunAnnotations.colmap_pred_camera_track,
-               rr.LineStrips3D(strips=strips_pred,  # gt_t_cam
+               rr.LineStrips3D(strips=strips_pred,  # gt_t_world2cam
                                colors=colors_pred,
                                radii=strips_radii),
                static=True)
@@ -474,13 +474,13 @@ class WriteResults:
         for image_id, image in sorted(colmap_reconstruction.images.items(), key=lambda x: x[0]):
             frame_index = all_image_names.index(image.name)
 
-            pred_t_obj2cam = torch.tensor(image.cam_from_world.translation)
-            pred_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
+            pred_t_world2cam = torch.tensor(image.cam_from_world.translation)
+            pred_q_world2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
 
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
-                rr.Transform3D(translation=pred_t_obj2cam,
-                               rotation=rr.Quaternion(xyzw=pred_q_obj2cam_xyzw),
+                rr.Transform3D(translation=pred_t_world2cam,
+                               rotation=rr.Quaternion(xyzw=pred_q_world2cam_xyzw),
                                from_parent=True),
                 static=True
             )
