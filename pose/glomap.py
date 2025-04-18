@@ -565,9 +565,9 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
     return keypoints_for_node, edge_match_indices_concatenated
 
 
-def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3,
+def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, gt_Se3_world2cam: Se3,
                                    first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
-    # The alignment assume that the COLMAP and GT spaces have the same origins.
+    # The alignment assumes that the COLMAP and GT spaces have the same origins.
     reconstruction = copy.deepcopy(reconstruction)
 
     if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
@@ -575,21 +575,22 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
         return reconstruction, False
 
     gt_first_image_obj2cam = Se3_to_Rigid3d(gt_Se3_obj2cam)
+    gt_first_image_world2cam = Se3_to_Rigid3d(gt_Se3_world2cam)
 
     colmap_first_image_world2cam = first_image_colmap.cam_from_world
 
-    C_gt = gt_first_image_obj2cam.inverse().translation  # metric
+    C_gt_world = gt_first_image_world2cam.inverse().translation  # metric
     C_colmap = colmap_first_image_world2cam.inverse().translation  # non-metric
 
-    R_gt = gt_first_image_obj2cam.rotation.matrix()
+    R_gt_world2cam = gt_first_image_world2cam.rotation.matrix()
     R_colmap = colmap_first_image_world2cam.rotation.matrix()
-    R_align = R_gt @ R_colmap.T  # maps COLMAP orientation to GT
+    R_align = R_gt_world2cam @ R_colmap.T  # maps COLMAP orientation to GT
 
-    C_colmap_rotated = R_align @ C_colmap
+    C_colmap_rotated_world = R_align @ C_colmap
 
-    scale = np.linalg.norm(C_gt) / np.linalg.norm(C_colmap_rotated)
+    scale = np.linalg.norm(C_gt_world) / np.linalg.norm(C_colmap_rotated_world)
 
-    t_align = C_gt - scale * C_colmap_rotated
+    t_align = C_gt_world - scale * C_colmap_rotated_world
 
     sorted_image_ids = sorted(reconstruction.images.keys())
     for image_id in sorted_image_ids:

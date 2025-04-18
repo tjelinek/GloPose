@@ -246,8 +246,9 @@ class Tracker6D:
 
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
+            gt_Se3_world2cam = self.gt_Se3_world2cam[0]
             reconstruction, align_success = align_reconstruction_with_pose(reconstruction, first_frame_obj2cam,
-                                                                           first_image_filename)
+                                                                           gt_Se3_world2cam, first_image_filename)
         elif self.config.similarity_transformation == 'kabsch':
             reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
         else:
