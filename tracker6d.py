@@ -41,13 +41,14 @@ class Tracker6D:
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
+        self.depth_paths: Optional[List[Path]] = depth_paths
         self.video_path: Optional[Path] = video_path
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
         self.sequence_starts: Optional[List[int]] = sequence_starts
 
         # Ground truth related
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
-        self.gt_Se3_world2cam: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
+        self.gt_Se3_world2cam: Optional[Dict[int, Se3]] = gt_Se3_world2cam
         self.gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = gt_pinhole_params
 
         # Cameras
