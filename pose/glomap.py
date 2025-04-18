@@ -582,26 +582,18 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
     C_gt_world = gt_first_image_world2cam.inverse().translation  # metric
     C_colmap = colmap_first_image_world2cam.inverse().translation  # non-metric
 
-    R_gt_world2cam = gt_first_image_world2cam.rotation.matrix()
-    R_colmap = colmap_first_image_world2cam.rotation.matrix()
-    R_align = R_gt_world2cam @ R_colmap.T  # maps COLMAP orientation to GT
+    scale = np.linalg.norm(C_gt_world) / np.linalg.norm(C_colmap)
 
-    C_colmap_rotated_world = R_align @ C_colmap
+    Sim3d_gt_world = Sim3d(scale, gt_first_image_world2cam.rotation.matrix(), gt_first_image_world2cam.translation)
+    Sim3d_colmap = Sim3d(1.0, colmap_first_image_world2cam.rotation.matrix(), colmap_first_image_world2cam.translation)
 
-    scale = np.linalg.norm(C_gt_world) / np.linalg.norm(C_colmap_rotated_world)
-
-    t_align = C_gt_world - scale * C_colmap_rotated_world
+    Sim3d_align = Sim3d_gt_world * Sim3d_colmap.inverse()
 
     sorted_image_ids = sorted(reconstruction.images.keys())
     for image_id in sorted_image_ids:
         image = reconstruction.image(image_id)
-        R = image.cam_from_world.rotation.matrix()
-        t = image.cam_from_world.translation
-        R_new = R_align @ R
-        t_new = scale * (R_align @ t) + t_align
-        reconstruction.images[image_id].cam_from_world = Rigid3d(R_new, t_new)
+        reconstruction.images[image_id].cam_from_world = Sim3d_align.transform_camera_world(image.cam_from_world)
 
-    Sim3d_align = Sim3d(scale, R_align, t_align)
     for point3D_id, point3D in reconstruction.points3D.items():
         # point3D.xyz = scale * (R_align @ point3D.xyz) + t_align
         point3D.xyz = Sim3d_align * point3D.xyz
