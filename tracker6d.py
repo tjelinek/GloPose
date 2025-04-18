@@ -27,8 +27,9 @@ class Tracker6D:
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
                  images_paths: List[Path] = None, video_path: Optional[Path] = None,
                  gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
-                 gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None, segmentation_video_path: Optional[Path] = None,
-                 segmentation_paths: List[Path] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
+                 gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
+                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
+                 depth_paths: Optional[List[Path]] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
 
         if os.path.exists(write_folder):
