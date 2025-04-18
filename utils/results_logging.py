@@ -437,10 +437,9 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        gt_cam2obj_Se3s = self.accumulate_gt_Se3_cam2obj(all_frames_from_0)
-        gt_obj2cam_Se3 = gt_cam2obj_Se3s.inverse()
+        gt_world2cam_Se3 = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
 
-        gt_t_cam = gt_obj2cam_Se3.translation.numpy(force=True)
+        gt_t_cam = gt_world2cam_Se3.translation.numpy(force=True)
         pred_t_cam = np.stack([pred_Se3_obj2cam[frm].inverse().t.numpy(force=True) for frm in sorted(pred_Se3_obj2cam)])
 
         cmap_gt = plt.get_cmap('Reds')
@@ -477,8 +476,6 @@ class WriteResults:
 
             pred_t_obj2cam = torch.tensor(image.cam_from_world.translation)
             pred_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
-
-            image_id_to_poses[image_id] = pred_t_obj2cam
 
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
@@ -545,8 +542,8 @@ class WriteResults:
                 )
             )
 
-        gt_cam2obj_se3 = self.accumulate_gt_Se3_cam2obj(all_frames_from_0)
-        pred_cam2obj_se3 = self.accumulate_pred_Se3_cam2obj(all_frames_from_0)
+        gt_cam2obj_se3 = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_cam2obj')
+        pred_cam2obj_se3 = self.accumulate_Se3_attributes(all_frames_from_0, 'pred_Se3_cam2obj')
 
         gt_q_xyzw_cam2obj = gt_cam2obj_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
         pred_q_xyzw_cam2obj = pred_cam2obj_se3.quaternion.q[:, [1, 2, 3, 0]].numpy(force=True)
@@ -776,19 +773,7 @@ class WriteResults:
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
                    rr.Scalar(self.config.sift_filter_good_to_add_matches))
 
-    def accumulate_pred_Se3_cam2obj(self, frame_indices) -> Se3:
-        return self.accumulate_Se3_cam2obj(frame_indices, 'pred')
-
-    def accumulate_gt_Se3_cam2obj(self, frame_indices) -> Se3:
-        return self.accumulate_Se3_cam2obj(frame_indices, 'gt')
-
-    def accumulate_Se3_cam2obj(self, frame_indices, mode) -> Se3:
-        if mode == 'gt':
-            attr_name = 'gt_Se3_cam2obj'
-        elif mode == 'pred':
-            attr_name = 'pred_Se3_cam2obj'
-        else:
-            raise ValueError("mode must be 'gt' or 'pred'")
+    def accumulate_Se3_attributes(self, frame_indices, attr_name: str) -> Se3:
 
         Ts_cam2obj = []
 
