@@ -145,8 +145,9 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
         static_onboarding_sequence = None
 
     # Load images and segmentations
-    gt_images, gt_segs, sequence_starts = get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type,
-                                                                           onboarding_type, static_onboarding_sequence)
+    gt_images, gt_segs, gt_depths, sequence_starts =\
+        get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                         static_onboarding_sequence)
 
     # Get camera-to-object transformations
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
@@ -162,6 +163,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     valid_frames = valid_frames[::skip_indices]
     gt_images = [gt_images[i] for i in valid_frames]
     gt_segs = [gt_segs[i] for i in valid_frames]
+    if gt_depths is not None:
+        gt_depths = [gt_depths[i] for i in valid_frames]
     dict_gt_Se3_cam2obj = {
         i: dict_gt_Se3_cam2obj[frame]
         for i, frame in enumerate(valid_frames)
@@ -193,7 +196,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
 
     # Initialize and run the tracker
     tracker = Tracker6D(config, write_folder, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                        segmentation_paths=gt_segs, initial_image=first_image, initial_segmentation=first_segmentation,
-                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params)
+                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params, segmentation_paths=gt_segs,
+                        initial_image=first_image, initial_segmentation=first_segmentation,
+                        depth_paths=gt_depths)
 
     tracker.run_filtering_with_reconstruction()

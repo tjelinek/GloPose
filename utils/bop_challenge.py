@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Tuple
 
 import numpy as np
 import torch
@@ -152,12 +152,9 @@ def get_bop_images_and_segmentations(
     sequence_type: str,
     onboarding_type: str = None,
     static_onboarding_sequence: Optional[str] = None
-):
+) -> Tuple[Dict[int, Path], Dict[int, Path], Optional[Dict[int, Path]], Optional[List[int]]]:
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
-
-    def load_segs(folder: Path):
-        return load_gt_segmentations(folder / 'mask_visib')
 
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
@@ -165,8 +162,17 @@ def get_bop_images_and_segmentations(
         
         images_down = load_gt_images(down_folder / 'rgb')
         images_up = load_gt_images(up_folder / 'rgb')
-        segs_down = load_segs(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down'))
-        segs_up = load_segs(get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up'))
+        segs_down = load_gt_segmentations(down_folder / 'mask_visib')
+        segs_up = load_gt_segmentations(up_folder / 'mask_visib')
+
+        depth_down_folder = down_folder / 'depth'
+        depth_up_folder = up_folder / 'depth'
+        depths_down = None
+        depths_up = None
+        if depth_down_folder.exists():
+            depths_down = load_gt_images(depth_down_folder)
+        if depth_up_folder.exists():
+            depths_up = load_gt_images(depth_up_folder)
 
         if static_onboarding_sequence == 'both':
             assert images_down is not None and images_up is not None
@@ -174,21 +180,25 @@ def get_bop_images_and_segmentations(
             sequence_starts.append(len(images_down))
 
             merged_images = images_down
-            merged_segmentations = images_up
+            merged_segmentations = images_down
+            merged_depths = depths_down
 
             offset = sequence_starts[1]
-            for frame, img in images_down.items():
+            for frame, img in images_up.items():
                 merged_images[offset + frame] = img
-            for frame, seg in images_up.items():
+            for frame, seg in segs_up.items():
                 merged_segmentations[offset + frame] = seg
+            if merged_depths is not None:
+                for frame, depth in depths_up.items():
+                    merged_depths[offset + frame] = depth
 
-            return merged_images, merged_segmentations, sequence_starts
+            return merged_images, merged_segmentations, merged_depths, sequence_starts
 
         elif static_onboarding_sequence == 'down':
-            return images_down, segs_down, sequence_starts
+            return images_down, segs_down, depths_down, sequence_starts
 
         elif static_onboarding_sequence == 'up':
-            return images_up, segs_up, sequence_starts
+            return images_up, segs_up, depths_up, sequence_starts
 
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
@@ -196,9 +206,13 @@ def get_bop_images_and_segmentations(
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / 'mask_visib'
+        depth_folder = sequence_folder / 'depth'
         gt_images = load_gt_images(image_folder)
         gt_segs = load_gt_segmentations(segmentation_folder)
-        return gt_images, gt_segs, None
+        gt_depths = None
+        if depth_folder.exists():
+            gt_depths = load_gt_images(depth_folder)
+        return gt_images, gt_segs, gt_depths, None
 
 
 def read_gt_Se3_cam2obj_transformations(
