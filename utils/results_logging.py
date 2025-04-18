@@ -430,9 +430,9 @@ class WriteResults:
         all_image_names = [str(self.data_graph.get_frame_data(i).image_filename)
                            for i in range(len(self.data_graph.G.nodes))]
 
-        pred_Se3_obj2cam_colmap_frames = world2cam_from_reconstruction(colmap_reconstruction)
-        pred_Se3_obj2cam = {all_image_names.index(colmap_reconstruction.images[colmap_idx].name): Se3_pose
-                            for colmap_idx, Se3_pose in pred_Se3_obj2cam_colmap_frames.items()}
+        pred_Se3_world2cam_colmap_frames = world2cam_from_reconstruction(colmap_reconstruction)
+        pred_Se3_world2cam = {all_image_names.index(colmap_reconstruction.images[colmap_idx].name): Se3_pose
+                              for colmap_idx, Se3_pose in pred_Se3_world2cam_colmap_frames.items()}
 
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
@@ -440,7 +440,8 @@ class WriteResults:
         gt_Se3_world2cam = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
 
         gt_t_world2cam = gt_Se3_world2cam.translation.numpy(force=True)
-        pred_t_world2cam = np.stack([pred_Se3_obj2cam[frm].inverse().t.numpy(force=True) for frm in sorted(pred_Se3_obj2cam)])
+        pred_t_world2cam = np.stack([pred_Se3_world2cam[frm].inverse().t.numpy(force=True)
+                                     for frm in sorted(pred_Se3_world2cam)])
 
         cmap_gt = plt.get_cmap('Reds')
         cmap_pred = plt.get_cmap('Blues')
