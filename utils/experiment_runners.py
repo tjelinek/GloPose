@@ -1,5 +1,7 @@
 import hashlib
 from pathlib import Path
+from typing import Dict, List, Any
+
 import torch
 from kornia.geometry import Se3, Quaternion
 
@@ -109,6 +111,14 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
     return tracker
 
 
+def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
+    frame_dict = {
+        i: frame_dict[frame]
+        for i, frame in enumerate(valid_frames)
+    }
+    return frame_dict
+
+
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
                          config: TrackerConfig, skip_indices: int, onboarding_type: str = None,
                          only_frames_with_known_poses: bool = False):
@@ -165,10 +175,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     gt_segs = [gt_segs[i] for i in valid_frames]
     if gt_depths is not None:
         gt_depths = [gt_depths[i] for i in valid_frames]
-    dict_gt_Se3_cam2obj = {
-        i: dict_gt_Se3_cam2obj[frame]
-        for i, frame in enumerate(valid_frames)
-    }
+    dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
 
     # Get initial image and segmentation
     first_image, first_segmentation = get_initial_image_and_segment(
@@ -188,6 +195,9 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
                                                             sequence_starts, config.device)
     if gt_Se3_world2cam is not None:
         pinhole_params = add_extrinsics_to_pinhole_params(pinhole_params, gt_Se3_world2cam)
+
+    pinhole_params = reindex_frame_dict(pinhole_params, valid_frames)
+    gt_Se3_world2cam = reindex_frame_dict(gt_Se3_world2cam, valid_frames)
 
     # Update config with frame information
     config.input_frames = len(gt_images)
