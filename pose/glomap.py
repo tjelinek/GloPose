@@ -209,6 +209,8 @@ class GlomapWrapper:
             fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
             fx = fx.item()
             fy = fy.item()
+            cx = cx.item()
+            cy = cy.item()
         else:
             pred_reconstruction_cam = reconstruction.cameras[1]
             cx, cy = (pred_reconstruction_cam.params[1], pred_reconstruction_cam.params[2])
