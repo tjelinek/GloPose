@@ -439,7 +439,7 @@ class WriteResults:
 
         gt_Se3_world2cam = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
 
-        gt_t_world2cam = gt_Se3_world2cam.translation.numpy(force=True)
+        gt_t_world2cam = gt_Se3_world2cam.inverse().translation.numpy(force=True)
         pred_t_world2cam = np.stack([pred_Se3_world2cam[frm].inverse().t.numpy(force=True)
                                      for frm in sorted(pred_Se3_world2cam)])
 
@@ -455,17 +455,17 @@ class WriteResults:
         object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
         strips_radii = [0.005 * object_size] * n_poses
 
-        # rr.log(RerunAnnotations.colmap_gt_camera_track,
-        #        rr.LineStrips3D(strips=strips_gt,  # gt_t_cam
-        #                        colors=colors_gt,
-        #                        radii=strips_radii),
-        #        static=True)
-
-        rr.log(RerunAnnotations.colmap_pred_camera_track,
-               rr.LineStrips3D(strips=strips_pred,  # gt_t_world2cam
-                               colors=colors_pred,
+        rr.log(RerunAnnotations.colmap_gt_camera_track,
+               rr.LineStrips3D(strips=strips_gt,  # gt_t_world2cam
+                               colors=colors_gt,
                                radii=strips_radii),
                static=True)
+
+        # rr.log(RerunAnnotations.colmap_pred_camera_track,
+        #        rr.LineStrips3D(strips=strips_pred,  # gt_t_world2cam
+        #                        colors=colors_pred,
+        #                        radii=strips_radii),
+        #        static=True)
 
         image_id_to_poses = {}
         image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
@@ -497,6 +497,12 @@ class WriteResults:
             )
 
             frame_node = self.data_graph.get_frame_data(frame_index)
+
+            # gt_t_world2cam = frame_node.gt_Se3_cam2obj.t
+            # print(f'Frame: {frame_index}, gt: {gt_t_world2cam.numpy(force=True).round(3)},'
+            #       f'pred: {image.cam_from_world.translation.round(3)}')
+
+            image_id_to_poses[image_id] = pred_t_world2cam
 
             for reliable_node_idx in frame_node.reliable_sources:
                 reliable_node_data = self.data_graph.get_frame_data(reliable_node_idx)
