@@ -15,7 +15,7 @@ from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvide
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift
-from pose.glomap import GlomapWrapper, get_image_Se3_world2cam, align_reconstruction_with_pose
+from pose.glomap import GlomapWrapper, get_image_Se3_world2cam, align_reconstruction_with_pose, align_with_kabsch
 from tracker_config import TrackerConfig
 from utils.eval import update_global_statistics
 from utils.results_logging import WriteResults
@@ -250,7 +250,12 @@ class Tracker6D:
             reconstruction, align_success = align_reconstruction_with_pose(reconstruction, first_frame_obj2cam,
                                                                            gt_Se3_world2cam, first_image_filename)
         elif self.config.similarity_transformation == 'kabsch':
-            reconstruction = self.glomap_wrapper.align_with_kabsch(reconstruction)
+            gt_Se3_world2cam_poses = {
+                str(self.data_graph.get_frame_data(n).image_filename):
+                    self.data_graph.get_frame_data(n).gt_Se3_world2cam
+                for n in self.data_graph.G.nodes
+            }
+            reconstruction = align_with_kabsch(reconstruction, gt_Se3_world2cam_poses)
         else:
             raise ValueError(f'Unknown similarity transform method {self.config.similarity_transformation}')
 

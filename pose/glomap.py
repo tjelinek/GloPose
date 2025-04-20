@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 from kornia.image import ImageSize
-from pycolmap import TwoViewGeometryOptions, Rigid3d, Sim3d
+from pycolmap import TwoViewGeometryOptions, Sim3d
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -26,7 +26,6 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMa
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
-from utils.general import extract_intrinsics_from_tensor
 
 
 class GlomapWrapper:
@@ -199,56 +198,35 @@ class GlomapWrapper:
 
         return reconstruction
 
-    def align_with_kabsch(self, reconstruction: pycolmap.Reconstruction) -> pycolmap.Reconstruction:
-        reconstruction = copy.deepcopy(reconstruction)
 
-        gt_reconstruction = pycolmap.Reconstruction()
+def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3])\
+        -> pycolmap.Reconstruction:
 
-        gt_K = self.data_graph.get_frame_data(0).gt_pinhole_K
-        if gt_K is not None:
-            fx, fy, cx, cy = extract_intrinsics_from_tensor(gt_K)
-            fx = fx.item()
-            fy = fy.item()
-            cx = cx.item()
-            cy = cy.item()
-        else:
-            pred_reconstruction_cam = reconstruction.cameras[1]
-            cx, cy = (pred_reconstruction_cam.params[1], pred_reconstruction_cam.params[2])
-            fx, fy = (pred_reconstruction_cam.params[0], pred_reconstruction_cam.params[0])
+    reconstruction = copy.deepcopy(reconstruction)
 
-        gt_w = reconstruction.cameras[1].width  # Assuming single camera only
-        gt_h = reconstruction.cameras[1].height
+    gt_camera_centers = []
+    pred_camera_centers = []
 
-        gt_reconstruction_cam_id = 1
-        cam = pycolmap.Camera(model=1, width=gt_w, height=gt_h, params=np.array([fx, fy, cx, cy]))
-        gt_reconstruction.add_camera(cam)
+    for image_name, gt_Se3_world2cam in gt_Se3_world2cam_poses.items():
 
-        tgt_image_names = []
-        tgt_3d_locations = []
+        pred_image = reconstruction.find_image_with_name(image_name)
+        if pred_image is None:
+            continue
 
-        for n in self.data_graph.G.nodes:
-            node_data = self.data_graph.get_frame_data(n)
+        gt_cam_center = gt_Se3_world2cam.inverse().translation.numpy(force=True)
+        pred_cam_center = pred_image.cam_from_world.inverse().translation
 
-            gt_Se3_world2cam = node_data.gt_Se3_cam2obj.inverse()
-            gt_q_xyzw_world2cam = gt_Se3_world2cam.quaternion.q.squeeze().numpy(force=True)[[1, 2, 3, 0]].astype(
-                np.float64)
-            gt_t_world2cam = gt_Se3_world2cam.t.squeeze().numpy(force=True).astype(np.float64)
+        gt_camera_centers.append(gt_cam_center)
+        pred_camera_centers.append(pred_cam_center)
 
-            image_name = node_data.image_filename
-            gt_image = pycolmap.Image(name=image_name, image_id=n, camera_id=gt_reconstruction_cam_id)
-            gt_world2cam = pycolmap.Rigid3d(rotation=gt_q_xyzw_world2cam, translation=gt_t_world2cam)
-            gt_image.cam_from_world = gt_world2cam
-            gt_reconstruction.add_image(gt_image)
-            gt_reconstruction.register_image(n)
+    gt_camera_centers = np.stack(gt_camera_centers)
+    pred_camera_centers = np.stack(pred_camera_centers)
 
-            tgt_image_names.append(image_name)
-            tgt_3d_locations.append(gt_t_world2cam)
+    sim3d_report = pycolmap.estimate_sim3d_robust(pred_camera_centers, gt_camera_centers)
+    sim3d = sim3d_report['tgt_from_src']
+    reconstruction.transform(sim3d)
 
-        sim3d = pycolmap.align_reconstructions_via_proj_centers(reconstruction, gt_reconstruction, 1.)
-
-        reconstruction.transform(sim3d)
-
-        return reconstruction
+    return reconstruction
 
 
 def two_view_geometry(colmap_db_path: Path):
@@ -591,15 +569,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
 
     Sim3d_pred2gt = Sim3d_gt_world * Sim3d_colmap.inverse()
 
-    sorted_image_ids = sorted(reconstruction.images.keys())
-    for image_id in sorted_image_ids:
-        image = reconstruction.image(image_id)
-        reconstruction.images[image_id].cam_from_world = Sim3d_pred2gt.transform_camera_world(image.cam_from_world)
-
-    for point3D_id, point3D in reconstruction.points3D.items():
-        # point3D.xyz = scale * (R_align @ point3D.xyz) + t_align
-        point3D.xyz = Sim3d_pred2gt * point3D.xyz
-
+    reconstruction.transform(Sim3d_pred2gt)
     return reconstruction, True
 
 
