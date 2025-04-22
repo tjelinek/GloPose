@@ -3,12 +3,14 @@ from time import time
 from typing import List, Tuple
 
 import networkx as nx
+import numpy as np
 import torch
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
+from utils.image_utils import otsu_threshold
 
 
 class BaseFrameFilter:
@@ -43,6 +45,8 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
 
+        self.current_flow_reliability_threshold = self.config.flow_reliability_threshold
+
     def densify(self):
         keyframe_nodes = sorted(self.keyframe_graph.nodes)
         for n in range(1, len(keyframe_nodes) - 1):
@@ -52,15 +56,36 @@ class RoMaFrameFilter(BaseFrameFilter):
             if reliability > self.config.flow_reliability_densification_threshold:
                 self.keyframe_graph.add_edge(u, v)
 
+    def update_flow_reliability_threshold(self):
+        all_frames = self.data_graph.G.nodes
+        template_reliabilities = []
+
+        for node in all_frames:
+            template_idx = self.data_graph.get_frame_data(node).matching_source_keyframe
+            edge = (template_idx, node)
+            if self.data_graph.G.has_edge(*edge):
+                template_reliabilities.append(self.data_graph.get_edge_observations(*edge).reliability_score)
+
+        template_reliabilities_np = np.array(template_reliabilities)
+        # threshold = threshold_otsu(template_reliabilities_np)
+        threshold = otsu_threshold(torch.from_numpy(template_reliabilities_np))
+
+        self.current_flow_reliability_threshold = threshold
+
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
 
         start_time = time()
 
+        if len(self.keyframe_graph.nodes) >= 10 and False:
+            self.update_flow_reliability_threshold()
+
         if frame_i == 0:
             self.keyframe_graph.add_node(0)
-            self.data_graph.get_frame_data(0).reliable_sources = {0}
-            self.data_graph.get_frame_data(0).matching_source_keyframe = 0
+            first_frame_node = self.data_graph.get_frame_data(0)
+            first_frame_node.reliable_sources = {0}
+            first_frame_node.matching_source_keyframe = 0
+            first_frame_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
             return
         if frame_i >= self.n_frames - 1 and False:
             self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
@@ -96,6 +121,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         duration = time() - start_time
         datagraph_node = self.data_graph.get_frame_data(frame_i)
         datagraph_node.pose_estimation_time = duration
+        datagraph_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
 
         flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
@@ -120,7 +146,7 @@ class RoMaFrameFilter(BaseFrameFilter):
                 reliable_flows |= {source_node_idx}
         source = best_source
 
-        if best_source_reliability < self.config.flow_reliability_threshold:
+        if best_source_reliability < self.current_flow_reliability_threshold:
             return None, None
         return reliable_flows, source
 
@@ -143,7 +169,7 @@ class RoMaFrameFilter(BaseFrameFilter):
                 reliable_flows |= {source_node_idx}
         source = best_source
 
-        if best_source_reliability < self.config.flow_reliability_threshold:
+        if best_source_reliability < self.current_flow_reliability_threshold:
             return set(), None
         return reliable_flows, source
 
@@ -179,7 +205,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
         edge_data.reliability_score = reliability
-        edge_data.is_match_reliable = reliability >= self.config.flow_reliability_threshold
+        edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
 
         return reliability
 

@@ -47,12 +47,10 @@ class CommonFrameData(DataGraphStorage):
     gt_pinhole_K: torch.Tensor = None
     image_shape: ImageSize = None
 
-    # Long short jumps
+    # RoMa Frame Filter
     matching_source_keyframe: int = None
-    pred_Se3_cam2obj: Se3 = None
-
-    # Sources
     reliable_sources: Set[int] = field(default_factory=set)
+    current_flow_reliability_threshold: float = 0.
 
     # Filename
     image_filename: Path = None
@@ -64,6 +62,9 @@ class CommonFrameData(DataGraphStorage):
 
     # Timings
     pose_estimation_time: float = None
+
+    # Pred
+    pred_Se3_cam2obj: Se3 = None
 
 
 @dataclass

@@ -192,3 +192,53 @@ def get_intrinsics_from_exif(image_path: Path, err_on_default=False) -> torch.te
     cy = height / 2
 
     return torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+
+
+def otsu_threshold(tensor: torch.Tensor) -> float:
+    """
+    Compute Otsu's threshold for a PyTorch tensor.
+
+    Args:
+        tensor: 1D or multi-dimensional PyTorch tensor
+
+    Returns:
+        threshold: float value of the Otsu threshold
+    """
+    # Flatten tensor to 1D
+    flat_tensor = tensor.flatten()
+
+    # Compute histogram
+    min_val = flat_tensor.min().item()
+    max_val = flat_tensor.max().item()
+
+    # Use 256 bins like typical image processing implementations
+    bins = 256
+    hist = torch.histc(flat_tensor, bins=bins, min=min_val, max=max_val)
+
+    # Bin centers
+    bin_edges = torch.linspace(min_val, max_val, bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    # Cumulative sums
+    weight1 = torch.cumsum(hist, dim=0)
+    weight2 = torch.cumsum(hist.flip(0), dim=0).flip(0)
+
+    # Class means
+    mean1 = torch.cumsum(hist * bin_centers, dim=0) / weight1
+    mean2 = (torch.cumsum((hist * bin_centers).flip(0), dim=0) / weight2.flip(0)).flip(0)
+
+    # Avoid division by zero
+    mask = (weight1[:-1] != 0) & (weight2[1:] != 0)
+
+    # Between-class variance
+    variance = torch.where(
+        mask,
+        weight1[:-1] * weight2[1:] * (mean1[:-1] - mean2[1:]) ** 2,
+        torch.tensor(0.0, device=tensor.device)
+    )
+
+    # Find threshold index with maximum variance
+    idx = torch.argmax(variance)
+    threshold = bin_centers[idx]
+
+    return threshold.item()

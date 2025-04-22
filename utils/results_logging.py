@@ -773,7 +773,7 @@ class WriteResults:
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-                   rr.Scalar(self.config.flow_reliability_threshold))
+                   rr.Scalar(target_data.current_flow_reliability_threshold))
         elif self.config.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
             rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))
