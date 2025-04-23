@@ -32,7 +32,7 @@ class TrackerConfig:
     input_frames: int = 0
     skip_indices: int = 1
     frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
-    black_background: bool = True
+    black_background: bool = False
     segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2', 'whites', or 'synthetic'
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     image_downsample: float = 1.0
@@ -63,7 +63,7 @@ class TrackerConfig:
     # Matcher configurations
     roma_matcher_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     roma_sample_size: int = 10000
-    min_roma_certainty_threshold: float = 0.95
+    min_roma_certainty_threshold: float = 0.5
     flow_reliability_threshold: float = 0.5
     flow_reliability_densification_threshold: float = 0.375
     min_number_of_reliable_matches: int = 0
@@ -74,7 +74,7 @@ class TrackerConfig:
 
     # Reconstruction settings
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
-    similarity_transformation = 'first_frame'  # Either 'first_frame' or 'kabsch'
+    similarity_transformation = 'kabsch'  # Either 'first_frame' or 'kabsch'
 
     # SIFT options
     sift_matcher_config: BaseSiftConfig = field(default_factory=BaseSiftConfig)
