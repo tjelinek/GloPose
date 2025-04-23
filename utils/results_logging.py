@@ -86,7 +86,7 @@ class WriteResults:
         if self.config.frame_filter == 'RoMa':
             match_reliability_statistics = rrb.TimeSeriesView(name="RoMa Matching Reliability",
                                                               origin=RerunAnnotations.matching_reliability_plot,
-                                                              axis_y=rrb.ScalarAxis(range=(0.0, 1.0),
+                                                              axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                                     zoom_lock=True),
                                                               plot_legend=rrb.PlotLegend(visible=True))
         else:
@@ -185,6 +185,35 @@ class WriteResults:
                                 row_shares=[0.8, 0.2],
                                 name='Matching'
                             ),
+                            *([rrb.Vertical(
+                                contents=[
+                                    rrb.Horizontal(
+                                        contents=[
+                                            rrb.Spatial2DView(name="RoMa Matches High Certainty",
+                                                              origin=RerunAnnotations.matches_high_certainty_matchable),
+                                            rrb.Spatial2DView(name="RoMa Matches Low Certainty",
+                                                              origin=RerunAnnotations.matches_low_certainty_matchable),
+                                            rrb.Spatial2DView(name="Template",
+                                                              origin=RerunAnnotations.matchability)
+
+                                        ],
+                                        name='Matching'
+                                    ),
+                                    rrb.TimeSeriesView(name="Matchable Area Share",
+                                                       origin=RerunAnnotations.matching_matchability_plot,
+                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
+                                                                             zoom_lock=True),
+                                                       plot_legend=rrb.PlotLegend(visible=True)),
+                                    rrb.TimeSeriesView(name="RoMa Min Certainty",
+                                                       origin=RerunAnnotations.matching_min_roma_certainty_plot,
+                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
+                                                                             zoom_lock=True),
+                                                       plot_legend=rrb.PlotLegend(visible=True)),
+                                ],
+                                row_shares=[4, 1, 1],
+                                name='Matchability'
+                            )] if self.config.frame_filter == 'RoMa' and self.config.matchability_based_reliability
+                              else []),
                         ],
                         name='Matching'
                     ),
@@ -248,6 +277,11 @@ class WriteResults:
                    rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
             rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
                    static=True)
+            rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
+                   rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
+            rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
+                   rr.SeriesLine(color=[0, 0, 255], name="min roma certainty"),
+                   static=True)
         elif self.config.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
                    rr.SeriesLine(color=[255, 0, 0], name="min matches"), static=True)
@@ -300,7 +334,6 @@ class WriteResults:
                    ),
                    static=True)
 
-        rr.log("/", rr.AnnotationContext([(1, "blue", (0, 255, 0))]), static=True)
         rr.send_blueprint(blueprint)
 
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
@@ -316,6 +349,16 @@ class WriteResults:
             template_path = self.write_folder / 'templates' / f'{len(keyframe_graph.nodes)}'
 
             self.log_image(frame_i, template, annotation, template_path)
+
+            # Matchability logging
+            if self.config.matchability_based_reliability:
+                matchability_mask = keyframe_node.matchability_mask
+                matchability_image = (~matchability_mask.unsqueeze(0).permute(1, 2, 0)).to(torch.float).numpy(force=True)
+                template = template.numpy(force=True) * 255.0
+                matchability_image_overlay = overlay_mask(template, matchability_image, 1.0, color=(0, 0, 0))
+                rr_matchability_image = rr.Image(template)
+                rr.log(RerunAnnotations.matchability, rr_matchability_image)
+
             self.logged_keyframe_graph.add_node(kf_idx)
 
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphNodes(node_ids=list(keyframe_graph.nodes),
@@ -447,7 +490,8 @@ class WriteResults:
         cmap_pred = plt.get_cmap('Blues')
         gradient = np.linspace(1., 0.5, self.config.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
-        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(np.uint8)
+        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(
+            np.uint8)
 
         strips_gt = np.stack([gt_t_world2cam[:-1], gt_t_world2cam[1:]], axis=1)
         strips_pred = np.stack([pred_t_world2cam[:-1], pred_t_world2cam[1:]], axis=1)
@@ -672,31 +716,39 @@ class WriteResults:
         new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
-        rr.set_time_sequence('frame', flow_arc_target)
-
         arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
         template_image = template_data.frame_observation.observed_image.squeeze()
         target_image = target_data.frame_observation.observed_image.squeeze()
-        source_segment = template_data.frame_observation.observed_segmentation.squeeze()
-        target_segment = target_data.frame_observation.observed_segmentation.squeeze()
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
         template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True)
-        template_target_segment = torch.cat([source_segment, target_segment], dim=-2)
-        template_target_segment_np = template_target_segment.numpy(force=True)
         rerun_image = rr.Image(template_target_image_np)
-        rerun_segment = rr.SegmentationImage(template_target_segment_np)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
-        # rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
-        # rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
+
+        # Matchability visualization
+        if self.config.matchability_based_reliability:
+            matchability_mask = template_data.matchability_mask
+            matchability_mask_padding = torch.ones_like(matchability_mask)
+            matchability_mask_pad = torch.cat([matchability_mask, matchability_mask_padding], dim=0)
+            matchability_mask_pad_np = matchability_mask_pad.numpy(force=True)
+            template_target_image_matchable_np = overlay_mask(template_target_image_np * 255.,
+                                                              ~matchability_mask_pad_np,  1.0, (0, 0, 0))
+
+            mathability_image_rerun = rr.Image(template_target_image_matchable_np)
+            rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
+            rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
         if self.config.frame_filter == 'RoMa':
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
-            above_threshold_mask = certainties >= self.config.min_roma_certainty_threshold
+            threshold = template_data.roma_certainty_threshold
+            if threshold is None:
+                threshold = self.config.min_roma_certainty_threshold
+
+            above_threshold_mask = certainties >= threshold
             src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
             dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
@@ -704,6 +756,16 @@ class WriteResults:
             inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
             outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
             outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+
+            if self.config.matchability_based_reliability:
+                certainties_matchable = arc_observation.src_dst_certainty_roma_matchable.numpy(force=True)
+                above_threshold_mask_matchable = certainties_matchable >= threshold
+                src_pts_xy_roma_matchable = arc_observation.src_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
+                dst_pts_xy_roma_matchable = arc_observation.dst_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
+                inliers_source_yx_matchable = src_pts_xy_roma_matchable[above_threshold_mask_matchable]
+                inliers_target_yx_matchable = dst_pts_xy_roma_matchable[above_threshold_mask_matchable]
+                outliers_source_yx_matchable = src_pts_xy_roma_matchable[~above_threshold_mask_matchable]
+                outliers_target_yx_matchable = dst_pts_xy_roma_matchable[~above_threshold_mask_matchable]
 
             roma_certainty_map = arc_observation.roma_flow_warp_certainty
             roma_h, roma_w = roma_certainty_map.shape[0], roma_certainty_map.shape[1] // 2
@@ -769,11 +831,22 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                                   RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
 
+        if self.config.matchability_based_reliability and self.config.frame_filter == 'RoMa':
+            log_correspondences_rerun(cmap_inliers, inliers_source_yx_matchable, inliers_target_yx_matchable,
+                                      RerunAnnotations.matches_high_certainty_matchable, template_image_size.height, 20)
+            log_correspondences_rerun(cmap_outliers, outliers_source_yx_matchable, outliers_target_yx_matchable,
+                                      RerunAnnotations.matches_low_certainty_matchable, template_image_size.height, 20)
+
         if self.config.frame_filter == 'RoMa':
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                    rr.Scalar(target_data.current_flow_reliability_threshold))
+            if self.config.matchability_based_reliability:
+                matchability_share = template_data.relative_area_matchable
+                min_roma_certainty = template_data.roma_certainty_threshold
+                rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalar(matchability_share))
+                rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalar(min_roma_certainty))
         elif self.config.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
             rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))

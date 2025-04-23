@@ -50,7 +50,11 @@ class CommonFrameData(DataGraphStorage):
     # RoMa Frame Filter
     matching_source_keyframe: int = None
     reliable_sources: Set[int] = field(default_factory=set)
+    is_keyframe: bool = False
     current_flow_reliability_threshold: float = 0.
+    roma_certainty_threshold: float = None
+    matchability_mask: torch.Tensor = None
+    relative_area_matchable: float = 0.
 
     # Filename
     image_filename: Path = None
@@ -83,6 +87,9 @@ class CrossFrameData(DataGraphStorage):
     src_pts_xy_roma: torch.Tensor = None
     dst_pts_xy_roma: torch.Tensor = None
     src_dst_certainty_roma: torch.Tensor = None
+    src_dst_certainty_roma_matchable: torch.Tensor = None
+    src_pts_xy_roma_matchable: torch.Tensor = None
+    dst_pts_xy_roma_matchable: torch.Tensor = None
 
     sift_keypoint_indices: torch.Tensor = None
     sift_dists: torch.Tensor = None

@@ -26,6 +26,15 @@ class RerunAnnotations:
     matching_reliability_plot: Final[str] = '/matching/reliability_plot'
     matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
     matching_reliability_threshold_roma: Final[str] = '/matching/reliability_plot/reliability_threshold'
+
+    matchability: Final[str] = 'matching/matchability'
+    matches_high_certainty_matchable: Final[str] = '/matching/high_certainty_matchable'
+    matches_low_certainty_matchable: Final[str] = '/matching/low_certainty_matchable'
+    matching_matchability_plot: Final[str] = '/matching/matchability_plot'
+    matching_matchability_plot_share_matchable: Final[str] = '/matching/matchability_plot/share_matchable'
+    matching_min_roma_certainty_plot: Final[str] = '/matching/min_roma_certainty_plot/'
+    matching_min_roma_certainty_plot_min_certainty: Final[str] = '/matching/min_roma_certainty_plot/min_certainty'
+
     matches_sift: Final[str] = '/matching/reliability_plot/sift_num_matches/'
     min_matches_sift: Final[str] = '/matching/reliability_plot/min_matches_sift'
     good_to_add_number_of_matches_sift: Final[str] = '/matching/reliability_plot/good_to_add_matches_sift'

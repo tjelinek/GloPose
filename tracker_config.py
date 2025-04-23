@@ -68,6 +68,7 @@ class TrackerConfig:
     flow_reliability_densification_threshold: float = 0.375
     min_number_of_reliable_matches: int = 0
     densify_view_graph: bool = True
+    matchability_based_reliability: bool = False
     frame_filter: str = 'RoMa'  # Either 'RoMa', 'SIFT', or 'passthrough'
     reconstruction_matches: str = 'RoMa'
 

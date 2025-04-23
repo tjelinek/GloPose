@@ -72,6 +72,34 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.current_flow_reliability_threshold = threshold
 
+    def add_keyframe(self, frame_i: int):
+        self.keyframe_graph.add_node(frame_i)
+
+        src_pts_xy_int, dst_pts_xy_int, certainty = (
+            self.flow_provider.get_source_target_points_roma_datagraph(frame_i, frame_i,
+                                                                       self.config.roma_sample_size, as_int=True,
+                                                                       zero_certainty_outside_segmentation=True,
+                                                                       only_foreground_matches=True))
+
+        kf_data = self.data_graph.get_frame_data(frame_i)
+        certainty_threshold = otsu_threshold(certainty)
+        if certainty_threshold is None:
+            prev_kf = kf_data.matching_source_keyframe
+            certainty_threshold = self.data_graph.get_frame_data(prev_kf).roma_certainty_threshold
+        kf_data.roma_certainty_threshold = certainty_threshold
+
+        image_shape = self.data_graph.get_frame_data(frame_i).image_shape
+        img_h, img_w = image_shape.height, image_shape.width
+        arc_data = self.data_graph.get_edge_observations(frame_i, frame_i)
+        roma_shape = arc_data.roma_flow_warp_certainty.shape
+        certainty_map = arc_data.roma_flow_warp_certainty[:, :roma_shape[1] // 2]
+        certainty_map_img_size = torch.nn.functional.interpolate(certainty_map[None, None], (img_h, img_w),
+                                                                 mode='bilinear').squeeze()
+        matchability_map = certainty_map_img_size > certainty_threshold
+        kf_data.matchability_mask = matchability_map
+        kf_data.is_keyframe = True
+        print(frame_i)
+
     @torch.no_grad()
     def filter_frames(self, frame_i: int):
 
@@ -81,7 +109,7 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.update_flow_reliability_threshold()
 
         if frame_i == 0:
-            self.keyframe_graph.add_node(0)
+            self.add_keyframe(0)
             first_frame_node = self.data_graph.get_frame_data(0)
             first_frame_node.reliable_sources = {0}
             first_frame_node.matching_source_keyframe = 0
@@ -104,7 +132,7 @@ class RoMaFrameFilter(BaseFrameFilter):
             reliable_flows_sources_prime, best_source = self.match_to_all_keyframes(frame_i)
             if best_source is None:
                 new_source = frame_i - 1
-                self.keyframe_graph.add_node(new_source)
+                self.add_keyframe(new_source)
                 self.keyframe_graph.add_edge(preceding_source, new_source)
                 source = new_source
 
@@ -185,6 +213,8 @@ class RoMaFrameFilter(BaseFrameFilter):
                                                                        zero_certainty_outside_segmentation=True,
                                                                        only_foreground_matches=True))
 
+        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
         assert fg_segmentation_mask.shape[-2:] == (H_A, W_A)
@@ -192,8 +222,23 @@ class RoMaFrameFilter(BaseFrameFilter):
         in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
         assert certainty.shape == in_segmentation_mask_yx.shape
+
+        if self.config.matchability_based_reliability:
+            matchability_mask = source_datagraph_node.matchability_mask
+            in_matchability_mask_yx = matchability_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+
+            in_segmentation_items = float(in_segmentation_mask_yx.sum())
+            in_segmentation_mask_yx &= in_matchability_mask_yx
+
+            edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[in_segmentation_mask_yx]
+            edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[in_segmentation_mask_yx]
+            edge_data.src_dst_certainty_roma_matchable = certainty[in_segmentation_mask_yx]
+
+            relative_area_matchable = float(in_segmentation_mask_yx.sum()) / (in_segmentation_items + 1e-5)
+            source_datagraph_node.relative_area_matchable = relative_area_matchable
+
         fg_certainties = certainty[in_segmentation_mask_yx]
-        fg_certainties_above_threshold = fg_certainties > self.config.min_roma_certainty_threshold
+        fg_certainties_above_threshold = fg_certainties > source_datagraph_node.roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
 
@@ -203,7 +248,6 @@ class RoMaFrameFilter(BaseFrameFilter):
         reliability *= float(sufficient_reliable_matches)
         reliability = reliability.item()
 
-        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
 
