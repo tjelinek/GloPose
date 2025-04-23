@@ -303,21 +303,26 @@ def read_static_onboarding_world2cam(
     dataset: str,
     sequence: str,
     sequence_type: str,
-    onboarding_type: str,
-    static_onboarding_sequence: Optional[str],
+    onboarding_type: Optional[str] = None,
+    static_onboarding_sequence: Optional[str] = None,
     sequence_starts: Optional[List[int]] = None,
     device: str = 'cpu'
 ) -> dict[int, Se3]:
-    return load_static_onboarding_parts(
-        bop_folder,
-        dataset,
-        sequence,
-        sequence_type,
-        onboarding_type,
-        static_onboarding_sequence,
-        loader_fn=lambda p: read_gt_Se3_world2cam(p / 'scene_camera.json', device=device),
-        sequence_starts=sequence_starts
-    )
+    if sequence_type == 'onboarding' and onboarding_type == 'static':
+        return load_static_onboarding_parts(
+            bop_folder,
+            dataset,
+            sequence,
+            sequence_type,
+            onboarding_type,
+            static_onboarding_sequence,
+            loader_fn=lambda p: read_gt_Se3_world2cam(p / 'scene_camera.json', device=device),
+            sequence_starts=sequence_starts
+        )
+    else:
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        pose_json_path = sequence_folder / 'scene_camera.json'
+        return read_gt_Se3_world2cam(pose_json_path, device=device)
 
 
 def read_dynamic_onboarding_depth_scales(

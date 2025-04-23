@@ -189,7 +189,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
                                          onboarding_type, static_onboarding_sequence, sequence_starts, config.device)
 
     gt_Se3_world2cam = None
-    if onboarding_type == 'static':
+    if onboarding_type == 'static' or sequence_type in ['val', 'train']:
         gt_Se3_world2cam = read_static_onboarding_world2cam(bop_folder, dataset, sequence, sequence_type,
                                                             onboarding_type, static_onboarding_sequence,
                                                             sequence_starts, config.device)
@@ -197,7 +197,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
         pinhole_params = add_extrinsics_to_pinhole_params(pinhole_params, gt_Se3_world2cam)
 
     pinhole_params = reindex_frame_dict(pinhole_params, valid_frames)
-    gt_Se3_world2cam = reindex_frame_dict(gt_Se3_world2cam, valid_frames)
+    if gt_Se3_world2cam is not None:
+        gt_Se3_world2cam = reindex_frame_dict(gt_Se3_world2cam, valid_frames)
 
     # Update config with frame information
     config.input_frames = len(gt_images)
