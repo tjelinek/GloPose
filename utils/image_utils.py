@@ -126,28 +126,29 @@ def resize_and_filter_image(image, new_width, new_height):
     return image
 
 
-def overlay_mask(image: np.ndarray, mask: np.ndarray, alpha: float = 0.5):
+def overlay_mask(image: np.ndarray, mask: np.ndarray, alpha: float = 0.5, color=(255, 255, 255)):
     """
-    Overlay an occlusion mask on an image.
+    Overlay a colored mask onto an image with adjustable transparency.
 
     Args:
-    - image: The original image as a numpy array of shape (H, W, C).
-    - occlusion_mask: The occlusion mask as a numpy array of shape (H, W, 1), values in [0, 1].
-    - alpha: The alpha value for the overlay, where 0 means no overlay and 1 means full overlay.
+        image (np.ndarray): Input image of shape (H, W) or (H, W, C), dtype uint8.
+        mask (np.ndarray): Mask of shape (H, W) or (H, W, 1), with values in [0, 1].
+        alpha (float): Blending factor for the mask, where 0 = no effect, 1 = full color overlay.
+        color (tuple): RGB tuple for overlay color (default is white).
 
     Returns:
-    - The image with the mask overlay as a numpy array of shape (H, W, C).
+        np.ndarray: Image with mask overlaid, same shape and dtype as input image.
     """
-    mask = mask.squeeze()  # Remove the singleton dimension if present
-    mask = mask * alpha  # Apply the alpha value to the occlusion mask
+    mask = np.clip(mask.squeeze(), 0, 1)[..., np.newaxis]
 
-    if image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1):  # Grayscale or single-channel
-        image = np.dstack([image] * 3)  # Convert to 3-channel for coloring
+    if image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1):
+        image = np.dstack([image] * 3)
 
-    white_overlay = np.ones_like(image) * 255
-    overlay_image = mask[..., np.newaxis] * image + (1 - mask[..., np.newaxis]) * white_overlay
+    image = image.astype(np.float32)
+    overlay_color = np.ones_like(image) * np.array(color, dtype=np.float32)
 
-    return overlay_image.astype(image.dtype)
+    overlay_image = (1 - alpha * mask) * image + (alpha * mask) * overlay_color
+    return overlay_image.astype(np.uint8)
 
 
 def get_intrinsics_from_exif(image_path: Path, err_on_default=False) -> torch.tensor:
@@ -194,7 +195,7 @@ def get_intrinsics_from_exif(image_path: Path, err_on_default=False) -> torch.te
     return torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
 
 
-def otsu_threshold(tensor: torch.Tensor) -> float:
+def otsu_threshold(tensor: torch.Tensor) -> float | None:
     """
     Compute Otsu's threshold for a PyTorch tensor.
 
@@ -207,6 +208,9 @@ def otsu_threshold(tensor: torch.Tensor) -> float:
     # Flatten tensor to 1D
     flat_tensor = tensor.flatten()
 
+    if flat_tensor.numel() < 50:
+        return None
+
     # Compute histogram
     min_val = flat_tensor.min().item()
     max_val = flat_tensor.max().item()
@@ -216,7 +220,7 @@ def otsu_threshold(tensor: torch.Tensor) -> float:
     hist = torch.histc(flat_tensor, bins=bins, min=min_val, max=max_val)
 
     # Bin centers
-    bin_edges = torch.linspace(min_val, max_val, bins + 1)
+    bin_edges = torch.linspace(min_val, max_val, bins + 1, device=hist.device)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
     # Cumulative sums
