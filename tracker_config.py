@@ -74,6 +74,7 @@ class TrackerConfig:
 
     # Reconstruction settings
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
+    init_with_first_two_images: bool = False
     similarity_transformation = 'kabsch'  # Either 'first_frame' or 'kabsch'
 
     # SIFT options
