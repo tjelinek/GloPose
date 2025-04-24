@@ -247,8 +247,8 @@ class Tracker6D:
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
             gt_Se3_world2cam = self.gt_Se3_world2cam[0]
-            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, first_frame_obj2cam,
-                                                                           gt_Se3_world2cam, first_image_filename)
+            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_world2cam, None,
+                                                                           first_image_filename)
         elif self.config.similarity_transformation == 'kabsch':
             gt_Se3_world2cam_poses = {
                 str(self.data_graph.get_frame_data(n).image_filename):
@@ -274,12 +274,11 @@ class Tracker6D:
             Se3_obj2cam_pred = get_image_Se3_world2cam(image, 'cpu')
 
             frame_data = self.data_graph.get_frame_data(image_frame_id)
-            Se3_cam2obj_gt = frame_data.gt_Se3_cam2obj
-            Se3_obj2cam_gt = Se3_cam2obj_gt.inverse() if Se3_cam2obj_gt is not None else None
+            Se3_world2cam_gt = frame_data.gt_Se3_world2cam
 
             # Ground-truth rotation and translation
-            gt_rotation = Se3_obj2cam_gt.rotation.matrix().tolist() if Se3_obj2cam_gt is not None else None
-            gt_translation = Se3_obj2cam_gt.translation.tolist() if Se3_obj2cam_gt is not None else None
+            gt_rotation = Se3_world2cam_gt.rotation.matrix().tolist() if Se3_world2cam_gt is not None else None
+            gt_translation = Se3_world2cam_gt.translation.tolist() if Se3_world2cam_gt is not None else None
 
             pred_rotation = Se3_obj2cam_pred.rotation.matrix().tolist()
             pred_translation = Se3_obj2cam_pred.translation.tolist()
