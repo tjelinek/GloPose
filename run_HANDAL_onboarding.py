@@ -10,7 +10,7 @@ def main():
         sequences = args.sequences
     else:
         sequences = [
-            'obj_000001',
+            # 'obj_000001',
             'obj_000010',
             'obj_000020',
             'obj_000030',
@@ -28,13 +28,12 @@ def main():
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 2
         config.bop_config.static_onboarding_sequence = 'down'
-        skip_indices = 4
+        config.skip_indices = 4
 
         sequence_type = 'onboarding'
         onboarding_type = 'static'
 
-        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, skip_indices,
-                             onboarding_type, True)
+        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True)
 
 
 if __name__ == "__main__":

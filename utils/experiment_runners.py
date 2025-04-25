@@ -120,7 +120,7 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
-                         config: TrackerConfig, skip_indices: int, onboarding_type: str = None,
+                         config: TrackerConfig, onboarding_type: str = None,
                          only_frames_with_known_poses: bool = False):
     """
     Run the 6D tracker on BOP dataset sequences.
@@ -170,7 +170,6 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     else:
         valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
 
-    valid_frames = valid_frames[::skip_indices]
     gt_images = [gt_images[i] for i in valid_frames]
     gt_segs = [gt_segs[i] for i in valid_frames]
     if gt_depths is not None:

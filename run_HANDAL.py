@@ -28,13 +28,12 @@ def main():
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 5
 
-        skip_indices = 2
+        config.skip_indices = 2
 
         sequence_type = 'val'
         onboarding_type = None
 
-        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, skip_indices,
-                             onboarding_type, True)
+        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True)
 
 
 if __name__ == "__main__":
