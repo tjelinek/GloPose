@@ -203,50 +203,6 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
         return segmentation_mask
 
 
-class SAM2OnlineSegmentationProvider(SegmentationProvider):
-
-    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
-                 initial_image: torch.Tensor, **kwargs):
-        super().__init__(image_shape, config)
-
-        assert initial_segmentation is not None
-
-        self.image_shape: ImageSize = image_shape
-        self.predictor: Optional[SamPredictor] = None
-
-        import sys
-        sys.path.append('repositories/segment-anything-2-real-time')
-        from sam2.build_sam import build_sam2, build_sam2_video_predictor, build_sam2_camera_predictor
-
-        checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
-        model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
-        # self.predictor = SAM2ImagePredictor(build_sam2(str(model_cfg), str(checkpoint)))
-        self.predictor = build_sam2_camera_predictor(model_cfg, str(checkpoint), device=self.device)
-
-        initial_image_sam_format = self._image_to_sam(initial_image)
-        self.predictor.load_first_frame(initial_image_sam_format)
-
-        initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
-        _, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(0, 0, initial_mask_sam_format)
-
-    @staticmethod
-    def _image_to_sam(image: torch.Tensor) -> np.ndarray:
-        return image.squeeze().permute(1, 2, 0).numpy(force=True)
-
-    @staticmethod
-    def _mask_to_sam_prompt(mask: torch.Tensor) -> np.ndarray:
-        return mask.squeeze().to(torch.bool).numpy(force=True)
-
-    def next_segmentation(self, frame_i, image) -> torch.Tensor:
-        with torch.inference_mode(), torch.autocast(self.device, dtype=torch.bfloat16):
-            image_sam_format = self._image_to_sam(image)
-            out_obj_ids, out_mask_logits = self.predictor.track(image_sam_format)
-
-        obj_seg_mask = out_mask_logits[0, 0] > 0
-        obj_seg_mask_formatted = obj_seg_mask[None, None].to(torch.float32)
-        return obj_seg_mask_formatted
-
-
 class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
