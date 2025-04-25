@@ -46,7 +46,7 @@ def main():
         output_folder=args.output_folder,
         gt_mesh_path=gt_mesh_path,
         gt_texture_path=gt_texture_path,
-        rotation_generator=scenarios.generate_rotations_z
+        rotation_generator=scenarios.random_walk_on_a_sphere
     )
 
 
