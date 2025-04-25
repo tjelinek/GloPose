@@ -16,7 +16,7 @@ from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segm
 
 
 def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
-                 gt_mesh_path=None, gt_texture_path=None, rotation_generator=None, skip_frames=1):
+                 gt_mesh_path=None, gt_texture_path=None, rotation_generator=None):
     """
     Common function to run 6D tracking across different datasets
 
@@ -66,11 +66,9 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
 
     gt_rotations = torch.deg2rad(rotation_generator(step=5).rotations).to(config.device)
     gt_rotations = torch.cat([gt_rotations, gt_rotations], dim=0)
-    gt_rotations = gt_rotations[::skip_frames]
 
     # Create image paths
     images_paths = [Path(f'{i}.png') for i in range(gt_rotations.shape[0])]
-    images_paths = images_paths[::skip_frames]
 
     # Generate translations (zero by default)
     gt_translations = scenarios.generate_sinusoidal_translations(steps=gt_rotations.shape[0]).translations * 0
