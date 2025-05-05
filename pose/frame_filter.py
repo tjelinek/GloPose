@@ -83,9 +83,11 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         kf_data = self.data_graph.get_frame_data(frame_i)
         certainty_threshold = otsu_threshold(certainty)
-        if certainty_threshold is None:
+        if certainty_threshold is None and frame_i > 0:
             prev_kf = kf_data.matching_source_keyframe
             certainty_threshold = self.data_graph.get_frame_data(prev_kf).roma_certainty_threshold
+        else:
+            certainty_threshold = self.config.min_roma_certainty_threshold
         kf_data.roma_certainty_threshold = certainty_threshold
 
         image_shape = self.data_graph.get_frame_data(frame_i).image_shape
