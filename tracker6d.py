@@ -10,7 +10,7 @@ from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
-from data_providers.frame_provider import BaseTracker
+from data_providers.frame_provider import FrameProviderAll
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
@@ -66,7 +66,7 @@ class Tracker6D:
         self.pinhole_params: Optional[PinholeCamera] = None
 
         # Frame provider
-        self.tracker: Optional[BaseTracker] = None
+        self.tracker: Optional[FrameProviderAll] = None
 
         # Other utilities and flags
         self.results_writer = None
@@ -86,7 +86,7 @@ class Tracker6D:
                                               config.dataset / f'{config.sequence}_{config.special_hash}')
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
-                                       segmentation_paths, segmentation_video_path, video_path, 0)
+                                       segmentation_paths, segmentation_video_path, video_path, depth_paths, 0)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -111,7 +111,7 @@ class Tracker6D:
                                   initial_image: torch.Tensor | List[torch.Tensor],
                                   initial_segmentation: torch.Tensor | List[torch.Tensor],
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
-                                  frame_i: int):
+                                  depth_paths: List[Path], frame_i: int):
 
         cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
                                    f'{self.config.sequence}_{self.config.special_hash}') /
@@ -153,12 +153,12 @@ class Tracker6D:
         else:
             Se3_obj_1_to_obj_i = None
 
-        self.tracker = BaseTracker(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
-                                   gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
-                                   initial_segmentation=initial_segmentation,
-                                   initial_image=initial_image, images_paths=images_paths, video_path=video_path,
-                                   segmentation_paths=segmentation_paths,
-                                   segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
+        self.tracker = FrameProviderAll(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
+                                        gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
+                                        initial_segmentation=initial_segmentation,
+                                        initial_image=initial_image, images_paths=images_paths, video_path=video_path,
+                                        segmentation_paths=segmentation_paths, depth_paths=depth_paths,
+                                        segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
 
     def run_filtering_with_reconstruction(self):
 
