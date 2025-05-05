@@ -26,10 +26,9 @@ def main():
 
         ]
 
-    skip_indices = 15
-
     sequence = sequences[0]
     config = load_config(args.config)
+    config.skip_indices = 15
 
     if config.gt_flow_source == 'GenerateSynthetic':
         exit()
@@ -51,10 +50,12 @@ def main():
     sequence_folder = config.default_data_folder / 'HO3D' / 'train' / sequence
     image_folder = sequence_folder / 'rgb'
     segmentation_folder = sequence_folder / 'seg'
+    depth_folder = sequence_folder / 'depth'
     meta_folder = sequence_folder / 'meta'
 
     gt_images_list = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
     gt_segmentations_list = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
+    gt_depths_list = [file for file in sorted(depth_folder.iterdir()) if file.is_file()]
 
     gt_translations = []
     gt_rotations = []
@@ -73,7 +74,6 @@ def main():
     eert0 = set(i for i in range(len(gt_rotations)) if len(gt_translations[i].shape) < 1)
 
     valid_indices = [i for i in range(len(gt_rotations)) if i not in (eerr0 | eert0)]
-    valid_indices = valid_indices[::skip_indices]
 
     # Filter the lists to include only valid elements
     filtered_gt_rotations = [gt_rotations[i] for i in valid_indices]
@@ -106,7 +106,8 @@ def main():
 
     sfb = Tracker6D(config, write_folder, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
                     gt_Se3_world2cam=Se3_obj2cam_dict, segmentation_paths=gt_segmentations_list,
-                    initial_image=first_image_tensor, initial_segmentation=first_segment_tensor)
+                    initial_image=first_image_tensor, initial_segmentation=first_segment_tensor,
+                    depth_paths=gt_depths_list)
     sfb.run_filtering_with_reconstruction()
 
 
