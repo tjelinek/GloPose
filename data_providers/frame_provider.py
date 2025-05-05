@@ -328,7 +328,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
         assert segmentation_resized.shape[-2] == self.image_shape.height
         assert segmentation_resized.shape[-1] == self.image_shape.width
 
-        return obj_seg_mask_formatted
+        return segmentation_resized
 
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
         return Path(f"{frame_i * self.skip_indices}.png")
