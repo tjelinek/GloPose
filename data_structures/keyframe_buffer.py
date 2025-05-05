@@ -136,6 +136,7 @@ class Observation:
 class FrameObservation(Observation):
     observed_image: torch.Tensor = None
     observed_segmentation: torch.Tensor = None
+    depth: torch.Tensor = None
 
 
 @dataclass

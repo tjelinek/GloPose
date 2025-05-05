@@ -271,7 +271,15 @@ class SAM2SegmentationProvider(SegmentationProvider):
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-            state = self.predictor.init_state(str(sam2_images_paths[0].parent),
+            sam2_tmp_path = config.write_folder / 'sam2_imgs'
+            sam2_tmp_path.mkdir(exist_ok=True, parents=True)
+
+            for idx, sam2_img_path in enumerate(sam2_images_paths):
+                original_filename = sam2_img_path.name
+                new_filename = f"{idx:05d}_{original_filename}"
+                shutil.copy2(sam2_img_path, sam2_tmp_path / new_filename)
+
+            state = self.predictor.init_state(str(sam2_tmp_path),
                                               offload_video_to_cpu=True,
                                               offload_state_to_cpu=True,
                                               )
@@ -285,6 +293,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
                 if self.cache_folder is not None:
                     torch.save((out_frame_idx, out_obj_ids, out_mask_logits), self.cache_paths[out_frame_idx])
+
+            shutil.rmtree(sam2_tmp_path)
         else:
             for cache_path in self.cache_paths:
                 out_frame_idx, out_obj_ids, out_mask_logits = torch.load(cache_path, weights_only=True,
@@ -312,8 +322,11 @@ class SAM2SegmentationProvider(SegmentationProvider):
         obj_seg_mask = out_mask_logits[0, 0] > 0
         obj_seg_mask_formatted = obj_seg_mask[None, None].to(torch.float32)
 
-        assert obj_seg_mask_formatted.shape[-2] == self.image_shape.height
-        assert obj_seg_mask_formatted.shape[-1] == self.image_shape.width
+        segmentation_resized = F.interpolate(obj_seg_mask_formatted, size=[self.image_shape.height,
+                                                                           self.image_shape.width], mode='nearest')
+
+        assert segmentation_resized.shape[-2] == self.image_shape.height
+        assert segmentation_resized.shape[-1] == self.image_shape.width
 
         return obj_seg_mask_formatted
 
@@ -321,7 +334,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
         return Path(f"{frame_i * self.skip_indices}.png")
 
 
-class BaseTracker:
+class FrameProviderAll:
     def __init__(self, config: TrackerConfig, **kwargs):
         self.downsample_factor = config.image_downsample
         self.image_shape: Optional[ImageSize] = None
@@ -340,6 +353,11 @@ class BaseTracker:
 
         self.image_shape: ImageSize = self.frame_provider.image_shape
 
+        if kwargs.get('depth_paths') is not None:
+            self.depth_provider = PrecomputedDepthProvider(config, self.image_shape, **kwargs)
+        else:
+            self.depth_provider = None
+
         if config.segmentation_provider == 'synthetic':
             self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'precomputed':
@@ -347,7 +365,6 @@ class BaseTracker:
         elif config.segmentation_provider == 'whites':
             self.segmentation_provider = WhiteSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'SAM2':
-            sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
             images_paths = kwargs.get('images_paths')
 
@@ -363,7 +380,6 @@ class BaseTracker:
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   self.frame_provider,
                                                                   sam2_images_paths=images_paths, **kwargs)
-            shutil.rmtree(sam2_tmp_path)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
@@ -408,7 +424,12 @@ class BaseTracker:
         if self.black_background:
             image = image * segmentation
 
-        frame_observation = FrameObservation(observed_image=image, observed_segmentation=segmentation)
+        depth = None
+        if self.depth_provider is not None:
+            depth = self.depth_provider.next_depth(frame_i, input_image=image)
+
+        frame_observation = FrameObservation(observed_image=image, observed_segmentation=segmentation,
+                                             depth=depth)
 
         return frame_observation
 
@@ -417,3 +438,48 @@ class BaseTracker:
 
     def get_image_size(self) -> ImageSize:
         return ImageSize(*self.next(0).observed_image.shape[-2:])
+
+
+##############################
+class DepthProvider(ABC):
+    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
+        self.image_shape: ImageSize = image_shape
+        self.device = config.device
+        self.config = config
+
+    @abstractmethod
+    def next_depth(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
+        pass
+
+    def get_sequence_length(self):
+        return self.config.input_frames
+
+
+class PrecomputedDepthProvider(DepthProvider):
+
+    def __init__(self, config: TrackerConfig, image_shape: ImageSize, depth_paths: List[Path],
+                 depth_scales: Optional[List[float]] = None, **kwargs):
+        super().__init__(image_shape, config)
+
+        self.image_shape: ImageSize = image_shape
+        self.depth_paths: List[Path] = depth_paths
+        self.depth_scales: List[float] = depth_scales if depth_scales is not None else [1.0] * len(depth_paths)
+        self.skip_indices = config.skip_indices
+
+    def get_sequence_length(self):
+        return len(self.depth_paths)
+
+    def next_depth(self, frame_i, **kwargs):
+        depth_tensor = self.load_and_downsample_depth(self.depth_paths[frame_i * self.skip_indices], self.image_shape,
+                                                      self.device)
+        return depth_tensor * self.depth_scales[frame_i * self.skip_indices]
+
+    @staticmethod
+    def load_and_downsample_depth(depth_path: Path, image_size: ImageSize, device: str = 'cpu') -> torch.Tensor:
+        # Load depth
+        depth = imageio.v3.imread(depth_path)
+
+        depth_p = torch.from_numpy(depth).to(device)[None, None].to(torch.float32)
+        depth_resized = F.interpolate(depth_p, size=[image_size.height, image_size.width], mode='nearest')
+
+        return depth_resized
