@@ -274,7 +274,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
-            for idx, sam2_img_path in enumerate(sam2_images_paths):
+            for idx, sam2_img_path in enumerate(sam2_images_paths[::self.skip_indices]):
                 original_filename = sam2_img_path.name
                 new_filename = f"{idx:05d}_{original_filename}"
                 shutil.copy2(sam2_img_path, sam2_tmp_path / new_filename)
