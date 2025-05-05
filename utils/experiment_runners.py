@@ -112,7 +112,7 @@ def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
 def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
     frame_dict = {
         i: frame_dict[frame]
-        for i, frame in enumerate(valid_frames)
+        for i, frame in enumerate(valid_frames) if frame in frame_dict
     }
     return frame_dict
 
