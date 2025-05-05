@@ -14,7 +14,7 @@ from torchvision import transforms
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
-from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length_in_frames
+from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame
 
 
 class SyntheticDataProvider:
@@ -34,7 +34,7 @@ class SyntheticDataProvider:
         self.renderer = RenderingKaolin(config, faces, self.image_shape.width,
                                         self.image_shape.height).to(self.device)
 
-    def next(self, frame_id) -> FrameObservation:
+    def next_synthetic_observation(self, frame_id) -> FrameObservation:
         keyframes = [frame_id]
         flow_frames = [frame_id]
 
@@ -64,6 +64,7 @@ class FrameProvider(ABC):
         self.image_shape: Optional[ImageSize] = None
         self.device = config.device
         self.sequence_length: int = config.input_frames
+        self.skip_indices: int = config.skip_indices
 
     @abstractmethod
     def next_image(self, frame) -> torch.Tensor:
@@ -71,6 +72,10 @@ class FrameProvider(ABC):
 
     @abstractmethod
     def get_intrinsics_for_frame(self, frame_i: int) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
 
@@ -81,12 +86,16 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_image(self, frame_id):
-        image = super().next(frame_id).observed_image
+        image = super().next_synthetic_observation(frame_id * self.skip_indices).observed_image
 
         return image
 
     def get_intrinsics_for_frame(self, frame_i: int) -> torch.Tensor:
         return super().get_intrinsics()
+
+    def get_n_th_image_name(self, frame_i: int) -> Path:
+        return Path(f"{frame_i * self.skip_indices}.png")
+
 
 
 class PrecomputedFrameProvider(FrameProvider):
@@ -101,6 +110,12 @@ class PrecomputedFrameProvider(FrameProvider):
 
         self.images_paths: Optional[List[Path]] = images_paths
         self.video_path: Optional[Path] = video_path
+
+    def get_n_th_image_name(self, frame_i: int) -> Path:
+        if self.images_paths is not None:
+            return self.images_paths[frame_i * self.skip_indices]
+        else:
+            return Path(f"{self.video_path.stem}_{frame_i * self.skip_indices}.png")
 
     @staticmethod
     def load_and_downsample_image(image_path: Path, downsample_factor: float, device: str = 'cpu') -> torch.Tensor:
@@ -119,9 +134,9 @@ class PrecomputedFrameProvider(FrameProvider):
 
     def next_image(self, frame_i) -> torch.Tensor:
         if self.images_paths is not None:
-            frame = imageio.v3.imread(self.images_paths[frame_i])
+            frame = imageio.v3.imread(self.images_paths[frame_i * self.skip_indices])
         else:
-            frame = get_nth_video_frame(self.video_path, frame_i)
+            frame = get_nth_video_frame(self.video_path, frame_i * self.skip_indices)
 
         image_tensor = transforms.ToTensor()(frame)[None].to(self.device)
 
@@ -150,13 +165,22 @@ class SegmentationProvider(ABC):
     def get_sequence_length(self):
         return self.config.input_frames
 
+    @abstractmethod
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        pass
+
 
 class WhiteSegmentationProvider(SegmentationProvider):
+
     def __init__(self, config: TrackerConfig, image_shape: ImageSize, **kwargs):
         super().__init__(image_shape, config)
+        self.skip_indices = config.skip_indices
 
     def next_segmentation(self, frame_i, **kwargs) -> torch.Tensor:
         return torch.ones((1, 1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float).to(self.device)
+
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        return Path(f"{frame_i * self.skip_indices}.png")
 
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
@@ -164,13 +188,17 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
     def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i):
         SegmentationProvider.__init__(self, image_shape, config)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
+        self.skip_indices = config.skip_indices
 
     def next_segmentation(self, frame_id, **kwargs):
-        segmentation = super().next(frame_id).observed_segmentation
+        segmentation = super().next_synthetic_observation(frame_id * self.skip_indices).observed_segmentation
         return segmentation
 
     def get_sequence_length(self) -> int:
         return self.config.input_frames
+
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        return Path(f"{frame_i * self.skip_indices}.png")
 
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
@@ -180,12 +208,17 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
         self.image_shape: ImageSize = image_shape
         self.segmentations_paths: List[Path] = segmentation_paths
+        self.skip_indices = config.skip_indices
 
     def get_sequence_length(self):
         return len(self.segmentations_paths)
 
     def next_segmentation(self, frame_i, **kwargs):
-        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i], self.image_shape, self.device)
+        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i * self.skip_indices],
+                                                     self.image_shape, self.device)
+
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        return self.segmentations_paths[frame_i * self.skip_indices]
 
     @staticmethod
     def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize, device: str = 'cpu') \
@@ -206,17 +239,14 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
-                 sam2_images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
-                 sam2_cache_folder: Optional[Path] = None, **kwargs):
+                 image_provider: FrameProvider,
+                 sam2_images_paths: List[Path], sam2_cache_folder: Path, **kwargs):
         super().__init__(image_shape, config)
 
         assert initial_segmentation is not None
-        assert sam2_images_paths is not None or video_path is not None
 
-        if sam2_images_paths is not None:
-            self.sequence_length = len(sam2_images_paths)
-        else:
-            self.sequence_length = get_video_length_in_frames(video_path)
+        self.sequence_length = image_provider.sequence_length
+        self.skip_indices = config.skip_indices
 
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
 
@@ -228,12 +258,9 @@ class SAM2SegmentationProvider(SegmentationProvider):
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
         if self.cache_folder is not None:
-            if sam2_images_paths is not None:
-                self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
-                                                for img_path in sam2_images_paths]
-            else:
-                self.cache_paths: List[Path] = [self.cache_folder / f'{video_path.stem}_{i}.pt'
-                                                for i in range(self.sequence_length)]
+            self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
+                                            for img_path in sam2_images_paths]
+
             self.cache_exists: bool = all(x.exists() for x in self.cache_paths)
         else:
             self.cache_exists = False
@@ -245,14 +272,10 @@ class SAM2SegmentationProvider(SegmentationProvider):
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-            if sam2_images_paths is not None:
-                state = self.predictor.init_state(str(sam2_images_paths[0].parent),
-                                                  offload_video_to_cpu=True,
-                                                  offload_state_to_cpu=True,
-                                                  )
-            else:
-                state = self.predictor.init_state(str(video_path), offload_video_to_cpu=True,
-                                                  offload_state_to_cpu=True)
+            state = self.predictor.init_state(str(sam2_images_paths[0].parent),
+                                              offload_video_to_cpu=True,
+                                              offload_state_to_cpu=True,
+                                              )
 
             initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
@@ -295,6 +318,9 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         return obj_seg_mask_formatted
 
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        return Path(f"{frame_i * self.skip_indices}.png")
+
 
 class BaseTracker:
     def __init__(self, config: TrackerConfig, **kwargs):
@@ -324,18 +350,11 @@ class BaseTracker:
         elif config.segmentation_provider == 'SAM2':
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
 
-            need_to_delete_cache = False
-            if kwargs.get('images_paths'):
-                images_paths = kwargs['images_paths']
-                images_paths_for_sam = self.save_images_as_jpeg(sam2_tmp_path, self.frame_provider, images_paths)
-                need_to_delete_cache = True
-            else:
-                images_paths_for_sam = None
-                assert kwargs.get('video_path')
+            images_paths = kwargs.get('images_paths')
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
-                next_observation = synthetic_segment_provider.next(0)
+                next_observation = synthetic_segment_provider.next_synthetic_observation(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
             else:
@@ -343,19 +362,25 @@ class BaseTracker:
             initial_segmentation = kwargs['initial_segmentation']
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
-                                                                  sam2_images_paths=images_paths_for_sam, **kwargs)
-            if need_to_delete_cache:
-                shutil.rmtree(sam2_tmp_path)
+                                                                  self.frame_provider,
+                                                                  sam2_images_paths=images_paths, **kwargs)
+            shutil.rmtree(sam2_tmp_path)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 
-    def save_images_as_jpeg(self, output_path: Path, frame_provider: FrameProvider,
+    def get_n_th_image_name(self, frame_i: int) -> Path:
+        return self.frame_provider.get_n_th_image_name(frame_i)
+
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        return self.segmentation_provider.get_n_th_segmentation_name(frame_i)
+
+    def save_images_as_jpeg(self, output_path: Path, frame_provider: FrameProvider, skip: int,
                             images_paths: Optional[List[Path]] = None) -> List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
 
         saved_img_paths = []
-        for frame_i in range(frame_provider.sequence_length):
+        for frame_i in range(0, frame_provider.sequence_length):
             img = frame_provider.next_image(frame_i).squeeze()
 
             img = transform_to_pil(img)
@@ -363,9 +388,11 @@ class BaseTracker:
 
             # Define the output file name
             if images_paths is not None:
-                output_file = output_path / f"{frame_i:05d}_{Path(images_paths[frame_i]).stem}.JPEG"
+                output_file = output_path / f"{frame_i * skip:05d}_{Path(images_paths[frame_i * skip]).stem}.JPEG"
             else:
-                output_file = output_path / f"{frame_i:05d}.JPEG"
+                output_file = output_path / f"{frame_i * skip:05d}.JPEG"
+
+            print(f'Cached SAM2 file {output_file}')
 
             # Save the image in JPEG format
             img.convert("RGB").save(output_file, format="JPEG")

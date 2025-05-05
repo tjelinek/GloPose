@@ -25,7 +25,7 @@ from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 class Tracker6D:
 
     def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
-                 images_paths: List[Path] = None, video_path: Optional[Path] = None,
+                 images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
                  gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
                  segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
@@ -36,6 +36,17 @@ class Tracker6D:
             shutil.rmtree(write_folder)
 
         write_folder.mkdir(exist_ok=True, parents=True)
+
+        if config.skip_indices != 1:
+            config.input_frames = config.input_frames // config.skip_indices
+            used_indices = range(0, config.input_frames, config.skip_indices)
+
+            if gt_Se3_cam2obj is not None:
+                gt_Se3_cam2obj = {i: gt_Se3_cam2obj[i] for i in used_indices if i in gt_Se3_cam2obj}
+            if gt_pinhole_params is not None:
+                gt_pinhole_params = {i: gt_pinhole_params[i] for i in used_indices if i in gt_pinhole_params}
+            if gt_Se3_world2cam is not None:
+                gt_Se3_world2cam = {i: gt_Se3_world2cam[i] for i in used_indices if i in gt_Se3_world2cam}
 
         config.write_folder = write_folder
         # Paths
@@ -321,15 +332,13 @@ class Tracker6D:
         if self.gt_Se3_world2cam is not None and (gt_Se3_world2cam := self.gt_Se3_world2cam.get(frame_i)):
             frame_node.gt_Se3_world2cam = gt_Se3_world2cam
 
-        if self.images_paths is not None:
-            frame_node.image_filename = Path(self.images_paths[frame_i].name)
-        elif self.video_path is not None:
-            frame_node.image_filename = Path(f'{self.video_path.stem}_{frame_i}.png')
+        frame_node.image_filename = Path(self.tracker.get_n_th_image_name(frame_i))
 
         if self.segmentation_paths is not None:
-            frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i].name)
+            frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i * self.config.skip_indices].name)
         elif self.segmentation_video_path is not None:
-            frame_node.segmentation_filename = Path(f'{self.segmentation_video_path.stem}_{frame_i}.png')
+            frame_node.segmentation_filename = Path(f'{self.segmentation_video_path.stem}_'
+                                                    f'{frame_i * self.config.skip_indices}.png')
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
