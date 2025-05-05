@@ -709,9 +709,6 @@ class WriteResults:
 
     def visualize_flow_with_matching_rerun(self, frame_i):
 
-        if frame_i == 0 or (frame_i % self.config.large_images_results_write_frequency != 0):
-            return
-
         datagraph_camera_data = self.data_graph.get_frame_data(frame_i)
         new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
@@ -720,6 +717,26 @@ class WriteResults:
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
+
+        if self.config.frame_filter == 'RoMa':
+            reliability = arc_observation.reliability_score
+            rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+            rr.log(RerunAnnotations.matching_reliability_threshold_roma,
+                   rr.Scalar(target_data.current_flow_reliability_threshold))
+            if self.config.matchability_based_reliability:
+                matchability_share = template_data.relative_area_matchable
+                min_roma_certainty = template_data.roma_certainty_threshold
+                rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalar(matchability_share))
+                rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalar(min_roma_certainty))
+        elif self.config.frame_filter == 'SIFT':
+            rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
+            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))
+            rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
+                   rr.Scalar(self.config.sift_filter_good_to_add_matches))
+
+        if frame_i == 0 or (frame_i % self.config.large_images_results_write_frequency != 0):
+            return
+
         template_image = template_data.frame_observation.observed_image.squeeze()
         target_image = target_data.frame_observation.observed_image.squeeze()
 
@@ -837,21 +854,6 @@ class WriteResults:
             log_correspondences_rerun(cmap_outliers, outliers_source_yx_matchable, outliers_target_yx_matchable,
                                       RerunAnnotations.matches_low_certainty_matchable, template_image_size.height, 20)
 
-        if self.config.frame_filter == 'RoMa':
-            reliability = arc_observation.reliability_score
-            rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
-            rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-                   rr.Scalar(target_data.current_flow_reliability_threshold))
-            if self.config.matchability_based_reliability:
-                matchability_share = template_data.relative_area_matchable
-                min_roma_certainty = template_data.roma_certainty_threshold
-                rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalar(matchability_share))
-                rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalar(min_roma_certainty))
-        elif self.config.frame_filter == 'SIFT':
-            rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
-            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))
-            rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
-                   rr.Scalar(self.config.sift_filter_good_to_add_matches))
 
     def accumulate_Se3_attributes(self, frame_indices, attr_name: str) -> Se3:
 
