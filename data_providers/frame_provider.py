@@ -97,6 +97,24 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
         return Path(f"{frame_i * self.skip_indices}.png")
 
 
+##############################
+class SegmentationProvider(ABC):
+    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
+        self.image_shape: ImageSize = image_shape
+        self.device = config.device
+        self.config = config
+
+    @abstractmethod
+    def next_segmentation(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
+        pass
+
+    def get_sequence_length(self):
+        return self.config.input_frames
+
+    @abstractmethod
+    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
+        pass
+
 
 class PrecomputedFrameProvider(FrameProvider):
 
@@ -149,25 +167,6 @@ class PrecomputedFrameProvider(FrameProvider):
             return get_intrinsics_from_exif(self.images_paths[frame_i]).to(self.device)
         else:  # We can not read it from a video
             raise ValueError("Can not gen cam intrinsics from a video")
-
-
-##############################
-class SegmentationProvider(ABC):
-    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
-        self.image_shape: ImageSize = image_shape
-        self.device = config.device
-        self.config = config
-
-    @abstractmethod
-    def next_segmentation(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
-        pass
-
-    def get_sequence_length(self):
-        return self.config.input_frames
-
-    @abstractmethod
-    def get_n_th_segmentation_name(self, frame_i: int) -> Path:
-        pass
 
 
 class WhiteSegmentationProvider(SegmentationProvider):
