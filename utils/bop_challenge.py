@@ -374,6 +374,7 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
 
     target_shape = get_target_shape(image_path, config.image_downsample)
     image = PrecomputedFrameProvider.load_and_downsample_image(image_path, config.image_downsample, config.device)
+    image = image.squeeze()
 
     flow_provider = RoMaFlowProviderDirect('cpu')
 
