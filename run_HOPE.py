@@ -27,6 +27,7 @@ def main():
         config.dataset = dataset
         config.image_downsample = 0.5
         config.large_images_results_write_frequency = 5
+        config.similarity_transformation = 'depths'
 
         config.skip_indices = 1
 
