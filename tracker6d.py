@@ -253,7 +253,7 @@ class Tracker6D:
 
         if reconstruction is None:
             return reconstruction, False
-        if self.config.similarity_transformation == 'first_frame':
+        if self.config.similarity_transformation == 'depths':
 
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
