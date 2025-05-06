@@ -78,6 +78,32 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
+    def save_images(self, output_path: Path, images_paths: Optional[List[Path]] = None) -> List[Path]:
+        output_path.mkdir(exist_ok=True)
+        transform_to_pil = transforms.ToPILImage()
+
+        saved_img_paths = []
+        for frame_i in range(0, self.sequence_length):
+            img = self.next_image(frame_i).squeeze()
+
+            img = transform_to_pil(img)
+            img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
+
+            # Define the output file name
+            if images_paths is not None:
+                output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
+                                             f"{Path(images_paths[frame_i * self.skip_indices]).stem}.jpg")
+            else:
+                output_file = output_path / f"{frame_i * self.skip_indices:05d}.jpg"
+
+            print(f'Cached SAM2 file {output_file}')
+
+            # Save the image in JPG format
+            img.convert("RGB").save(output_file, format="JPEG")
+            saved_img_paths.append(output_file)
+
+        return saved_img_paths
+
 
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
@@ -251,20 +277,22 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         self.predictor: Optional[SamPredictor] = None
         self.cache_folder: Optional[Path] = sam2_cache_folder
+
         if self.cache_folder is not None:
+
             if self.cache_folder.exists() and config.purge_cache:
                 shutil.rmtree(self.cache_folder)
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
-        if self.cache_folder is not None:
-            self.cache_paths: List[Path] = [self.cache_folder / (img_path.stem + '.pt')
-                                            for img_path in sam2_images_paths]
+            self.cache_paths: List[Path] = [self.cache_folder / (image_provider.get_n_th_image_name(i).stem + '.pt')
+                                            for i in range(self.sequence_length)]
 
             self.cache_exists: bool = all(x.exists() for x in self.cache_paths)
         else:
             self.cache_exists = False
 
         self.past_predictions = {}
+
         if not self.cache_exists:
 
             checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
@@ -274,10 +302,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             sam2_tmp_path = config.write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
-            for idx, sam2_img_path in enumerate(sam2_images_paths[::self.skip_indices]):
-                original_filename = sam2_img_path.name
-                new_filename = f"{idx:05d}_{original_filename}"
-                shutil.copy2(sam2_img_path, sam2_tmp_path / new_filename)
+            image_provider.save_images(sam2_tmp_path, sam2_images_paths)
 
             state = self.predictor.init_state(str(sam2_tmp_path),
                                               offload_video_to_cpu=True,
@@ -288,11 +313,12 @@ class SAM2SegmentationProvider(SegmentationProvider):
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
                                                                                       initial_mask_sam_format)
 
-            self.past_predictions = {0: (out_obj_ids, out_mask_logits)}
-            for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(state):
+            self.past_predictions = {0: (0, out_obj_ids, out_mask_logits)}
+            for i, (_, out_obj_ids, out_mask_logits) in enumerate(self.predictor.propagate_in_video(state)):
+                out_frame_idx = i * self.skip_indices
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
                 if self.cache_folder is not None:
-                    torch.save((out_frame_idx, out_obj_ids, out_mask_logits), self.cache_paths[out_frame_idx])
+                    torch.save((out_frame_idx, out_obj_ids, out_mask_logits), self.cache_paths[i])
 
             shutil.rmtree(sam2_tmp_path)
         else:
@@ -314,8 +340,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def next_segmentation(self, frame_i, image) -> torch.Tensor:
 
-        if frame_i in self.past_predictions.keys():
-            out_frame_idx, out_obj_ids, out_mask_logits = self.past_predictions[frame_i]
+        if frame_i * self.skip_indices in self.past_predictions.keys():
+            out_frame_idx, out_obj_ids, out_mask_logits = self.past_predictions[frame_i * self.skip_indices]
         else:
             raise ValueError("Not predicted")
 
@@ -388,32 +414,6 @@ class FrameProviderAll:
 
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
         return self.segmentation_provider.get_n_th_segmentation_name(frame_i)
-
-    def save_images_as_jpeg(self, output_path: Path, frame_provider: FrameProvider, skip: int,
-                            images_paths: Optional[List[Path]] = None) -> List[Path]:
-        output_path.mkdir(exist_ok=True)
-        transform_to_pil = transforms.ToPILImage()
-
-        saved_img_paths = []
-        for frame_i in range(0, frame_provider.sequence_length):
-            img = frame_provider.next_image(frame_i).squeeze()
-
-            img = transform_to_pil(img)
-            img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
-
-            # Define the output file name
-            if images_paths is not None:
-                output_file = output_path / f"{frame_i * skip:05d}_{Path(images_paths[frame_i * skip]).stem}.JPEG"
-            else:
-                output_file = output_path / f"{frame_i * skip:05d}.JPEG"
-
-            print(f'Cached SAM2 file {output_file}')
-
-            # Save the image in JPEG format
-            img.convert("RGB").save(output_file, format="JPEG")
-            saved_img_paths.append(output_file)
-
-        return saved_img_paths
 
     def next(self, frame_i) -> FrameObservation:
         image = self.frame_provider.next_image(frame_i)
