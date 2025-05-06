@@ -552,8 +552,9 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
     return keypoints_for_node, edge_match_indices_concatenated
 
 
-def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_Se3_obj2cam: Se3, gt_Se3_world2cam: Se3,
-                                   first_image_name: str) -> Tuple[pycolmap.Reconstruction, bool]:
+def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, first_image_gt_Se3_world2cam: Se3,
+                                   image_depths: Dict[str, torch.Tensor], first_image_name: str) \
+        -> Tuple[pycolmap.Reconstruction, bool]:
     # The alignment assumes that the COLMAP and GT spaces have the same origins.
     reconstruction = copy.deepcopy(reconstruction)
 
@@ -561,8 +562,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, gt_S
         print("Alignment error. The 1st image was not registered.")
         return reconstruction, False
 
-    gt_first_image_obj2cam = Se3_to_Rigid3d(gt_Se3_obj2cam)
-    gt_first_image_world2cam = Se3_to_Rigid3d(gt_Se3_world2cam)
+    gt_first_image_world2cam = Se3_to_Rigid3d(first_image_gt_Se3_world2cam)
 
     colmap_first_image_world2cam = first_image_colmap.cam_from_world
 
