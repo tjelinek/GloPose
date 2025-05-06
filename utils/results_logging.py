@@ -410,7 +410,7 @@ class WriteResults:
         node_labels = {kf: str(kf) for kf in kfs}
 
         for kf in kfs:
-            neighbors = sorted({e[0] for e in pose_graph.in_edges(kf)})
+            neighbors = sorted({e[0] for e in pose_graph.in_edges(kf)} - set(kfs))
             pose_graph.remove_edges_from((kf, n) for n in neighbors if n not in kfs)
             pose_graph.remove_edges_from((n, kf) for n in neighbors if n not in kfs)
 
@@ -421,7 +421,10 @@ class WriteResults:
                 end = g[-1][1]
                 pose_graph.add_edge(start, kf)
                 all_nodes.append(start)
-                node_labels[start] = f'{start}..{end}'
+                if start != end:
+                    node_labels[start] = f'{start}..{end}'
+                else:
+                    node_labels[start] = str(start)
 
         all_nodes_sorted = sorted(all_nodes)
         # Define y-axis positions for keyframes and ordinary frames
