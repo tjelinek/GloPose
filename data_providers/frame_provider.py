@@ -428,6 +428,10 @@ class FrameProviderAll:
         if self.depth_provider is not None:
             depth = self.depth_provider.next_depth(frame_i, input_image=image)
 
+        assert image.shape[-2:] == segmentation.shape[-2:]
+        if depth is not None:
+            assert image.shape[-2:] == depth.shape[-2:]
+
         frame_observation = FrameObservation(observed_image=image, observed_segmentation=segmentation,
                                              depth=depth)
 
