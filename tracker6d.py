@@ -37,16 +37,17 @@ class Tracker6D:
 
         write_folder.mkdir(exist_ok=True, parents=True)
 
-        if config.skip_indices != 1:
-            config.input_frames = config.input_frames // config.skip_indices
-            used_indices = range(0, config.input_frames, config.skip_indices)
+        skip = config.skip_indices
+        if skip != 1:
+            used_indices = range(0, config.input_frames, skip)
+            config.input_frames = config.input_frames // skip
 
             if gt_Se3_cam2obj is not None:
-                gt_Se3_cam2obj = {i: gt_Se3_cam2obj[i] for i in used_indices if i in gt_Se3_cam2obj}
+                gt_Se3_cam2obj = {i // skip: gt_Se3_cam2obj[i] for i in used_indices if i in gt_Se3_cam2obj}
             if gt_pinhole_params is not None:
-                gt_pinhole_params = {i: gt_pinhole_params[i] for i in used_indices if i in gt_pinhole_params}
+                gt_pinhole_params = {i // skip: gt_pinhole_params[i] for i in used_indices if i in gt_pinhole_params}
             if gt_Se3_world2cam is not None:
-                gt_Se3_world2cam = {i: gt_Se3_world2cam[i] for i in used_indices if i in gt_Se3_world2cam}
+                gt_Se3_world2cam = {i // skip: gt_Se3_world2cam[i] for i in used_indices if i in gt_Se3_world2cam}
 
         config.write_folder = write_folder
         # Paths
