@@ -410,8 +410,8 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     non_matched_keypoints = {img_id: database.read_keypoints(img_id) for img_id in non_matched_images_ids}
 
     database.clear_keypoints()
-    for colmap_image_id in keypoints.keys():
-        keypoints_np = keypoints[colmap_image_id].numpy(force=True)
+    for colmap_image_id in sorted(keypoints.keys()):
+        keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
         database.write_keypoints(colmap_image_id, keypoints_np)
 
     for colmap_image_u, colmap_image_v in edge_match_indices.keys():
