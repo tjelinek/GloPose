@@ -138,7 +138,7 @@ class PrecomputedFrameProvider(FrameProvider):
 
     def get_n_th_image_name(self, frame_i: int) -> Path:
         if self.images_paths is not None:
-            return self.images_paths[frame_i * self.skip_indices]
+            return Path(self.images_paths[frame_i * self.skip_indices].name)
         else:
             return Path(f"{self.video_path.stem}_{frame_i * self.skip_indices}.png")
 
