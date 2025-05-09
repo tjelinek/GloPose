@@ -191,16 +191,13 @@ class Tracker6D:
 
         if reconstruction is not None and alignment_success:
             view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
-            view_graph.save(self.cache_folder_view_graph, save_images=True)
+            view_graph.save(self.cache_folder_view_graph, save_images=True, to_cpu=True)
 
             reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
             reconstruction_path.mkdir(exist_ok=True, parents=True)
             reconstruction.write(str(reconstruction_path))
 
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
-
-            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
-            view_graph.save(self.cache_folder_view_graph, save_images=True)
 
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
