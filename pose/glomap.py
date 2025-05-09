@@ -6,7 +6,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
-import h5py
 import imageio
 import networkx as nx
 import numpy as np
@@ -21,7 +20,6 @@ from data_providers.frame_provider import PrecomputedSegmentationProvider, Preco
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.view_graph import ViewGraph
 
-from utils.colmap.h5_to_db import import_into_colmap
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
@@ -96,13 +94,11 @@ class GlomapWrapper:
         sample_size = self.config.roma_sample_size
 
         assert not database_path.exists()
-        img_ext = 'png'
 
-        keypoints_data = defaultdict(lambda: torch.empty(0, 2).to(device))
-        matches_data = defaultdict(dict)
         single_camera = True
         assert len(images) > 0
 
+        matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
         for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
 
             img1_path = Path(img1_path)
@@ -129,58 +125,46 @@ class GlomapWrapper:
                                                                  Path(img2_path.name), as_int=True,
                                                                  zero_certainty_outside_segmentation=True,
                                                                  only_foreground_matches=True)
+            img1_id = images.index(img1_path) + 1
+            img2_id = images.index(img2_path) + 1
+            matching_edges[(img1_id, img2_id)] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
 
-            src_pts_xy_roma_all = torch.cat([keypoints_data[img1_path.name], src_pts_xy_roma_int])
-            dst_pts_xy_roma_all = torch.cat([keypoints_data[img2_path.name], dst_pts_xy_roma_int])
+        database = pycolmap.Database(str(database_path))
 
-            src_pts_xy_roma_unique = torch.unique(src_pts_xy_roma_all, return_inverse=False, dim=0)
-            dst_pts_xy_roma_unique = torch.unique(dst_pts_xy_roma_all, return_inverse=False, dim=0)
+        keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database, device)
 
-            keypoints_data[img1_path.name] = src_pts_xy_roma_unique
-            keypoints_data[img2_path.name] = dst_pts_xy_roma_unique
+        first_frame_data = self.data_graph.get_frame_data(0)
+        h, w = first_frame_data.image_shape.height, first_frame_data.image_shape.width
+        camera_K = first_frame_data.gt_pinhole_K
+        f_x = float(camera_K[0, 0])
+        f_y = float(camera_K[1, 1])
+        c_x = float(camera_K[0, 2])
+        c_y = float(camera_K[1, 2])
 
-            matches_data[img1_path.name] = {img2_path.name: (src_pts_xy_roma_int, dst_pts_xy_roma_int)}
+        new_cam_id = 1
+        if single_camera:
+            new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
+                                         params=[f_x, f_y, c_x, c_y])
+            database.write_camera(new_camera, use_camera_id=True)
 
-        # Delete possibly old data
-        for file in self.feature_dir.iterdir():
-            if file.is_file():
-                file.unlink()
-        if database_path.exists():
-            database_path.unlink()
+        for i, img in enumerate(images):
+            if not single_camera:
+                raise NotImplementedError("To be added")
 
-        matches_file = self.feature_dir / 'matches.h5'
-        keypoints_file = self.feature_dir / 'keypoints.h5'
+            img_id = i + 1
+            image = pycolmap.Image(image_id=img_id, camera_id=new_cam_id, name=str(img.name))
+            database.write_image(image, use_image_id=True)
 
-        assert not matches_file.exists()
-        assert not keypoints_file.exists()
+        for colmap_image_id in sorted(keypoints.keys()):
+            keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
+            database.write_keypoints(colmap_image_id, keypoints_np)
 
-        with h5py.File(matches_file, mode='w') as f_match:
-            for img1_key, match_data in matches_data.items():
-                group = f_match.require_group(str(img1_key))
-                for img2_key, (src_pts, dst_pts) in match_data.items():
+        for colmap_image_u, colmap_image_v in edge_match_indices.keys():
+            match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
+            database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
-                    src_dst_pts = torch.cat([src_pts, dst_pts], dim=1)
-                    src_dst_pts_unique = torch.unique(src_dst_pts, dim=0)
-                    src_pts, dst_pts = torch.split(src_dst_pts_unique, [2, 2], dim=1)
+        database.close()
 
-                    keypoints_image1 = keypoints_data[img1_key].to(torch.int)
-                    keypoints_image2 = keypoints_data[img2_key].to(torch.int)
-
-                    src_pts_indices = get_match_points_indices(keypoints_image1, src_pts)
-                    dst_pts_indices = get_match_points_indices(keypoints_image2, dst_pts)
-
-                    match_indices = torch.stack([src_pts_indices, dst_pts_indices], dim=-1).numpy(force=True)
-
-                    group.create_dataset(str(img2_key), data=match_indices)
-
-        with h5py.File(keypoints_file, mode='w') as f_kp:
-            for img_key, keypoints in keypoints_data.items():
-                f_kp[str(img_key)] = keypoints.numpy(force=True)
-
-        import_into_colmap(self.colmap_image_path, self.feature_dir, database_path, img_ext, single_camera)
-
-        from time import sleep
-        sleep(1)
         two_view_geometry(self.colmap_db_path)
 
         first_image_id = None
@@ -192,8 +176,6 @@ class GlomapWrapper:
                    first_image_id, second_image_id)
 
         path_to_rec = self.colmap_output_path / '0'
-        print(path_to_rec)
-        sleep(1)  # Wait for the rec to be written
         reconstruction = pycolmap.Reconstruction(path_to_rec)
         try:
             print(reconstruction.summary())
