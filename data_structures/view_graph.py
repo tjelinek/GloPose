@@ -21,8 +21,9 @@ class ViewGraphNode:
 
 
 class ViewGraph:
-    def __init__(self):
+    def __init__(self, device: str):
         self.view_graph = nx.DiGraph()
+        self.device: str = device
 
     def add_node(self, node_id, se3_cam2obj, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
@@ -36,7 +37,7 @@ class ViewGraph:
         else:
             raise KeyError(f"Node {frame_idx} not found in the graph.")
 
-    def save(self, save_dir: Path, save_images: bool = False, overwrite: bool = True):
+    def save(self, save_dir: Path, save_images: bool = False, overwrite: bool = True, to_cpu: bool = False):
         """Saves the graph structure and associated images/segmentations to disk."""
         graph_path = save_dir / Path("graph.pkl")
 
@@ -48,6 +49,9 @@ class ViewGraph:
 
         graph_path.parent.mkdir(parents=True, exist_ok=True)
         graph_path.is_file()
+
+        if to_cpu:
+            self.send_to_device('cpu')
 
         with open(graph_path, "wb") as f:
             pickle.dump(self, f)
@@ -72,12 +76,21 @@ class ViewGraph:
                 vutils.save_image(image, str(img_path))
                 vutils.save_image(segmentation.float(), str(seg_path))
 
+    def send_to_device(self, device):
+        """Sends the graph to a given device."""
+        self.device = device
+        for node_id, data in self.view_graph.nodes(data=True):
+            node_data: ViewGraphNode = data["data"]
+            node_data.observation = node_data.observation.send_to_device(device)
+            node_data.Se3_cam2obj = node_data.Se3_cam2obj.to(device)
 
-def load_view_graph(load_dir: Path) -> ViewGraph:
+
+def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
     """Loads the graph structure and associated images/segmentations from disk."""
     graph_path = load_dir / "graph.pkl"
     with open(graph_path, "rb") as f:
-        view_graph = pickle.load(f)
+        view_graph: ViewGraph = pickle.load(f)
+        view_graph.send_to_device(device)
 
     return view_graph
 
@@ -87,7 +100,7 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colm
     all_image_names = [str(data_graph.get_frame_data(i).image_filename)
                        for i in range(len(data_graph.G.nodes))]
 
-    view_graph = ViewGraph()
+    view_graph = ViewGraph(data_graph.storage_device)
 
     for image_id, image in colmap_reconstruction.images.items():
         frame_index = all_image_names.index(image.name)
