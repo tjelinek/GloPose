@@ -12,9 +12,6 @@ import torch
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from tqdm import tqdm
 
-from utils.colmap.colmap_database import COLMAPDatabase
-from utils.colmap.h5_to_db import add_keypoints, add_matches
-
 temp_dir = Path("/mnt/personal/jelint19/cache/sift_cache")
 os.makedirs(temp_dir, exist_ok=True)
 
@@ -109,24 +106,6 @@ def get_exhaustive_image_pairs(img_fnames):
         for j in range(i + 1, len(img_fnames)):
             index_pairs.append((i, j))
     return index_pairs
-
-
-def import_into_colmap(img_dir,
-                       feature_dir='.featureout',
-                       database_path='colmap.db',
-                       img_ext='.png'):
-    db = COLMAPDatabase.connect(database_path)
-    db.create_tables()
-    single_camera = True
-    fname_to_id = add_keypoints(db, feature_dir, img_dir, img_ext, 'simple-pinhole', single_camera)
-    add_matches(
-        db,
-        feature_dir,
-        fname_to_id,
-    )
-    db.commit()
-    return
-
 
 def default_opts():
     opts = {"feature_dir": '.featureout',
