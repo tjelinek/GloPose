@@ -99,6 +99,7 @@ class GlomapWrapper:
         assert len(images) > 0
 
         matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
+        matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
         for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
 
             img1_path = Path(img1_path)
@@ -127,11 +128,14 @@ class GlomapWrapper:
                                                                  only_foreground_matches=True)
             img1_id = images.index(img1_path) + 1
             img2_id = images.index(img2_path) + 1
-            matching_edges[(img1_id, img2_id)] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+            edge = (img1_id, img2_id)
+            matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+            matching_edges_certainties[edge] = certainty
 
         database = pycolmap.Database(str(database_path))
 
-        keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database, device)
+        keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
+                                                                      eliminate_one_to_many_matches=True, device=device)
 
         first_frame_data = self.data_graph.get_frame_data(0)
         h, w = first_frame_data.image_shape.height, first_frame_data.image_shape.width
@@ -460,7 +464,9 @@ def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tens
 
 
 def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
-                                  existing_database: pycolmap.Database = None, device: str = 'cpu') -> (
+                                  existing_database: pycolmap.Database = None,
+                                  matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = None,
+                                  eliminate_one_to_many_matches: bool = True, device: str = 'cpu') -> (
         Tuple)[Dict[int, torch.Tensor], Dict[Tuple[int, int], torch.Tensor]]:
     G = nx.DiGraph()
     G.add_edges_from(matching_edges.keys())
@@ -532,11 +538,47 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
         keypoints_indices_u = edge_match_indices[u, v, 0]
         keypoints_indices_v = edge_match_indices[u, v, 1]
 
+        if eliminate_one_to_many_matches:
+            if matching_edges_certainties is not None:
+                certainty = matching_edges_certainties[u, v]
+            else:
+                certainty = torch.zeros(keypoints_indices_v.shape[0], device=device)
+
+            certainty_sort_idx = torch.argsort(certainty, descending=True)
+            keypoints_indices_u_sorted = keypoints_indices_u[certainty_sort_idx]
+            keypoints_indices_v_sorted = keypoints_indices_v[certainty_sort_idx]
+
+            unique_indices_u = get_first_kpt_indices_occurrence(keypoints_indices_u_sorted)
+            unique_indices_v = get_first_kpt_indices_occurrence(keypoints_indices_v_sorted)
+
+            unique_mask_u = torch.zeros_like(keypoints_indices_u, device=device, dtype=torch.bool)
+            unique_mask_v = torch.zeros_like(keypoints_indices_v, device=device, dtype=torch.bool)
+
+            unique_mask_u[unique_indices_u] = True
+            unique_mask_v[unique_indices_v] = True
+
+            ono_to_one_mask = unique_mask_u & unique_mask_v
+
+            keypoints_indices_u = keypoints_indices_u[ono_to_one_mask]
+            keypoints_indices_v = keypoints_indices_v[ono_to_one_mask]
+
         stacked_indices = torch.stack([keypoints_indices_u, keypoints_indices_v], dim=1)
 
         edge_match_indices_concatenated[(u, v)] = stacked_indices
 
     return keypoints_for_node, edge_match_indices_concatenated
+
+
+def get_first_kpt_indices_occurrence(keypoints_indices) -> torch.Tensor:
+    # Given a tensor of elements, give indices where each unique element occurred the first time
+    unique, unique_idx, counts = torch.unique(keypoints_indices, sorted=True,
+                                              return_inverse=True, return_counts=True)
+    _, ind_sorted = torch.sort(unique_idx, stable=True)
+    cum_sum = counts.cumsum(0)
+    cum_sum = torch.cat((torch.tensor([0], device=cum_sum.device), cum_sum[:-1]))
+    first_kpt_idx_occurrence = ind_sorted[cum_sum]
+
+    return first_kpt_idx_occurrence
 
 
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, first_image_gt_Se3_world2cam: Se3,
