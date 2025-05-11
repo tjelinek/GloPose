@@ -526,10 +526,15 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
 
         keypoints_for_node[u] = keypoints_u_unique
 
-    edge_match_indices_concatenated: Dict[Tuple[int, int], torch.Tensor] = {
-        (u, v): torch.stack([edge_match_indices[u, v, 0], edge_match_indices[u, v, 1]], dim=1)
-        for u, v in G.to_undirected().edges()
-    }
+    edge_match_indices_concatenated = {}
+    for u, v in G.to_undirected().edges():
+
+        keypoints_indices_u = edge_match_indices[u, v, 0]
+        keypoints_indices_v = edge_match_indices[u, v, 1]
+
+        stacked_indices = torch.stack([keypoints_indices_u, keypoints_indices_v], dim=1)
+
+        edge_match_indices_concatenated[(u, v)] = stacked_indices
 
     return keypoints_for_node, edge_match_indices_concatenated
 
