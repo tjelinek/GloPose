@@ -378,7 +378,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
-            query_img_pts_xy, db_img_pts_xy, _ = (
+            query_img_pts_xy, db_img_pts_xy, certainties = (
                 flow_provider.get_source_target_points_roma(query_img, pose_graph_image, config.roma_sample_size,
                                                             query_img_segmentation, pose_graph_segmentation,
                                                             as_int=True, zero_certainty_outside_segmentation=True,
@@ -387,6 +387,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
+        matching_edges_certainties[(new_image_id, db_img_id)] = certainties
 
     keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database,
                                                                   eliminate_one_to_many_matches=True,
