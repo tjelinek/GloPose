@@ -15,6 +15,9 @@ from tracker_config import TrackerConfig
 from utils.image_utils import get_target_shape
 
 
+FLOW_PROVIDER_GLOBAL: Optional[RoMaFlowProviderDirect] = None
+
+
 def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -> Dict[int, PinholeCamera]:
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
@@ -377,7 +380,10 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
     image = image.squeeze()
 
     config.device = 'cuda'
-    flow_provider = RoMaFlowProviderDirect(config.device)
+    global FLOW_PROVIDER_GLOBAL
+
+    if FLOW_PROVIDER_GLOBAL is None:
+        FLOW_PROVIDER_GLOBAL = RoMaFlowProviderDirect(config.device)
 
     for segmentation_paths in segmentation_paths:
         segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,
