@@ -568,16 +568,16 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
             keypoints_indices_u_sorted = keypoints_indices_u[certainty_sort_idx]
             keypoints_indices_v_sorted = keypoints_indices_v[certainty_sort_idx]
 
-            unique_indices_u, _ = get_first_kpt_indices_occurrence(keypoints_indices_u_sorted)
-            unique_indices_v, _ = get_first_kpt_indices_occurrence(keypoints_indices_v_sorted)
+            unique_keypoints_indices_u, _ = get_first_occurrence_indices(keypoints_indices_u_sorted)
+            unique_keypoints_indices_v, _ = get_first_occurrence_indices(keypoints_indices_v_sorted)
 
-            unique_mask_u = torch.zeros_like(keypoints_indices_u, device=device, dtype=torch.bool)
-            unique_mask_v = torch.zeros_like(keypoints_indices_v, device=device, dtype=torch.bool)
+            unique_keypoints_mask_u = torch.zeros_like(keypoints_indices_u, device=device, dtype=torch.bool)
+            unique_keypoints_mask_v = torch.zeros_like(keypoints_indices_v, device=device, dtype=torch.bool)
 
-            unique_mask_u[unique_indices_u] = True
-            unique_mask_v[unique_indices_v] = True
+            unique_keypoints_mask_u[unique_keypoints_indices_u] = True
+            unique_keypoints_mask_v[unique_keypoints_indices_v] = True
 
-            ono_to_one_mask = unique_mask_u & unique_mask_v
+            ono_to_one_mask = unique_keypoints_mask_u & unique_keypoints_mask_v
 
             keypoints_indices_u = keypoints_indices_u_sorted[ono_to_one_mask]
             keypoints_indices_v = keypoints_indices_v_sorted[ono_to_one_mask]
@@ -589,16 +589,50 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
     return keypoints_for_node, edge_match_indices_concatenated
 
 
-def get_first_kpt_indices_occurrence(keypoints_indices) -> torch.Tensor:
-    # Given a tensor of elements, give indices where each unique element occurred the first time
-    unique, unique_idx, counts = torch.unique(keypoints_indices, sorted=True,
-                                              return_inverse=True, return_counts=True)
-    _, ind_sorted = torch.sort(unique_idx, stable=True)
-    cum_sum = counts.cumsum(0)
-    cum_sum = torch.cat((torch.tensor([0], device=cum_sum.device), cum_sum[:-1]))
-    first_kpt_idx_occurrence = ind_sorted[cum_sum]
+def get_first_occurrence_indices(elements: torch.Tensor, dim: Optional[int] = None) \
+        -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Find the indices where each unique element first appears in the input tensor. Unlike torch.unique, this function
+    guarantees ordering.
 
-    return first_kpt_idx_occurrence
+    This function identifies all unique elements in the input tensor and returns:
+    1. The indices where each unique element first appears in the original tensor
+    2. A mapping from each position in the original tensor to its corresponding unique element index
+
+    Args:
+        elements: Input tensor containing potentially duplicate elements
+        dim: The dimension along which to find unique elements, if elements is multi-dimensional
+
+    Returns:
+        Tuple containing:
+        - first_occurrence_indices: Indices where each unique element first appears
+        - element_to_unique_mapping: Mapping from original positions to unique element indices
+    """
+    # Find unique elements and get mapping information
+    unique_elements, element_to_unique_mapping, occurrence_counts = torch.unique(
+        elements,
+        sorted=True,
+        dim=dim,
+        return_inverse=True,
+        return_counts=True
+    )
+
+    # Get indices that would sort the mapping array while preserving order of equal elements
+    _, sorted_positions = torch.sort(element_to_unique_mapping, stable=True)
+
+    # Calculate cumulative occurrence counts
+    cumulative_counts = occurrence_counts.cumsum(0)
+
+    # Shift cumulative counts to get starting positions of each unique value
+    starting_positions = torch.cat((
+        torch.tensor([0], device=cumulative_counts.device),
+        cumulative_counts[:-1]
+    ))
+
+    # Get the indices of first occurrences
+    first_occurrence_indices = sorted_positions[starting_positions]
+
+    return first_occurrence_indices, element_to_unique_mapping
 
 
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, first_image_gt_Se3_world2cam: Se3,
