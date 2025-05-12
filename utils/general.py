@@ -1,9 +1,14 @@
+import importlib
+import sys
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
 import torch
 from kornia.morphology import erosion, dilation
 import torch.nn.functional as F
+
+from tracker_config import TrackerConfig
 
 
 def erode_segment_mask2(erosion_iterations, segment_masks):
@@ -91,6 +96,19 @@ def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observe
     src_pts_yx = torch.nonzero(not_occluded_foreground_mask).to(torch.float32)
 
     return src_pts_yx, not_occluded_foreground_mask
+
+
+def load_config(config_path) -> TrackerConfig:
+    config_path = Path(config_path)
+
+    spec = importlib.util.spec_from_file_location("module.name", config_path)
+    config_module = importlib.util.module_from_spec(spec)
+    sys.modules["module.name"] = config_module
+    spec.loader.exec_module(config_module)
+
+    config_instance: TrackerConfig = config_module.get_config()
+
+    return config_instance
 
 
 def print_cuda_occupied_memory(device='cuda:0'):
