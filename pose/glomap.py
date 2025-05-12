@@ -417,10 +417,10 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     mapper_options = pycolmap.IncrementalMapperOptions()
 
     reconstruction_manager = pycolmap.ReconstructionManager()
-    reconstruction_manager.read(path_to_reconstruction)
+    reconstruction_manager.read(str(path_to_reconstruction))
 
     reconstruction_idx = reconstruction_manager.add()
-    reconstruction = pycolmap.Reconstruction(path_to_reconstruction)
+    reconstruction = pycolmap.Reconstruction(str(path_to_reconstruction))
 
     mapper.begin_reconstruction(reconstruction)
 
