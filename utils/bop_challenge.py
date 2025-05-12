@@ -362,7 +362,7 @@ def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_path
         view_graphs: List[ViewGraph] = []
         for view_graph_dir in view_graph_save_paths.iterdir():
             if view_graph_dir.is_dir():
-                view_graph = load_view_graph(view_graph_dir)
+                view_graph = load_view_graph(view_graph_dir, device=config.device)
                 view_graphs.append(view_graph)
 
         predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics, view_graphs, config)
@@ -376,12 +376,14 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
     image = PrecomputedFrameProvider.load_and_downsample_image(image_path, config.image_downsample, config.device)
     image = image.squeeze()
 
-    flow_provider = RoMaFlowProviderDirect('cpu')
+    config.device = 'cuda'
+    flow_provider = RoMaFlowProviderDirect(config.device)
 
     for segmentation_paths in segmentation_paths:
         segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,
                                                                                         target_shape,
                                                                                         config.device)
+        segmentation = segmentation.squeeze()
 
         # TODO iterate over all view graphs
         predict_poses(image, segmentation, camera_K=camera_K, view_graph=view_graphs[0], flow_provider=flow_provider,
