@@ -397,8 +397,8 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
         segmentation = segmentation.squeeze()
 
         # TODO iterate over all view graphs
-        predict_poses(image, segmentation, camera_K=camera_K, view_graph=view_graphs[0], flow_provider=flow_provider,
-                      config=config)
+        predict_poses(image, segmentation, camera_K=camera_K, view_graph=view_graphs[0],
+                      flow_provider=FLOW_PROVIDER_GLOBAL, config=config)
 
 
 if __name__ == '__main__':
