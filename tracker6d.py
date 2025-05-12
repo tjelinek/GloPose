@@ -242,10 +242,9 @@ class Tracker6D:
 
         align_success = True
         reconstruction = None
-        first_frame_obj2cam = self.gt_Se3_cam2obj.get(0).inverse()
         try:
             reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                            matching_pairs, first_frame_obj2cam)
+                                                                            matching_pairs)
         except Exception as e:
             print(e)
 

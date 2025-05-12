@@ -79,8 +79,7 @@ class GlomapWrapper:
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]], first_frame_obj2cam: Se3) \
-            -> pycolmap.Reconstruction:
+                                   matching_pairs: List[Tuple[int, int]]) -> pycolmap.Reconstruction:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
