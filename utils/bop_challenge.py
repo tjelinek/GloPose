@@ -356,6 +356,11 @@ def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_path
 
         path_to_scene = test_dataset_path / scene_folder_name
         path_to_image = path_to_scene / 'rgb' / image_filename
+        if not path_to_image.exists():
+            image_filename = f'{image_id_str}.jpg'
+            path_to_image = path_to_scene / 'rgb' / image_filename
+            assert path_to_image.exists()
+
         path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
         segmentation_paths = path_to_scene / 'mask_visib'
 
