@@ -433,36 +433,6 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
         print(f"Failed to register image {new_image_id}.")
 
 
-def keypoints_unique_preserve_order_old(keypoints: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    # Need to use numpy because sort=False argument of torch.unique() does not work
-
-    keypoints_np = keypoints.numpy(force=True)
-
-    # NumPy has a built-in way to get unique elements with indices
-    _, index_np, inverse_indices_np = np.unique(keypoints_np, return_index=True, return_inverse=True, axis=0)
-
-    # Sort indices to get elements in order of appearance
-    index_sort_permutation_np = np.argsort(index_np)
-    index_sort_permutation = torch.from_numpy(index_sort_permutation_np).to(keypoints.device)
-    inverse_indices = torch.from_numpy(inverse_indices_np).to(keypoints.device)
-    index = torch.from_numpy(index_np).to(keypoints.device)
-
-    unique_order_preserving = keypoints[index[index_sort_permutation]]
-
-    idx_mapping = torch.zeros(len(index_sort_permutation), dtype=torch.long).to(keypoints.device)
-
-    # Use scatter_ to place indices at the positions specified by index_sort_permutation
-    # This creates our mapping from original positions to new positions after reordering
-    idx_mapping.scatter_(0, index_sort_permutation, torch.arange(len(index_sort_permutation), device=keypoints.device))
-
-    # Apply the mapping to get correct inverse indices
-    inverse_indices_order_preserving = idx_mapping[inverse_indices]
-
-    assert torch.all(torch.eq(keypoints, unique_order_preserving[inverse_indices_order_preserving]).view(-1))
-
-    return unique_order_preserving, inverse_indices_order_preserving
-
-
 def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
     first_kpt_idx_occurrence, inverse_indices = get_first_occurrence_indices(keypoints, dim=0)
