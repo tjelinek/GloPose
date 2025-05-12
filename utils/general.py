@@ -1,15 +1,9 @@
-import importlib
-import sys
-from pathlib import Path
 from typing import Tuple
 
-import cv2
 import numpy as np
 import torch
 from kornia.morphology import erosion, dilation
 import torch.nn.functional as F
-
-from tracker_config import TrackerConfig
 
 
 def erode_segment_mask2(erosion_iterations, segment_masks):
@@ -42,45 +36,6 @@ def dilate_mask(dilation_iterations, mask_tensor):
     for _ in range(dilation_iterations):
         dilated_segment_masks = dilation(dilated_segment_masks, kernel)
     return dilated_segment_masks[None]
-
-
-def load_config(config_path) -> TrackerConfig:
-    config_path = Path(config_path)
-
-    spec = importlib.util.spec_from_file_location("module.name", config_path)
-    config_module = importlib.util.module_from_spec(spec)
-    sys.modules["module.name"] = config_module
-    spec.loader.exec_module(config_module)
-
-    config_instance: TrackerConfig = config_module.get_config()
-
-    return config_instance
-
-
-def imread(name):
-    img = cv2.imread(name, cv2.IMREAD_UNCHANGED)
-    if len(img.shape) == 2:
-        return img / 255
-    elif img.shape[2] == 3:
-        return img[:, :, [2, 1, 0]] / 255
-    else:
-        return img[:, :, [2, 1, 0, 3]] / 6553
-
-
-def crop_resize(Is, bbox, res):
-    if Is is None:
-        return None
-    rev_axis = False
-    if len(Is.shape) == 3:
-        rev_axis = True
-        Is = Is[:, :, :, np.newaxis]
-    imr = np.zeros((res[1], res[0], Is.shape[2], Is.shape[3]))
-    for kk in range(Is.shape[3]):
-        im = Is[bbox[0]:bbox[2], bbox[1]:bbox[3], :, kk]
-        imr[:, :, :, kk] = cv2.resize(im, res, interpolation=cv2.INTER_CUBIC)
-    if rev_axis:
-        imr = imr[:, :, :, 0]
-    return imr
 
 
 def mesh_normalize(vertices):
@@ -185,14 +140,6 @@ def pad_to_multiple(image, multiple):
     padded_image = F.pad(image, (0, pad_w, 0, pad_h))
 
     return padded_image, pad_h, pad_w
-
-
-def unpad_image(image, pad_h, pad_w):
-    if pad_h > 0:
-        image = image[:, :-pad_h, :]
-    if pad_w > 0:
-        image = image[:, :, :-pad_w]
-    return image
 
 
 def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\
