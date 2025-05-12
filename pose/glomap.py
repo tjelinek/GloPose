@@ -335,9 +335,9 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
                   view_graph: ViewGraph, flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider,
                   config: TrackerConfig):
     device = config.device
-    sequence = 'obj_000005'
+    sequence = 'obj_000010'
     base_results_path = Path(f'/mnt/personal/jelint19/results/FlowTracker/')
-    db_relative_path = Path(f'hope/{sequence}/glomap_{sequence}/')
+    db_relative_path = Path(f'handal/{sequence}/glomap_{sequence}/')
     db_filename = Path('database.db')
 
     path_to_colmap_db = base_results_path / db_relative_path / db_filename
@@ -417,6 +417,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     mapper_options = pycolmap.IncrementalMapperOptions()
 
     reconstruction_manager = pycolmap.ReconstructionManager()
+    breakpoint()
     reconstruction_manager.read(str(path_to_reconstruction))
 
     reconstruction_idx = reconstruction_manager.add()
@@ -661,8 +662,8 @@ if __name__ == '__main__':
          Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images/000706.jpg'))]
 
     colmap_db_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000010/glomap_obj_000010/database.db')
-    colmap_img_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/images')
-    colmap_output_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000020/glomap_obj_000020/output')
+    colmap_img_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000010/glomap_obj_000010/images')
+    colmap_output_path_ = Path('/mnt/personal/jelint19/results/FlowTracker/handal/obj_000010/glomap_obj_000010/output')
 
     print("COLMAP Python bindings path:", pycolmap.__file__)
     # time.sleep(20)
