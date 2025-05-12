@@ -369,6 +369,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     database.write_image(new_database_image, use_image_id=True)
 
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
+    matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
 
     for frame_idx in view_graph.view_graph.nodes():
         view_graph_node = view_graph.get_node_data(frame_idx)
@@ -388,7 +389,10 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
 
-    keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database, device)
+    keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database,
+                                                                  eliminate_one_to_many_matches=True,
+                                                                  matching_edges_certainties=matching_edges_certainties,
+                                                                  device=device)
 
     all_image_ids = {img.image_id for img in database.read_all_images()}
     matched_images_ids = {node for edge in edge_match_indices.keys() for node in edge}
