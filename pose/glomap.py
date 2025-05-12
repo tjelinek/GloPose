@@ -340,7 +340,7 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     db_filename = Path('database.db')
 
     path_to_colmap_db = base_results_path / db_relative_path / db_filename
-    path_to_reconstruction = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/hope/{sequence}/reconstruction')
+    path_to_reconstruction = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/handal/{sequence}_down/reconstruction/0')
     path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / db_relative_path
     cache_db_file = path_to_cache / db_filename
 
@@ -416,7 +416,6 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
     mapper_options = pycolmap.IncrementalMapperOptions()
 
     reconstruction_manager = pycolmap.ReconstructionManager()
-    breakpoint()
     reconstruction_manager.read(str(path_to_reconstruction))
 
     reconstruction_idx = reconstruction_manager.add()
