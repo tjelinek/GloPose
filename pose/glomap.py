@@ -548,8 +548,8 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
             keypoints_indices_u_sorted = keypoints_indices_u[certainty_sort_idx]
             keypoints_indices_v_sorted = keypoints_indices_v[certainty_sort_idx]
 
-            unique_indices_u = get_first_kpt_indices_occurrence(keypoints_indices_u_sorted)
-            unique_indices_v = get_first_kpt_indices_occurrence(keypoints_indices_v_sorted)
+            unique_indices_u, _ = get_first_kpt_indices_occurrence(keypoints_indices_u_sorted)
+            unique_indices_v, _ = get_first_kpt_indices_occurrence(keypoints_indices_v_sorted)
 
             unique_mask_u = torch.zeros_like(keypoints_indices_u, device=device, dtype=torch.bool)
             unique_mask_v = torch.zeros_like(keypoints_indices_v, device=device, dtype=torch.bool)
@@ -559,8 +559,8 @@ def unique_keypoints_from_matches(matching_edges: Dict[Tuple[int, int], Tuple[to
 
             ono_to_one_mask = unique_mask_u & unique_mask_v
 
-            keypoints_indices_u = keypoints_indices_u[ono_to_one_mask]
-            keypoints_indices_v = keypoints_indices_v[ono_to_one_mask]
+            keypoints_indices_u = keypoints_indices_u_sorted[ono_to_one_mask]
+            keypoints_indices_v = keypoints_indices_v_sorted[ono_to_one_mask]
 
         stacked_indices = torch.stack([keypoints_indices_u, keypoints_indices_v], dim=1)
 
