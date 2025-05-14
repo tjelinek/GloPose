@@ -14,7 +14,7 @@ from torchvision import transforms
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
-from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame
+from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length
 
 
 class SyntheticDataProvider:
@@ -130,6 +130,12 @@ class PrecomputedFrameProvider(FrameProvider):
         super().__init__(config.image_downsample, config)
 
         assert images_paths is not None or video_path is not None
+        if self.sequence_length is None:
+            if images_paths is not None:
+                self.sequence_length = len(images_paths)
+            elif video_path is not None:
+                self.sequence_length = get_video_length(video_path)
+
         ref_path = images_paths[0] if images_paths is not None else video_path
         self.image_shape = get_target_shape(ref_path, self.downsample_factor)
 

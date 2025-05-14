@@ -104,6 +104,36 @@ def get_nth_video_frame(video_path: Path, frame_number: int, mode: str = 'rgb') 
     return Image.fromarray(frame)
 
 
+def get_video_length(video_path: Path) -> int:
+    """
+    Retrieves the total number of frames in a video file.
+
+    Args:
+        video_path (Path): Path to the video file.
+
+    Returns:
+        int: The total number of frames in the video.
+    """
+    if not video_path.is_file():
+        raise FileNotFoundError(f"The file {video_path} does not exist.")
+
+    # Open the video file
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file {video_path}.")
+
+    # Get the total number of frames
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Release the video capture object
+    cap.release()
+
+    if frame_count <= 0:
+        raise ValueError(f"Could not determine the frame count for {video_path}.")
+
+    return frame_count
+
+
 def pad_image(image):
     W, H = image.shape[-2:]
     max_size = max(H, W)
