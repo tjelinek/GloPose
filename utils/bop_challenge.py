@@ -402,8 +402,8 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
 
 
 if __name__ == '__main__':
-    _bop_targets_path = Path('/mnt/personal/jelint19/data/bop/hope/hope/test_targets_bop24.json')
-    _view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/hope')
+    _bop_targets_path = Path('/mnt/personal/jelint19/data/bop/handal/handal_base/test_targets_bop24.json')
+    _view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/handal')
 
     _config = TrackerConfig()
     predict_poses_for_bop_challenge(_bop_targets_path, _view_graph_location, _config)

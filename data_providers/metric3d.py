@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import torch
+import torchvision.transforms.functional as TF
 
 try:
     from mmcv.utils import Config, DictAction
@@ -151,9 +152,11 @@ def metric3d_vit_giant2(pretrain=False, **kwargs):
 def infer_depth_using_metric3d(image: Path, model, cam_K: torch.Tensor):
     import cv2
 
+    device = 'cuda'
     #### prepare data
-    intrinsic = [cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]]
+    intrinsic = torch.tensor([cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]], device=device)
     rgb_origin = cv2.imread(str(image))[:, :, ::-1]
+    # rgb_origin = image
 
     #### ajust input size to fit pretrained model
     # keep ratio resize
@@ -162,11 +165,16 @@ def infer_depth_using_metric3d(image: Path, model, cam_K: torch.Tensor):
     h, w = rgb_origin.shape[:2]
     scale = min(input_size[0] / h, input_size[1] / w)
 
-    rgb = cv2.resize(rgb_origin, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_LINEAR)
+    new_h, new_w = int(h * scale), int(w * scale)
+    # rgb = TF.resize(rgb_origin, [new_h, new_w], interpolation=TF.InterpolationMode.BILINEAR)
+    rgb = cv2.resize(rgb_origin, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
     # remember to scale intrinsic, hold depth
-    intrinsic = [intrinsic[0] * scale, intrinsic[1] * scale, intrinsic[2] * scale, intrinsic[3] * scale]
+    intrinsic = intrinsic * scale
+
     # padding to input_size
-    padding = [123.675, 116.28, 103.53]
+    # padding = [123.675, 116.28, 103.53]
+    padding = (123.675 / 255., 116.28 / 255., 103.53 / 255.)
     h, w = rgb.shape[:2]
     pad_h = input_size[0] - h
     pad_w = input_size[1] - w
@@ -174,6 +182,7 @@ def infer_depth_using_metric3d(image: Path, model, cam_K: torch.Tensor):
     pad_w_half = pad_w // 2
     rgb = cv2.copyMakeBorder(rgb, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half, cv2.BORDER_CONSTANT,
                              value=padding)
+    # rgb = TF.pad(rgb, [pad_w_half, pad_h_half, pad_w - pad_w_half, pad_h - pad_h_half], fill=padding)
     pad_info = [pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half]
 
     #### normalize
