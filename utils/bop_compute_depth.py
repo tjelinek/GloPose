@@ -4,6 +4,7 @@ from typing import List
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_providers.metric3d import *
 from tracker_config import TrackerConfig
+from utils.bop_challenge import get_pinhole_params
 
 
 @torch.no_grad()
@@ -34,20 +35,31 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                 if not scene.is_dir() or not rgb_folder.exists():
                     continue
 
+                json_file_path = scene / 'scene_camera.json'
+                pinhole_params = get_pinhole_params(json_file_path)
+
+                first_image_pinhole_params = pinhole_params[0]
+                last_pinhole_params = first_image_pinhole_params
+
                 new_depth_folder = scene / 'depth_depthanythingv2'
 
                 all_images = sorted(rgb_folder.iterdir())
                 frame_provider = PrecomputedFrameProvider(config, all_images)
 
                 for i in range(frame_provider.sequence_length):
-                    image = frame_provider.next_image(i)
+
+                    pinhole_params_i = pinhole_params.get(i)
+                    if pinhole_params_i is None:
+                        pinhole_params_i = last_pinhole_params
+                    else:
+                        last_pinhole_params = pinhole_params_i
+                    cam_K = pinhole_params_i.intrinsics.squeeze()
+
+                    # image = frame_provider.next_image(i)
 
                     image_path = frame_provider.images_paths[i]
-
-                    depth = prepare_image_for_metric3d(image_path, metric3d)
+                    depth = infer_depth_using_metric3d(image_path, metric3d, cam_K)
                     breakpoint()
-                    pred_depth, confidence, output_dict = metric3d.inference({'input': image})
-
 
 
 if __name__ == '__main__':
