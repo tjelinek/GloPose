@@ -59,7 +59,6 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
 
                     image_path = frame_provider.images_paths[i]
                     depth = infer_depth_using_metric3d(image_path, metric3d, cam_K)
-                    breakpoint()
 
 
 if __name__ == '__main__':
