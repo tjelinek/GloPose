@@ -1,6 +1,7 @@
 from typing import List
 
 from torchvision.utils import save_image
+from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_providers.metric3d import *
@@ -10,29 +11,22 @@ from utils.bop_challenge import get_pinhole_params
 
 @torch.no_grad()
 def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
-    # metric3d = torch.hub.load('yvanyin/metric3d', 'metric3d_vit_small', pretrain=True)
     metric3d = metric3d_vit_large(pretrain=True).cuda().eval()
     config = TrackerConfig()
 
-    for dataset in base_bop_folder.iterdir():
-
-        if dataset.name not in relevant_datasets:
-            continue
-
-        for split in dataset.iterdir():
-
+    datasets = [d for d in base_bop_folder.iterdir() if d.name in relevant_datasets]
+    for dataset in tqdm(datasets, desc='Datasets'):
+        for split in tqdm(list(dataset.iterdir()), desc=f'Splits ({dataset.name})', leave=False):
             if not split.is_dir():
                 continue
 
             all_items = [x for x in split.iterdir() if x.is_dir()]
-
             if len(all_items) == 0 or (all_items[0] / 'depth').exists():
                 continue
 
-            for scene in all_items:
-
+            for scene in tqdm(all_items, desc=f'Scenes ({split.name})', leave=False):
+                print(f'Processing: Dataset={dataset.name}, Split={split.name}, Scene={scene.name}')
                 rgb_folder = scene / 'rgb'
-
                 if not scene.is_dir() or not rgb_folder.exists():
                     continue
 
@@ -43,20 +37,18 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                 last_pinhole_params = first_image_pinhole_params
 
                 new_depth_folder = scene / 'depth_metric3d'
+                new_depth_folder.mkdir(exist_ok=True)
 
                 all_images = sorted(rgb_folder.iterdir())
                 frame_provider = PrecomputedFrameProvider(config, all_images)
 
-                for i in range(frame_provider.sequence_length):
-
+                for i in tqdm(range(frame_provider.sequence_length), desc='Frames', leave=False):
                     pinhole_params_i = pinhole_params.get(i)
                     if pinhole_params_i is None:
                         pinhole_params_i = last_pinhole_params
                     else:
                         last_pinhole_params = pinhole_params_i
                     cam_K = pinhole_params_i.intrinsics.squeeze()
-
-                    # image = frame_provider.next_image(i)
 
                     image_path = frame_provider.images_paths[i]
                     image_name = frame_provider.get_n_th_image_name(i).stem
