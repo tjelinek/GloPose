@@ -64,7 +64,7 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                     depth = infer_depth_using_metric3d(image_path, metric3d, cam_K)
 
                     depth_image_path = new_depth_folder / (image_name + '.png')
-                    save_image(depth, 'depth.png')
+                    save_image(depth, str(depth_image_path))
 
 
 if __name__ == '__main__':
