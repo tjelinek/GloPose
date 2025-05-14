@@ -1,5 +1,6 @@
 from typing import List
 
+from torchvision.utils import save_image
 
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_providers.metric3d import *
@@ -41,7 +42,7 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                 first_image_pinhole_params = pinhole_params[0]
                 last_pinhole_params = first_image_pinhole_params
 
-                new_depth_folder = scene / 'depth_depthanythingv2'
+                new_depth_folder = scene / 'depth_metric3d'
 
                 all_images = sorted(rgb_folder.iterdir())
                 frame_provider = PrecomputedFrameProvider(config, all_images)
@@ -58,7 +59,12 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                     # image = frame_provider.next_image(i)
 
                     image_path = frame_provider.images_paths[i]
+                    image_name = frame_provider.get_n_th_image_name(i).stem
+
                     depth = infer_depth_using_metric3d(image_path, metric3d, cam_K)
+
+                    depth_image_path = new_depth_folder / (image_name + '.png')
+                    save_image(depth, 'depth.png')
 
 
 if __name__ == '__main__':
