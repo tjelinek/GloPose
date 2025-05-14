@@ -33,7 +33,7 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                 json_file_path = scene / 'scene_camera.json'
                 pinhole_params = get_pinhole_params(json_file_path)
 
-                first_image_pinhole_params = pinhole_params[0]
+                first_image_pinhole_params = pinhole_params[min(pinhole_params.keys())]
                 last_pinhole_params = first_image_pinhole_params
 
                 new_depth_folder = scene / 'depth_metric3d'
@@ -44,6 +44,12 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
 
                 for i in tqdm(range(frame_provider.sequence_length), desc='Frames', leave=False):
                     pinhole_params_i = pinhole_params.get(i)
+                    image_name = frame_provider.get_n_th_image_name(i).stem
+                    depth_image_path = new_depth_folder / (image_name + '.png')
+
+                    if depth_image_path.exists():
+                        continue
+
                     if pinhole_params_i is None:
                         pinhole_params_i = last_pinhole_params
                     else:
@@ -51,11 +57,10 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                     cam_K = pinhole_params_i.intrinsics.squeeze()
 
                     image_path = frame_provider.images_paths[i]
-                    image_name = frame_provider.get_n_th_image_name(i).stem
+                    image = frame_provider.next_image(i)
 
-                    depth = infer_depth_using_metric3d(image_path, metric3d, cam_K)
+                    depth = infer_depth_using_metric3d(image_path, metric3d, cam_K, image)
 
-                    depth_image_path = new_depth_folder / (image_name + '.png')
                     save_image(depth, str(depth_image_path))
 
 
