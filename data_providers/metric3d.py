@@ -148,11 +148,11 @@ def metric3d_vit_giant2(pretrain=False, **kwargs):
     return model
 
 
-def prepare_image_for_metric3d(image: Path, model, cam_intrinsics: torch.Tensor = None):
+def infer_depth_using_metric3d(image: Path, model, cam_K: torch.Tensor):
     import cv2
 
     #### prepare data
-    intrinsic = [707.0493, 707.0493, 604.0814, 180.5066]
+    intrinsic = [cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]]
     rgb_origin = cv2.imread(str(image))[:, :, ::-1]
 
     #### ajust input size to fit pretrained model
