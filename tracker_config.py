@@ -29,7 +29,7 @@ class TrackerConfig:
     large_images_results_write_frequency: int = 1
 
     # Input data settings
-    input_frames: int = 0
+    input_frames: int = None
     skip_indices: int = 1
     frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
     black_background: bool = False
