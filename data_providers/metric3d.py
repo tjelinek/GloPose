@@ -1,6 +1,6 @@
-dependencies = ['torch', 'torchvision']
+import sys
+from pathlib import Path
 
-import os
 import torch
 
 try:
@@ -8,10 +8,11 @@ try:
 except:
     from mmengine import Config, DictAction
 
-from mono.model.monodepth_model import get_configured_monodepth_model
+metric3d_dir = Path('repositories/Metric3D').expanduser()
+sys.path.append(str(metric3d_dir))
+sys.path.append(str(metric3d_dir / 'mono'))
 
-# metric3d_dir = os.path.dirname(__file__)
-metric3d_dir = os.path.expanduser('~/repositories/Metric3D')
+from mono.model.monodepth_model import get_configured_monodepth_model
 
 MODEL_TYPE = {
     'ConvNeXt-Tiny': {
@@ -147,23 +148,20 @@ def metric3d_vit_giant2(pretrain=False, **kwargs):
     return model
 
 
-if __name__ == '__main__':
+def prepare_image_for_metric3d(image: Path, model, cam_intrinsics: torch.Tensor = None):
     import cv2
-    import numpy as np
 
     #### prepare data
-    rgb_file = 'data/kitti_demo/rgb/0000000050.png'
-    depth_file = 'data/kitti_demo/depth/0000000050.png'
     intrinsic = [707.0493, 707.0493, 604.0814, 180.5066]
-    gt_depth_scale = 256.0
-    rgb_origin = cv2.imread(rgb_file)[:, :, ::-1]
+    rgb_origin = cv2.imread(str(image))[:, :, ::-1]
 
     #### ajust input size to fit pretrained model
     # keep ratio resize
     input_size = (616, 1064)  # for vit model
-    # input_size = (544, 1216) # for convnext model
+
     h, w = rgb_origin.shape[:2]
     scale = min(input_size[0] / h, input_size[1] / w)
+
     rgb = cv2.resize(rgb_origin, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_LINEAR)
     # remember to scale intrinsic, hold depth
     intrinsic = [intrinsic[0] * scale, intrinsic[1] * scale, intrinsic[2] * scale, intrinsic[3] * scale]
@@ -187,7 +185,6 @@ if __name__ == '__main__':
 
     ###################### canonical camera space ######################
     # inference
-    model = torch.hub.load('yvanyin/metric3d', 'metric3d_vit_small', pretrain=True)
     model.cuda().eval()
     with torch.no_grad():
         pred_depth, confidence, output_dict = model.inference({'input': rgb})
@@ -207,29 +204,4 @@ if __name__ == '__main__':
     pred_depth = pred_depth * canonical_to_real_scale  # now the depth is metric
     pred_depth = torch.clamp(pred_depth, 0, 300)
 
-    #### you can now do anything with the metric depth
-    # such as evaluate predicted depth
-    if depth_file is not None:
-        gt_depth = cv2.imread(depth_file, -1)
-        gt_depth = gt_depth / gt_depth_scale
-        gt_depth = torch.from_numpy(gt_depth).float().cuda()
-        assert gt_depth.shape == pred_depth.shape
-
-        mask = (gt_depth > 1e-8)
-        abs_rel_err = (torch.abs(pred_depth[mask] - gt_depth[mask]) / gt_depth[mask]).mean()
-        print('abs_rel_err:', abs_rel_err.item())
-
-    #### normal are also available
-    if 'prediction_normal' in output_dict:  # only available for Metric3Dv2, i.e. vit model
-        pred_normal = output_dict['prediction_normal'][:, :3, :, :]
-        normal_confidence = output_dict['prediction_normal'][:, 3, :,
-                            :]  # see https://arxiv.org/abs/2109.09881 for details
-        # un pad and resize to some size if needed
-        pred_normal = pred_normal.squeeze()
-        pred_normal = pred_normal[:, pad_info[0]: pred_normal.shape[1] - pad_info[1],
-                      pad_info[2]: pred_normal.shape[2] - pad_info[3]]
-        # you can now do anything with the normal
-        # such as visualize pred_normal
-        pred_normal_vis = pred_normal.cpu().numpy().transpose((1, 2, 0))
-        pred_normal_vis = (pred_normal_vis + 1) / 2
-        cv2.imwrite('normal_vis.png', (pred_normal_vis * 255).astype(np.uint8))
+    return pred_depth
