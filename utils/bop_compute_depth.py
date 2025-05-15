@@ -1,6 +1,3 @@
-from typing import List
-
-import torch
 from torchvision.utils import save_image
 from tqdm import tqdm
 
