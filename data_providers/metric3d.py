@@ -1,8 +1,13 @@
 import sys
 from pathlib import Path
+from typing import List
 
 import torch
-import torchvision.transforms.functional as TF
+import torchvision.transforms.v2.functional as TF
+from kornia.image import ImageSize
+
+from data_providers.frame_provider import DepthProvider, FrameProvider
+from tracker_config import TrackerConfig
 
 try:
     from mmcv.utils import Config, DictAction
@@ -149,11 +154,34 @@ def metric3d_vit_giant2(pretrain=False, **kwargs):
     return model
 
 
-def infer_depth_using_metric3d(image_name: Path, model, cam_K: torch.Tensor):
-    import cv2
+class Metric3DDepthProvider(DepthProvider):
 
-    device = 'cuda'
-    #### prepare data
+    def __init__(self, config: TrackerConfig, image_shape: ImageSize, frame_provider: FrameProvider,
+                 cam_K: List[torch.Tensor], **kwargs):
+        super().__init__(image_shape, config)
+
+        self.image_shape: ImageSize = image_shape
+        self.frame_provider: FrameProvider = frame_provider
+        self.skip_indices = config.skip_indices
+        self.cam_K: List[torch.Tensor] = cam_K
+        assert frame_provider.skip_indices == self.skip_indices
+        self.metric3d = metric3d_vit_large(pretrain=True).cuda().eval()
+
+    def get_sequence_length(self):
+        return self.frame_provider.sequence_length
+
+    def next_depth(self, frame_i, **kwargs):
+        image = self.frame_provider.next_image(frame_i)
+        cam_K = self.cam_K[frame_i * self.skip_indices]
+
+        depth = infer_depth_using_metric3d(image, cam_K, self.metric3d)
+
+        return depth
+
+
+@torch.no_grad()
+def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, device='cuda'):
+    # prepare data
     intrinsic = torch.tensor([cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]], device=device)
     rgb_origin = cv2.imread(str(image_name))[:, :, ::-1]
     # rgb_origin = image
