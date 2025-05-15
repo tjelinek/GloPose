@@ -11,7 +11,7 @@ from utils.bop_challenge import get_pinhole_params
 
 
 @torch.no_grad()
-def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
+def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str], batch_size: int = 8):
     metric3d = metric3d_vit_large(pretrain=True).cuda().eval()
     config = TrackerConfig()
 
@@ -43,6 +43,10 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                 all_images = sorted(rgb_folder.iterdir())
                 frame_provider = PrecomputedFrameProvider(config, all_images)
 
+                batch_imgs = []
+                batch_K = []
+                batch_paths = []
+
                 for i in tqdm(range(frame_provider.sequence_length), desc='Frames', leave=False):
                     pinhole_params_i = pinhole_params.get(i)
                     image_name = frame_provider.get_n_th_image_name(i).stem
@@ -59,9 +63,22 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
 
                     image = frame_provider.next_image_255(i)
 
-                    pred_depth_up = infer_depth_using_metric3d(image, cam_K, metric3d)
+                    batch_imgs.append(image)
+                    batch_K.append(cam_K)
+                    batch_paths.append(depth_image_path)
 
-                    save_image(pred_depth_up, str(depth_image_path))
+                    if len(batch_imgs) == batch_size or i == frame_provider.sequence_length - 1:
+                        imgs_tensor = torch.cat(batch_imgs, dim=0).cuda()
+                        Ks_tensor = torch.stack(batch_K, dim=0).cuda()
+                        pred_depths = infer_depth_using_metric3d(imgs_tensor, Ks_tensor, metric3d)  # (B, 1, H, W)
+
+                        for d, path in zip(pred_depths, batch_paths):
+                            save_image(d, str(path))
+
+                        batch_imgs.clear()
+                        batch_K.clear()
+                        batch_paths.clear()
+
 
 if __name__ == '__main__':
 

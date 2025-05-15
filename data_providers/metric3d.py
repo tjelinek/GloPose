@@ -185,7 +185,7 @@ def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, 
     assert image.dtype == torch.uint8  # To replicate the behaviour of Metric3D, the image dtype should be uint8
 
     # prepare data
-    intrinsic = torch.tensor([cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]], device=device)
+    intrinsic = torch.stack([cam_K[:, 0, 0], cam_K[:, 1, 1], cam_K[:, 0, 2], cam_K[:, 1, 2]], dim=-1)
 
     # adjust input size to fit pretrained model
     # keep ratio resize
@@ -234,8 +234,8 @@ def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, 
     # ----------------- Canonical camera space -------------------------
 
     # de-canonical transform
-    canonical_to_real_scale = intrinsic[0] / 1000.0  # 1000.0 is the focal length of canonical camera
-    pred_depth_upsampled = pred_depth_upsampled * canonical_to_real_scale  # now the depth is metric
+    canonical_to_real_scale = intrinsic[:, 0] / 1000.0  # 1000.0 is the focal length of canonical camera
+    pred_depth_upsampled = pred_depth_upsampled * canonical_to_real_scale.view(-1, 1, 1, 1)  # now the depth is metric
     pred_depth_upsampled = torch.clamp(pred_depth_upsampled, 0, 300)
 
     return pred_depth_upsampled
