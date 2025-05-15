@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 from typing import List
@@ -181,6 +182,68 @@ class Metric3DDepthProvider(DepthProvider):
 
 @torch.no_grad()
 def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, device='cuda'):
+    assert image.dtype == torch.uint8  # To replicate the behaviour of Metric3D, the image dtype should be uint8
+
+    # prepare data
+    intrinsic = torch.tensor([cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]], device=device)
+
+    # adjust input size to fit pretrained model
+    # keep ratio resize
+    input_size = (616, 1064)  # for vit model
+
+    h, w = image.shape[-2:]
+    scale = min(input_size[0] / h, input_size[1] / w)
+
+    new_h, new_w = int(h * scale), int(w * scale)
+
+    image_255 = (image * 255.).to(torch.uint8)
+    rgb_i = TF.resize(image_255, [new_h, new_w], interpolation=TF.InterpolationMode.BILINEAR)
+
+    # remember to scale intrinsic, hold depth
+    intrinsic = intrinsic * scale
+
+    # padding to input_size
+    padding = [round(123.675), round(116.28), round(103.53)]
+    h, w = rgb_i.shape[-2:]
+    pad_h = input_size[0] - h
+    pad_w = input_size[1] - w
+    pad_h_half = pad_h // 2
+    pad_w_half = pad_w // 2
+
+    rgb_pad = TF.pad(rgb_i, [pad_w_half, pad_h_half, pad_w - pad_w_half, pad_h - pad_h_half], fill=padding)
+    rgb_pad = rgb_pad.to(torch.uint8).to(torch.float)
+
+    pad_info = [pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half]
+
+    # normalize
+    mean = torch.tensor([123.675, 116.28, 103.53]).float()[:, None, None].to(device)
+    std = torch.tensor([58.395, 57.12, 57.375]).float()[:, None, None].to(device)
+    # rgb = torch.from_numpy(rgb.transpose((2, 0, 1))).float()
+    rgb_norm = torch.div((rgb_pad - mean), std)
+
+    # ----------------- Canonical camera space -------------------------
+    # inference
+    pred_depth, confidence, output_dict = model.inference({'input': rgb_norm})
+
+    pred_h, pred_w = pred_depth.shape[-2:]
+    # un pad
+    pred_depth = pred_depth[..., pad_info[0]: pred_h - pad_info[1], pad_info[2]: pred_w - pad_info[3]]
+
+    # upsample to original size
+    pred_depth_upsampled = torch.nn.functional.interpolate(pred_depth, image.shape[-2:], mode='bilinear')
+    # ----------------- Canonical camera space -------------------------
+
+    # de-canonical transform
+    canonical_to_real_scale = intrinsic[0] / 1000.0  # 1000.0 is the focal length of canonical camera
+    pred_depth_upsampled = pred_depth_upsampled * canonical_to_real_scale  # now the depth is metric
+    pred_depth_upsampled = torch.clamp(pred_depth_upsampled, 0, 300)
+
+    return pred_depth_upsampled
+
+
+@torch.no_grad()
+def infer_depth_using_metric3d_ref(image_name: Path, cam_K: torch.Tensor, model, device='cuda'):
+    import cv2
     # prepare data
     intrinsic = torch.tensor([cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]], device=device)
     rgb_origin = cv2.imread(str(image_name))[:, :, ::-1]
@@ -195,36 +258,35 @@ def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, 
 
     new_h, new_w = int(h * scale), int(w * scale)
     # rgb = TF.resize(rgb_origin, [new_h, new_w], interpolation=TF.InterpolationMode.BILINEAR)
-    rgb = cv2.resize(rgb_origin, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    rgb_res = cv2.resize(rgb_origin, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
     # remember to scale intrinsic, hold depth
     intrinsic = intrinsic * scale
 
     # padding to input_size
-    # padding = [123.675, 116.28, 103.53]
-    padding = (123.675 / 255., 116.28 / 255., 103.53 / 255.)
-    h, w = rgb.shape[:2]
+    padding = [123.675, 116.28, 103.53]
+    h, w = rgb_res.shape[:2]
     pad_h = input_size[0] - h
     pad_w = input_size[1] - w
     pad_h_half = pad_h // 2
     pad_w_half = pad_w // 2
-    rgb = cv2.copyMakeBorder(rgb, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half, cv2.BORDER_CONSTANT,
-                             value=padding)
+    rgb_pad = cv2.copyMakeBorder(rgb_res, pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half,
+                                 cv2.BORDER_CONSTANT, value=padding)
     # rgb = TF.pad(rgb, [pad_w_half, pad_h_half, pad_w - pad_w_half, pad_h - pad_h_half], fill=padding)
     pad_info = [pad_h_half, pad_h - pad_h_half, pad_w_half, pad_w - pad_w_half]
 
     #### normalize
     mean = torch.tensor([123.675, 116.28, 103.53]).float()[:, None, None]
     std = torch.tensor([58.395, 57.12, 57.375]).float()[:, None, None]
-    rgb = torch.from_numpy(rgb.transpose((2, 0, 1))).float()
-    rgb = torch.div((rgb - mean), std)
-    rgb = rgb[None, :, :, :].cuda()
+    rgb_norm = torch.from_numpy(rgb_pad.transpose((2, 0, 1))).float()
+    rgb_norm = torch.div((rgb_norm - mean), std)
+    rgb_norm = rgb_norm[None, :, :, :].cuda()
 
     ###################### canonical camera space ######################
     # inference
     model.cuda().eval()
     with torch.no_grad():
-        pred_depth, confidence, output_dict = model.inference({'input': rgb})
+        pred_depth, confidence, output_dict = model.inference({'input': rgb_norm})
 
     # un pad
     pred_depth = pred_depth.squeeze()
@@ -232,13 +294,12 @@ def infer_depth_using_metric3d(image: torch.Tensor, cam_K: torch.Tensor, model, 
                  pad_info[2]: pred_depth.shape[1] - pad_info[3]]
 
     # upsample to original size
-    pred_depth = torch.nn.functional.interpolate(pred_depth[None, None, :, :], rgb_origin.shape[:2],
-                                                 mode='bilinear').squeeze()
+    pred_depth_up = torch.nn.functional.interpolate(pred_depth[None, None, :, :], rgb_origin.shape[:2], mode='bilinear')
     ###################### canonical camera space ######################
 
     #### de-canonical transform
     canonical_to_real_scale = intrinsic[0] / 1000.0  # 1000.0 is the focal length of canonical camera
-    pred_depth = pred_depth * canonical_to_real_scale  # now the depth is metric
-    pred_depth = torch.clamp(pred_depth, 0, 300)
+    pred_depth_up = pred_depth_up * canonical_to_real_scale  # now the depth is metric
+    pred_depth_up = torch.clamp(pred_depth_up, 0, 300)
 
-    return pred_depth
+    return pred_depth_up

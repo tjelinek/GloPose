@@ -1,5 +1,6 @@
 from typing import List
 
+import torch
 from torchvision.utils import save_image
 from tqdm import tqdm
 
@@ -56,13 +57,11 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str]):
                         last_pinhole_params = pinhole_params_i
                     cam_K = pinhole_params_i.intrinsics.squeeze()
 
-                    image_path = frame_provider.images_paths[i]
-                    image = frame_provider.next_image(i)
+                    image = frame_provider.next_image_255(i)
 
-                    depth = infer_depth_using_metric3d(image_path, metric3d, cam_K, image)
+                    pred_depth_up = infer_depth_using_metric3d(image, cam_K, metric3d)
 
-                    save_image(depth, str(depth_image_path))
-
+                    save_image(pred_depth_up, str(depth_image_path))
 
 if __name__ == '__main__':
 

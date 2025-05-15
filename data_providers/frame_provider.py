@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from PIL import Image
 from kornia.image import ImageSize
 from torchvision import transforms
+from torchvision.io import decode_image, ImageReadMode
 
 from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
@@ -170,6 +171,18 @@ class PrecomputedFrameProvider(FrameProvider):
             frame = get_nth_video_frame(self.video_path, frame_i * self.skip_indices)
 
         image_tensor = transforms.ToTensor()(frame)[None].to(self.device)
+
+        image_downsampled = self.downsample_image(image_tensor, self.downsample_factor)
+
+        return image_downsampled
+
+    def next_image_255(self, frame_i) -> torch.Tensor:
+        if self.images_paths is not None:
+            frame = decode_image(str(self.images_paths[frame_i * self.skip_indices]), mode=ImageReadMode.UNCHANGED)
+        else:
+            raise NotImplementedError()
+
+        image_tensor = frame[None].to(self.device)
 
         image_downsampled = self.downsample_image(image_tensor, self.downsample_factor)
 
@@ -431,7 +444,7 @@ class FrameProviderAll:
             image = image * segmentation
 
         depth = None
-        if self.depth_provider is not None:
+        if self.depth_provider is not None and False:
             depth = self.depth_provider.next_depth(frame_i, input_image=image)
 
         assert image.shape[-2:] == segmentation.shape[-2:]
