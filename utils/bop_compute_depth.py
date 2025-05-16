@@ -8,7 +8,7 @@ from utils.bop_challenge import get_pinhole_params
 
 
 @torch.no_grad()
-def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str], batch_size: int = 8):
+def compute_missing_depths_metric3d(base_bop_folder: Path, relevant_datasets: List[str], batch_size: int = 8):
     metric3d = metric3d_vit_large(pretrain=True).cuda().eval()
     config = TrackerConfig()
 
@@ -81,4 +81,4 @@ if __name__ == '__main__':
 
     _relevant_datasets = ['handal', 'hope']
     _base_bop_folder = Path('/mnt/personal/jelint19/data/bop')
-    compute_missing_depths(_base_bop_folder, _relevant_datasets)
+    compute_missing_depths_metric3d(_base_bop_folder, _relevant_datasets)
