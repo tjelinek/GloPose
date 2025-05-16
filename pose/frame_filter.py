@@ -279,7 +279,7 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
 
         ransac_opts = pycolmap.RANSACOptions()
         ransac_opts.max_error = 0.5
-        ransac_opts.confidence = 0.99999999
+        # ransac_opts.confidence = 0.99999999
 
         if camera_K1 is not None and camera_K2 is not None:
             K_params1 = colmap_K_params_vec(camera_K1.numpy(force=True))
