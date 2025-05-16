@@ -265,7 +265,7 @@ class Tracker6D:
                     self.data_graph.get_frame_data(n).gt_Se3_world2cam
                 for n in self.data_graph.G.nodes
             }
-            reconstruction = align_with_kabsch(reconstruction, gt_Se3_world2cam_poses)
+            reconstruction, align_success = align_with_kabsch(reconstruction, gt_Se3_world2cam_poses)
         else:
             raise ValueError(f'Unknown similarity transform method {self.config.similarity_transformation}')
 

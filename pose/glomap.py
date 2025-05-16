@@ -188,7 +188,7 @@ class GlomapWrapper:
 
 
 def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3])\
-        -> pycolmap.Reconstruction:
+        -> Tuple[pycolmap.Reconstruction, bool]:
 
     reconstruction = copy.deepcopy(reconstruction)
 
@@ -211,10 +211,13 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
     pred_camera_centers = np.stack(pred_camera_centers)
 
     sim3d_report = pycolmap.estimate_sim3d_robust(pred_camera_centers, gt_camera_centers)
+    if sim3d_report is None:
+        return reconstruction, False
+
     sim3d = sim3d_report['tgt_from_src']
     reconstruction.transform(sim3d)
 
-    return reconstruction
+    return reconstruction, True
 
 
 def two_view_geometry(colmap_db_path: Path):
