@@ -14,7 +14,7 @@ from data_providers.frame_provider import FrameProviderAll
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
-from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC
+from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
 from pose.glomap import GlomapWrapper, get_image_Se3_world2cam, align_reconstruction_with_pose, align_with_kabsch
 from tracker_config import TrackerConfig
 from utils.eval import update_global_statistics
@@ -98,6 +98,8 @@ class Tracker6D:
         self.frame_filter: Union[RoMaFrameFilter, FrameFilterSift]
         if self.config.frame_filter == 'RoMa':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
+        elif self.config.frame_filter == 'passthrough':
+            self.frame_filter = FrameFilterPassThrough(self.config, self.data_graph)
         elif self.config.frame_filter == 'RoMaRANSAC':
             self.frame_filter = RoMaFrameFilterRANSAC(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'SIFT':

@@ -70,7 +70,7 @@ class TrackerConfig:
     densify_view_graph: bool = True
     matchability_based_reliability: bool = False
     frame_filter: str = 'RoMaRANSAC'  # Either 'RoMa', 'SIFT', or 'passthrough'
-    take_all_frame_filter_modulo: int = 1
+    passthrough_frame_filter_skip: int = 1
     reconstruction_matches: str = 'RoMa'
 
     # Reconstruction settings

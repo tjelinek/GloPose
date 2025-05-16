@@ -38,6 +38,10 @@ class BaseFrameFilter:
     def densify(self):
         pass
 
+    @abstractmethod
+    def add_keyframe(self, frame_i: int):
+        pass
+
 
 class RoMaFrameFilter(BaseFrameFilter):
 
@@ -301,6 +305,23 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
             reliability = 0.
 
         return reliability
+
+
+class FrameFilterPassThrough(BaseFrameFilter):
+
+    def add_keyframe(self, frame_i: int):
+
+        if frame_i % self.config.passthrough_frame_filter_skip != 0:
+            return
+
+        forward_edges = [(i, frame_i) for i in range(frame_i)]
+        backward_edges = [(frame_i, i) for i in range(frame_i)]
+
+        self.keyframe_graph.add_edges_from(forward_edges)
+        self.keyframe_graph.add_edges_from(backward_edges)
+
+    def densify(self):
+        pass
 
 
 class FrameFilterSift(BaseFrameFilter):
