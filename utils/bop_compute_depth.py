@@ -15,7 +15,7 @@ def compute_missing_depths(base_bop_folder: Path, relevant_datasets: List[str], 
     datasets = [d for d in base_bop_folder.iterdir() if d.name in relevant_datasets]
     for dataset in tqdm(datasets, desc='Datasets'):
         for split in tqdm(list(dataset.iterdir()), desc=f'Splits ({dataset.name})', leave=False):
-            if not split.is_dir():
+            if not split.is_dir() and 'train' not in str(split.name):
                 continue
 
             all_items = [x for x in split.iterdir() if x.is_dir()]
