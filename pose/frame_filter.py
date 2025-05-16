@@ -294,8 +294,8 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
         else:
             ransac_res = pycolmap.estimate_fundamental_matrix(src_pts_xy_np, dst_pts_xy_np, ransac_opts)
 
-        inlier_mask = ransac_res.get('inlier_mask')
-        if inlier_mask is not None:
+        if ransac_res is not None:
+            inlier_mask = ransac_res.get('inlier_mask')
             reliability = inlier_mask.sum() / len(inlier_mask)
         else:
             reliability = 0.
