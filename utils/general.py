@@ -184,3 +184,13 @@ def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\
     cy = intrinsics[..., 1, 2]
 
     return fx, fy, cx, cy
+
+
+def colmap_K_params_vec(camera_K):
+    f_x = float(camera_K[0, 0])
+    f_y = float(camera_K[1, 1])
+    c_x = float(camera_K[0, 2])
+    c_y = float(camera_K[1, 2])
+    params_vec = [f_x, f_y, c_x, c_y]
+
+    return params_vec

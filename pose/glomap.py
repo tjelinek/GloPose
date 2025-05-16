@@ -24,6 +24,7 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMa
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
+from utils.general import colmap_K_params_vec
 
 
 class GlomapWrapper:
@@ -139,15 +140,12 @@ class GlomapWrapper:
         first_frame_data = self.data_graph.get_frame_data(0)
         h, w = first_frame_data.image_shape.height, first_frame_data.image_shape.width
         camera_K = first_frame_data.gt_pinhole_K
-        f_x = float(camera_K[0, 0])
-        f_y = float(camera_K[1, 1])
-        c_x = float(camera_K[0, 2])
-        c_y = float(camera_K[1, 2])
+        params_vec = colmap_K_params_vec(camera_K)
 
         new_cam_id = 1
         if single_camera:
             new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
-                                         params=[f_x, f_y, c_x, c_y])
+                                         params=params_vec)
             database.write_camera(new_camera, use_camera_id=True)
 
         for i, img in enumerate(images):
