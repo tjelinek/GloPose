@@ -4,12 +4,14 @@ from typing import List, Tuple
 
 import networkx as nx
 import numpy as np
+import pycolmap
 import torch
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
+from utils.general import colmap_K_params_vec
 from utils.image_utils import otsu_threshold
 
 
@@ -252,6 +254,48 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
+
+        return reliability
+
+
+class RoMaFrameFilterRANSAC(RoMaFrameFilter):
+
+    def flow_reliability(self, source_frame: int, target_frame: int) -> float:
+        src_pts_xy, dst_pts_xy, certainty = (
+            self.flow_provider.get_source_target_points_roma_datagraph(source_frame, target_frame,
+                                                                       self.config.roma_sample_size, as_int=False,
+                                                                       zero_certainty_outside_segmentation=True,
+                                                                       only_foreground_matches=True))
+        src_pts_xy_np = src_pts_xy.numpy(force=True)
+        dst_pts_xy_np = dst_pts_xy.numpy(force=True)
+
+        frame_data_source = self.data_graph.get_frame_data(source_frame)
+        frame_data_target = self.data_graph.get_frame_data(target_frame)
+        camera_K1 = self.data_graph.get_frame_data(source_frame).gt_pinhole_K
+        camera_K2 = self.data_graph.get_frame_data(target_frame).gt_pinhole_K
+
+        source_shape = frame_data_source.image_shape
+        target_shape = frame_data_target.image_shape
+
+        ransac_opts = pycolmap.RANSACOptions()
+        ransac_opts.max_error = 0.5
+        ransac_opts.confidence = 0.99999999
+
+        if camera_K1 is not None and camera_K2 is not None:
+            K_params1 = colmap_K_params_vec(camera_K1.numpy(force=True))
+            K_params2 = colmap_K_params_vec(camera_K2.numpy(force=True))
+
+            camera1 = pycolmap.Camera(camera_id=1, model=pycolmap.CameraModelId.PINHOLE, width=source_shape.width,
+                                      height=source_shape.height, params=K_params1)
+            camera2 = pycolmap.Camera(camera_id=1, model=pycolmap.CameraModelId.PINHOLE, width=target_shape.width,
+                                      height=target_shape.height, params=K_params2)
+
+            ransac_res = pycolmap.estimate_essential_matrix(src_pts_xy_np, dst_pts_xy_np, camera1, camera2, ransac_opts)
+        else:
+            ransac_res = pycolmap.estimate_fundamental_matrix(src_pts_xy_np, dst_pts_xy_np, ransac_opts)
+
+        inlier_mask = ransac_res['inlier_mask']
+        reliability = inlier_mask.sum() / len(inlier_mask)
 
         return reliability
 
