@@ -42,6 +42,10 @@ class BaseFrameFilter:
     def add_keyframe(self, frame_i: int):
         pass
 
+    @abstractmethod
+    def filter_frames(self, frame_i: int):
+        pass
+
 
 class RoMaFrameFilter(BaseFrameFilter):
 
@@ -309,10 +313,11 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
 
 class FrameFilterPassThrough(BaseFrameFilter):
 
-    def add_keyframe(self, frame_i: int):
-
+    def filter_frames(self, frame_i: int):
         if frame_i % self.config.passthrough_frame_filter_skip != 0:
-            return
+            self.add_keyframe(frame_i)
+
+    def add_keyframe(self, frame_i: int):
 
         forward_edges = [(i, frame_i) for i in range(frame_i)]
         backward_edges = [(frame_i, i) for i in range(frame_i)]
