@@ -314,7 +314,7 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
 class FrameFilterPassThrough(BaseFrameFilter):
 
     def filter_frames(self, frame_i: int):
-        if frame_i % self.config.passthrough_frame_filter_skip != 0:
+        if frame_i % self.config.passthrough_frame_filter_skip == 0:
             self.add_keyframe(frame_i)
 
     def add_keyframe(self, frame_i: int):
