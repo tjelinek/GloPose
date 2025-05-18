@@ -1,0 +1,9 @@
+from tracker_config import TrackerConfig
+
+
+def get_config() -> TrackerConfig:
+    cfg = TrackerConfig()
+
+    cfg.frame_filter = 'passthrough'
+
+    return cfg
