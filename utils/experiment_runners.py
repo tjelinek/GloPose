@@ -15,14 +15,14 @@ from tracker6d import Tracker6D
 from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segment
 
 
-def run_tracking(config, dataset, sequence, experiment=None, output_folder=None,
-                 gt_mesh_path=None, gt_texture_path=None, rotation_generator=None):
+def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=None, output_folder=None,
+                 gt_mesh_path: Path = None, gt_texture_path: Path = None, rotation_generator=None):
     """
     Common function to run 6D tracking across different datasets
 
     Parameters:
     -----------
-    config : object
+    config : TrackerConfig
         Configuration object that has already been loaded and customized
     dataset : str
         Name of the dataset (e.g., 'SyntheticObjects', 'GoogleScannedObjects')
