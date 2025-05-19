@@ -325,6 +325,9 @@ class FrameFilterPassThrough(BaseFrameFilter):
         self.keyframe_graph.add_edges_from(forward_edges)
         self.keyframe_graph.add_edges_from(backward_edges)
 
+        frame_data = self.data_graph.get_frame_data(frame_i)
+        frame_data.matching_source_keyframe = frame_i - 1 if frame_i > 0 else 0
+
     def densify(self):
         pass
 

@@ -695,6 +695,9 @@ class WriteResults:
         new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
+        if self.config.frame_filter == 'passthrough':
+            return
+
         arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
