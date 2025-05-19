@@ -69,7 +69,8 @@ class TrackerConfig:
     min_number_of_reliable_matches: int = 0
     densify_view_graph: bool = True
     matchability_based_reliability: bool = False
-    frame_filter: str = 'RoMaRANSAC'  # Either 'RoMa', 'SIFT', or 'passthrough'
+    frame_filter: str = 'RoMa'  # Either 'RoMa', 'SIFT', or 'passthrough'
+    roma_allow_disk_cache: bool = True
     passthrough_frame_filter_skip: int = 1
     reconstruction_matches: str = 'RoMa'
 

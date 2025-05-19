@@ -117,10 +117,9 @@ class RoMaFlowProviderDirect:
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
     def __init__(self, device, cache_dir: Path, data_graph: DataGraph = None, allow_missing: bool = True,
-                 purge_cache: bool = False):
+                 allow_disk_cache=True, purge_cache: bool = False):
         super().__init__(device)
 
-        self.saved_flow_paths = cache_dir
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
         self.data_graph: Optional[DataGraph] = data_graph
@@ -134,6 +133,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         self.certainties_path.mkdir(exist_ok=True, parents=True)
 
         self.allow_missing: bool = allow_missing
+        self.allow_disk_cache: bool = allow_disk_cache
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                        source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
@@ -171,7 +171,7 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
         if warp is None or certainty is None:
             warp, certainty = super().next_flow_roma(source_image_tensor, target_image_tensor)
 
-            if source_image_name and target_image_name and self.allow_missing:
+            if source_image_name and target_image_name and self.allow_missing and self.allow_disk_cache:
                 torch.save(warp, warp_filename)
                 torch.save(certainty, certainty_filename)
 
