@@ -50,28 +50,8 @@ echo "Log dir: ${output_folder}/${experiment}.log"
 echo "Output folder: ${output_folder}"
 echo "Experiment: ${experiment}"
 
-ml maturin/1.5.1-GCCcore-13.2.0-Rust-1.76.0 \
-kornia/0.7.4-foss-2023b-CUDA-12.4.0 \
-kaolin/0.17.0-foss-2023b-CUDA-12.4.0 \
-scikit-image/0.24.0-foss-2023b \
-git/2.42.0-GCCcore-13.2.0 \
-sam2/20241216-foss-2023b-CUDA-12.4.0 \
-timm/1.0.13-foss-2023b-CUDA-12.4.0 \
-CMake/3.29.3-GCCcore-13.2.0 \
-Eigen/3.4.0-GCCcore-13.2.0 \
-scikit-build/0.17.6-GCCcore-13.2.0 \
-Boost/1.83.0-GCC-13.2.0 \
-FLANN/1.9.2-foss-2023b \
-METIS/5.1.0-GCCcore-13.2.0 \
-CeresSolver/2.2.0-foss-2023b-CUDA-12.4.0 \
-glog/0.6.0-GCCcore-13.2.0 \
-SQLite/3.43.1-GCCcore-13.2.0 \
-CGAL/5.6.1-GCCcore-13.2.0 \
-Qt5/5.15.13-GCCcore-13.2.0 \
-FreeImage/3.18.0-GCCcore-13.2.0 \
-glew/2.2.0-GCCcore-13.2.0-egl \
-GMP/6.3.0-GCCcore-13.2.0 \
-MPFR/4.2.1-GCCcore-13.2.0 \
-pybind11/2.13.6-GCC-13.2.0
+modules_file=~/modules_glotracker.txt
+# shellcheck disable=SC2046
+ml $(<"$modules_file")
 
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" >> "${output_folder}/${experiment}.log" 2>&1
