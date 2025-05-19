@@ -119,13 +119,16 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
                          config: TrackerConfig, onboarding_type: str = None, only_frames_with_known_poses: bool = False,
-                         scene_obj_id: int = 0):
+                         scene_obj_id: int = None):
 
     # Determine output folder
     if args.output_folder is not None:
         write_folder = Path(args.output_folder) / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / sequence
+    if scene_obj_id is not None:
+        write_folder_seq = write_folder.stem
+        write_folder = write_folder.parent / f'{write_folder_seq}_{scene_obj_id:06d}'
 
     # Path to BOP dataset
     bop_folder = config.default_data_folder / 'bop'

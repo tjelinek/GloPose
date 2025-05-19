@@ -36,7 +36,7 @@ def main():
         experiment_name = args.experiment
 
         config.experiment_name = experiment_name
-        config.sequence = sequence
+        config.sequence = sequence_obj
         config.dataset = dataset
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 5
