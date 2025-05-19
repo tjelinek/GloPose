@@ -599,12 +599,11 @@ def get_first_occurrence_indices(elements: torch.Tensor, dim: Optional[int] = No
     cumulative_counts = occurrence_counts.cumsum(0)
 
     # Shift cumulative counts to get starting positions of each unique value
-    starting_positions = torch.cat((
-        torch.tensor([0], device=cumulative_counts.device),
-        cumulative_counts[:-1]
-    ))
+    N = occurrence_counts.size(0)
+    zero = torch.tensor([0], device=cumulative_counts.device, dtype=cumulative_counts.dtype)
+    starting_positions = torch.cat((zero, cumulative_counts[:-1]))[:N]  # [:N] when called the function on empty Tensor
 
-    # Get the indices of first occurrences
+    # first-occurrence indices
     first_occurrence_indices = sorted_positions[starting_positions]
 
     return first_occurrence_indices, element_to_unique_mapping
