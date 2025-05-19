@@ -369,27 +369,6 @@ class WriteResults:
 
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in keyframe_graph.edges]))
 
-    def log_keyframe_info(self, keyframe_graph: nx.Graph):
-        log_path = self.write_folder / 'keyframe_log.txt'
-
-        with open(log_path, 'w') as f:
-            def log_print(*args, **kwargs):
-                print(*args, **kwargs)
-                print(*args, **kwargs, file=f)
-
-            log_print(f'{"Keyframe":<10} {"Start":<10} {"End":<10}')
-            current_keyframe = min(keyframe_graph.nodes)
-            log_print(f'{current_keyframe:<10} {0:<10}', end='')
-
-            for i in range(len(self.data_graph.G.nodes)):
-                template_current = self.data_graph.get_frame_data(i).matching_source_keyframe
-                if template_current != current_keyframe:
-                    current_keyframe = template_current
-                    log_print(f'{i - 1:<10}')
-                    log_print(f'{current_keyframe:<10} {i:<10}', end='')
-
-            log_print(f'{i:<10}')
-
     def visualize_pose_graph(self, frame_i: int, keyframe_graph: nx.Graph):
         rr.set_time_sequence('frame', frame_i)
 
