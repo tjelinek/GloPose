@@ -118,25 +118,9 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
-                         config: TrackerConfig, onboarding_type: str = None,
-                         only_frames_with_known_poses: bool = False):
-    """
-    Run the 6D tracker on BOP dataset sequences.
+                         config: TrackerConfig, onboarding_type: str = None, only_frames_with_known_poses: bool = False,
+                         scene_obj_id: int = 0):
 
-    Args:
-        dataset: The dataset name (e.g., 'hope', 'handal')
-        experiment_name: Name of the experiment
-        sequence: Sequence identifier
-        sequence_type: Type of sequence (e.g., 'val', 'onboarding')
-        args: Command line arguments
-        config: Tracker configuration
-        skip_indices: Number of frames to skip when processing
-        onboarding_type: Type of onboarding data, if applicable
-        only_frames_with_known_poses: Skip frames without known poses
-
-    Returns:
-        None
-    """
     # Determine output folder
     if args.output_folder is not None:
         write_folder = Path(args.output_folder) / dataset / sequence
@@ -149,18 +133,22 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
     if onboarding_type == 'static':
         static_onboarding_sequence = config.bop_config.static_onboarding_sequence
         config.special_hash = static_onboarding_sequence
+    elif sequence_type in ['test', 'train', 'val']:
+        config.special_hash = str(scene_obj_id)
+        static_onboarding_sequence = None
     else:
         static_onboarding_sequence = None
 
     # Load images and segmentations
     gt_images, gt_segs, gt_depths, sequence_starts =\
         get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type, onboarding_type,
-                                         static_onboarding_sequence)
+                                         static_onboarding_sequence, scene_obj_id=scene_obj_id)
 
     # Get camera-to-object transformations
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
                                                               onboarding_type, sequence_starts,
-                                                              static_onboarding_sequence, device=config.device)
+                                                              static_onboarding_sequence, scene_obj_id,
+                                                              device=config.device)
 
     # Apply frame skipping
     if only_frames_with_known_poses:

@@ -25,9 +25,12 @@ def main():
             '000009_000000', '000009_000001', '000009_000002', '000009_000003', '000009_000004',
             '000010_000000', '000010_000001', '000010_000002', '000010_000003', '000010_000004',
             '000010_000005',
-                    ][:1]
+                    ][4:5]
 
-    for sequence in sequences:
+    for sequence_obj in sequences:
+
+        sequence, obj = sequence_obj.split('_')
+        obj_id = int(obj)
         config = load_config(args.config)
 
         experiment_name = args.experiment
@@ -38,12 +41,13 @@ def main():
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 5
 
-        config.skip_indices = 2
+        config.skip_indices = 1
 
         sequence_type = 'val'
         onboarding_type = None
 
-        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True)
+        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True,
+                             scene_obj_id=obj_id)
 
 
 if __name__ == "__main__":

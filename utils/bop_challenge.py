@@ -72,9 +72,9 @@ def load_gt_images(image_folder: Path):
     return gt_images
 
 
-def load_gt_segmentations(segmentation_folder: Path, object_id: int = 1):
+def load_gt_segmentations(segmentation_folder: Path, object_id: int = 0):
     """Load segmentation files, filtering by object ID."""
-    object_id_str = f"{object_id - 1:06d}"  # Ensure it's a zero-padded 6-digit string
+    object_id_str = f"{object_id:06d}"  # Ensure it's a zero-padded 6-digit string
 
     gt_segs = {
         int(file.stem.split('_')[0]): file
@@ -103,13 +103,21 @@ def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_
         raise ValueError(f'Unknown sequence type: {sequence_type}')
 
 
-def extract_gt_Se3_cam2obj(pose_json_path: Path, object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
+def extract_gt_Se3_cam2obj(pose_json_path: Path, scene_object_object_id: int = None, object_id: int = None,
+                           device: str = 'cpu') -> Dict[int, Se3]:
 
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
 
-    if object_id is None:
-        obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
+    assert not (scene_object_object_id is not None and object_id is not None)
+    obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
+
+    if scene_object_object_id is None and object_id is None:
         object_id = obj_ids[0]
+    elif scene_object_object_id is not None and object_id is None:
+        object_id = obj_ids[scene_object_object_id]
+    else:
+        assert object_id in obj_ids
+
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
     gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()
     gt_Se3_cam2obj = {frame: dict_gt_Se3_obj2cam[frame].inverse() for frame in gt_Se3_obj2cam_frames}
@@ -154,7 +162,8 @@ def get_bop_images_and_segmentations(
     sequence: str,
     sequence_type: str,
     onboarding_type: str = None,
-    static_onboarding_sequence: Optional[str] = None
+    static_onboarding_sequence: Optional[str] = None,
+    scene_obj_id: int = None,
 ) -> Tuple[Dict[int, Path], Dict[int, Path], Optional[Dict[int, Path]], Optional[List[int]]]:
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
@@ -211,7 +220,7 @@ def get_bop_images_and_segmentations(
         segmentation_folder = sequence_folder / 'mask_visib'
         depth_folder = sequence_folder / 'depth'
         gt_images = load_gt_images(image_folder)
-        gt_segs = load_gt_segmentations(segmentation_folder)
+        gt_segs = load_gt_segmentations(segmentation_folder, object_id=scene_obj_id)
         gt_depths = None
         if depth_folder.exists():
             gt_depths = load_gt_images(depth_folder)
@@ -226,6 +235,7 @@ def read_gt_Se3_cam2obj_transformations(
     onboarding_type: str = None,
     sequence_starts: Optional[List[int]] = None,
     static_onboarding_sequence: Optional[str] = None,
+    scene_obj_id: int = None,
     device: str = 'cpu'
 ) -> Dict[int, Se3]:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
@@ -242,7 +252,7 @@ def read_gt_Se3_cam2obj_transformations(
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_gt.json'
-        return extract_gt_Se3_cam2obj(pose_json_path, device=device)
+        return extract_gt_Se3_cam2obj(pose_json_path, scene_obj_id, device=device)
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,
