@@ -245,13 +245,8 @@ class Tracker6D:
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) ->\
             Tuple[Optional[Reconstruction], bool]:
 
-        align_success = True
-        reconstruction = None
-        try:
-            reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                            matching_pairs)
-        except Exception as e:
-            print(e)
+        reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
+                                                                        matching_pairs)
 
         if reconstruction is None:
             return reconstruction, False
