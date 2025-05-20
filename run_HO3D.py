@@ -61,7 +61,7 @@ def main():
     gt_rotations = []
     cam_intrinsics_list = []
     for i, file in enumerate(sorted(meta_folder.iterdir())):
-        if file.suffix != '.npz':
+        if file.suffix not in ['.npz', '.pkl']:
             continue
 
         data = np.load(file, allow_pickle=True)
