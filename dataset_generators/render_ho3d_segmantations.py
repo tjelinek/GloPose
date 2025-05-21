@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Script to render per-frame segmentation masks of the object from HO3Dv3 evaluation splits, with debug outputs to validate transforms.
+Script to render per-frame segmentation masks of the object from HO3Dv3 evaluation splits using Open3D,
+applying the correct transform convention (object→camera) and handling multi-camera annotations.
 
 Usage:
-    python render_segmentations_debug.py
+    python render_segmentations_open3d.py
 """
 import os
 import copy
@@ -14,8 +15,13 @@ import cv2
 from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
 
-# Debug flag: number of frames to debug-print
-DEBUG_FRAMES = 5
+# Hardcoded paths
+EVAL_ROOT = '/mnt/personal/jelint19/data/HO3D/evaluation'
+MESH_ROOT = '/mnt/personal/jelint19/data/HO3D/models'
+
+# Number of debug frames to inspect
+DEBUG_FRAMES = 3
+
 
 def find_mesh_file(mesh_root, obj_name):
     mesh_dir = os.path.join(mesh_root, obj_name)
@@ -23,88 +29,78 @@ def find_mesh_file(mesh_root, obj_name):
         path = os.path.join(mesh_dir, fname)
         if os.path.isfile(path):
             return path
-    raise FileNotFoundError(f"No mesh found for object {obj_name} in {mesh_dir}")
+    raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
-def render_sequence(seq_path, mesh_root, out_seq_path):
+
+def render_sequence(seq_path):
     meta_dir = os.path.join(seq_path, 'meta')
     rgb_dir  = os.path.join(seq_path, 'rgb')
 
-    # Get image size
+    # create output dir
+    out_dir = os.path.join(seq_path, 'segmentation_rendered')
+    os.makedirs(out_dir, exist_ok=True)
+
+    # read image size for renderer
     first_rgb = sorted(os.listdir(rgb_dir))[0]
     img = cv2.imread(os.path.join(rgb_dir, first_rgb), cv2.IMREAD_UNCHANGED)
     h, w = img.shape[:2]
 
-    # Setup renderer
+    # offscreen renderer
     renderer = OffscreenRenderer(w, h)
     mat = MaterialRecord()
-    mat.shader = "defaultLit"
+    mat.shader = "defaultUnlit"
 
-    # Output directory for masks
-    seg_dir = os.path.join(out_seq_path, 'segmentation_rendered')
-    os.makedirs(seg_dir, exist_ok=True)
-
-    # Collect meta files
-    meta_files = sorted([f for f in os.listdir(meta_dir)
-                         if f.endswith('.npz') or f.endswith('.pkl')])
+    # collect meta files
+    meta_files = sorted(f for f in os.listdir(meta_dir) if f.endswith('.npz') or f.endswith('.pkl'))
     if not meta_files:
-        print(f"No meta files in {meta_dir}")
         return
 
-    # Load base mesh once
+    # load base mesh once
     first_meta = np.load(os.path.join(meta_dir, meta_files[0]), allow_pickle=True)
     obj_name = first_meta['objName'].item() if isinstance(first_meta['objName'], np.ndarray) else first_meta['objName']
-    mesh_path = find_mesh_file(mesh_root, obj_name)
+    mesh_path = find_mesh_file(MESH_ROOT, obj_name)
     base_mesh = o3d.io.read_triangle_mesh(mesh_path)
     base_mesh.compute_vertex_normals()
     center_local = np.asarray(base_mesh.get_center())
 
     for idx, mf in enumerate(meta_files):
-        # Load per-frame data
+        # load metadata
         data = np.load(os.path.join(meta_dir, mf), allow_pickle=True)
-        aa = data['objRot'].squeeze()
-        t  = data['objTrans'].squeeze()
+        raw_rot = data['objRot']
+        raw_trans = data['objTrans']
+
+        # extract for correct camera
+        aa = np.array(raw_rot)
+        t = np.array(raw_trans)
         camMat = data['camMat']
 
-        # Compute rotation matrix for cam2obj
-        R_co, _ = cv2.Rodrigues(aa)
-        t_co = t.reshape(3,1)
-        # Build cam2obj transform
-        T_co = np.eye(4)
-        T_co[:3,:3] = R_co
-        T_co[:3, 3] = t_co.flatten()
-        # Invert to get obj2cam
-        T_oc = np.linalg.inv(T_co)
-        R_oc = T_oc[:3,:3]
-        t_oc = T_oc[:3,3]
+        # correct transform: object->camera rotation and translation
+        R_co, _ = cv2.Rodrigues(aa.astype(np.float64))
+        T_final = np.eye(4)
+        T_final[:3, :3] = R_co
+        T_final[:3,  3] = t
 
-        # Debug prints
+        # debug for first few frames
         if idx < DEBUG_FRAMES:
-            print(f"--- Frame {idx} Debug ---")
-            print("Cam2Obj R_co:\n", R_co)
-            print("Cam2Obj t_co:\n", t_co.flatten())
-            print("Obj2Cam R_oc:\n", R_oc)
-            print("Obj2Cam t_oc:\n", t_oc)
-            # Project mesh center
-            center_cam = R_oc @ center_local + t_oc
-            X, Y, Z = center_cam
-            u = camMat[0,0] * X / Z + camMat[0,2]
-            v = camMat[1,1] * Y / Z + camMat[1,2]
-            print(f"Center in camera coords: {center_cam}")
-            print(f"Projected center (u,v): ({u:.1f}, {v:.1f})\n")
+            center_cam = R_co @ center_local + t
+            u = camMat[0,0] * center_cam[0]/center_cam[2] + camMat[0, 2]
+            v = camMat[1,1] * center_cam[1]/center_cam[2] + camMat[1, 2]
+            print(f"Frame {idx}: center_cam={center_cam}, proj=(u={u:.1f}, v={v:.1f})")
 
-        # Render mesh in camera frame
+        # clear and add mesh
         renderer.scene.clear_geometry()
         mesh_copy = copy.deepcopy(base_mesh)
-        mesh_copy.transform(T_oc)
+        mesh_copy.transform(T_final)
+
         renderer.scene.add_geometry("obj", mesh_copy, mat)
 
-        # Setup camera intrinsics
-        fx, fy = camMat[0,0], camMat[1,1]
-        cx, cy = camMat[0,2], camMat[1,2]
+        # set camera intrinsics (camera at origin)
+        fx, fy = camMat[0, 0], camMat[1, 1]
+        cx, cy = camMat[0, 2], camMat[1, 2]
         intrinsic = PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
         renderer.setup_camera(intrinsic, np.eye(4))
 
-        # Render depth
+        # render depth buffer (raw)
         depth_o3d = renderer.render_to_depth_image(False)
         depth = np.asarray(depth_o3d)
 
