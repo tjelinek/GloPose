@@ -40,6 +40,7 @@ def render_sequence(seq_path, mesh_root):
 
     # offscreen renderer
     renderer = OffscreenRenderer(w, h)
+    renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
     mat = MaterialRecord()
     mat.shader = "defaultUnlit"
 
