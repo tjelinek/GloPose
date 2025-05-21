@@ -15,13 +15,6 @@ import cv2
 from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
 
-# Hardcoded paths
-EVAL_ROOT = '/mnt/personal/jelint19/data/HO3D/evaluation'
-MESH_ROOT = '/mnt/personal/jelint19/data/HO3D/models'
-
-# Number of debug frames to inspect
-DEBUG_FRAMES = 3
-
 
 def find_mesh_file(mesh_root, obj_name):
     mesh_dir = os.path.join(mesh_root, obj_name)
