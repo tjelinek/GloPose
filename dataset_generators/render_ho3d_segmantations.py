@@ -108,8 +108,10 @@ def render_sequence(seq_path, mesh_root):
         mask = np.isfinite(depth)
 
         mask_img = (mask.astype(np.uint8) * 255)
+        mask_rgb = cv2.cvtColor(mask_img, cv2.COLOR_GRAY2RGB)
+
         seg_file = os.path.join(out_dir, f"{idx:06d}.png")
-        cv2.imwrite(seg_file, mask_img)
+        cv2.imwrite(seg_file, mask_rgb)
 
 
 def main():
