@@ -14,6 +14,7 @@ import cv2
 
 from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
+from tqdm import tqdm
 
 
 def find_mesh_file(mesh_root, obj_name):
@@ -56,7 +57,7 @@ def render_sequence(seq_path, mesh_root):
     base_mesh = o3d.io.read_triangle_mesh(mesh_path)
     base_mesh.compute_vertex_normals()
 
-    for idx, mf in enumerate(meta_files):
+    for idx, mf in enumerate(tqdm(meta_files, desc=f"Frames ({os.path.basename(seq_path)})")):
         # load metadata
         data = np.load(os.path.join(meta_dir, mf), allow_pickle=True)
         raw_rot = data['objRot']
@@ -68,7 +69,11 @@ def render_sequence(seq_path, mesh_root):
         camMat = data['camMat']
 
         # correct transform: object->camera rotation and translation
-        R_co, _ = cv2.Rodrigues(aa.astype(np.float64))
+        try:
+            R_co, _ = cv2.Rodrigues(aa.astype(np.float64))
+        except:
+            print(f'Frame {idx} corrupted')
+            continue
         T_final = np.eye(4)
         T_final[:3, :3] = R_co
         T_final[:3, 3] = t
@@ -111,7 +116,7 @@ def main():
     eval_root = '/mnt/personal/jelint19/data/HO3D/evaluation'
     mesh_root = '/mnt/personal/jelint19/data/HO3D/models'
 
-    for seq in sorted(os.listdir(eval_root)):
+    for seq in tqdm(sorted(os.listdir(eval_root)), desc="Sequences"):
         seq_path = os.path.join(eval_root, seq)
         if not os.path.isdir(seq_path):
             continue
