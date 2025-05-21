@@ -77,6 +77,14 @@ def render_sequence(seq_path, mesh_root):
         renderer.scene.clear_geometry()
         mesh_copy = copy.deepcopy(base_mesh)
         mesh_copy.transform(T_final)
+        T_flip = np.asarray([
+            [1., 0., 0., 0.],
+            [0., -1., 0., 0.],
+            [0., 0., -1., 0.],
+            [0., 0., 0., 1.],
+        ])
+        #  OpenCV/HO3D camera coordinate system into the OpenGL coordinate system
+        mesh_copy.transform(T_flip)
 
         renderer.scene.add_geometry("obj", mesh_copy, mat)
 
