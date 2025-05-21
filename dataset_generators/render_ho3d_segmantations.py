@@ -84,9 +84,9 @@ def render_sequence(seq_path, mesh_root):
         intrinsic = PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
         renderer.setup_camera(intrinsic, np.eye(4))
 
-        # render depth buffer (raw)
-        depth_o3d = renderer.render_to_depth_image(False)
-        depth = np.asarray(depth_o3d)
+        # color_o3d = renderer.render_to_image()  # default color pass
+        # color = np.asarray(color_o3d)  # to numpy H×W×3 uint8
+        # cv2.imwrite(os.path.join(out_dir, f"color_{idx:06d}.png"), color)
 
         depth_o3d = renderer.render_to_depth_image(True)
         depth = np.asarray(depth_o3d, dtype=np.float32)
