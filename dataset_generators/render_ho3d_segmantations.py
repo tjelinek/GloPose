@@ -32,9 +32,9 @@ def find_mesh_file(mesh_root, obj_name):
     raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
 
-def render_sequence(seq_path):
+def render_sequence(seq_path, mesh_root):
     meta_dir = os.path.join(seq_path, 'meta')
-    rgb_dir  = os.path.join(seq_path, 'rgb')
+    rgb_dir = os.path.join(seq_path, 'rgb')
 
     # create output dir
     out_dir = os.path.join(seq_path, 'segmentation_rendered')
@@ -58,10 +58,9 @@ def render_sequence(seq_path):
     # load base mesh once
     first_meta = np.load(os.path.join(meta_dir, meta_files[0]), allow_pickle=True)
     obj_name = first_meta['objName'].item() if isinstance(first_meta['objName'], np.ndarray) else first_meta['objName']
-    mesh_path = find_mesh_file(MESH_ROOT, obj_name)
+    mesh_path = find_mesh_file(mesh_root, obj_name)
     base_mesh = o3d.io.read_triangle_mesh(mesh_path)
     base_mesh.compute_vertex_normals()
-    center_local = np.asarray(base_mesh.get_center())
 
     for idx, mf in enumerate(meta_files):
         # load metadata
@@ -78,14 +77,7 @@ def render_sequence(seq_path):
         R_co, _ = cv2.Rodrigues(aa.astype(np.float64))
         T_final = np.eye(4)
         T_final[:3, :3] = R_co
-        T_final[:3,  3] = t
-
-        # debug for first few frames
-        if idx < DEBUG_FRAMES:
-            center_cam = R_co @ center_local + t
-            u = camMat[0,0] * center_cam[0]/center_cam[2] + camMat[0, 2]
-            v = camMat[1,1] * center_cam[1]/center_cam[2] + camMat[1, 2]
-            print(f"Frame {idx}: center_cam={center_cam}, proj=(u={u:.1f}, v={v:.1f})")
+        T_final[:3, 3] = t
 
         # clear and add mesh
         renderer.scene.clear_geometry()
@@ -94,7 +86,6 @@ def render_sequence(seq_path):
 
         renderer.scene.add_geometry("obj", mesh_copy, mat)
 
-        # set camera intrinsics (camera at origin)
         fx, fy = camMat[0, 0], camMat[1, 1]
         cx, cy = camMat[0, 2], camMat[1, 2]
         intrinsic = PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
@@ -104,18 +95,8 @@ def render_sequence(seq_path):
         depth_o3d = renderer.render_to_depth_image(False)
         depth = np.asarray(depth_o3d)
 
-        # Debug depth stats
-        if idx < DEBUG_FRAMES:
-            nonzeros = depth[depth > 0]
-            if nonzeros.size:
-                print(f"Depth stats frame {idx}: min={nonzeros.min():.3f}, max={nonzeros.max():.3f}, mean={nonzeros.mean():.3f}\n")
-            else:
-                print("No valid depth values (all zeros).\n")
-
-        # Segmentation mask
-        mask = (depth > 0).astype(np.uint8) * 255
-        seg_file = os.path.join(seg_dir, f"{idx:06d}.png")
-        cv2.imwrite(seg_file, mask)
+        depth_o3d = renderer.render_to_depth_image(True)
+        depth = np.asarray(depth_o3d, dtype=np.float32)
 
         mask = np.isfinite(depth)
 
@@ -125,16 +106,16 @@ def render_sequence(seq_path):
 
 
 def main():
-    # Hardcoded paths
     eval_root = '/mnt/personal/jelint19/data/HO3D/evaluation'
-    mesh_root = '/mnt/personal/jelint19/data/HO3D/YCB_Video_Models'
+    mesh_root = '/mnt/personal/jelint19/data/HO3D/models'
 
     for seq in sorted(os.listdir(eval_root)):
         seq_path = os.path.join(eval_root, seq)
         if not os.path.isdir(seq_path):
             continue
-        print(f"Rendering sequence: {seq}")
-        render_sequence(seq_path, mesh_root, seq_path)
+        print(f"Processing sequence: {seq}")
+        render_sequence(seq_path, mesh_root)
+
 
 if __name__ == '__main__':
     main()
