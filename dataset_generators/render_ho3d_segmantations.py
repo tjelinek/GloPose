@@ -117,7 +117,11 @@ def render_sequence(seq_path):
         seg_file = os.path.join(seg_dir, f"{idx:06d}.png")
         cv2.imwrite(seg_file, mask)
 
-    print(f"Saved segmentation masks to {seg_dir}")
+        mask = np.isfinite(depth)
+
+        mask_img = (mask.astype(np.uint8) * 255)
+        seg_file = os.path.join(out_dir, f"{idx:06d}.png")
+        cv2.imwrite(seg_file, mask_img)
 
 
 def main():
