@@ -35,8 +35,8 @@ def transform_pts(pts, cam2world):
     return wpts[:3]
 
 
-def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b, thresh=0.05):
-    # 1) get A’s points in world, then into B’s camera frame
+def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b, thresh=0.005):
+    # 1) get A's points in world, then into B's camera frame
     pts_a = depth_to_xyz(depth_a, intrinsics_a)
     wpts_a = transform_pts(pts_a, cam2world_a)
     world2b = torch.inverse(cam2world_b)
@@ -68,7 +68,7 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics):
     returns: NxN matrix of overlap ratios
     """
     N = len(depths)
-    M = torch.zeros((N, N), device=depths[0].device)
+    M = torch.eye(N, device=depths[0].device)
     for i in range(N):
         for j in range(N):
             if i != j:
@@ -93,12 +93,13 @@ def compute_overlaps_bop(dataset_name):
 
         images_paths = sorted(images_folder.iterdir())
         depths_paths = sorted(depths_folder.iterdir())
-        N_frames = len(images_paths)
+        N_frames = min(10, len(images_paths))
+        depth_scales = [0.001] * N_frames
 
         image_provider = PrecomputedFrameProvider(config, images_paths)
         image_shape = image_provider.image_shape
 
-        depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths)
+        depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths, depth_scales)
 
         cam2worlds = [Se3_world2cams[i].inverse().matrix().squeeze() for i in range(N_frames)]
         intrinsics = [camera_K[i].camera_matrix.squeeze() for i in range(N_frames)]
@@ -110,5 +111,4 @@ def compute_overlaps_bop(dataset_name):
 
 
 if __name__ == "__main__":
-
     compute_overlaps_bop('handal')
