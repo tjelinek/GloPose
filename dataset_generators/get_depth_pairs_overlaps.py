@@ -1,5 +1,11 @@
+from pathlib import Path
+
 import torch
-import torch.nn.functional as F
+
+from data_providers.frame_provider import PrecomputedDepthProvider, PrecomputedFrameProvider
+from tracker_config import TrackerConfig
+from utils.bop_challenge import read_gt_Se3_world2cam, get_pinhole_params
+
 
 def depth_to_xyz(depth, intrinsics):
     """
@@ -47,6 +53,7 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics, thresh
     matched = torch.abs(db - zs) < thresh
     return matched.sum().float() / in_bounds.sum().float()
 
+
 def compute_all_overlaps(depths, cam2worlds, intrinsics):
     """
     depths: list of [H,W] tensors
@@ -63,3 +70,40 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics):
                                        cam2worlds[i], cam2worlds[j],
                                        intrinsics)
     return M
+
+
+def compute_overlaps_bop(dataset_name):
+    config = TrackerConfig()
+
+    path_to_dataset = Path(f'/mnt/personal/jelint19/data/bop/{dataset_name}')
+    training_set = path_to_dataset / 'train_pbr'
+
+    for scene in training_set.iterdir():
+        depths_folder = scene / 'depth'
+        images_folder = scene / 'rgb'
+        scene_camera_path = scene / 'scene_camera.json'
+
+        Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path)
+        camera_K = get_pinhole_params(scene_camera_path)
+
+        images_paths = sorted(images_folder.iterdir())
+        depths_paths = sorted(depths_folder.iterdir())
+        N_frames = len(images_paths)
+
+        image_provider = PrecomputedFrameProvider(config, images_paths)
+        image_shape = image_provider.image_shape
+
+        depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths)
+
+        cam2worlds = [Se3_world2cams[i].inverse().matrix().squeeze() for i in range(N_frames)]
+        intrinsics = [camera_K[i].camera_matrix.squeeze() for i in range(N_frames)]
+
+        depths = [depth_provider.next_depth(i).squeeze() for i in range(N_frames)]
+
+        compute_all_overlaps(depths, cam2worlds, intrinsics)
+        pass
+
+
+if __name__ == "__main__":
+
+    compute_overlaps_bop('handal')
