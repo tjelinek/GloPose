@@ -95,7 +95,7 @@ def compute_overlaps_bop(dataset_name):
 
         images_paths = sorted(images_folder.iterdir())
         depths_paths = sorted(depths_folder.iterdir())
-        N_frames = min(10, len(images_paths))
+        N_frames = len(images_paths)
         depth_scales = [0.001] * N_frames
 
         image_provider = PrecomputedFrameProvider(config, images_paths)
