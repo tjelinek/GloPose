@@ -35,7 +35,7 @@ def transform_pts(pts, cam2world):
     return wpts[:3]
 
 
-def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, thresh=0.05):
+def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b, thresh=0.05):
     # 1) get A’s points in world, then into B’s camera frame
     pts_a = depth_to_xyz(depth_a, intrinsics_a)
     wpts_a = transform_pts(pts_a, cam2world_a)
@@ -43,7 +43,7 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, thre
     bpts = world2b @ torch.cat((wpts_a, torch.ones(1, wpts_a.shape[1], device=wpts_a.device)), dim=0)
     cam_pts = bpts[:3]
     # 2) project into B’s image
-    proj = intrinsics_a @ cam_pts
+    proj = intrinsics_b @ cam_pts
     u = proj[0] / proj[2]
     v = proj[1] / proj[2]
     valid = (proj[2] > 0)
@@ -72,7 +72,8 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics):
     for i in range(N):
         for j in range(N):
             if i != j:
-                M[i, j] = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j], intrinsics[i])
+                M[i, j] = M[i, j] = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j],
+                                                  intrinsics[i], intrinsics[j])
     return M
 
 
