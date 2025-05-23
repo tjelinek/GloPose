@@ -1,4 +1,5 @@
 import json
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional, Callable, Tuple
@@ -22,6 +23,7 @@ def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
 
+    no_image_shape_available = False
     pinhole_cameras = {}
     for frame_str, value in json_data.items():
         frame_int = int(frame_str)
@@ -29,14 +31,21 @@ def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -
         cam_K = torch.tensor(frame_data['cam_K'], device=device).view(3, 3)
         cam_w2c = Se3.identity(device=device).matrix()
 
-        width = torch.tensor(frame_data['width'], device=device)
-        height = torch.tensor(frame_data['height'], device=device)
+        if frame_data.get('width') is not None and frame_data.get('height') is not None:
+            width = torch.tensor(frame_data['width'], device=device)
+            height = torch.tensor(frame_data['height'], device=device)
+        else:
+            width, height = torch.tensor(0, device=device), torch.tensor(0, device=device)
+            no_image_shape_available = True
 
         pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
                                        height.unsqueeze(0), width.unsqueeze(0))
         pinhole_camera = pinhole_camera.scale(torch.tensor(scale, device=device).unsqueeze(0))
 
         pinhole_cameras[frame_int] = pinhole_camera
+
+    if no_image_shape_available:
+        warnings.warn(f"The image shape is not available in the {json_file_path} file. ")
 
     return pinhole_cameras
 
