@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedDepthProvider, PrecomputedFrameProvider
 from tracker_config import TrackerConfig
@@ -71,7 +72,7 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics):
     """
     N = len(depths)
     M = torch.eye(N, device=depths[0].device)
-    for i in range(N):
+    for i in tqdm(range(N), desc='i→j overlaps'):
         for j in range(N):
             if i != j:
                 M[i, j] = M[i, j] = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j],
@@ -85,7 +86,7 @@ def compute_overlaps_bop(dataset_name):
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/bop/{dataset_name}')
     training_set = path_to_dataset / 'train_pbr'
 
-    for scene in training_set.iterdir():
+    for scene in tqdm(sorted(training_set.iterdir()), desc='scenes'):
         depths_folder = scene / 'depth'
         images_folder = scene / 'rgb'
         scene_camera_path = scene / 'scene_camera.json'
