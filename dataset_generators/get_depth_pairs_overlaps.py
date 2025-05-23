@@ -57,7 +57,7 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, thre
     # 3) compare against depth_b
     db = depth_b[v_int, u_int]
     matched = torch.abs(db - zs) < thresh
-    return matched.sum().float() / in_bounds.sum().float()
+    return matched.sum().float() / (in_bounds.sum().float() + 1e-8)
 
 
 def compute_all_overlaps(depths, cam2worlds, intrinsics):
