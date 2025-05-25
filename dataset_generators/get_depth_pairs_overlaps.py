@@ -90,6 +90,12 @@ def compute_overlaps_bop(dataset_name):
         depths_folder = scene / 'depth'
         images_folder = scene / 'rgb'
         scene_camera_path = scene / 'scene_camera.json'
+        scene_info_path = scene / 'scene_info.npy'
+
+        print(f'Processing scene {scene}...')
+
+        if scene_info_path.exists():
+            continue
 
         Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, device=config.device)
         camera_K = get_pinhole_params(scene_camera_path, scale=config.image_downsample, device=config.device)
@@ -104,10 +110,24 @@ def compute_overlaps_bop(dataset_name):
 
         depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths, depth_scales)
 
-        cam2worlds = [Se3_world2cams[i].inverse().matrix().squeeze() for i in range(N_frames)]
-        intrinsics = [camera_K[i].camera_matrix.squeeze() for i in range(N_frames)]
+        invalid_ids = set()
 
-        depths = [depth_provider.next_depth(i).squeeze() for i in range(N_frames)]
+        cam2worlds = {}
+        intrinsics = {}
+        depths = {}
+        for i in range(N_frames):
+            try:
+                cam2worlds[i] = Se3_world2cams[i].inverse().matrix().squeeze()
+                intrinsics[i] = camera_K[i].camera_matrix.squeeze()
+                depths[i] = depth_provider.next_depth(i).squeeze()
+            except:
+                invalid_ids.add(i)
+
+        valid_ids = sorted(set(range(N_frames)) - invalid_ids)
+
+        depths = [depths[i] for i in valid_ids]
+        intrinsics = [intrinsics[i] for i in valid_ids]
+        cam2worlds = [cam2worlds[i] for i in valid_ids]
 
         overlap_matrix = compute_all_overlaps(depths, cam2worlds, intrinsics)
 
@@ -119,7 +139,7 @@ def compute_overlaps_bop(dataset_name):
         scene_info['pairs'] = np.array([(i, j) for (i, j) in product(range(N_frames), range(N_frames)) if overlap_matrix[i, j] > 0])
         scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
 
-        np.save(str(scene / 'scene_info.npy'), scene_info, allow_pickle=True)
+        np.save(str(scene_info_path), scene_info, allow_pickle=True)
 
 
 if __name__ == "__main__":
