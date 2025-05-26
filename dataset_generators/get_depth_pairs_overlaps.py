@@ -3,9 +3,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from kornia.geometry import Se3, Quaternion
 from tqdm import tqdm
 
-from data_providers.frame_provider import PrecomputedDepthProvider, PrecomputedFrameProvider
+from data_providers.frame_provider import PrecomputedDepthProvider, PrecomputedFrameProvider, \
+    PrecomputedSegmentationProvider, PrecomputedDepthProvider_HO3D
 from tracker_config import TrackerConfig
 from utils.bop_challenge import read_gt_Se3_world2cam, get_pinhole_params
 
@@ -131,17 +133,85 @@ def compute_overlaps_bop(dataset_name):
 
         overlap_matrix = compute_all_overlaps(depths, cam2worlds, intrinsics)
 
-        scene_info = {}
-        scene_info['image_paths'] = [str(p) for p in images_paths]
-        scene_info['depth_paths'] = [str(p) for p in depths_paths]
-        scene_info['intrinsics'] = [K.numpy(force=True) for K in intrinsics]
-        scene_info['poses'] = [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in valid_ids]
-        scene_info['pairs'] = np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
-                                        if overlap_matrix[i, j] > 0])
+        scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
+                      'intrinsics': [K.numpy(force=True) for K in intrinsics],
+                      'poses': [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in valid_ids],
+                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
+                                         if overlap_matrix[i, j] > 0])}
         scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
 
         np.save(str(scene_info_path), scene_info, allow_pickle=True)
 
 
+def compute_overlaps_ho3d():
+    config = TrackerConfig()
+
+    path_to_dataset = Path(f'/mnt/personal/jelint19/data/HO3D/')
+    training_set = path_to_dataset / 'train'
+
+    for scene in tqdm(sorted(training_set.iterdir()), desc='scenes'):
+        images_paths = sorted((scene / 'rgb').iterdir())
+        segmentation_paths = sorted((scene / 'seg').iterdir())
+        depths_paths = sorted((scene / 'depth').iterdir())
+        meta_files = sorted(f for f in (scene / 'meta').iterdir() if Path(f).suffix == '.npz')
+
+        N = len(images_paths)
+
+        image_provider = PrecomputedFrameProvider(config, images_paths)
+        image_shape = image_provider.image_shape
+        depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depths_paths)
+        segmentation_provider = PrecomputedSegmentationProvider(config, image_shape, segmentation_paths)
+
+        scene_info_path = scene / 'scene_info.npy'
+
+        if scene_info_path.exists():
+            continue
+
+        valid_ids = []
+        depths = []
+        intrinsics = []
+        cam2obj_Ts = []
+        segmentations = []
+
+        for i in range(N):
+
+            try:
+                segmentation = segmentation_provider.next_segmentation(i).squeeze()
+                depth = depth_provider.next_depth(i).squeeze()
+
+                meta_file = meta_files[i]
+                data = np.load(meta_file, allow_pickle=True)
+                data_dict = {key: data[key] for key in data}
+
+                cam_K = torch.from_numpy(data_dict['camMat']).to(config.device).to(torch.float32)
+                cam2obj_R = torch.from_numpy(data_dict['objRot']).to(config.device).squeeze()
+                cam2obj_t = torch.from_numpy(data_dict['objTrans']).to(config.device)
+                cam2obj_Se3 = Se3(Quaternion.from_axis_angle(cam2obj_R), cam2obj_t)
+                cam2obj_T = cam2obj_Se3.matrix().squeeze()
+
+                valid_ids.append(i)
+                intrinsics.append(cam_K)
+                cam2obj_Ts.append(cam2obj_T)
+                depths.append(depth)
+                segmentations.append(segmentation)
+
+            except Exception:
+                pass
+
+        overlap_matrix = compute_all_overlaps(depths, cam2obj_Ts, intrinsics)
+
+        scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
+                      'intrinsics': [K.numpy(force=True) for K in intrinsics],
+                      'poses': [Se3.from_matrix(cam2obj_Ts[i]).inverse().matrix().squeeze().numpy(force=True)
+                                for i in valid_ids],
+                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
+                                         if overlap_matrix[i, j] > 0])}
+        scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
+
+        np.save(str(scene_info_path), scene_info, allow_pickle=True)
+
+
+
 if __name__ == "__main__":
-    compute_overlaps_bop('handal')
+    # compute_overlaps_bop('hope')
+    compute_overlaps_ho3d()
