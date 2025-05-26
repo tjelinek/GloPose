@@ -3,6 +3,7 @@ from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import List, Optional
 
+import cv2
 import imageio
 import numpy as np
 import torch
@@ -493,16 +494,35 @@ class PrecomputedDepthProvider(DepthProvider):
         return len(self.depth_paths)
 
     def next_depth(self, frame_i, **kwargs):
-        depth_tensor = self.load_and_downsample_depth(self.depth_paths[frame_i * self.skip_indices], self.image_shape,
-                                                      self.device)
+        depth_path = self.depth_paths[frame_i * self.skip_indices]
+        depth_tensor = self.load_and_downsample_depth(depth_path, self.image_shape, self.device)
         return depth_tensor * self.depth_scales[frame_i * self.skip_indices]
 
     @staticmethod
     def load_and_downsample_depth(depth_path: Path, image_size: ImageSize, device: str = 'cpu') -> torch.Tensor:
         # Load depth
-        depth = imageio.v3.imread(depth_path)
+        depth = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
 
         depth_p = torch.from_numpy(depth).to(device)[None, None].to(torch.float32)
-        depth_resized = F.interpolate(depth_p, size=[image_size.height, image_size.width], mode='nearest')
+        depth_resized = F.interpolate(depth_p, size=[image_size.height, image_size.width], mode='bilinear')
+
+        return depth_resized
+
+
+class PrecomputedDepthProvider_HO3D(PrecomputedDepthProvider):
+
+    @staticmethod
+    def load_and_downsample_depth(depth_path: Path, image_size: ImageSize, device: str = 'cpu') -> torch.Tensor:
+        # Taken from
+        # https://github.com/shreyashampali/ho3d/blob/c1c8923f2f90fc2ec7c502f491b3851e2c58c388/vis_pcl_all_cameras.py#L60
+
+        depth_scale = 0.00012498664727900177
+        depth_img = cv2.imread(str(depth_path))
+
+        dpt = depth_img[:, :, 2] + depth_img[:, :, 1] * 256
+        dpt = dpt * depth_scale
+
+        depth_p = torch.from_numpy(dpt).to(device)[None, None].to(torch.float32)
+        depth_resized = F.interpolate(depth_p, size=[image_size.height, image_size.width], mode='bilinear')
 
         return depth_resized
