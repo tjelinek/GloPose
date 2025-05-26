@@ -150,6 +150,9 @@ def compute_overlaps_ho3d():
     training_set = path_to_dataset / 'train'
 
     for scene in tqdm(sorted(training_set.iterdir()), desc='scenes'):
+
+        print(f'Processing scene {scene}...')
+
         images_paths = sorted((scene / 'rgb').iterdir())
         segmentation_paths = sorted((scene / 'seg').iterdir())
         depths_paths = sorted((scene / 'depth').iterdir())
