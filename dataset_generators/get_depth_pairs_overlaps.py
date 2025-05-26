@@ -135,8 +135,9 @@ def compute_overlaps_bop(dataset_name):
         scene_info['image_paths'] = [str(p) for p in images_paths]
         scene_info['depth_paths'] = [str(p) for p in depths_paths]
         scene_info['intrinsics'] = [K.numpy(force=True) for K in intrinsics]
-        scene_info['poses'] = [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in range(N_frames)]
-        scene_info['pairs'] = np.array([(i, j) for (i, j) in product(range(N_frames), range(N_frames)) if overlap_matrix[i, j] > 0])
+        scene_info['poses'] = [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in valid_ids]
+        scene_info['pairs'] = np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
+                                        if overlap_matrix[i, j] > 0])
         scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
 
         np.save(str(scene_info_path), scene_info, allow_pickle=True)
