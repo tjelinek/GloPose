@@ -135,8 +135,8 @@ def compute_overlaps_bop(dataset_name):
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
-                      'poses': [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in valid_ids],
-                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
+                      'poses': [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in range(len(valid_ids))],
+                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), repeat=2)
                                          if overlap_matrix[i, j] > 0])}
         scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
 
@@ -205,9 +205,9 @@ def compute_overlaps_ho3d():
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
-                      'poses': [Se3.from_matrix(cam2obj_Ts[i]).inverse().matrix().squeeze().numpy(force=True)
-                                for i in valid_ids],
-                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), range(len(valid_ids)))
+                      'poses': [Se3.from_matrix(cam2obj_T).inverse().matrix().squeeze().numpy(force=True)
+                                for cam2obj_T in cam2obj_Ts],
+                      'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), repeat=2)
                                          if overlap_matrix[i, j] > 0])}
         scene_info['overlaps'] = np.array([overlap_matrix[i, j].item() for i, j in scene_info['pairs']])
 
@@ -216,5 +216,5 @@ def compute_overlaps_ho3d():
 
 
 if __name__ == "__main__":
-    # compute_overlaps_bop('hope')
-    compute_overlaps_ho3d()
+    compute_overlaps_bop('handal')
+    # compute_overlaps_ho3d()
