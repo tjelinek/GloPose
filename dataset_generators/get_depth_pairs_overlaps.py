@@ -1,3 +1,4 @@
+import random
 from itertools import product
 from pathlib import Path
 
@@ -143,13 +144,22 @@ def compute_overlaps_bop(dataset_name):
         np.save(str(scene_info_path), scene_info, allow_pickle=True)
 
 
-def compute_overlaps_ho3d():
+def compute_overlaps_ho3d(random_shuffle=True):
     config = TrackerConfig()
 
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/HO3D/')
     training_set = path_to_dataset / 'train'
 
-    for scene in tqdm(sorted(training_set.iterdir()), desc='scenes'):
+    scene_list = list(training_set.iterdir())
+    if random_shuffle:
+        random.shuffle(scene_list)
+
+    for scene in tqdm(scene_list, desc='scenes'):
+
+        scene_info_path = scene / 'scene_info.npy'
+
+        if scene_info_path.exists():
+            continue
 
         print(f'Processing scene {scene}...')
 
@@ -164,11 +174,6 @@ def compute_overlaps_ho3d():
         image_shape = image_provider.image_shape
         depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depths_paths)
         segmentation_provider = PrecomputedSegmentationProvider(config, image_shape, segmentation_paths)
-
-        scene_info_path = scene / 'scene_info.npy'
-
-        if scene_info_path.exists():
-            continue
 
         valid_ids = []
         depths = []
@@ -216,5 +221,5 @@ def compute_overlaps_ho3d():
 
 
 if __name__ == "__main__":
-    compute_overlaps_bop('handal')
-    # compute_overlaps_ho3d()
+    # compute_overlaps_bop('hope')
+    compute_overlaps_ho3d()
