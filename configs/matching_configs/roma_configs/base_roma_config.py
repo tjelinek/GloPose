@@ -13,4 +13,5 @@ class BaseRomaConfig:
             setattr(self, key, value)
 
         self.config_name: str = self.__class__.__name__
-        pass
+
+        self.use_custom_weights: bool = False

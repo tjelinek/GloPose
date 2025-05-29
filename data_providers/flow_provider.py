@@ -7,16 +7,27 @@ import torchvision
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
+from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 
 
 class RoMaFlowProviderDirect:
 
-    def __init__(self, device):
+    def __init__(self, device, roma_config: BaseRomaConfig):
         self.device = device
-        self.flow_model: roma_model = roma_outdoor(device=self.device)
-        self.flow_model.sample_mode = 'balanced'  # This ensures that the matches are
+
+        if roma_config.use_custom_weights:
+            weights = torch.load('/mnt/personal/jelint19/weights/RoMa/checkpointstrain_roma_outdoor_latest.pth',
+                                 map_location=device, weights_only=True)
+            if "model" in weights:
+                weights = weights["model"]
+        else:
+            weights = torch.load('/mnt/personal/jelint19/weights/RoMa/roma_outdoor.pth',
+                                 map_location=device, weights_only=True)
+
+        self.flow_model: roma_model = roma_outdoor(device=self.device, weights=weights)
+        self.flow_model.sample_mode = 'balanced'  # This ensures that the matches are sampled ~ certainties
         self.roma_size_hw = (864, 864)
 
     def next_flow_roma(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
@@ -116,9 +127,9 @@ class RoMaFlowProviderDirect:
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
-    def __init__(self, device, cache_dir: Path, data_graph: DataGraph = None, allow_missing: bool = True,
+    def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None, allow_missing: bool = True,
                  allow_disk_cache=True, purge_cache: bool = False):
-        super().__init__(device)
+        super().__init__(device, roma_config)
 
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'

@@ -74,6 +74,9 @@ class TrackerConfig:
     passthrough_frame_filter_skip: int = 1
     reconstruction_matches: str = 'RoMa'
 
+    # RoMa config
+    roma_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
+
     # Reconstruction settings
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
     init_with_first_two_images: bool = False

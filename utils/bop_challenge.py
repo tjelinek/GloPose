@@ -407,7 +407,7 @@ def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path],
     global FLOW_PROVIDER_GLOBAL
 
     if FLOW_PROVIDER_GLOBAL is None:
-        FLOW_PROVIDER_GLOBAL = RoMaFlowProviderDirect(config.device)
+        FLOW_PROVIDER_GLOBAL = RoMaFlowProviderDirect(config.device, config.roma_config)
 
     for segmentation_paths in segmentation_paths:
         segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,

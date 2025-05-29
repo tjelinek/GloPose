@@ -92,9 +92,10 @@ class Tracker6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, cache_folder_RoMA, self.data_graph,
-                                                               purge_cache=self.config.purge_cache,
-                                                               allow_disk_cache=self.config.roma_allow_disk_cache)
+        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
+                                                               cache_folder_RoMA, self.data_graph,
+                                                               allow_disk_cache=self.config.roma_allow_disk_cache,
+                                                               purge_cache=self.config.purge_cache)
 
         self.frame_filter: Union[RoMaFrameFilter, FrameFilterSift]
         if self.config.frame_filter == 'RoMa':
