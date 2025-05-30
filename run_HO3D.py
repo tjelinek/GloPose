@@ -35,7 +35,7 @@ def main():
 
     sequence = sequences[0]
     config = load_config(args.config)
-    config.skip_indices = 10
+    config.skip_indices = 11
 
     if config.gt_flow_source == 'GenerateSynthetic':
         exit()
