@@ -95,7 +95,7 @@ def load_gt_data(config: TrackerConfig):
 
 
 def get_initial_image_and_segment(images_list, segmentations_list, dataset_delimeters=None, segmentation_channel=0) \
-        -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        -> Tuple[torch.Tensor, torch.Tensor]:
 
     if dataset_delimeters is None:
         dataset_delimeters = [0]
