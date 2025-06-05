@@ -3,7 +3,7 @@ import torch
 import time
 from pathlib import Path
 
-from kornia.geometry import Quaternion, Se3
+from kornia.geometry import Quaternion, Se3, PinholeCamera
 
 from utils.data_utils import get_initial_image_and_segment
 from utils.runtime_utils import parse_args
@@ -29,8 +29,8 @@ def main():
             ]
         else:
             sequences = [
-                'AP10',  'AP12',  'AP14',   'MPM11',  'MPM13',  'SB11',  'SM1',
-                'AP11',  'AP13',  'MPM10',  'MPM12',  'MPM14',  'SB13',
+                'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
+                'AP11', 'AP13', 'MPM10', 'MPM12', 'MPM14', 'SB13',
             ]
 
     sequence = sequences[0]
@@ -72,7 +72,7 @@ def main():
 
     nones = set()
     for i, file in enumerate(sorted(meta_folder.iterdir())):
-        if file.suffix not in ['.npz', '.pkl']:
+        if file.suffix not in ['.pkl']:
             continue
 
         data = np.load(file, allow_pickle=True)
@@ -125,10 +125,19 @@ def main():
     first_image_tensor, first_segment_tensor = get_initial_image_and_segment(gt_images_list, gt_segmentations_list,
                                                                              segmentation_channel=1)
 
+    image_h, image_w = (torch.tensor(int(s * config.image_downsample))[None].to(config.device)
+                        for s in first_image_tensor.shape[-2:])
+
+    gt_pinhole_params = {}
+    for i in range(config.input_frames):
+        obj2cam = Se3_obj2cam_dict[i].matrix()[None]
+        cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.device)
+        gt_pinhole_params[i] = PinholeCamera(cam_K_tensor, obj2cam, image_h, image_w)
+
     sfb = Tracker6D(config, write_folder, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
                     gt_Se3_world2cam=Se3_obj2cam_dict, segmentation_paths=gt_segmentations_list,
                     initial_image=first_image_tensor, initial_segmentation=first_segment_tensor,
-                    depth_paths=gt_depths_list)
+                    depth_paths=gt_depths_list, gt_pinhole_params=gt_pinhole_params)
     sfb.run_filtering_with_reconstruction()
 
 
