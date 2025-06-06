@@ -50,8 +50,18 @@ echo "Log dir: ${output_folder}/${experiment}.log"
 echo "Output folder: ${output_folder}"
 echo "Experiment: ${experiment}"
 
+# Get the stem (filename without path and extension) of the runner
+runner_stem=$(basename "$dataset_runner" .py)
+
+# Concatenate all sequences with a delimiter (e.g., underscore)
+sequences_concatenated=$(IFS=_; echo "${sequences[*]}")
+
 modules_file=~/modules_glotracker.txt
 # shellcheck disable=SC2046
 ml $(<"$modules_file")
 
-python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" --config="$config_file_path" --sequences "${sequences[@]}" >> "${output_folder}/${experiment}.log" 2>&1
+mkdir -p "${output_folder}/logs"
+
+python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}"\
+        --config="$config_file_path" --sequences \
+        "${sequences[@]}">> "${output_folder}/logs/${runner_stem}_${sequences_concatenated}.log" 2>&1
