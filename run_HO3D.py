@@ -13,7 +13,7 @@ from utils.general import load_config
 
 def main():
     dataset = 'HO3D'
-    split = 'evaluation'  # or 'train'
+    split = 'evaluation'  # 'evaluation' or 'train'
 
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
