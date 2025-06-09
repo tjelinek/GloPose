@@ -63,6 +63,10 @@ class Tracker6D:
         self.gt_Se3_world2cam: Optional[Dict[int, Se3]] = gt_Se3_world2cam
         self.gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = gt_pinhole_params
 
+        # Initialization stuff
+        self.initial_image: torch.Tensor = initial_image
+        self.initial_segmentation: torch.Tensor = initial_segmentation
+
         # Cameras
         self.pinhole_params: Optional[PinholeCamera] = None
 
@@ -77,11 +81,14 @@ class Tracker6D:
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
-        cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
-                                   config.roma_matcher_config.config_name / config.dataset / config.sequence)
-        cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
-                                   config.sift_matcher_config.config_name / config.dataset /
-                                   f'{config.sequence}_{config.special_hash}')
+        self.cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
+                                        config.roma_matcher_config.config_name / config.dataset / config.sequence)
+        self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
+                                        config.sift_matcher_config.config_name / config.dataset /
+                                        f'{config.sequence}_{config.special_hash}')
+        self.cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+                                         f'{self.config.sequence}_{self.config.special_hash}') /
+                                        str(self.config.image_downsample))
 
         self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
                                               config.dataset / f'{config.sequence}_{config.special_hash}')
@@ -93,7 +100,7 @@ class Tracker6D:
                                            data_graph=self.data_graph)
 
         self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
-                                                               cache_folder_RoMA, self.data_graph,
+                                                               self.cache_folder_RoMA, self.data_graph,
                                                                allow_disk_cache=self.config.roma_allow_disk_cache,
                                                                purge_cache=self.config.purge_cache)
 
@@ -107,7 +114,7 @@ class Tracker6D:
         elif self.config.frame_filter == 'SIFT':
             sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph,
                                                            self.config.sift_matcher_config.sift_filter_num_feats,
-                                                           cache_folder_SIFT, device=self.config.device)
+                                                           self.cache_folder_SIFT, device=self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
@@ -120,9 +127,7 @@ class Tracker6D:
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
                                   depth_paths: List[Path], frame_i: int):
 
-        cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
-                                   f'{self.config.sequence}_{self.config.special_hash}') /
-                                   str(self.config.image_downsample))
+        cache_folder_SAM2 = self.cache_folder_SAM2
 
         if self.sequence_starts is not None:
             assert type(initial_segmentation) is list
@@ -165,7 +170,8 @@ class Tracker6D:
                                         initial_segmentation=initial_segmentation,
                                         initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                         segmentation_paths=segmentation_paths, depth_paths=depth_paths,
-                                        segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
+                                        segmentation_video_path=segmentation_video_path,
+                                        sam2_cache_folder=cache_folder_SAM2)
 
     def run_pipeline(self):
 
@@ -243,7 +249,7 @@ class Tracker6D:
             print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
                   self.config.input_frames)
 
-    def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) ->\
+    def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) -> \
             Tuple[Optional[Reconstruction], bool]:
 
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
@@ -341,4 +347,4 @@ class Tracker6D:
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
     sfb = Tracker6D(config, write_folder, **kwargs)
-    sfb.run_filtering_with_reconstruction()
+    sfb.run_pipeline()
