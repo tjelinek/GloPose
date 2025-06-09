@@ -140,7 +140,7 @@ def main():
                     gt_Se3_world2cam=Se3_obj2cam_dict, segmentation_paths=gt_segmentations_list,
                     initial_image=first_image_tensor, initial_segmentation=first_segment_tensor,
                     depth_paths=gt_depths_list, gt_pinhole_params=gt_pinhole_params)
-    sfb.run_filtering_with_reconstruction()
+    sfb.run_pipeline()
 
 
 if __name__ == "__main__":

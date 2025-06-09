@@ -167,7 +167,7 @@ class Tracker6D:
                                         segmentation_paths=segmentation_paths, depth_paths=depth_paths,
                                         segmentation_video_path=segmentation_video_path, sam2_cache_folder=cache_folder_SAM2)
 
-    def run_filtering_with_reconstruction(self):
+    def run_pipeline(self):
 
         self.filter_frames()
 

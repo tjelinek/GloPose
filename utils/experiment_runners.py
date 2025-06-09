@@ -104,7 +104,7 @@ def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=
     tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, images_paths=images_paths,
                         gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
-    tracker.run_filtering_with_reconstruction()
+    tracker.run_pipeline()
 
     return tracker
 
@@ -199,4 +199,4 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
                         initial_image=first_image, initial_segmentation=first_segmentation,
                         depth_paths=gt_depths)
 
-    tracker.run_filtering_with_reconstruction()
+    tracker.run_pipeline()
