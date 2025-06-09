@@ -8,13 +8,19 @@ Usage:
 """
 import os
 import copy
+from pathlib import Path
+
 import numpy as np
 import open3d as o3d
 import cv2
+from kornia.image import ImageSize
 
 from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
 from tqdm import tqdm
+
+from data_providers.frame_provider import PrecomputedDepthProvider_HO3D
+from tracker_config import TrackerConfig
 
 
 def find_mesh_file(mesh_root, obj_name):
@@ -26,7 +32,8 @@ def find_mesh_file(mesh_root, obj_name):
     raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
 
-def render_sequence(seq_path, mesh_root):
+def render_sequence(seq_path: Path, mesh_root: Path, check_depth_consistency=False):
+    # Depth consistency check is unreliable
     meta_dir = os.path.join(seq_path, 'meta')
     rgb_dir = os.path.join(seq_path, 'rgb')
 
@@ -56,6 +63,15 @@ def render_sequence(seq_path, mesh_root):
     mesh_path = find_mesh_file(mesh_root, obj_name)
     base_mesh = o3d.io.read_triangle_mesh(mesh_path)
     base_mesh.compute_vertex_normals()
+
+    if check_depth_consistency:
+        config = TrackerConfig()
+        config.device = 'cpu'
+        image_shape = ImageSize(h, w)
+        depth_folder = seq_path / 'depth'
+
+        depth_paths = sorted(depth_folder.iterdir())
+        depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depth_paths)
 
     for idx, mf in enumerate(tqdm(meta_files, desc=f"Frames ({os.path.basename(seq_path)})")):
         # load metadata
@@ -107,6 +123,11 @@ def render_sequence(seq_path, mesh_root):
 
         mask = np.isfinite(depth)
 
+        if check_depth_consistency:
+            depth_gt = depth_provider.next_depth(idx).squeeze().numpy(force=True)
+            depth_close = (np.abs(depth - depth_gt) < 1e-1)
+            mask *= depth_close
+
         mask_img = (mask.astype(np.uint8) * 255)
         mask_rgb = cv2.cvtColor(mask_img, cv2.COLOR_GRAY2RGB)
 
@@ -115,11 +136,11 @@ def render_sequence(seq_path, mesh_root):
 
 
 def main():
-    eval_root = '/mnt/personal/jelint19/data/HO3D/evaluation'
-    mesh_root = '/mnt/personal/jelint19/data/HO3D/models'
+    eval_root = Path('/mnt/personal/jelint19/data/HO3D/evaluation')
+    mesh_root = Path('/mnt/personal/jelint19/data/HO3D/models')
 
     for seq in tqdm(sorted(os.listdir(eval_root)), desc="Sequences"):
-        seq_path = os.path.join(eval_root, seq)
+        seq_path = eval_root / seq
         if not os.path.isdir(seq_path):
             continue
         print(f"Processing sequence: {seq}")
