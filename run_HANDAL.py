@@ -41,7 +41,8 @@ def main():
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 5
 
-        config.skip_indices = 1
+        if config.per_dataset_skip_indices:
+            config.skip_indices = 1
 
         sequence_type = 'val'
         onboarding_type = None

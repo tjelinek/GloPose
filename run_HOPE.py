@@ -29,7 +29,8 @@ def main():
         config.large_images_results_write_frequency = 5
         config.similarity_transformation = 'depths'
 
-        config.skip_indices = 1
+        if config.per_dataset_skip_indices:
+            config.skip_indices = 1
 
         sequence_type = 'onboarding'
         onboarding_type = config.bop_config.onboarding_type

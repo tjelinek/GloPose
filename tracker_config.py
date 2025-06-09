@@ -31,6 +31,7 @@ class TrackerConfig:
     # Input data settings
     input_frames: int = None
     skip_indices: int = 1
+    per_dataset_skip_indices: bool = True
     frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
     black_background: bool = False
     segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2', 'whites', or 'synthetic'

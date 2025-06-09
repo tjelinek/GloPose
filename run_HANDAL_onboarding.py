@@ -28,7 +28,9 @@ def main():
         config.image_downsample = 0.25
         config.large_images_results_write_frequency = 2
         config.bop_config.static_onboarding_sequence = 'down'
-        config.skip_indices = 4
+
+        if config.per_dataset_skip_indices:
+            config.skip_indices = 4
 
         sequence_type = 'onboarding'
         onboarding_type = 'static'
