@@ -134,10 +134,62 @@ def render_sequence(seq_path: Path, mesh_root: Path, check_depth_consistency=Fal
         seg_file = os.path.join(out_dir, f"{idx:06d}.png")
         cv2.imwrite(seg_file, mask_rgb)
 
+def annotation_list_to_dict(eval_root: Path, annotation_path: Path, annotation_dict_path: Path):
+
+    with open(annotation_path, 'r') as f:
+        annotation_list = json.load(f)
+
+    total_num_files = 0
+    annotation_dict = defaultdict(dict)
+
+    for seq_folder in tqdm(sorted(eval_root.iterdir())):
+        rgb_folder = seq_folder / 'meta'
+        seq_name = seq_folder.name
+
+        for meta_name in tqdm(sorted(rgb_folder.iterdir())):
+            meta_id = meta_name.stem
+
+            data = np.load(str(meta_name), allow_pickle=True)
+            if type(data['objRot']) is not np.ndarray:
+                print(f'Ignoring {seq_name}/{meta_id}')
+                continue
+
+            if total_num_files >= len(annotation_list):
+                print(f'Ignoring {seq_name}/{meta_id}, out of bounds: {total_num_files}/{len(annotation_list)}')
+                continue
+            annotation_dict[seq_name][meta_id] = annotation_list[total_num_files]
+
+            total_num_files += 1
+
+    print(f'Processed {total_num_files}/{len(annotation_list)} annotations')
+    with open(annotation_dict_path, 'w') as f:
+        json.dump(annotation_dict, f, indent=2)
+
 
 def main():
-    eval_root = Path('/mnt/personal/jelint19/data/HO3D/evaluation')
-    mesh_root = Path('/mnt/personal/jelint19/data/HO3D/models')
+
+    ho3d_data_root = Path('/mnt/personal/jelint19/data/HO3D/')
+    eval_root = ho3d_data_root / 'evaluation'
+    mesh_root = ho3d_data_root / 'models'
+
+    eval_xyz_path = ho3d_data_root / 'evaluation_xyz.json'
+    eval_verts_path = ho3d_data_root / 'evaluation_verts.json'
+    eval_xyz_dict_path = ho3d_data_root / 'evaluation_xyz_dict.json'
+    eval_verts_dict_path = ho3d_data_root / 'evaluation_verts_dict.json'
+
+    if not eval_xyz_dict_path.exists():
+        print('Converting evaluation_xyz to dict.')
+        annotation_list_to_dict(eval_root, eval_xyz_path, eval_xyz_dict_path)
+
+    if not eval_verts_dict_path.exists():
+        print('Converting evaluation_xyz to dict.')
+        annotation_list_to_dict(eval_root, eval_verts_path, eval_verts_dict_path)
+
+    with open(eval_xyz_path, 'r') as f:
+        evaluation_xyz_dict = json.load(f)
+
+    with open(eval_verts_path, 'r') as f:
+        evaluation_verts_dict = json.load(f)
 
     for seq in tqdm(sorted(os.listdir(eval_root)), desc="Sequences"):
         seq_path = eval_root / seq
