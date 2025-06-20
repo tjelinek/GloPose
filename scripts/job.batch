@@ -64,4 +64,4 @@ mkdir -p "${output_folder}/logs"
 
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}"\
         --config="$config_file_path" --sequences \
-        "${sequences[@]}">> "${output_folder}/logs/${runner_stem}_${sequences_concatenated}.log" 2>&1
+        "${sequences[@]}" > "${output_folder}/logs/${runner_stem}_${sequences_concatenated}.log" 2>&1
