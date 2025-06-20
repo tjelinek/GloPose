@@ -38,7 +38,7 @@ def find_mesh_file(mesh_root, obj_name):
     raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
 
-def render_sequence(seq_path: Path, mesh_root: Path, check_depth_consistency=False):
+def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_verts, check_depth_consistency=False):
     # Depth consistency check is unreliable
     meta_dir = os.path.join(seq_path, 'meta')
     rgb_dir = os.path.join(seq_path, 'rgb')
