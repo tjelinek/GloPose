@@ -25,7 +25,7 @@ from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
 from tqdm import tqdm
 
-from data_providers.frame_provider import PrecomputedDepthProvider_HO3D
+from repositories.ho3d.mano.webuser.smpl_handpca_wrapper_HAND_only import load_model
 from tracker_config import TrackerConfig
 
 
@@ -38,7 +38,7 @@ def find_mesh_file(mesh_root, obj_name):
     raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
 
-def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_verts, check_depth_consistency=False):
+def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts):
     # Depth consistency check is unreliable
     meta_dir = os.path.join(seq_path, 'meta')
     rgb_dir = os.path.join(seq_path, 'rgb')
@@ -47,14 +47,29 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_
     out_dir = os.path.join(seq_path, 'segmentation_rendered')
     os.makedirs(out_dir, exist_ok=True)
 
+    mano_model_path = '../repositories/ho3d/mano/models/MANO_RIGHT.pkl'
+    mano_model = load_model(mano_model_path)
+    mano_faces = mano_model.f
+
     # read image size for renderer
     first_rgb = sorted(os.listdir(rgb_dir))[0]
     img = cv2.imread(os.path.join(rgb_dir, first_rgb), cv2.IMREAD_UNCHANGED)
     h, w = img.shape[:2]
 
     # offscreen renderer
-    renderer = OffscreenRenderer(w, h)
-    renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
+    obj_renderer = OffscreenRenderer(w, h)
+    hand_renderer = OffscreenRenderer(w, h)
+    obj_renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
+    hand_renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
+
+    # obj_mat = MaterialRecord()
+    # obj_mat.shader = "defaultUnlit"
+    # obj_mat.base_color = [0.0, 1.0, 0.0, 1.0]  # Green for object
+    #
+    # hand_mat = MaterialRecord()
+    # hand_mat.shader = "defaultUnlit"
+    # hand_mat.base_color = [0.0, 0.0, 1.0, 1.0]  # Blue for hand
+
     mat = MaterialRecord()
     mat.shader = "defaultUnlit"
 
@@ -69,15 +84,6 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_
     mesh_path = find_mesh_file(mesh_root, obj_name)
     base_mesh = o3d.io.read_triangle_mesh(mesh_path)
     base_mesh.compute_vertex_normals()
-
-    if check_depth_consistency:
-        config = TrackerConfig()
-        config.device = 'cpu'
-        image_shape = ImageSize(h, w)
-        depth_folder = seq_path / 'depth'
-
-        depth_paths = sorted(depth_folder.iterdir())
-        depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depth_paths)
 
     for idx, mf in enumerate(tqdm(meta_files, desc=f"Frames ({os.path.basename(seq_path)})")):
         # load metadata
@@ -103,14 +109,17 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_
             print(f'Frame {idx} missing hand file')
             continue
 
-        hand_mesh = np.asarray(evaluation_verts[seq_name][frame_name])
+        hand_vertices = np.asarray(evaluation_verts[seq_name][frame_name])
+        hand_mesh = o3d.geometry.TriangleMesh()
+        hand_mesh.vertices = o3d.utility.Vector3dVector(hand_vertices)
+        hand_mesh.triangles = o3d.utility.Vector3iVector(mano_faces)
+        hand_mesh.compute_vertex_normals()
 
         T_final = np.eye(4)
         T_final[:3, :3] = R_co
         T_final[:3, 3] = t
 
         # clear and add mesh
-        renderer.scene.clear_geometry()
         mesh_copy = copy.deepcopy(base_mesh)
         mesh_copy.transform(T_final)
         T_flip = np.asarray([
@@ -122,12 +131,17 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_xyz, evaluation_
         #  OpenCV/HO3D camera coordinate system into the OpenGL coordinate system
         mesh_copy.transform(T_flip)
 
-        renderer.scene.add_geometry("obj", mesh_copy, mat)
+        hand_mesh_copy = copy.deepcopy(hand_mesh)
+        hand_mesh_copy.transform(T_flip)
+
+        obj_renderer.scene.add_geometry("obj", mesh_copy, mat)
+        hand_renderer.scene.add_geometry("hand", hand_mesh_copy, mat)
 
         fx, fy = camMat[0, 0], camMat[1, 1]
         cx, cy = camMat[0, 2], camMat[1, 2]
         intrinsic = PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
-        renderer.setup_camera(intrinsic, np.eye(4))
+        obj_renderer.setup_camera(intrinsic, np.eye(4))
+        hand_renderer.setup_camera(intrinsic, np.eye(4))
 
         # color_o3d = renderer.render_to_image()  # default color pass
         # color = np.asarray(color_o3d)  # to numpy H×W×3 uint8
@@ -211,7 +225,7 @@ def main():
         if not os.path.isdir(seq_path):
             continue
         print(f"Processing sequence: {seq}")
-        render_sequence(seq_path, mesh_root, evaluation_xyz_dict, evaluation_verts_dict)
+        render_sequence(seq_path, mesh_root, evaluation_verts_dict)
 
 
 if __name__ == '__main__':
