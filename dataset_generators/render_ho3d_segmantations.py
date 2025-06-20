@@ -19,14 +19,12 @@ sys.path.append('../repositories/ho3d/mano')
 import numpy as np
 import open3d as o3d
 import cv2
-from kornia.image import ImageSize
 
 from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord
 from open3d.camera import PinholeCameraIntrinsic
 from tqdm import tqdm
 
 from repositories.ho3d.mano.webuser.smpl_handpca_wrapper_HAND_only import load_model
-from tracker_config import TrackerConfig
 
 
 def find_mesh_file(mesh_root, obj_name):
@@ -95,8 +93,6 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluatio
 
     for idx, mf in enumerate(tqdm(meta_files, desc=f"Frames ({os.path.basename(seq_path)})")):
 
-        if idx > 10:
-            exit()
         # load metadata
         data = np.load(os.path.join(meta_dir, mf), allow_pickle=True)
         raw_rot = data['objRot']
