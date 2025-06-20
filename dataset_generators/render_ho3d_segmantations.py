@@ -38,10 +38,18 @@ def find_mesh_file(mesh_root, obj_name):
     raise FileNotFoundError(f"Mesh not found for {obj_name} in {mesh_dir}")
 
 
-def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts):
+def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluation_mapping_path):
     # Depth consistency check is unreliable
     meta_dir = os.path.join(seq_path, 'meta')
     rgb_dir = os.path.join(seq_path, 'rgb')
+
+    with open(evaluation_mapping_path, 'r') as f:
+        eval_mapping = f.read().strip().split('\n')
+
+    eval_mapping_to_index = defaultdict(dict)
+    for i, line in enumerate(eval_mapping):
+        sequence, frame = line.split('/')
+        eval_mapping_to_index[sequence][frame] = i
 
     # create output dir
     out_dir = os.path.join(seq_path, 'segmentation_rendered')
@@ -86,6 +94,9 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts):
     base_mesh.compute_vertex_normals()
 
     for idx, mf in enumerate(tqdm(meta_files, desc=f"Frames ({os.path.basename(seq_path)})")):
+
+        if idx > 10:
+            exit()
         # load metadata
         data = np.load(os.path.join(meta_dir, mf), allow_pickle=True)
         raw_rot = data['objRot']
@@ -105,11 +116,12 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts):
 
         seq_name = seq_path.name
         frame_name = Path(mf).stem
-        if not evaluation_verts[seq_name].get(frame_name):
+        if not eval_mapping_to_index[seq_name].get(frame_name):
             print(f'Frame {idx} missing hand file')
             continue
 
-        hand_vertices = np.asarray(evaluation_verts[seq_name][frame_name])
+        hand_vertices = np.asarray(evaluation_verts[eval_mapping_to_index[seq_name][frame_name]])
+
         hand_mesh = o3d.geometry.TriangleMesh()
         hand_mesh.vertices = o3d.utility.Vector3dVector(hand_vertices)
         hand_mesh.triangles = o3d.utility.Vector3iVector(mano_faces)
@@ -147,21 +159,38 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts):
         # color = np.asarray(color_o3d)  # to numpy H×W×3 uint8
         # cv2.imwrite(os.path.join(out_dir, f"color_{idx:06d}.png"), color)
 
-        depth_o3d = renderer.render_to_depth_image(True)
-        depth = np.asarray(depth_o3d, dtype=np.float32)
+        obj_renderer.scene.clear_geometry()
+        obj_renderer.scene.add_geometry("object", mesh_copy, mat)
+        obj_renderer.setup_camera(intrinsic, np.eye(4))
+        obj_depth = np.asarray(obj_renderer.render_to_depth_image(True))
+        obj_mask = np.isfinite(obj_depth)
 
-        mask = np.isfinite(depth)
+        # Render hand mask
+        hand_renderer.scene.clear_geometry()
+        hand_renderer.scene.add_geometry("hand", hand_mesh_copy, mat)
+        hand_renderer.setup_camera(intrinsic, np.eye(4))
+        hand_depth = np.asarray(hand_renderer.render_to_depth_image(True))
+        hand_mask = np.isfinite(hand_depth)
 
-        if check_depth_consistency:
-            depth_gt = depth_provider.next_depth(idx).squeeze().numpy(force=True)
-            depth_close = (np.abs(depth - depth_gt) < 1e-1)
-            mask *= depth_close
+        # Combine masks with depth ordering
+        combined_mask = np.zeros((h, w), dtype=np.uint8)
 
-        mask_img = (mask.astype(np.uint8) * 255)
-        mask_rgb = cv2.cvtColor(mask_img, cv2.COLOR_GRAY2RGB)
+        # Object pixels where no hand occlusion
+        obj_pixels = obj_mask & (~hand_mask | (obj_depth < hand_depth))
+        combined_mask[obj_pixels] = 1
+
+        # Hand pixels (closer to camera)
+        hand_pixels = hand_mask & (~obj_mask | (hand_depth <= obj_depth))
+        combined_mask[hand_pixels] = 2
+
+        # Convert to color
+        segmentation_color = np.zeros((h, w, 3), dtype=np.uint8)
+        segmentation_color[combined_mask == 1] = [0, 255, 0]  # Green for object
+        segmentation_color[combined_mask == 2] = [0, 0, 255]  # Blue for hand
 
         seg_file = os.path.join(out_dir, f"{idx:06d}.png")
-        cv2.imwrite(seg_file, mask_rgb)
+        cv2.imwrite(seg_file, segmentation_color)
+
 
 def annotation_list_to_dict(eval_root: Path, annotation_path: Path, annotation_dict_path: Path):
 
@@ -205,6 +234,11 @@ def main():
     eval_verts_path = ho3d_data_root / 'evaluation_verts.json'
     eval_xyz_dict_path = ho3d_data_root / 'evaluation_xyz_dict.json'
     eval_verts_dict_path = ho3d_data_root / 'evaluation_verts_dict.json'
+    evaluation_mapping = ho3d_data_root / 'evaluation.txt'
+    # eval_xyz_path = Path('~/Downloads/evaluation_xyz.json').expanduser()
+    # eval_verts_path = Path('~/Downloads/evaluation_verts.json').expanduser()
+    # eval_xyz_dict_path = Path('~/Downloads/evaluation_xyz_dict.json').expanduser()
+    # eval_verts_dict_path = Path('~/Downloads/evaluation_verts_dict.json').expanduser()
 
     if not eval_xyz_dict_path.exists():
         print('Converting evaluation_xyz to dict.')
@@ -217,15 +251,15 @@ def main():
     with open(eval_xyz_dict_path, 'r') as f:
         evaluation_xyz_dict = json.load(f)
 
-    with open(eval_verts_dict_path, 'r') as f:
-        evaluation_verts_dict = json.load(f)
+    with open(eval_verts_path, 'r') as f:
+        evaluation_verts = json.load(f)
 
     for seq in tqdm(sorted(os.listdir(eval_root)), desc="Sequences"):
         seq_path = eval_root / seq
         if not os.path.isdir(seq_path):
             continue
         print(f"Processing sequence: {seq}")
-        render_sequence(seq_path, mesh_root, evaluation_verts_dict)
+        render_sequence(seq_path, mesh_root, evaluation_verts, evaluation_mapping)
 
 
 if __name__ == '__main__':
