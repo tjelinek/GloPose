@@ -24,6 +24,9 @@ class TrackerConfig:
     experiment_name: str = None
     special_hash: str = ''
 
+    # Experiments settings
+    evaluate_sam2_only: bool = False
+
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
     large_images_results_write_frequency: int = 1

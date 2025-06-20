@@ -10,14 +10,14 @@ from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
-from data_providers.frame_provider import FrameProviderAll
+from data_providers.frame_provider import FrameProviderAll, SAM2SegmentationProvider
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
 from pose.glomap import GlomapWrapper, get_image_Se3_world2cam, align_reconstruction_with_pose, align_with_kabsch
 from tracker_config import TrackerConfig
-from utils.eval import update_global_statistics
+from utils.eval import update_global_statistics, update_iou_frame_statistics
 from utils.results_logging import WriteResults
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
@@ -174,6 +174,10 @@ class Tracker6D:
                                         sam2_cache_folder=cache_folder_SAM2)
 
     def run_pipeline(self):
+
+        if self.config.evaluate_sam2_only:
+            self.evaluate_sam()
+            return
 
         self.filter_frames()
 
@@ -343,6 +347,41 @@ class Tracker6D:
         elif self.segmentation_video_path is not None:
             frame_node.segmentation_filename = Path(f'{self.segmentation_video_path.stem}_'
                                                     f'{frame_i * self.config.skip_indices}.png')
+
+    def evaluate_sam(self):
+
+        from data_providers.frame_provider import PrecomputedSegmentationProvider
+        import numpy as np
+
+        precomputed_segmentation_provider = PrecomputedSegmentationProvider(self.config, self.tracker.image_shape,
+                                                                            self.segmentation_paths)
+
+        sam2_segmentation_provider = SAM2SegmentationProvider(self.config, self.tracker.image_shape,
+                                                              self.initial_segmentation, self.tracker.frame_provider,
+                                                              self.images_paths, self.cache_folder_SAM2)
+
+        iou_list = []
+        for frame_i in range(self.config.input_frames):
+
+            image = self.tracker.frame_provider.next_image(frame_i)
+
+            gt_segmentation = precomputed_segmentation_provider.next_segmentation(frame_i).squeeze()
+            sam2_segmentation = sam2_segmentation_provider.next_segmentation(frame_i, image).squeeze()
+
+            assert gt_segmentation.shape == sam2_segmentation.shape
+
+            iou = (torch.min(gt_segmentation, sam2_segmentation).sum() /
+                   (torch.max(gt_segmentation, sam2_segmentation).sum() + 1e-10))
+
+            iou_list.append(iou.item())
+
+        iou_np = np.array(iou_list)
+
+        csv_per_frame_iou_folder = self.write_folder.parent.parent / 'sam_stats'
+        csv_per_frame_iou_folder.mkdir(exist_ok=True, parents=True)
+        csv_per_frame_iou_stats = csv_per_frame_iou_folder / f'{self.config.dataset}_{self.config.sequence}.csv'
+
+        update_iou_frame_statistics(csv_per_frame_iou_stats, iou_np, self.config.dataset, self.config.sequence)
 
 
 def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
