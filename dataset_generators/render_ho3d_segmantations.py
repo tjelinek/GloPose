@@ -8,7 +8,13 @@ Usage:
 """
 import os
 import copy
+import json
+import sys
+from collections import defaultdict
 from pathlib import Path
+
+sys.path.append('../repositories/ho3d')
+sys.path.append('../repositories/ho3d/mano')
 
 import numpy as np
 import open3d as o3d
@@ -90,6 +96,15 @@ def render_sequence(seq_path: Path, mesh_root: Path, check_depth_consistency=Fal
         except:
             print(f'Frame {idx} corrupted')
             continue
+
+        seq_name = seq_path.name
+        frame_name = Path(mf).stem
+        if not evaluation_verts[seq_name].get(frame_name):
+            print(f'Frame {idx} missing hand file')
+            continue
+
+        hand_mesh = np.asarray(evaluation_verts[seq_name][frame_name])
+
         T_final = np.eye(4)
         T_final[:3, :3] = R_co
         T_final[:3, 3] = t
@@ -185,10 +200,10 @@ def main():
         print('Converting evaluation_xyz to dict.')
         annotation_list_to_dict(eval_root, eval_verts_path, eval_verts_dict_path)
 
-    with open(eval_xyz_path, 'r') as f:
+    with open(eval_xyz_dict_path, 'r') as f:
         evaluation_xyz_dict = json.load(f)
 
-    with open(eval_verts_path, 'r') as f:
+    with open(eval_verts_dict_path, 'r') as f:
         evaluation_verts_dict = json.load(f)
 
     for seq in tqdm(sorted(os.listdir(eval_root)), desc="Sequences"):
@@ -196,7 +211,7 @@ def main():
         if not os.path.isdir(seq_path):
             continue
         print(f"Processing sequence: {seq}")
-        render_sequence(seq_path, mesh_root)
+        render_sequence(seq_path, mesh_root, evaluation_xyz_dict, evaluation_verts_dict)
 
 
 if __name__ == '__main__':
