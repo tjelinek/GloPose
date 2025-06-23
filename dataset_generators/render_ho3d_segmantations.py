@@ -13,8 +13,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.append('../repositories/ho3d')
-sys.path.append('../repositories/ho3d/mano')
+sys.path.append('./repositories/ho3d')
+sys.path.append('./repositories/ho3d/mano')
 
 import numpy as np
 import open3d as o3d
@@ -53,7 +53,7 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluatio
     out_dir = os.path.join(seq_path, 'segmentation_rendered')
     os.makedirs(out_dir, exist_ok=True)
 
-    mano_model_path = '../repositories/ho3d/mano/models/MANO_RIGHT.pkl'
+    mano_model_path = './repositories/ho3d/mano/models/MANO_RIGHT.pkl'
     mano_model = load_model(mano_model_path)
     mano_faces = mano_model.f
 
@@ -63,10 +63,8 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluatio
     h, w = img.shape[:2]
 
     # offscreen renderer
-    obj_renderer = OffscreenRenderer(w, h)
-    hand_renderer = OffscreenRenderer(w, h)
-    obj_renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
-    hand_renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
+    renderer = OffscreenRenderer(w, h)
+    renderer.scene.set_background([0, 0, 0, 0])  # Transparent background
 
     # obj_mat = MaterialRecord()
     # obj_mat.shader = "defaultUnlit"
@@ -142,30 +140,26 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluatio
         hand_mesh_copy = copy.deepcopy(hand_mesh)
         hand_mesh_copy.transform(T_flip)
 
-        obj_renderer.scene.add_geometry("obj", mesh_copy, mat)
-        hand_renderer.scene.add_geometry("hand", hand_mesh_copy, mat)
-
         fx, fy = camMat[0, 0], camMat[1, 1]
         cx, cy = camMat[0, 2], camMat[1, 2]
         intrinsic = PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
-        obj_renderer.setup_camera(intrinsic, np.eye(4))
-        hand_renderer.setup_camera(intrinsic, np.eye(4))
+
+        # Render obj mask
+        renderer.scene.clear_geometry()
+        renderer.scene.add_geometry("obj", mesh_copy, mat)
+        renderer.setup_camera(intrinsic, np.eye(4))
+        obj_depth = np.asarray(renderer.render_to_depth_image(True))
+        obj_mask = np.isfinite(obj_depth)
 
         # color_o3d = renderer.render_to_image()  # default color pass
         # color = np.asarray(color_o3d)  # to numpy H×W×3 uint8
         # cv2.imwrite(os.path.join(out_dir, f"color_{idx:06d}.png"), color)
 
-        obj_renderer.scene.clear_geometry()
-        obj_renderer.scene.add_geometry("object", mesh_copy, mat)
-        obj_renderer.setup_camera(intrinsic, np.eye(4))
-        obj_depth = np.asarray(obj_renderer.render_to_depth_image(True))
-        obj_mask = np.isfinite(obj_depth)
-
         # Render hand mask
-        hand_renderer.scene.clear_geometry()
-        hand_renderer.scene.add_geometry("hand", hand_mesh_copy, mat)
-        hand_renderer.setup_camera(intrinsic, np.eye(4))
-        hand_depth = np.asarray(hand_renderer.render_to_depth_image(True))
+        renderer.scene.clear_geometry()
+        renderer.scene.add_geometry("hand", hand_mesh_copy, mat)
+        renderer.setup_camera(intrinsic, np.eye(4))
+        hand_depth = np.asarray(renderer.render_to_depth_image(True))
         hand_mask = np.isfinite(hand_depth)
 
         # Combine masks with depth ordering
