@@ -32,49 +32,36 @@ def depth_to_xyz(depth, intrinsics):
     return pts  # in camera frame
 
 
-def transform_pts(pts, cam2world):
+def transform_pts(pts, T_4x4):
     """
-    pts: [3, N] in cam frame
-    cam2world: [4,4]
-    returns: [3, N] in world frame
+    pts: [3, N] points
+    T_4x4: [4, 4] transformation matrix
+    returns: [3, N] transformed points
     """
     homo = torch.cat((pts, torch.ones(1, pts.shape[1], device=pts.device)), dim=0)
-    wpts = cam2world @ homo
-    return wpts[:3]
+    pts_transformed = T_4x4 @ homo
+    return pts_transformed[:3]
 
 
-def visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b,
+def visualize_overlap_debug(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsicsB,
                             sample_rate=100, width=1000, height=700, coordinate_frame='world',
-                            transformed_pts_a=None, pts_b_in_own_frame=None, transformed_cam_a_pos=None):
-    """
-    Interactive 3D visualization of point clouds from both cameras to debug overlap calculation.
-
-    Args:
-        depth_a, depth_b: depth maps
-        cam2world_a, cam2world_b: camera-to-world transformation matrices
-        intrinsics_a, intrinsics_b: camera intrinsic matrices
-        sample_rate: subsample points every N pixels for visualization (default: 100)
-        width, height: plot dimensions
-        coordinate_frame: 'world' or 'camera_b' - which coordinate system to visualize in
-        transformed_pts_a: pre-computed transformed points from camera A (when coordinate_frame='camera_b')
-        pts_b_in_own_frame: pre-computed points from camera B in its own frame
-    """
+                            camA_pts_camB=None, camB_pts_camB=None, camA_camB=None):
 
     if coordinate_frame == 'world':
         # Original world coordinate visualization
         # Get points from camera A (same as in your original function)
-        pts_a = depth_to_xyz(depth_a, intrinsics_a)
-        wpts_a = transform_pts(pts_a, cam2world_a)
+        pts_a = depth_to_xyz(depthA, intrinsicsA)
+        wpts_a = transform_pts(pts_a, camA2world)
 
         # Get points from camera B
-        pts_b = depth_to_xyz(depth_b, intrinsics_b)
-        wpts_b = transform_pts(pts_b, cam2world_b)
+        pts_b = depth_to_xyz(depthB, intrinsicsB)
+        wpts_b = transform_pts(pts_b, camB2world)
 
-    else:  # coordinate_frame == 'camera_b'
+    else:  # coordinate_frame == 'camB'
         # Use the exact transformations computed in overlap_ratio
-        if transformed_pts_a is None or pts_b_in_own_frame is None or transformed_cam_a_pos is None:
-            raise ValueError(
-                "For camera_b coordinate frame, must provide transformed_pts_a, pts_b_in_own_frame, and transformed_cam_a_pos")
+        if camA_pts_camB is None or camB_pts_camB is None or camA_camB is None:
+            raise ValueError("For camB coordinate frame, must provide transformed_pts_a, "
+                             "pts_b_in_own_frame, and transformed_cam_a_pos")
 
     # Convert to numpy for visualization (subsample for performance)
     wpts_a_np = wpts_a.detach().cpu().numpy()
@@ -91,8 +78,8 @@ def visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b, intrinsi
     pts_b_vis = wpts_b_np[:, indices_b]
 
     # Get camera positions
-    cam_a_pos = cam2world_a[:3, 3].detach().cpu().numpy()
-    cam_b_pos = cam2world_b[:3, 3].detach().cpu().numpy()
+    cam_a_pos = camA2world[:3, 3].detach().cpu().numpy()
+    cam_b_pos = camB2world[:3, 3].detach().cpu().numpy()
 
     # Create interactive 3D plot
     fig = go.Figure()
@@ -196,36 +183,40 @@ def visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b, intrinsi
     fig.show()
 
 
-def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b,
+def overlap_ratio(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsicsB,
                   thresh=0.005, debug_vis=True):
-    # 1) get A's points in world, then into B's camera frame
-    camA_pts_camA = depth_to_xyz(depth_a, intrinsics_a)
-    camA_pts_world = transform_pts(camA_pts_camA, cam2world_a)
-    camA_pts_world_homo = torch.cat((camA_pts_world, torch.ones(1, camA_pts_world.shape[1],
-                                                                device=camA_pts_world.device)), dim=0)
-    T_world2camb = torch.inverse(cam2world_b)
-    camA_pts_camB_homo = T_world2camb @ camA_pts_world_homo
-    camA_pts_camB = camA_pts_camB_homo[:3]
-    # 2) project into B’s image
-    camA_pts_imB = intrinsics_b @ camA_pts_camB
+    # Naming convention: <object>_<coordinate_system>_<mode>
+    camA_pts_camA = depth_to_xyz(depthA, intrinsicsA)
+
+    T_world2camB = torch.inverse(camB2world)
+    T_camA2camB = T_world2camB @ camA2world
+
+    camA_pts_camB = transform_pts(camA_pts_camA, T_camA2camB)
+
+    camA_pts_imB = intrinsicsB @ camA_pts_camB
     camA_pts_imB_u = camA_pts_imB[0] / camA_pts_imB[2]
     camA_pts_imB_v = camA_pts_imB[1] / camA_pts_imB[2]
     camA_pts_imB_before_cam = (camA_pts_imB[2] > 0)
     camA_pts_imB_u_int = camA_pts_imB_u.round().long()
     camA_pts_imB_v_int = camA_pts_imB_v.round().long()
-    H, W = depth_b.shape
+    H, W = depthB.shape
     camA_pts_camB_in_bounds = (camA_pts_imB_before_cam & (camA_pts_imB_u_int >= 0) & (camA_pts_imB_u_int < W) &
                               (camA_pts_imB_v_int >= 0) & (camA_pts_imB_v_int < H))
     camA_pts_imB_u_int = camA_pts_imB_u_int[camA_pts_camB_in_bounds]
     camA_pts_imB_v_int = camA_pts_imB_v_int[camA_pts_camB_in_bounds]
     camA_pts_camB_zs = camA_pts_camB[2, camA_pts_camB_in_bounds]
-    # 3) compare against depth_b
-    camB_pts_masked_zs = depth_b[camA_pts_imB_v_int, camA_pts_imB_u_int]
+
+    camB_pts_masked_zs = depthB[camA_pts_imB_v_int, camA_pts_imB_u_int]
     matched = torch.abs(camB_pts_masked_zs - camA_pts_camB_zs) < thresh
 
     if debug_vis:
-        visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b,
-                                intrinsics_a, intrinsics_b, coordinate_frame='camera_b')
+        camB_pts_camB = depth_to_xyz(depthB, intrinsicsB)
+        camA_camA = torch.zeros(3, 1, device=camA_pts_imB.device)
+        camA_camB = transform_pts(camA_camA, T_camA2camB).squeeze()
+
+        visualize_overlap_debug(depthA, depthB, camA2world, camB2world,
+                                intrinsicsA, intrinsicsB, coordinate_frame='camB', camA_pts_camB=camA_pts_camB,
+                                camB_pts_camB=camB_pts_camB, camA_camB=camA_camB)
         print(f"Overlap ratio: {matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8):.4f}")
         print(f"Points in bounds: {camA_pts_camB_in_bounds.sum()}")
         print(f"Points matched: {matched.sum()}")
