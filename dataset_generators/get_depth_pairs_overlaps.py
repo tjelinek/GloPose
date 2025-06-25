@@ -41,7 +41,161 @@ def transform_pts(pts, cam2world):
     return wpts[:3]
 
 
-def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b, thresh=0.005):
+def visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b,
+                            sample_rate=100, width=1000, height=700, coordinate_frame='world',
+                            transformed_pts_a=None, pts_b_in_own_frame=None, transformed_cam_a_pos=None):
+    """
+    Interactive 3D visualization of point clouds from both cameras to debug overlap calculation.
+
+    Args:
+        depth_a, depth_b: depth maps
+        cam2world_a, cam2world_b: camera-to-world transformation matrices
+        intrinsics_a, intrinsics_b: camera intrinsic matrices
+        sample_rate: subsample points every N pixels for visualization (default: 100)
+        width, height: plot dimensions
+        coordinate_frame: 'world' or 'camera_b' - which coordinate system to visualize in
+        transformed_pts_a: pre-computed transformed points from camera A (when coordinate_frame='camera_b')
+        pts_b_in_own_frame: pre-computed points from camera B in its own frame
+    """
+
+    if coordinate_frame == 'world':
+        # Original world coordinate visualization
+        # Get points from camera A (same as in your original function)
+        pts_a = depth_to_xyz(depth_a, intrinsics_a)
+        wpts_a = transform_pts(pts_a, cam2world_a)
+
+        # Get points from camera B
+        pts_b = depth_to_xyz(depth_b, intrinsics_b)
+        wpts_b = transform_pts(pts_b, cam2world_b)
+
+    else:  # coordinate_frame == 'camera_b'
+        # Use the exact transformations computed in overlap_ratio
+        if transformed_pts_a is None or pts_b_in_own_frame is None or transformed_cam_a_pos is None:
+            raise ValueError(
+                "For camera_b coordinate frame, must provide transformed_pts_a, pts_b_in_own_frame, and transformed_cam_a_pos")
+
+    # Convert to numpy for visualization (subsample for performance)
+    wpts_a_np = wpts_a.detach().cpu().numpy()
+    wpts_b_np = wpts_b.detach().cpu().numpy()
+
+    # Subsample points for visualization
+    n_pts_a = wpts_a_np.shape[1]
+    n_pts_b = wpts_b_np.shape[1]
+
+    indices_a = np.arange(0, n_pts_a, sample_rate)
+    indices_b = np.arange(0, n_pts_b, sample_rate)
+
+    pts_a_vis = wpts_a_np[:, indices_a]
+    pts_b_vis = wpts_b_np[:, indices_b]
+
+    # Get camera positions
+    cam_a_pos = cam2world_a[:3, 3].detach().cpu().numpy()
+    cam_b_pos = cam2world_b[:3, 3].detach().cpu().numpy()
+
+    # Create interactive 3D plot
+    fig = go.Figure()
+
+    # Add points from camera A (red)
+    fig.add_trace(go.Scatter3d(
+        x=pts_a_vis[0],
+        y=pts_a_vis[1],
+        z=pts_a_vis[2],
+        mode='markers',
+        marker=dict(
+            size=2,
+            color='red',
+            opacity=0.6
+        ),
+        name='Camera A points',
+        hovertemplate='Camera A<br>X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+    ))
+
+    # Add points from camera B (blue)
+    fig.add_trace(go.Scatter3d(
+        x=pts_b_vis[0],
+        y=pts_b_vis[1],
+        z=pts_b_vis[2],
+        mode='markers',
+        marker=dict(
+            size=2,
+            color='blue',
+            opacity=0.6
+        ),
+        name='Camera B points',
+        hovertemplate='Camera B<br>X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+    ))
+
+    # Add camera positions
+    fig.add_trace(go.Scatter3d(
+        x=[cam_a_pos[0]],
+        y=[cam_a_pos[1]],
+        z=[cam_a_pos[2]],
+        mode='markers',
+        marker=dict(
+            size=15,
+            color='darkred',
+            symbol='diamond'
+        ),
+        name='Camera A position',
+        hovertemplate='Camera A Position<br>X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=[cam_b_pos[0]],
+        y=[cam_b_pos[1]],
+        z=[cam_b_pos[2]],
+        mode='markers',
+        marker=dict(
+            size=15,
+            color='darkblue',
+            symbol='diamond'
+        ),
+        name='Camera B position',
+        hovertemplate='Camera B Position<br>X: %{x:.3f}<br>Y: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>'
+    ))
+
+    # Calculate proper axis ranges for equal aspect ratio
+    all_points = np.concatenate([pts_a_vis, pts_b_vis,
+                                 cam_a_pos.reshape(3, 1), cam_b_pos.reshape(3, 1)], axis=1)
+    center = np.mean(all_points, axis=1)
+    max_range = np.max(np.max(all_points, axis=1) - np.min(all_points, axis=1)) / 2
+
+    # Update layout for better visualization
+    fig.update_layout(
+        title='Interactive 3D Point Clouds from Both Cameras<br><sub>Click and drag to rotate, scroll to zoom</sub>',
+        width=width,
+        height=height,
+        scene=dict(
+            xaxis=dict(
+                title='X (world)',
+                range=[center[0] - max_range, center[0] + max_range]
+            ),
+            yaxis=dict(
+                title='Y (world)',
+                range=[center[1] - max_range, center[1] + max_range]
+            ),
+            zaxis=dict(
+                title='Z (world)',
+                range=[center[2] - max_range, center[2] + max_range]
+            ),
+            aspectmode='cube',  # Equal aspect ratio
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.5)  # Nice initial viewing angle
+            )
+        ),
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        )
+    )
+
+    fig.show()
+
+
+def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b,
+                  thresh=0.005, debug_vis=False):
     # 1) get A's points in world, then into B's camera frame
     pts_a = depth_to_xyz(depth_a, intrinsics_a)
     wpts_a = transform_pts(pts_a, cam2world_a)
