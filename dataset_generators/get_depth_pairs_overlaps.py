@@ -219,6 +219,14 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intr
     # 3) compare against depth_b
     db = depth_b[v_int, u_int]
     matched = torch.abs(db - zs) < thresh
+
+    if debug_vis:
+        visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b,
+                                intrinsics_a, intrinsics_b, coordinate_frame='camera_b')
+        print(f"Overlap ratio: {matched.sum().float() / (in_bounds.sum().float() + 1e-8):.4f}")
+        print(f"Points in bounds: {in_bounds.sum()}")
+        print(f"Points matched: {matched.sum()}")
+
     return matched.sum().float() / (in_bounds.sum().float() + 1e-8)
 
 
