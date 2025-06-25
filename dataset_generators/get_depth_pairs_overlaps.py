@@ -43,43 +43,25 @@ def transform_pts(pts, T_4x4):
     return pts_transformed[:3]
 
 
-def visualize_overlap_debug(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsicsB,
-                            sample_rate=100, width=1000, height=700, coordinate_frame='world',
-                            camA_pts_camB=None, camB_pts_camB=None, camA_camB=None):
-
-    if coordinate_frame == 'world':
-        # Original world coordinate visualization
-        # Get points from camera A (same as in your original function)
-        pts_a = depth_to_xyz(depthA, intrinsicsA)
-        wpts_a = transform_pts(pts_a, camA2world)
-
-        # Get points from camera B
-        pts_b = depth_to_xyz(depthB, intrinsicsB)
-        wpts_b = transform_pts(pts_b, camB2world)
-
-    else:  # coordinate_frame == 'camB'
-        # Use the exact transformations computed in overlap_ratio
-        if camA_pts_camB is None or camB_pts_camB is None or camA_camB is None:
-            raise ValueError("For camB coordinate frame, must provide transformed_pts_a, "
-                             "pts_b_in_own_frame, and transformed_cam_a_pos")
+def visualize_overlap_debug(camA_pts_camB, camB_pts_camB, camA_camB, sample_rate=100, width=1000, height=700):
 
     # Convert to numpy for visualization (subsample for performance)
-    wpts_a_np = wpts_a.detach().cpu().numpy()
-    wpts_b_np = wpts_b.detach().cpu().numpy()
+    camA_pts_camB_np = camA_pts_camB.numpy(force=True)
+    camB_pts_camB_np = camB_pts_camB.numpy(force=True)
 
     # Subsample points for visualization
-    n_pts_a = wpts_a_np.shape[1]
-    n_pts_b = wpts_b_np.shape[1]
+    n_pts_a = camA_pts_camB_np.shape[1]
+    n_pts_b = camB_pts_camB_np.shape[1]
 
     indices_a = np.arange(0, n_pts_a, sample_rate)
     indices_b = np.arange(0, n_pts_b, sample_rate)
 
-    pts_a_vis = wpts_a_np[:, indices_a]
-    pts_b_vis = wpts_b_np[:, indices_b]
+    pts_a_vis = camA_pts_camB_np[:, indices_a]
+    pts_b_vis = camB_pts_camB_np[:, indices_b]
 
     # Get camera positions
-    cam_a_pos = camA2world[:3, 3].detach().cpu().numpy()
-    cam_b_pos = camB2world[:3, 3].detach().cpu().numpy()
+    cam_a_pos = camA_camB.numpy(force=True)
+    cam_b_pos = camA_camB.numpy(force=True)
 
     # Create interactive 3D plot
     fig = go.Figure()
@@ -214,9 +196,7 @@ def overlap_ratio(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsic
         camA_camA = torch.zeros(3, 1, device=camA_pts_imB.device)
         camA_camB = transform_pts(camA_camA, T_camA2camB).squeeze()
 
-        visualize_overlap_debug(depthA, depthB, camA2world, camB2world,
-                                intrinsicsA, intrinsicsB, coordinate_frame='camB', camA_pts_camB=camA_pts_camB,
-                                camB_pts_camB=camB_pts_camB, camA_camB=camA_camB)
+        visualize_overlap_debug(camA_pts_camB, camB_pts_camB, camA_camB)
         print(f"Overlap ratio: {matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8):.4f}")
         print(f"Points in bounds: {camA_pts_camB_in_bounds.sum()}")
         print(f"Points matched: {matched.sum()}")
