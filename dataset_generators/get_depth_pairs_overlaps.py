@@ -197,28 +197,31 @@ def visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b, intrinsi
 
 
 def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intrinsics_b,
-                  thresh=0.005, debug_vis=False):
+                  thresh=0.005, debug_vis=True):
     # 1) get A's points in world, then into B's camera frame
-    pts_a = depth_to_xyz(depth_a, intrinsics_a)
-    wpts_a = transform_pts(pts_a, cam2world_a)
-    world2b = torch.inverse(cam2world_b)
-    bpts = world2b @ torch.cat((wpts_a, torch.ones(1, wpts_a.shape[1], device=wpts_a.device)), dim=0)
-    cam_pts = bpts[:3]
+    camA_pts_camA = depth_to_xyz(depth_a, intrinsics_a)
+    camA_pts_world = transform_pts(camA_pts_camA, cam2world_a)
+    camA_pts_world_homo = torch.cat((camA_pts_world, torch.ones(1, camA_pts_world.shape[1],
+                                                                device=camA_pts_world.device)), dim=0)
+    T_world2camb = torch.inverse(cam2world_b)
+    camA_pts_camB_homo = T_world2camb @ camA_pts_world_homo
+    camA_pts_camB = camA_pts_camB_homo[:3]
     # 2) project into B’s image
-    proj = intrinsics_b @ cam_pts
-    u = proj[0] / proj[2]
-    v = proj[1] / proj[2]
-    valid = (proj[2] > 0)
-    u_int = u.round().long()
-    v_int = v.round().long()
+    camA_pts_imB = intrinsics_b @ camA_pts_camB
+    camA_pts_imB_u = camA_pts_imB[0] / camA_pts_imB[2]
+    camA_pts_imB_v = camA_pts_imB[1] / camA_pts_imB[2]
+    camA_pts_imB_before_cam = (camA_pts_imB[2] > 0)
+    camA_pts_imB_u_int = camA_pts_imB_u.round().long()
+    camA_pts_imB_v_int = camA_pts_imB_v.round().long()
     H, W = depth_b.shape
-    in_bounds = valid & (u_int >= 0) & (u_int < W) & (v_int >= 0) & (v_int < H)
-    u_int = u_int[in_bounds]
-    v_int = v_int[in_bounds]
-    zs = cam_pts[2, in_bounds]
+    camA_pts_camB_in_bounds = (camA_pts_imB_before_cam & (camA_pts_imB_u_int >= 0) & (camA_pts_imB_u_int < W) &
+                              (camA_pts_imB_v_int >= 0) & (camA_pts_imB_v_int < H))
+    camA_pts_imB_u_int = camA_pts_imB_u_int[camA_pts_camB_in_bounds]
+    camA_pts_imB_v_int = camA_pts_imB_v_int[camA_pts_camB_in_bounds]
+    camA_pts_camB_zs = camA_pts_camB[2, camA_pts_camB_in_bounds]
     # 3) compare against depth_b
-    db = depth_b[v_int, u_int]
-    matched = torch.abs(db - zs) < thresh
+    camB_pts_masked_zs = depth_b[camA_pts_imB_v_int, camA_pts_imB_u_int]
+    matched = torch.abs(camB_pts_masked_zs - camA_pts_camB_zs) < thresh
 
     if debug_vis:
         visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b,
