@@ -226,11 +226,11 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intr
     if debug_vis:
         visualize_overlap_debug(depth_a, depth_b, cam2world_a, cam2world_b,
                                 intrinsics_a, intrinsics_b, coordinate_frame='camera_b')
-        print(f"Overlap ratio: {matched.sum().float() / (in_bounds.sum().float() + 1e-8):.4f}")
-        print(f"Points in bounds: {in_bounds.sum()}")
+        print(f"Overlap ratio: {matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8):.4f}")
+        print(f"Points in bounds: {camA_pts_camB_in_bounds.sum()}")
         print(f"Points matched: {matched.sum()}")
 
-    return matched.sum().float() / (in_bounds.sum().float() + 1e-8)
+    return matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8)
 
 
 def compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh):
