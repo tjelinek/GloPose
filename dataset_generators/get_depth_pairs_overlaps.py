@@ -204,7 +204,7 @@ def overlap_ratio(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsic
     return matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8)
 
 
-def compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters: np.ndarray=None):
+def compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters: np.ndarray = None):
     """
     depths: list of [H,W] tensors
     cam2worlds: list of [4,4] tensors
@@ -247,8 +247,8 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
 
         print(f'Processing scene {scene}...')
 
-        if scene_info_path.exists():
-            continue
+        # if scene_info_path.exists():
+        #     continue
 
         Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, device=config.device)
         camera_K = get_pinhole_params(scene_camera_path, scale=config.image_downsample, device=config.device)
@@ -370,7 +370,7 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
             except Exception:
                 pass
 
-        overlap_matrix = compute_all_overlaps(depths, cam2obj_Ts, intrinsics)
+        overlap_matrix = compute_all_overlaps(cam2obj_Ts, intrinsics, depths, 0.005)
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
@@ -384,5 +384,5 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
 
 
 if __name__ == "__main__":
-    compute_overlaps_bop('handal', 'cpu')
+    compute_overlaps_bop('hope', 'cuda')
     # compute_overlaps_ho3d('cuda)
