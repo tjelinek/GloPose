@@ -2,6 +2,8 @@ import random
 from itertools import product
 from pathlib import Path
 
+import plotly.graph_objects as go
+
 import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion
