@@ -66,7 +66,7 @@ def overlap_ratio(depth_a, depth_b, cam2world_a, cam2world_b, intrinsics_a, intr
     return matched.sum().float() / (in_bounds.sum().float() + 1e-8)
 
 
-def compute_all_overlaps(depths, cam2worlds, intrinsics):
+def compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh):
     """
     depths: list of [H,W] tensors
     cam2worlds: list of [4,4] tensors
@@ -78,8 +78,10 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics):
     for i in tqdm(range(N), desc='i→j overlaps'):
         for j in range(N):
             if i != j:
-                M[i, j] = M[i, j] = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j],
-                                                  intrinsics[i], intrinsics[j])
+                overlap = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j],
+                                        intrinsics[i], intrinsics[j], overlap_thresh)
+                M[i, j] = overlap
+                M[j, i] = overlap
     return M
 
 
@@ -106,7 +108,17 @@ def compute_overlaps_bop(dataset_name):
         images_paths = sorted(images_folder.iterdir())
         depths_paths = sorted(depths_folder.iterdir())
         N_frames = len(images_paths)
-        depth_scales = [0.001] * N_frames
+
+        overlap_thresh = 500  # 5 mm
+        if dataset_name == 'handal':
+            scale = 0.001
+            depth_scales = [scale] * N_frames
+        elif dataset_name == 'hope':
+            scale = 0.1
+            depth_scales = [scale] * N_frames
+        else:
+            raise NotImplementedError("BOP datasets have non-uniform depth scales. Might cause problems.")
+        overlap_thresh *= scale
 
         image_provider = PrecomputedFrameProvider(config, images_paths)
         image_shape = image_provider.image_shape
@@ -132,7 +144,7 @@ def compute_overlaps_bop(dataset_name):
         intrinsics = [intrinsics[i] for i in valid_ids]
         cam2worlds = [cam2worlds[i] for i in valid_ids]
 
-        overlap_matrix = compute_all_overlaps(depths, cam2worlds, intrinsics)
+        overlap_matrix = compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh)
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
