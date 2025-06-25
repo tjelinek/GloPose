@@ -166,7 +166,7 @@ def visualize_overlap_debug(camA_pts_camB, camB_pts_camB, camA_camB, sample_rate
 
 
 def overlap_ratio(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsicsB,
-                  thresh=0.005, debug_vis=True):
+                  thresh=0.005, debug_vis=False):
     # Naming convention: <object>_<coordinate_system>_<mode>
     camA_pts_camA = depth_to_xyz(depthA, intrinsicsA)
 
@@ -204,7 +204,7 @@ def overlap_ratio(depthA, depthB, camA2world, camB2world, intrinsicsA, intrinsic
     return matched.sum().float() / (camA_pts_camB_in_bounds.sum().float() + 1e-8)
 
 
-def compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh):
+def compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters: np.ndarray=None):
     """
     depths: list of [H,W] tensors
     cam2worlds: list of [4,4] tensors
@@ -214,17 +214,27 @@ def compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh):
     N = len(depths)
     M = torch.eye(N, device=depths[0].device)
     for i in tqdm(range(N), desc='i→j overlaps'):
-        for j in range(N):
+        if delimiters is not None:
+            delimiters_idx = np.argmax(delimiters > i)
+            j_start = delimiters[delimiters_idx - 1]
+            j_end = delimiters[delimiters_idx]
+        else:
+            j_start = 0
+            j_end = N
+
+        for j in range(j_start, j_end):
             if i != j:
                 overlap = overlap_ratio(depths[i], depths[j], cam2worlds[i], cam2worlds[j],
                                         intrinsics[i], intrinsics[j], overlap_thresh)
                 M[i, j] = overlap
                 M[j, i] = overlap
+    M_np = M.numpy(force=True)
     return M
 
 
-def compute_overlaps_bop(dataset_name):
+def compute_overlaps_bop(dataset_name, device='cuda'):
     config = TrackerConfig()
+    config.device = device
 
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/bop/{dataset_name}')
     training_set = path_to_dataset / 'train_pbr'
@@ -247,11 +257,14 @@ def compute_overlaps_bop(dataset_name):
         depths_paths = sorted(depths_folder.iterdir())
         N_frames = len(images_paths)
 
-        overlap_thresh = 500  # 5 mm
+        delimiters = None
+        overlap_thresh = 5  # 5 mm
         if dataset_name == 'handal':
+            delimiters = np.arange(0, N_frames, 25)
             scale = 0.001
             depth_scales = [scale] * N_frames
         elif dataset_name == 'hope':
+            delimiters = np.arange(0, N_frames, 25)
             scale = 0.1
             depth_scales = [scale] * N_frames
         else:
@@ -282,7 +295,7 @@ def compute_overlaps_bop(dataset_name):
         intrinsics = [intrinsics[i] for i in valid_ids]
         cam2worlds = [cam2worlds[i] for i in valid_ids]
 
-        overlap_matrix = compute_all_overlaps(depths, cam2worlds, intrinsics, overlap_thresh)
+        overlap_matrix = compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters=delimiters)
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
@@ -294,8 +307,9 @@ def compute_overlaps_bop(dataset_name):
         np.save(str(scene_info_path), scene_info, allow_pickle=True)
 
 
-def compute_overlaps_ho3d(random_shuffle=True):
+def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
     config = TrackerConfig()
+    config.device = device
 
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/HO3D/')
     training_set = path_to_dataset / 'train'
@@ -369,7 +383,6 @@ def compute_overlaps_ho3d(random_shuffle=True):
         np.save(str(scene_info_path), scene_info, allow_pickle=True)
 
 
-
 if __name__ == "__main__":
-    # compute_overlaps_bop('hope')
-    compute_overlaps_ho3d()
+    compute_overlaps_bop('handal', 'cpu')
+    # compute_overlaps_ho3d('cuda)
