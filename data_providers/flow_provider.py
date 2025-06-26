@@ -140,20 +140,6 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
 
         return src_pts_xy_roma, dst_pts_xy_roma, certainty
 
-    @staticmethod
-    def keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma, source_image_tensor, target_image_tensor):
-        h1 = source_image_tensor.shape[-2]
-        w1 = source_image_tensor.shape[-1]
-        h2 = target_image_tensor.shape[-2]
-        w2 = target_image_tensor.shape[-1]
-        src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
-        dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
-        src_pts_xy_roma[:, 0] = torch.clamp(src_pts_xy_roma[:, 0], 0, w1 - 1)
-        src_pts_xy_roma[:, 1] = torch.clamp(src_pts_xy_roma[:, 1], 0, h1 - 1)
-        dst_pts_xy_roma[:, 0] = torch.clamp(dst_pts_xy_roma[:, 0], 0, w2 - 1)
-        dst_pts_xy_roma[:, 1] = torch.clamp(dst_pts_xy_roma[:, 1], 0, h2 - 1)
-        return src_pts_xy_roma, dst_pts_xy_roma
-
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
 
