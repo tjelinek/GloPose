@@ -15,6 +15,9 @@ from flow import roma_warp_to_pixel_coordinates
 
 class FlowProviderDirect(ABC):
 
+    def __init__(self, device: str):
+        self.device = device
+
     @abstractmethod
     def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                      source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
@@ -78,15 +81,53 @@ class FlowProviderDirect(ABC):
         return src_pts_xy, dst_pts_xy, certainty
 
 
+class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
-class PrecomputedFlowProviderDirect(ABC):
+    def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None,
+                 allow_missing: bool = True,
+                 allow_disk_cache=True, purge_cache: bool = False):
+        super().__init__(device)
 
-    pass
+        self.warps_path = cache_dir / 'warps'
+        self.certainties_path = cache_dir / 'certainties'
+        self.data_graph: Optional[DataGraph] = data_graph
+
+        if purge_cache and self.warps_path.exists():
+            shutil.rmtree(self.warps_path)
+        if purge_cache and self.certainties_path.exists():
+            shutil.rmtree(self.certainties_path)
+
+        self.warps_path.mkdir(exist_ok=True, parents=True)
+        self.certainties_path.mkdir(exist_ok=True, parents=True)
+
+        self.allow_missing: bool = allow_missing
+        self.allow_disk_cache: bool = allow_disk_cache
+
+    def _datagraph_edge_exists(self, source_image_index, target_image_index):
+        return (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
+                self.data_graph.G.has_edge(source_image_index, target_image_index))
+
+    def cached_flow_from_filenames(self, src_image_name: Union[str, Path], target_image_name: Union[str, Path]):
+
+        src_image_name = Path(src_image_name)
+        target_image_name = Path(target_image_name)
+        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+
+        warp_filename = self.warps_path / saved_filename
+        certainty_filename = self.certainties_path / saved_filename
+
+        if warp_filename.exists() and certainty_filename.exists():
+            warp = torch.load(warp_filename, weights_only=True).to(self.device)
+            certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
+            return warp, certainty
+
+        return None
 
 
 class RoMaFlowProviderDirect(FlowProviderDirect):
 
     def __init__(self, device, roma_config: BaseRomaConfig):
+        super().__init__(device)
         self.device = device
 
         if roma_config.use_custom_weights:
@@ -124,7 +165,7 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
 
     def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
                                             source_image_segmentation: torch.Tensor = None,
-                                            target_image_segmentation: torch.Tensor = None) ->  torch.Tensor:
+                                            target_image_segmentation: torch.Tensor = None) -> torch.Tensor:
         roma_h, roma_w = self.roma_size_hw
         assert source_image_segmentation is not None or target_image_segmentation is not None
 
@@ -140,26 +181,7 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
         return certainty
 
 
-class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
-
-    def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None, allow_missing: bool = True,
-                 allow_disk_cache=True, purge_cache: bool = False):
-        super().__init__(device, roma_config)
-
-        self.warps_path = cache_dir / 'warps'
-        self.certainties_path = cache_dir / 'certainties'
-        self.data_graph: Optional[DataGraph] = data_graph
-
-        if purge_cache and self.warps_path.exists():
-            shutil.rmtree(self.warps_path)
-        if purge_cache and self.certainties_path.exists():
-            shutil.rmtree(self.certainties_path)
-
-        self.warps_path.mkdir(exist_ok=True, parents=True)
-        self.certainties_path.mkdir(exist_ok=True, parents=True)
-
-        self.allow_missing: bool = allow_missing
-        self.allow_disk_cache: bool = allow_disk_cache
+class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowProviderDirect):
 
     def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                      source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
@@ -288,18 +310,17 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
                                              source_image_index, target_image_index, as_int,
                                              zero_certainty_outside_segmentation, only_foreground_matches)
 
-    def _datagraph_edge_exists(self, source_image_index, target_image_index):
-        return (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
-                self.data_graph.G.has_edge(source_image_index, target_image_index))
 
-    def cached_flow_from_filenames(self, src_image_name: Union[str, Path], target_image_name: Union[str, Path]):
+class UFMFlowProviderDirect(FlowProviderDirect):
 
-        src_image_name = Path(src_image_name)
-        target_image_name = Path(target_image_name)
-        saved_filename = f'{src_image_name.stem}___{target_image_name.stem}.pt'
+    def __init__(self, device, roma_config: BaseRomaConfig):
+        super().__init__(device)
+        self.device = device
 
-        warp_filename = self.warps_path / saved_filename
-        certainty_filename = self.certainties_path / saved_filename
+        from uniflowmatch.models.ufm import UniFlowMatchClassificationRefinement
+        model = UniFlowMatchClassificationRefinement.from_pretrained("infinity1096/UFM-Refine")
+
+        model.eval()
 
         if warp_filename.exists() and certainty_filename.exists():
             warp = torch.load(warp_filename, weights_only=True).to(self.device)
