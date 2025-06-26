@@ -86,10 +86,10 @@ class RoMaFrameFilter(BaseFrameFilter):
         self.keyframe_graph.add_node(frame_i)
 
         src_pts_xy_int, dst_pts_xy_int, certainty = (
-            self.flow_provider.get_source_target_points_roma_datagraph(frame_i, frame_i,
-                                                                       self.config.roma_sample_size, as_int=True,
-                                                                       zero_certainty_outside_segmentation=True,
-                                                                       only_foreground_matches=True))
+            self.flow_provider.get_source_target_points_datagraph(frame_i, frame_i,
+                                                                  self.config.roma_sample_size, as_int=True,
+                                                                  zero_certainty_outside_segmentation=True,
+                                                                  only_foreground_matches=True))
 
         kf_data = self.data_graph.get_frame_data(frame_i)
         certainty_threshold = otsu_threshold(certainty)
@@ -220,10 +220,10 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
         src_pts_xy_int, dst_pts_xy_int, certainty = (
-            self.flow_provider.get_source_target_points_roma_datagraph(source_frame, target_frame,
-                                                                       self.config.roma_sample_size, as_int=True,
-                                                                       zero_certainty_outside_segmentation=True,
-                                                                       only_foreground_matches=True))
+            self.flow_provider.get_source_target_points_datagraph(source_frame, target_frame,
+                                                                  self.config.roma_sample_size, as_int=True,
+                                                                  zero_certainty_outside_segmentation=True,
+                                                                  only_foreground_matches=True))
 
         edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
 
@@ -270,10 +270,10 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
 
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         src_pts_xy, dst_pts_xy, certainty = (
-            self.flow_provider.get_source_target_points_roma_datagraph(source_frame, target_frame,
-                                                                       self.config.roma_sample_size, as_int=False,
-                                                                       zero_certainty_outside_segmentation=True,
-                                                                       only_foreground_matches=True))
+            self.flow_provider.get_source_target_points_datagraph(source_frame, target_frame,
+                                                                  self.config.roma_sample_size, as_int=False,
+                                                                  zero_certainty_outside_segmentation=True,
+                                                                  only_foreground_matches=True))
         src_pts_xy_np = src_pts_xy.numpy(force=True)
         dst_pts_xy_np = dst_pts_xy.numpy(force=True)
 

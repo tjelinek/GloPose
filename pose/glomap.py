@@ -121,11 +121,11 @@ class GlomapWrapper:
             img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
 
             src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
-                self.flow_provider.get_source_target_points_roma(img1, img2, sample_size, img1_seg.squeeze(),
-                                                                 img2_seg.squeeze(), Path(img1_path.name),
-                                                                 Path(img2_path.name), as_int=True,
-                                                                 zero_certainty_outside_segmentation=True,
-                                                                 only_foreground_matches=True)
+                self.flow_provider.get_source_target_points(img1, img2, sample_size, img1_seg.squeeze(),
+                                                            img2_seg.squeeze(), Path(img1_path.name),
+                                                            Path(img2_path.name), as_int=True,
+                                                            zero_certainty_outside_segmentation=True,
+                                                            only_foreground_matches=True)
             img1_id = images.index(img1_path) + 1
             img2_id = images.index(img2_path) + 1
             edge = (img1_id, img2_id)
@@ -380,10 +380,10 @@ def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor,
 
         if type(flow_provider) is RoMaFlowProviderDirect or True:
             query_img_pts_xy, db_img_pts_xy, certainties = (
-                flow_provider.get_source_target_points_roma(query_img, pose_graph_image, config.roma_sample_size,
-                                                            query_img_segmentation, pose_graph_segmentation,
-                                                            as_int=True, zero_certainty_outside_segmentation=True,
-                                                            only_foreground_matches=True))
+                flow_provider.get_source_target_points(query_img, pose_graph_image, config.roma_sample_size,
+                                                       query_img_segmentation, pose_graph_segmentation,
+                                                       as_int=True, zero_certainty_outside_segmentation=True,
+                                                       only_foreground_matches=True))
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
