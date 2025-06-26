@@ -167,6 +167,22 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
         return src_pts_xy, dst_pts_xy, certainty
 
+    def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
+                                           sample: int = None, as_int: bool = False,
+                                           zero_certainty_outside_segmentation: bool = False,
+                                           only_foreground_matches: bool = False) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        source_data = self.data_graph.get_frame_data(source_image_index)
+        target_data = self.data_graph.get_frame_data(target_image_index)
+
+        return self.get_source_target_points(source_data.frame_observation.observed_image.squeeze(),
+                                             target_data.frame_observation.observed_image.squeeze(), sample,
+                                             source_data.frame_observation.observed_segmentation.squeeze(),
+                                             target_data.frame_observation.observed_segmentation.squeeze(),
+                                             source_data.image_filename, target_data.image_filename,
+                                             source_image_index, target_image_index, as_int,
+                                             zero_certainty_outside_segmentation, only_foreground_matches)
+
 
 class RoMaFlowProviderDirect(FlowProviderDirect):
 
@@ -292,22 +308,6 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
                 warp, certainty = self.flow_model.sample(warp, certainty, sample)
 
         return warp, certainty
-
-    def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
-                                           sample: int = None, as_int: bool = False,
-                                           zero_certainty_outside_segmentation: bool = False,
-                                           only_foreground_matches: bool = False) \
-            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        source_data = self.data_graph.get_frame_data(source_image_index)
-        target_data = self.data_graph.get_frame_data(target_image_index)
-
-        return self.get_source_target_points(source_data.frame_observation.observed_image.squeeze(),
-                                             target_data.frame_observation.observed_image.squeeze(), sample,
-                                             source_data.frame_observation.observed_segmentation.squeeze(),
-                                             target_data.frame_observation.observed_segmentation.squeeze(),
-                                             source_data.image_filename, target_data.image_filename,
-                                             source_image_index, target_image_index, as_int,
-                                             zero_certainty_outside_segmentation, only_foreground_matches)
 
 
 class UFMFlowProviderDirect(FlowProviderDirect):
