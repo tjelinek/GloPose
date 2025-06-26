@@ -80,6 +80,18 @@ class FlowProviderDirect(ABC):
 
         return src_pts_xy, dst_pts_xy, certainty
 
+    @abstractmethod
+    def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        pass
+
+    @abstractmethod
+    def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
+                                            source_image_segmentation: torch.Tensor = None,
+                                            target_image_segmentation: torch.Tensor = None) -> torch.Tensor:
+
+        pass
+
 
 class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
@@ -219,9 +231,12 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
                                                                  target_image_segmentation)
 
         if sample:
-            warp, certainty = self.flow_model.sample(warp, certainty, sample)
+            warp, certainty = self.sample(warp, certainty, sample)
 
         return warp, certainty
+
+    def sample(self, warp, certainty, sample):
+        return self.flow_model.sample(warp, certainty, sample)
 
     def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
                                             source_image_segmentation: torch.Tensor = None,
