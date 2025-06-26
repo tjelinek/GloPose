@@ -123,6 +123,50 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
         return None
 
+    def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
+                                 sample: int = None, source_image_segmentation: torch.Tensor = None,
+                                 target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
+                                 target_image_name: Path = None, source_image_index: int = None,
+                                 target_image_index: int = None, as_int: bool = False,
+                                 zero_certainty_outside_segmentation=False, only_foreground_matches=False) -> \
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        src_pts_xy = None
+        dst_pts_xy = None
+        certainty = None
+
+        if self._datagraph_edge_exists(source_image_index, target_image_index):
+            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
+
+            if edge_data.src_pts_xy_roma is not None and edge_data.dst_pts_xy_roma is not None:
+                src_pts_xy, dst_pts_xy = edge_data.src_pts_xy_roma, edge_data.dst_pts_xy_roma
+
+        if src_pts_xy is None or dst_pts_xy is None or certainty is None:
+            src_pts_xy, dst_pts_xy, certainty = (
+                super().get_source_target_points(source_image, target_image, sample,
+                                                 source_image_segmentation, target_image_segmentation,
+                                                 source_image_name, target_image_name, source_image_index,
+                                                 target_image_index, as_int, zero_certainty_outside_segmentation,
+                                                 only_foreground_matches))
+
+        if (self.data_graph is not None and source_image_index is not None and target_image_index is not None and
+                not self.data_graph.G.has_edge(source_image_index, target_image_index)):
+            self.data_graph.add_new_arc(source_image_index, target_image_index)
+
+        if self._datagraph_edge_exists(source_image_index, target_image_index):
+            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
+
+            if edge_data.src_pts_xy_roma is None:
+                edge_data.src_pts_xy_roma = src_pts_xy
+            if edge_data.dst_pts_xy_roma is None:
+                edge_data.dst_pts_xy_roma = dst_pts_xy
+            if edge_data.src_dst_certainty_roma is None:
+                edge_data.src_dst_certainty_roma = certainty
+
+        if as_int:
+            src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
+
+        return src_pts_xy, dst_pts_xy, certainty
+
 
 class RoMaFlowProviderDirect(FlowProviderDirect):
 
@@ -248,50 +292,6 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
                 warp, certainty = self.flow_model.sample(warp, certainty, sample)
 
         return warp, certainty
-
-    def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
-                                 sample: int = None, source_image_segmentation: torch.Tensor = None,
-                                 target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
-                                 target_image_name: Path = None, source_image_index: int = None,
-                                 target_image_index: int = None, as_int: bool = False,
-                                 zero_certainty_outside_segmentation=False, only_foreground_matches=False) -> \
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        src_pts_xy = None
-        dst_pts_xy = None
-        certainty = None
-
-        if self._datagraph_edge_exists(source_image_index, target_image_index):
-            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
-
-            if edge_data.src_pts_xy_roma is not None and edge_data.dst_pts_xy_roma is not None:
-                src_pts_xy, dst_pts_xy = edge_data.src_pts_xy_roma, edge_data.dst_pts_xy_roma
-
-        if src_pts_xy is None or dst_pts_xy is None or certainty is None:
-            src_pts_xy, dst_pts_xy, certainty = (
-                super().get_source_target_points(source_image, target_image, sample,
-                                                 source_image_segmentation, target_image_segmentation,
-                                                 source_image_name, target_image_name, source_image_index,
-                                                 target_image_index, as_int, zero_certainty_outside_segmentation,
-                                                 only_foreground_matches))
-
-        if (self.data_graph is not None and source_image_index is not None and target_image_index is not None and
-                not self.data_graph.G.has_edge(source_image_index, target_image_index)):
-            self.data_graph.add_new_arc(source_image_index, target_image_index)
-
-        if self._datagraph_edge_exists(source_image_index, target_image_index):
-            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
-
-            if edge_data.src_pts_xy_roma is None:
-                edge_data.src_pts_xy_roma = src_pts_xy
-            if edge_data.dst_pts_xy_roma is None:
-                edge_data.dst_pts_xy_roma = dst_pts_xy
-            if edge_data.src_dst_certainty_roma is None:
-                edge_data.src_dst_certainty_roma = certainty
-
-        if as_int:
-            src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
-
-        return src_pts_xy, dst_pts_xy, certainty
 
     def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
                                            sample: int = None, as_int: bool = False,
