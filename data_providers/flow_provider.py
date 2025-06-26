@@ -1,4 +1,5 @@
 import shutil
+from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import Union, Tuple, Optional
 
@@ -12,7 +13,36 @@ from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 
 
-class RoMaFlowProviderDirect:
+class FlowProviderDirect(ABC):
+
+    @abstractmethod
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None, zero_certainty_outside_segmentation: bool = False):
+        pass
+
+    @staticmethod
+    def keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma, source_image_tensor, target_image_tensor):
+        h1 = source_image_tensor.shape[-2]
+        w1 = source_image_tensor.shape[-1]
+        h2 = target_image_tensor.shape[-2]
+        w2 = target_image_tensor.shape[-1]
+        src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
+        dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
+        src_pts_xy_roma[:, 0] = torch.clamp(src_pts_xy_roma[:, 0], 0, w1 - 1)
+        src_pts_xy_roma[:, 1] = torch.clamp(src_pts_xy_roma[:, 1], 0, h1 - 1)
+        dst_pts_xy_roma[:, 0] = torch.clamp(dst_pts_xy_roma[:, 0], 0, w2 - 1)
+        dst_pts_xy_roma[:, 1] = torch.clamp(dst_pts_xy_roma[:, 1], 0, h2 - 1)
+        return src_pts_xy_roma, dst_pts_xy_roma
+
+
+class PrecomputedFlowProviderDirect(ABC):
+
+    pass
+
+
+class RoMaFlowProviderDirect(FlowProviderDirect):
 
     def __init__(self, device, roma_config: BaseRomaConfig):
         self.device = device
