@@ -98,47 +98,46 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
             certainty[:, roma_w:2 * roma_w] *= target_image_segment_roma_size.squeeze().bool().float()
         return certainty
 
-    def get_source_target_points(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor,
+    def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample=None, source_image_segmentation: torch.Tensor = None,
                                  target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
                                  target_image_name: Path = None, source_image_index: int = None,
                                  target_image_index: int = None, as_int: bool = False,
                                  zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False) \
             -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        warp, certainty = self.compute_flow(source_image_tensor, target_image_tensor, sample,
+        warp, certainty = self.compute_flow(source_image, target_image, sample,
                                             source_image_segmentation, target_image_segmentation, source_image_name,
                                             target_image_name, source_image_index, target_image_index,
                                             zero_certainty_outside_segmentation)
 
-        h1 = source_image_tensor.shape[-2]
-        w1 = source_image_tensor.shape[-1]
-        h2 = target_image_tensor.shape[-2]
-        w2 = target_image_tensor.shape[-1]
-        src_pts_xy_roma, dst_pts_xy_roma = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
+        h1 = source_image.shape[-2]
+        w1 = source_image.shape[-1]
+        h2 = target_image.shape[-2]
+        w2 = target_image.shape[-1]
+        src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
 
-        if len(src_pts_xy_roma.shape) == 3:
-            src_pts_xy_roma = src_pts_xy_roma.flatten(0, 1)
-        if len(dst_pts_xy_roma.shape) == 3:
-            dst_pts_xy_roma = dst_pts_xy_roma.flatten(0, 1)
+        if len(src_pts_xy.shape) == 3:
+            src_pts_xy = src_pts_xy.flatten(0, 1)
+        if len(dst_pts_xy.shape) == 3:
+            dst_pts_xy = dst_pts_xy.flatten(0, 1)
 
-        src_pts_xy_roma_int, dst_pts_xy_roma_int = self.keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma,
-                                                                         source_image_tensor, target_image_tensor)
+        src_pts_xy_int, dst_pts_xy_int = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
         if as_int:
-            src_pts_xy_roma, dst_pts_xy_roma = src_pts_xy_roma_int, dst_pts_xy_roma_int
+            src_pts_xy, dst_pts_xy = src_pts_xy_int, dst_pts_xy_int
 
         if only_foreground_matches:
             assert source_image_segmentation is not None and target_image_segmentation is not None
             assert len(source_image_segmentation.shape) == 2 and len(target_image_segmentation.shape) == 2
-            in_segment_mask_src = source_image_segmentation[src_pts_xy_roma_int[:, 1], src_pts_xy_roma_int[:, 0]].bool()
-            in_segment_mask_tgt = target_image_segmentation[dst_pts_xy_roma_int[:, 1], dst_pts_xy_roma_int[:, 0]].bool()
+            in_segment_mask_src = source_image_segmentation[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+            in_segment_mask_tgt = target_image_segmentation[dst_pts_xy_int[:, 1], dst_pts_xy_int[:, 0]].bool()
 
             fg_matches = in_segment_mask_src * in_segment_mask_tgt
 
-            src_pts_xy_roma = src_pts_xy_roma[fg_matches]
-            dst_pts_xy_roma = dst_pts_xy_roma[fg_matches]
+            src_pts_xy = src_pts_xy[fg_matches]
+            dst_pts_xy = dst_pts_xy[fg_matches]
             certainty = certainty[fg_matches]
 
-        return src_pts_xy_roma, dst_pts_xy_roma, certainty
+        return src_pts_xy, dst_pts_xy, certainty
 
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect):
