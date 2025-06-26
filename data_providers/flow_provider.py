@@ -256,18 +256,18 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
                                  target_image_index: int = None, as_int: bool = False,
                                  zero_certainty_outside_segmentation=False, only_foreground_matches=False) -> \
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        src_pts_xy_roma = None
-        dst_pts_xy_roma = None
+        src_pts_xy = None
+        dst_pts_xy = None
         certainty = None
 
         if self._datagraph_edge_exists(source_image_index, target_image_index):
             edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
 
             if edge_data.src_pts_xy_roma is not None and edge_data.dst_pts_xy_roma is not None:
-                src_pts_xy_roma, dst_pts_xy_roma = edge_data.src_pts_xy_roma, edge_data.dst_pts_xy_roma
+                src_pts_xy, dst_pts_xy = edge_data.src_pts_xy_roma, edge_data.dst_pts_xy_roma
 
-        if src_pts_xy_roma is None or dst_pts_xy_roma is None or certainty is None:
-            src_pts_xy_roma, dst_pts_xy_roma, certainty = (
+        if src_pts_xy is None or dst_pts_xy is None or certainty is None:
+            src_pts_xy, dst_pts_xy, certainty = (
                 super().get_source_target_points(source_image, target_image, sample,
                                                  source_image_segmentation, target_image_segmentation,
                                                  source_image_name, target_image_name, source_image_index,
@@ -282,17 +282,16 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
             edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
 
             if edge_data.src_pts_xy_roma is None:
-                edge_data.src_pts_xy_roma = src_pts_xy_roma
+                edge_data.src_pts_xy_roma = src_pts_xy
             if edge_data.dst_pts_xy_roma is None:
-                edge_data.dst_pts_xy_roma = dst_pts_xy_roma
+                edge_data.dst_pts_xy_roma = dst_pts_xy
             if edge_data.src_dst_certainty_roma is None:
                 edge_data.src_dst_certainty_roma = certainty
 
         if as_int:
-            src_pts_xy_roma, dst_pts_xy_roma = self.keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma,
-                                                                     source_image, target_image)
+            src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
 
-        return src_pts_xy_roma, dst_pts_xy_roma, certainty
+        return src_pts_xy, dst_pts_xy, certainty
 
     def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
                                            sample: int = None, as_int: bool = False,
