@@ -135,6 +135,72 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
         return None
 
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None,
+                     zero_certainty_outside_segmentation=False) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        if source_image_name is not None and target_image_name is not None:
+            saved_filename = f'{source_image_name.stem}___{target_image_name.stem}.pt'
+            warp_filename = self.warps_path / saved_filename
+            certainty_filename = self.certainties_path / saved_filename
+        elif (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
+              self.data_graph.G.has_node(source_image_index) and self.data_graph.G.has_node(source_image_index)):
+            source_data = self.data_graph.get_frame_data(source_image_index)
+            target_data = self.data_graph.get_frame_data(target_image_index)
+
+            saved_filename = f'{source_data.image_filename.stem}___{target_data.image_filename.stem}.pt'
+            warp_filename = self.warps_path / saved_filename
+            certainty_filename = self.certainties_path / saved_filename
+        else:
+            warp_filename = None
+            certainty_filename = None
+
+        warp, certainty = None, None
+        if self._datagraph_edge_exists(source_image_index, target_image_index):
+            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
+            if edge_data.roma_flow_warp is not None and edge_data.roma_flow_warp_certainty is not None:
+                warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_warp_certainty
+
+        if (warp is None or certainty is None) and warp_filename is not None and certainty_filename is not None:
+            if warp_filename.exists() and certainty_filename.exists():
+                warp = torch.load(warp_filename, weights_only=True, map_location=self.device)
+                certainty = torch.load(certainty_filename, weights_only=True, map_location=self.device)
+
+        if warp is None or certainty is None:
+            warp, certainty = super().compute_flow(source_image_tensor, target_image_tensor)
+
+            if source_image_name and target_image_name and self.allow_missing and self.allow_disk_cache:
+                torch.save(warp, warp_filename)
+                torch.save(certainty, certainty_filename)
+
+        if zero_certainty_outside_segmentation:
+            certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
+                                                                 target_image_segmentation)
+
+        if self.data_graph is not None:
+            if source_image_index is not None and target_image_index is not None:
+                if not self.data_graph.G.has_edge(source_image_index, target_image_index):
+                    self.data_graph.add_new_arc(source_image_index, target_image_index)
+
+                edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
+                if edge_data.roma_flow_warp is None:
+                    edge_data.roma_flow_warp = warp
+                if edge_data.roma_flow_warp_certainty is None:
+                    edge_data.roma_flow_warp_certainty = certainty
+
+        if sample:
+            if ((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
+                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5) and
+                    zero_certainty_outside_segmentation):  # This should prevent the sampling to fail due to CUDA error
+                warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
+                certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
+            else:
+                warp, certainty = self.sample(warp, certainty, sample)
+
+        return warp, certainty
+
     def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample: int = None, source_image_segmentation: torch.Tensor = None,
                                  target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
@@ -258,72 +324,7 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowProviderDirect):
 
-    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
-                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
-                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
-                     target_image_index: int = None,
-                     zero_certainty_outside_segmentation=False) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        if source_image_name is not None and target_image_name is not None:
-            saved_filename = f'{source_image_name.stem}___{target_image_name.stem}.pt'
-            warp_filename = self.warps_path / saved_filename
-            certainty_filename = self.certainties_path / saved_filename
-        elif (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
-              self.data_graph.G.has_node(source_image_index) and self.data_graph.G.has_node(source_image_index)):
-            source_data = self.data_graph.get_frame_data(source_image_index)
-            target_data = self.data_graph.get_frame_data(target_image_index)
-
-            saved_filename = f'{source_data.image_filename.stem}___{target_data.image_filename.stem}.pt'
-            warp_filename = self.warps_path / saved_filename
-            certainty_filename = self.certainties_path / saved_filename
-        else:
-            warp_filename = None
-            certainty_filename = None
-
-        warp, certainty = None, None
-        if self._datagraph_edge_exists(source_image_index, target_image_index):
-            edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
-            if edge_data.roma_flow_warp is not None and edge_data.roma_flow_warp_certainty is not None:
-                warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_warp_certainty
-
-        if (warp is None or certainty is None) and warp_filename is not None and certainty_filename is not None:
-            if warp_filename.exists() and certainty_filename.exists():
-                warp = torch.load(warp_filename, weights_only=True, map_location=self.device)
-                certainty = torch.load(certainty_filename, weights_only=True, map_location=self.device)
-
-        if warp is None or certainty is None:
-            warp, certainty = super().compute_flow(source_image_tensor, target_image_tensor)
-
-            if source_image_name and target_image_name and self.allow_missing and self.allow_disk_cache:
-                torch.save(warp, warp_filename)
-                torch.save(certainty, certainty_filename)
-
-        if zero_certainty_outside_segmentation:
-            certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
-                                                                 target_image_segmentation)
-
-        if self.data_graph is not None:
-            if source_image_index is not None and target_image_index is not None:
-                if not self.data_graph.G.has_edge(source_image_index, target_image_index):
-                    self.data_graph.add_new_arc(source_image_index, target_image_index)
-
-                edge_data = self.data_graph.get_edge_observations(source_image_index, target_image_index)
-                if edge_data.roma_flow_warp is None:
-                    edge_data.roma_flow_warp = warp
-                if edge_data.roma_flow_warp_certainty is None:
-                    edge_data.roma_flow_warp_certainty = certainty
-
-        if sample:
-            if ((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
-                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5) and
-                    zero_certainty_outside_segmentation):  # This should prevent the sampling to fail due to CUDA error
-                warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
-                certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
-            else:
-                warp, certainty = self.flow_model.sample(warp, certainty, sample)
-
-        return warp, certainty
-
+    pass
 
 class UFMFlowProviderDirect(FlowProviderDirect):
 
