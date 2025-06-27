@@ -163,7 +163,7 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
                 warp, certainty = edge_data.roma_flow_warp, edge_data.roma_flow_warp_certainty
 
         if (warp is None or certainty is None) and warp_filename is not None and certainty_filename is not None:
-            if warp_filename.exists() and certainty_filename.exists():
+            if warp_filename.exists() and certainty_filename.exists() and self.allow_disk_cache:
                 warp = torch.load(warp_filename, weights_only=True, map_location=self.device)
                 certainty = torch.load(certainty_filename, weights_only=True, map_location=self.device)
 
