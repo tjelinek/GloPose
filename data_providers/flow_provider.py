@@ -87,12 +87,22 @@ class FlowProviderDirect(ABC):
 
         pass
 
-    @abstractmethod
     def zero_certainty_outside_segmentation(self, certainty: torch.Tensor,
                                             source_image_segmentation: torch.Tensor = None,
                                             target_image_segmentation: torch.Tensor = None) -> torch.Tensor:
 
-        pass
+        assert source_image_segmentation is not None or target_image_segmentation is not None
+
+        certainty = certainty.clone()
+
+        h, w = certainty.shape
+        w /= 2
+        if source_image_segmentation is not None:
+            certainty[:, :w] *= source_image_segmentation.squeeze().bool().float()
+        if target_image_segmentation is not None:
+            certainty[:, w:2 * w] *= target_image_segmentation.squeeze().bool().float()
+
+        return certainty
 
 
 class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
