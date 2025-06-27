@@ -325,7 +325,16 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
 
 class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowProviderDirect):
 
-    pass
+    def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None,
+                 allow_missing: bool = True, allow_disk_cache=True, purge_cache: bool = False):
+
+        RoMaFlowProviderDirect.__init__(self, device, roma_config)
+
+        # Then initialize PrecomputedFlowProviderDirect with its parameters
+        PrecomputedFlowProviderDirect.__init__(self, device, cache_dir, data_graph,
+                                               allow_missing, allow_disk_cache, purge_cache)
+
+
 
 class UFMFlowProviderDirect(FlowProviderDirect):
 
@@ -339,6 +348,41 @@ class UFMFlowProviderDirect(FlowProviderDirect):
 
         self.model.eval()
 
+    @torch.no_grad()
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None, zero_certainty_outside_segmentation: bool = False) \
+            -> Tuple[torch.Tensor, torch.Tensor]:
+
+        h, w = source_image_tensor.shape[-2:]
+        source_image_tensor_hwc = rearrange(source_image_tensor, 'c h w -> h w c').to(torch.float)
+        target_image_tensor_hwc = rearrange(target_image_tensor, 'c h w -> h w c').to(torch.float)
+
+        result = self.model.predict_correspondences_batched(source_image=source_image_tensor_hwc,
+                                                            target_image=target_image_tensor_hwc,
+                                                            data_norm_type='identity',)
+
+        flow = result.flow.flow_output[0]
+        covisibility = result.covisibility.mask[0]
+
+        y, x = torch.meshgrid(
+            torch.arange(h, dtype=torch.float32, device=self.device),
+            torch.arange(w, dtype=torch.float32, device=self.device),
+            indexing='ij'
+        )
+        coords = torch.stack([x, y], dim=0)
+
+        dst_pts_xy = coords + flow
+
+        if zero_certainty_outside_segmentation:
+            covisibility = self.zero_certainty_outside_segmentation(covisibility, source_image_segmentation,
+                                                                 target_image_segmentation)
+
+        if sample:
+            warp, certainty = self.sample(dst_pts_xy, covisibility, sample)
+
+        return dst_pts_xy, covisibility
 
         model.eval()
 
