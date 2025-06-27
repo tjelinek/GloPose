@@ -95,10 +95,9 @@ class FlowProviderDirect(ABC):
 
 class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 
-    def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None,
-                 allow_missing: bool = True,
-                 allow_disk_cache=True, purge_cache: bool = False):
-        super().__init__(device)
+    def __init__(self, device, cache_dir: Path, data_graph: DataGraph = None,
+                 allow_missing: bool = True, allow_disk_cache=True, purge_cache: bool = False):
+        FlowProviderDirect.__init__(self, device)
 
         self.warps_path = cache_dir / 'warps'
         self.certainties_path = cache_dir / 'certainties'
@@ -265,7 +264,7 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
 class RoMaFlowProviderDirect(FlowProviderDirect):
 
     def __init__(self, device, roma_config: BaseRomaConfig):
-        super().__init__(device)
+        FlowProviderDirect.__init__(self, device)
         self.device = device
 
         if roma_config.use_custom_weights:
