@@ -5,10 +5,12 @@ from typing import Union, Tuple, Optional
 
 import torch
 import torchvision
+from einops import rearrange
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
+from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 from data_structures.data_graph import DataGraph
 from flow import roma_warp_to_pixel_coordinates
 
@@ -327,12 +329,16 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
 
 class UFMFlowProviderDirect(FlowProviderDirect):
 
-    def __init__(self, device, roma_config: BaseRomaConfig):
-        super().__init__(device)
+    def __init__(self, device, ufm_config: BaseUFMConfig):
+        FlowProviderDirect.__init__(self, device)
         self.device = device
+        self.ufm_config = ufm_config
 
         from uniflowmatch.models.ufm import UniFlowMatchClassificationRefinement
-        model = UniFlowMatchClassificationRefinement.from_pretrained("infinity1096/UFM-Refine")
+        self.model = UniFlowMatchClassificationRefinement.from_pretrained("infinity1096/UFM-Refine").to(self.device)
+
+        self.model.eval()
+
 
         model.eval()
 
