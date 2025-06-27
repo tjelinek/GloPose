@@ -9,7 +9,7 @@ import torch
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect
 from data_providers.frame_provider import FrameProviderAll, SAM2SegmentationProvider
 from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
@@ -81,8 +81,8 @@ class Tracker6D:
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
-        self.cache_folder_RoMA: Path = (Path('/mnt/personal/jelint19/cache/RoMa_cache') /
-                                        config.roma_matcher_config.config_name / config.dataset / config.sequence)
+        self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.dense_matching}_cache') /
+                                            config.roma_matcher_config.config_name / config.dataset / config.sequence)
         self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
                                         config.sift_matcher_config.config_name / config.dataset /
                                         f'{config.sequence}_{config.special_hash}')
@@ -99,13 +99,21 @@ class Tracker6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
-                                                               self.cache_folder_RoMA, self.data_graph,
-                                                               allow_disk_cache=self.config.roma_allow_disk_cache,
-                                                               purge_cache=self.config.purge_cache)
+        if self.config.dense_matching == 'RoMa':
+            self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
+                                                                   self.matching_cache_folder, self.data_graph,
+                                                                   allow_disk_cache=self.config.roma_allow_disk_cache,
+                                                                   purge_cache=self.config.purge_cache)
+        elif self.config.dense_matching == 'UFM':
+            self.flow_provider = PrecomputedUFMFlowProviderDirect(self.config.device, self.config.ufm_config,
+                                                                  self.matching_cache_folder, self.data_graph,
+                                                                  allow_disk_cache=self.config.roma_allow_disk_cache,
+                                                                  purge_cache=self.config.purge_cache)
+        else:
+            raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
 
         self.frame_filter: Union[RoMaFrameFilter, FrameFilterSift]
-        if self.config.frame_filter == 'RoMa':
+        if self.config.frame_filter == 'dense_matching':
             self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'passthrough':
             self.frame_filter = FrameFilterPassThrough(self.config, self.data_graph)

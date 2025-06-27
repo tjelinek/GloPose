@@ -7,6 +7,7 @@ from kornia.image import ImageSize
 from configs.components_config.base_BOP_config import BaseBOPConfig
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
+from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 
 
 @dataclass
@@ -73,13 +74,15 @@ class TrackerConfig:
     min_number_of_reliable_matches: int = 0
     densify_view_graph: bool = True
     matchability_based_reliability: bool = False
-    frame_filter: str = 'RoMa'  # Either 'RoMa', 'SIFT', or 'passthrough'
+    frame_filter: str = 'dense_matching'  # Either 'dense_matching', 'SIFT', or 'passthrough'
     roma_allow_disk_cache: bool = True
     passthrough_frame_filter_skip: int = 1
     reconstruction_matches: str = 'RoMa'
 
     # RoMa config
+    dense_matching: str = 'UFM'  # 'UFM' or 'RoMa'
     roma_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
+    ufm_config: BaseUFMConfig = field(default_factory=BaseUFMConfig)
 
     # Reconstruction settings
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
