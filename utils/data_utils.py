@@ -1,7 +1,7 @@
 import csv
 import math
 from pathlib import Path
-from typing import Iterable, Dict, Tuple, cast, List
+from typing import Iterable, Dict, Tuple, cast
 
 import torch
 import trimesh
@@ -116,3 +116,17 @@ def get_initial_image_and_segment(images_list, segmentations_list, dataset_delim
         segmentations = segmentations[0]
 
     return images, segmentations
+
+
+def get_scales():
+    return {'m': 1.0, 'dm': 10.0, 'cm': 100.0, 'mm': 1000.0}
+
+
+def get_scale_from_meter(output_scale):
+    scales = get_scales()
+    assert output_scale in scales, f"Unknown unit: {output_scale}"
+    return scales[output_scale]
+
+
+def get_scale_to_meter(input_scale):
+    return 1.0 / get_scale_from_meter(input_scale)
