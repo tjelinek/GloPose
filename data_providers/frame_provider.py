@@ -482,12 +482,22 @@ class DepthProvider(ABC):
 class PrecomputedDepthProvider(DepthProvider):
 
     def __init__(self, config: TrackerConfig, image_shape: ImageSize, depth_paths: List[Path],
-                 depth_scales: Optional[List[float]] = None, **kwargs):
+                 depth_scales: Optional[List[float]] = None, input_units: str = None, output_units: str = None, **kwargs):
         super().__init__(image_shape, config)
 
         self.image_shape: ImageSize = image_shape
         self.depth_paths: List[Path] = depth_paths
-        self.depth_scales: List[float] = depth_scales if depth_scales is not None else [1.0] * len(depth_paths)
+        self.depth_scales: List[float]
+
+        assert not (depth_scales is not None and input_units is not None and output_units is not None)
+
+        if depth_scales is not None:
+            self.depth_scales = depth_scales
+        elif input_units is not None and output_units is not None:
+            assert input_units is not None and output_units is not None
+            raise NotImplementedError("We still do not have implemented auto input to output units scaling.")
+        else:
+            self.depth_scales = [1.0] * len(depth_paths)
         self.skip_indices = config.skip_indices
 
     def get_sequence_length(self):
