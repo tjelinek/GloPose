@@ -13,6 +13,7 @@ from data_providers.frame_provider import PrecomputedFrameProvider, PrecomputedS
 from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.glomap import predict_poses
 from tracker_config import TrackerConfig
+from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.image_utils import get_target_shape
 
 
@@ -305,12 +306,14 @@ def get_gop_camera_intrinsics(json_path: Path, image_id: int):
     return np.array(cam_K).reshape(3, 3)
 
 
-def read_gt_Se3_world2cam(pose_json_path: Path, device: str = 'cpu') -> dict[int, Se3]:
+def read_gt_Se3_world2cam(pose_json_path: Path, input_scale='m', output_scale='m', device: str = 'cpu') \
+        -> dict[int, Se3]:
     data = json.loads(pose_json_path.read_text())
+    scale = get_scale_to_meter(input_scale) * get_scale_from_meter(output_scale)
     result = {}
     for frame_id_str, frame_data in data.items():
         R = torch.tensor(frame_data['cam_R_w2c'], dtype=torch.float32, device=device).reshape(3, 3)
-        t = torch.tensor(frame_data['cam_t_w2c'], dtype=torch.float32, device=device).reshape(3)
+        t = torch.tensor(frame_data['cam_t_w2c'], dtype=torch.float32, device=device).reshape(3) * scale
         result[int(frame_id_str)] = Se3(Quaternion.from_matrix(R), t)
     return result
 
