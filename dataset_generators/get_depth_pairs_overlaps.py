@@ -250,31 +250,35 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         # if scene_info_path.exists():
         #     continue
 
-        Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, device=config.device)
         camera_K = get_pinhole_params(scene_camera_path, scale=config.image_downsample, device=config.device)
 
         images_paths = sorted(images_folder.iterdir())
         depths_paths = sorted(depths_folder.iterdir())
         N_frames = len(images_paths)
 
-        delimiters = None
-        overlap_thresh = 5  # 5 mm
+        overlap_thresh = 0.005  # 5 mm
         if dataset_name == 'handal':
-            delimiters = np.arange(0, N_frames, 25)
-            scale = 0.001
-            depth_scales = [scale] * N_frames
+            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
+            depth_scale_to_meter = 0.001
+            extrinsics_input_scale = 'm'
         elif dataset_name == 'hope':
-            delimiters = np.arange(0, N_frames, 25)
-            scale = 0.1
-            depth_scales = [scale] * N_frames
+            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
+            depth_scale_to_meter = 0.0001
+            extrinsics_input_scale = 'mm'
         else:
             raise NotImplementedError("BOP datasets have non-uniform depth scales. Might cause problems.")
-        overlap_thresh *= scale
+        depth_output_unit = 'm'
+        extrinsics_output_scale = 'm'
+
+        Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, input_scale=extrinsics_input_scale,
+                                               output_scale=extrinsics_output_scale, device=config.device)
 
         image_provider = PrecomputedFrameProvider(config, images_paths)
         image_shape = image_provider.image_shape
 
-        depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths, depth_scales)
+        depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths,
+                                                  depth_scale_to_meter=depth_scale_to_meter,
+                                                  output_unit=depth_output_unit)
 
         invalid_ids = set()
 
@@ -298,6 +302,8 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         overlap_matrix = compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters=delimiters)
 
         scene_info = {'image_paths': [str(p) for p in images_paths], 'depth_paths': [str(p) for p in depths_paths],
+                      'depth_scale_to_meter': depth_scale_to_meter,
+                      # Multiplicative scale to convert depth scale to meter
                       'intrinsics': [K.numpy(force=True) for K in intrinsics],
                       'poses': [Se3_world2cams[i].matrix().squeeze().numpy(force=True) for i in range(len(valid_ids))],
                       'pairs': np.array([(i, j) for (i, j) in product(range(len(valid_ids)), repeat=2)
