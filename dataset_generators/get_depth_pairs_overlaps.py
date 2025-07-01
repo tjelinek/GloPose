@@ -266,11 +266,9 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
 
         overlap_thresh = 0.005  # 5 mm
         if dataset_name == 'handal':
-            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
             depth_scale_to_meter = 0.001
             extrinsics_input_scale = 'm'
         elif dataset_name == 'hope':
-            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
             depth_scale_to_meter = 0.0001
             extrinsics_input_scale = 'mm'
         else:
@@ -306,6 +304,17 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         depths = [depths[i] for i in valid_ids]
         intrinsics = [intrinsics[i] for i in valid_ids]
         cam2worlds = [cam2worlds[i] for i in valid_ids]
+        images_paths = [images_paths[i] for i in valid_ids]
+        depths_paths = [depths_paths[i] for i in valid_ids]
+        Se3_world2cams = [Se3_world2cams[i] for i in valid_ids]
+
+        N_frames = len(valid_ids)
+        if dataset_name == 'handal':
+            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
+        elif dataset_name == 'hope':
+            delimiters = np.concatenate([np.arange(0, N_frames, 25), [N_frames]])
+        else:
+            raise NotImplementedError("BOP datasets have non-uniform depth scales. Might cause problems.")
 
         overlap_matrix = compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimiters=delimiters)
 
