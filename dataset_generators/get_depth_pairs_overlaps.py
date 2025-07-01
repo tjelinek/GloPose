@@ -252,6 +252,14 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
 
         camera_K = get_pinhole_params(scene_camera_path, scale=config.image_downsample, device=config.device)
 
+        missing_intrinsics = [i for i in range(1000) if i not in camera_K.keys()]
+
+        if len(missing_intrinsics) != 0:
+            print(f"\nManually adding intrinsics {missing_intrinsics}")
+            for m_idx in missing_intrinsics:
+                closest = np.argmin(np.abs(m_idx - np.asarray(sorted(camera_K.keys()))))
+                camera_K[m_idx] = camera_K[closest]
+
         images_paths = sorted(images_folder.iterdir())
         depths_paths = sorted(depths_folder.iterdir())
         N_frames = len(images_paths)
