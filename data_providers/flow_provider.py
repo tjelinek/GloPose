@@ -370,6 +370,9 @@ class UFMFlowProviderDirect(FlowProviderDirect):
             -> Tuple[torch.Tensor, torch.Tensor]:
 
         h, w = source_image_tensor.shape[-2:]
+        assert len(source_image_tensor.shape) == 3
+        assert len(target_image_tensor.shape) == 3
+
         source_image_tensor_hwc = rearrange(source_image_tensor, 'c h w -> h w c').to(torch.float)
         target_image_tensor_hwc = rearrange(target_image_tensor, 'c h w -> h w c').to(torch.float)
 
