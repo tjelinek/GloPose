@@ -100,15 +100,16 @@ class RoMaFrameFilter(BaseFrameFilter):
             certainty_threshold = self.config.min_roma_certainty_threshold
         kf_data.roma_certainty_threshold = certainty_threshold
 
-        image_shape = self.data_graph.get_frame_data(frame_i).image_shape
-        img_h, img_w = image_shape.height, image_shape.width
-        arc_data = self.data_graph.get_edge_observations(frame_i, frame_i)
-        roma_shape = arc_data.roma_flow_warp_certainty.shape
-        certainty_map = arc_data.roma_flow_warp_certainty[:, :roma_shape[1] // 2]
-        certainty_map_img_size = torch.nn.functional.interpolate(certainty_map[None, None], (img_h, img_w),
-                                                                 mode='bilinear').squeeze()
-        matchability_map = certainty_map_img_size > certainty_threshold
-        kf_data.matchability_mask = matchability_map
+        if self.config.matchability_based_reliability:
+            image_shape = self.data_graph.get_frame_data(frame_i).image_shape
+            img_h, img_w = image_shape.height, image_shape.width
+            arc_data = self.data_graph.get_edge_observations(frame_i, frame_i)
+            roma_shape = arc_data.roma_flow_warp_certainty.shape
+            certainty_map = arc_data.roma_flow_warp_certainty[:, :roma_shape[1] // 2]
+            certainty_map_img_size = torch.nn.functional.interpolate(certainty_map[None, None], (img_h, img_w),
+                                                                     mode='bilinear').squeeze()
+            matchability_map = certainty_map_img_size > certainty_threshold
+            kf_data.matchability_mask = matchability_map
         kf_data.is_keyframe = True
         print(frame_i)
 
