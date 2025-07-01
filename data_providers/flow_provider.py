@@ -8,11 +8,12 @@ import torchvision
 from einops import rearrange
 from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
+from romatch.utils.kde import kde
 
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 from data_structures.data_graph import DataGraph
-from flow import roma_warp_to_pixel_coordinates
+from flow import roma_warp_to_pixel_coordinates, convert_to_roma_warp, convert_certainty_to_roma_format
 
 
 class FlowProviderDirect(ABC):
@@ -124,7 +125,7 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
         self.certainties_path.mkdir(exist_ok=True, parents=True)
 
         self.allow_missing: bool = allow_missing
-        self.allow_disk_cache: bool = allow_disk_cache
+        self.allow_disk_cache: bool = False
 
     def _datagraph_edge_exists(self, source_image_index, target_image_index):
         return (source_image_index is not None and target_image_index is not None and self.data_graph is not None and
@@ -358,6 +359,9 @@ class UFMFlowProviderDirect(FlowProviderDirect):
 
         self.model.eval()
 
+        self.sample_mode = 'balanced'
+        self.sample_thresh = 0.5
+
     @torch.no_grad()
     def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                      source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
@@ -385,20 +389,57 @@ class UFMFlowProviderDirect(FlowProviderDirect):
 
         dst_pts_xy = coords + flow
 
-        if zero_certainty_outside_segmentation:
+        dst_pts_xy_roma = convert_to_roma_warp(dst_pts_xy)
+        covisibility = convert_certainty_to_roma_format(covisibility)
+
+        if zero_certainty_outside_segmentation and False:
             covisibility = self.zero_certainty_outside_segmentation(covisibility, source_image_segmentation,
-                                                                 target_image_segmentation)
+                                                                    target_image_segmentation)
 
         if sample:
-            warp, certainty = self.sample(dst_pts_xy, covisibility, sample)
+            dst_pts_xy, covisibility = self.sample(dst_pts_xy_roma, covisibility, sample)
 
         return dst_pts_xy, covisibility
 
-        model.eval()
+    def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        if warp_filename.exists() and certainty_filename.exists():
-            warp = torch.load(warp_filename, weights_only=True).to(self.device)
-            certainty = torch.load(certainty_filename, weights_only=True).to(self.device)
-            return warp, certainty
+        # Taken from RoMa implementation
 
-        return None
+        if "threshold" in self.sample_mode:
+            upper_thresh = self.sample_thresh
+            certainty = certainty.clone()
+            certainty[certainty > upper_thresh] = 1
+        matches, certainty = (
+            warp.reshape(-1, 4),
+            certainty.reshape(-1),
+        )
+        expansion_factor = 4 if "balanced" in self.sample_mode else 1
+        good_samples = torch.multinomial(certainty,
+                                         num_samples=min(expansion_factor * sample, len(certainty)),
+                                         replacement=False)
+        good_matches, good_certainty = matches[good_samples], certainty[good_samples]
+        if "balanced" not in self.sample_mode:
+            return good_matches, good_certainty
+        density = kde(good_matches, std=0.1)
+        p = 1 / (density + 1)
+        p[density < 10] = 1e-7  # Basically should have at least 10 perfect neighbours, or around 100 ok ones
+        balanced_samples = torch.multinomial(p,
+                                             num_samples=min(sample, len(good_certainty)),
+                                             replacement=False)
+
+        match_samples = good_matches[balanced_samples]
+        certainty_samples = good_certainty[balanced_samples]
+
+        return match_samples, certainty_samples
+
+
+class PrecomputedUFMFlowProviderDirect(UFMFlowProviderDirect, PrecomputedFlowProviderDirect):
+
+    def __init__(self, device, umf_config: BaseUFMConfig, cache_dir: Path, data_graph: DataGraph = None,
+                 allow_missing: bool = True, allow_disk_cache=True, purge_cache: bool = False):
+
+        UFMFlowProviderDirect.__init__(self, device, umf_config)
+
+        # Then initialize PrecomputedFlowProviderDirect with its parameters
+        PrecomputedFlowProviderDirect.__init__(self, device, cache_dir, data_graph,
+                                               allow_missing, allow_disk_cache, purge_cache)
