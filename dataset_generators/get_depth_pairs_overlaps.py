@@ -391,4 +391,5 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
 
 if __name__ == "__main__":
     compute_overlaps_bop('hope', 'cuda')
+    compute_overlaps_bop('handal', 'cuda')
     # compute_overlaps_ho3d('cuda)
