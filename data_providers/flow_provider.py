@@ -97,7 +97,7 @@ class FlowProviderDirect(ABC):
         certainty = certainty.clone()
 
         h, w = certainty.shape
-        w /= 2
+        w //= 2
         if source_image_segmentation is not None:
             certainty[:, :w] *= source_image_segmentation.squeeze().bool().float()
         if target_image_segmentation is not None:
