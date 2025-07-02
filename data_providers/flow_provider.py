@@ -412,9 +412,9 @@ class UFMFlowProviderDirect(FlowProviderDirect):
                                                                     target_image_segmentation)
 
         if sample:
-            dst_pts_xy, covisibility = self.sample(dst_pts_xy_roma, covisibility, sample)
+            dst_pts_xy_roma, covisibility = self.sample(dst_pts_xy_roma, covisibility, sample)
 
-        return dst_pts_xy, covisibility
+        return dst_pts_xy_roma, covisibility
 
     def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
