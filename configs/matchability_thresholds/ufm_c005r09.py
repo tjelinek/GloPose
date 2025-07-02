@@ -7,6 +7,6 @@ def get_config() -> TrackerConfig:
     cfg.min_roma_certainty_threshold = 0.05
     cfg.flow_reliability_threshold = 0.9
     cfg.frame_filter = 'dense_matching'
-    cfg.dense_matching = 'UFM''
+    cfg.dense_matching = 'UFM'
 
     return cfg
