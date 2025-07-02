@@ -458,3 +458,39 @@ class PrecomputedUFMFlowProviderDirect(UFMFlowProviderDirect, PrecomputedFlowPro
         # Then initialize PrecomputedFlowProviderDirect with its parameters
         PrecomputedFlowProviderDirect.__init__(self, device, cache_dir, data_graph,
                                                allow_missing, allow_disk_cache, purge_cache)
+
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None,
+                     zero_certainty_outside_segmentation=False) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        certainty_filename, warp_filename = self._get_cache_filenames(source_image_index, source_image_name,
+                                                                      target_image_index, target_image_name)
+
+        warp, certainty = self._try_to_load_data(source_image_index, target_image_index, warp_filename,
+                                                 certainty_filename)
+
+        if warp is None or certainty is None:
+            warp, certainty = UFMFlowProviderDirect.compute_flow(self, source_image_tensor, target_image_tensor)
+
+            # if source_image_name and target_image_name and self.allow_missing and self.allow_disk_cache:
+            #     torch.save(warp, warp_filename)
+            #     torch.save(certainty, certainty_filename)
+
+        if zero_certainty_outside_segmentation:
+            certainty = self.zero_certainty_outside_segmentation(certainty, source_image_segmentation,
+                                                                 target_image_segmentation)
+
+        self._save_to_datagraph(source_image_index, target_image_index, warp, certainty)
+
+        if sample:
+            if ((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
+                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5) and
+                    zero_certainty_outside_segmentation):  # This should prevent the sampling to fail due to CUDA error
+                warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
+                certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
+            else:
+                warp, certainty = self.sample(warp, certainty, sample)
+
+        return warp, certainty
