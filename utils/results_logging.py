@@ -83,8 +83,8 @@ class WriteResults:
             RerunAnnotations.translation_scale
         }
 
-        if self.config.frame_filter == 'RoMa':
-            match_reliability_statistics = rrb.TimeSeriesView(name="RoMa Matching Reliability",
+        if self.config.frame_filter == 'dense_matching':
+            match_reliability_statistics = rrb.TimeSeriesView(name=f"{self.config.frame_filter} Matching Reliability",
                                                               origin=RerunAnnotations.matching_reliability_plot,
                                                               axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                                     zoom_lock=True),
@@ -176,7 +176,7 @@ class WriteResults:
                                                               origin=RerunAnnotations.matches_low_certainty),
                                             *([rrb.Spatial2DView(name="RoMa Matching Certainty",
                                                                  origin=RerunAnnotations.matching_certainty)]
-                                              if self.config.frame_filter == 'RoMa' else [])
+                                              if self.config.frame_filter == 'dense_matching' else [])
                                         ],
                                         name='Matching'
                                     ),
@@ -212,7 +212,7 @@ class WriteResults:
                                 ],
                                 row_shares=[4, 1, 1],
                                 name='Matchability'
-                            )] if self.config.frame_filter == 'RoMa' and self.config.matchability_based_reliability
+                            )] if self.config.frame_filter == 'dense_matching' and self.config.matchability_based_reliability
                               else []),
                         ],
                         name='Matching'
@@ -272,7 +272,7 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
-        if self.config.frame_filter == 'RoMa':
+        if self.config.frame_filter == 'dense_matching':
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                    rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
             rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
@@ -702,8 +702,8 @@ class WriteResults:
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
-
-        if self.config.frame_filter == 'RoMa':
+        
+        if self.config.frame_filter == 'dense_matching':
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
@@ -744,7 +744,7 @@ class WriteResults:
             rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
             rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
-        if self.config.frame_filter == 'RoMa':
+        if self.config.frame_filter == 'dense_matching':
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
             threshold = template_data.roma_certainty_threshold
             if threshold is None:
@@ -833,7 +833,7 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                                   RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
 
-        if self.config.matchability_based_reliability and self.config.frame_filter == 'RoMa':
+        if self.config.matchability_based_reliability and self.config.frame_filter == 'dense_matching':
             log_correspondences_rerun(cmap_inliers, inliers_source_yx_matchable, inliers_target_yx_matchable,
                                       RerunAnnotations.matches_high_certainty_matchable, template_image_size.height, 20)
             log_correspondences_rerun(cmap_outliers, outliers_source_yx_matchable, outliers_target_yx_matchable,
