@@ -77,7 +77,6 @@ class TrackerConfig:
     frame_filter: str = 'dense_matching'  # Either 'dense_matching', 'SIFT', or 'passthrough'
     roma_allow_disk_cache: bool = True
     passthrough_frame_filter_skip: int = 1
-    reconstruction_matches: str = 'RoMa'
 
     # RoMa config
     dense_matching: str = 'UFM'  # 'UFM' or 'RoMa'
