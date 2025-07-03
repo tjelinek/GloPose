@@ -30,23 +30,25 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
     args = []
     args.append("--config")
-    args.append(configuration_path)
+    args.append(str(configuration_path))
     args.append("--dataset-runner")
     args.append(runners[dataset])
     args.append("--experiment")
     args.append(str(Path(configuration_name).stem))
     args.append("--output-folder")
-    args.append(output_folder)
+    args.append(str(output_folder))
     args.append("--sequences")
     args.extend(sequences)
 
     # Echo the arguments
-    print("Running sbatch job.batch with arguments:", args)
     print('----------------------------------------')
+    print("Running sbatch job.batch with arguments:", args)
     if os.path.basename(os.getcwd()) == "scripts":
         subprocess.run(["sbatch", "job.batch"] + args)
     else:
+        print(' '.join(["sbatch", "job.batch"] + args))
         subprocess.run(["sbatch", "scripts/job.batch"] + args)
+    print('----------------------------------------')
 
 
 def create_unused_folder(output_folder: Path):
