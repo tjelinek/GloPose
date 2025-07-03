@@ -222,6 +222,11 @@ class Tracker6D:
             reconstruction.write(str(reconstruction_path))
 
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction)
+        else:
+            if reconstruction is None:
+                print("!!!Reconstruction failed")
+            if alignment_success is None:
+                print("!!!Alignment failed")
 
         csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
         csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
