@@ -177,8 +177,8 @@ class GlomapWrapper:
                    first_image_id, second_image_id)
 
         path_to_rec = self.colmap_output_path / '0'
-        reconstruction = pycolmap.Reconstruction(path_to_rec)
         try:
+            reconstruction = pycolmap.Reconstruction(path_to_rec)
             print(reconstruction.summary())
         except Exception as e:
             print(e)
