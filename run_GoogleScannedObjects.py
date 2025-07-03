@@ -1,7 +1,7 @@
 from pathlib import Path
 from dataset_generators import scenarios
 from utils.experiment_runners import run_tracking
-from utils.runtime_utils import parse_args
+from utils.runtime_utils import parse_args, exception_logger
 from utils.general import load_config
 
 
@@ -24,30 +24,31 @@ def main():
             # 'Sootheze_Cold_Therapy_Elephant',
             # 'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
-        ]
+        ][:1]
 
-    sequence = sequences[0]
+    for sequence in sequences:
 
-    # Set camera parameters specific to GoogleScannedObjects
-    config.camera_position = (0, -5.0, 0)
-    config.camera_up = (0, 0, 1)
+        with exception_logger():
+            # Set camera parameters specific to GoogleScannedObjects
+            config.camera_position = (0, -5.0, 0)
+            config.camera_up = (0, 0, 1)
 
-    # Construct paths specific to GoogleScannedObjects
-    gt_model_path = config.default_data_folder / Path(dataset) / Path('models') / Path(sequence)
-    gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
-    gt_mesh_path = gt_model_path / Path('meshes/model.obj')
+            # Construct paths specific to GoogleScannedObjects
+            gt_model_path = config.default_data_folder / Path(dataset) / Path('models') / Path(sequence)
+            gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
+            gt_mesh_path = gt_model_path / Path('meshes/model.obj')
 
-    # Run tracking with z-axis rotations for GoogleScannedObjects
-    run_tracking(
-        config=config,
-        dataset=dataset,
-        sequence=sequence,
-        experiment=args.experiment,
-        output_folder=args.output_folder,
-        gt_mesh_path=gt_mesh_path,
-        gt_texture_path=gt_texture_path,
-        rotation_generator=scenarios.random_walk_on_a_sphere
-    )
+            # Run tracking with z-axis rotations for GoogleScannedObjects
+            run_tracking(
+                config=config,
+                dataset=dataset,
+                sequence=sequence,
+                experiment=args.experiment,
+                output_folder=args.output_folder,
+                gt_mesh_path=gt_mesh_path,
+                gt_texture_path=gt_texture_path,
+                rotation_generator=scenarios.random_walk_on_a_sphere
+            )
 
 
 if __name__ == "__main__":

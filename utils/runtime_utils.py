@@ -1,4 +1,5 @@
 import argparse
+from contextlib import contextmanager
 
 
 def parse_args():
@@ -8,3 +9,11 @@ def parse_args():
     parser.add_argument("--output_folder", required=False)
     parser.add_argument("--experiment", required=False, default='')  # Experiment name
     return parser.parse_args()
+
+
+@contextmanager
+def exception_logger(ignore_exceptions=(Exception,)):
+    try:
+        yield
+    except ignore_exceptions as e:
+        print(f"Exception caught: {type(e).__name__}: {e}")

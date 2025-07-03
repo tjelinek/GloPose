@@ -1,6 +1,6 @@
 from utils.experiment_runners import run_on_bop_sequences
 from utils.general import load_config
-from utils.runtime_utils import parse_args
+from utils.runtime_utils import parse_args, exception_logger
 
 
 def main():
@@ -18,24 +18,26 @@ def main():
         ][:1]
 
     for sequence in sequences:
-        config = load_config(args.config)
 
-        experiment_name = args.experiment
+        with exception_logger():
+            config = load_config(args.config)
 
-        config.experiment_name = experiment_name
-        config.sequence = sequence
-        config.dataset = dataset
-        config.image_downsample = 0.5
-        config.large_images_results_write_frequency = 5
-        config.similarity_transformation = 'depths'
+            experiment_name = args.experiment
 
-        if config.per_dataset_skip_indices:
-            config.skip_indices = 1
+            config.experiment_name = experiment_name
+            config.sequence = sequence
+            config.dataset = dataset
+            config.image_downsample = 0.5
+            config.large_images_results_write_frequency = 5
+            config.similarity_transformation = 'depths'
 
-        sequence_type = 'onboarding'
-        onboarding_type = config.bop_config.onboarding_type
+            if config.per_dataset_skip_indices:
+                config.skip_indices = 1
 
-        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type)
+            sequence_type = 'onboarding'
+            onboarding_type = config.bop_config.onboarding_type
+
+            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type)
 
 
 if __name__ == "__main__":

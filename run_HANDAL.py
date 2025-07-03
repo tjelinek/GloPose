@@ -1,6 +1,6 @@
 from utils.experiment_runners import run_on_bop_sequences
 from utils.general import load_config
-from utils.runtime_utils import parse_args
+from utils.runtime_utils import parse_args, exception_logger
 
 
 def main():
@@ -29,26 +29,28 @@ def main():
 
     for sequence_obj in sequences:
 
-        sequence, obj = sequence_obj.split('_')
-        obj_id = int(obj)
-        config = load_config(args.config)
+        with exception_logger():
 
-        experiment_name = args.experiment
+            sequence, obj = sequence_obj.split('_')
+            obj_id = int(obj)
+            config = load_config(args.config)
 
-        config.experiment_name = experiment_name
-        config.sequence = sequence_obj
-        config.dataset = dataset
-        config.image_downsample = 0.25
-        config.large_images_results_write_frequency = 5
+            experiment_name = args.experiment
 
-        if config.per_dataset_skip_indices:
-            config.skip_indices = 1
+            config.experiment_name = experiment_name
+            config.sequence = sequence_obj
+            config.dataset = dataset
+            config.image_downsample = 0.25
+            config.large_images_results_write_frequency = 5
 
-        sequence_type = 'val'
-        onboarding_type = None
+            if config.per_dataset_skip_indices:
+                config.skip_indices = 1
 
-        run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True,
-                             scene_obj_id=obj_id)
+            sequence_type = 'val'
+            onboarding_type = None
+
+            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type,
+                                 True, scene_obj_id=obj_id)
 
 
 if __name__ == "__main__":
