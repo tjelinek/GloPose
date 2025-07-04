@@ -25,23 +25,49 @@ def get_segmentation_provider(segmentation_type, initial_segmentation, initial_i
     return tracker
 
 
-def process_bop_sequences(dataset, splits, segmentation_type):
+def process_bop_sequences(dataset, splits):
     bop_folder = Path('/mnt/personal/jelint19/data/bop').expanduser()
-    dataset_path = bop_folder / 'dataset'
-    split_path = dataset_path / 'split_path'
+    dataset_path = bop_folder / dataset
+
+    for split in splits:
+        split_path = dataset_path / split
+
+        for sequence in split_path.iterdir():
+
+            if not sequence.is_dir():
+                continue
+
+            images = load_gt_images(sequence / 'rgb')
+            segs = load_gt_segmentations(sequence / 'mask_visib')
+
+            first_image, first_segmentation = get_initial_image_and_segment(
+                images,
+                segs,
+                segmentation_channel=0
+        )
+
+        process_sequence(first_image, first_segmentation, images, segs, sequence)
+
+
+def process_ho3d_sequences(splits):
+    ho3d_folder = Path('/mnt/personal/jelint19/data/HO3D').expanduser()
+    split_path = ho3d_folder / 'split_path'
 
     for sequence in split_path.iterdir():
 
         if not sequence.is_dir():
             continue
 
-        images = load_gt_images(sequence / 'rgb')
-        segs = load_gt_segmentations(sequence / 'mask_visib')
+        image_folder = sequence / 'rgb'
+        segmentation_folder = sequence / 'seg'
+
+        images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
+        segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
 
         first_image, first_segmentation = get_initial_image_and_segment(
             images,
             segs,
-            segmentation_channel=0
+            segmentation_channel=1
         )
 
         process_sequence(first_image, first_segmentation, images, segs, sequence)
@@ -69,3 +95,11 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
         cv2.imwrite(str(image_seg_gt_path), image_seg_gt)
         cv2.imwrite(str(image_seg_sa2_path), image_seg_sam2)
     shutil.rmtree(SAM2_cache_folder)
+
+
+if __name__ == 'main':
+
+    process_ho3d_sequences(['train', 'evaluation'])
+
+    process_bop_sequences('handal', ['train', 'test', 'onboarding_static'])
+    process_bop_sequences('hope', ['train', 'test', 'onboarding_static', 'onboarding_dynamic'])
