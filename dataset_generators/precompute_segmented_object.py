@@ -44,9 +44,9 @@ def process_bop_sequences(dataset, splits):
                 images,
                 segs,
                 segmentation_channel=0
-        )
+            )
 
-        process_sequence(first_image, first_segmentation, images, segs, sequence)
+            process_sequence(first_image, first_segmentation, images, segs, sequence)
 
 
 def process_ho3d_sequences(splits):
