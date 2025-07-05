@@ -269,14 +269,14 @@ def _roma_warp_to_pixel_coordinates(coords, H, W):
     return kpts
 
 
-def convert_to_roma_warp(dst_pts_xy: torch.Tensor) -> torch.Tensor:
+def convert_to_roma_warp(dst_pts_xy_forward: torch.Tensor, dst_pts_xy_backward: torch.Tensor = None) -> torch.Tensor:
 
-    _, H, W = dst_pts_xy.shape
+    _, H, W = dst_pts_xy_forward.shape
 
     # Create source pixel grid
     y, x = torch.meshgrid(
-        torch.arange(H, dtype=torch.float32, device=dst_pts_xy.device),
-        torch.arange(W, dtype=torch.float32, device=dst_pts_xy.device),
+        torch.arange(H, dtype=torch.float32, device=dst_pts_xy_forward.device),
+        torch.arange(W, dtype=torch.float32, device=dst_pts_xy_forward.device),
         indexing='ij'
     )
     src_pts = torch.stack([x, y], dim=0)  # (2, H, W)
@@ -288,29 +288,43 @@ def convert_to_roma_warp(dst_pts_xy: torch.Tensor) -> torch.Tensor:
         return torch.stack([x, y], dim=0)  # (2, H, W)
 
     src_norm = normalize(src_pts)
-    dst_norm = normalize(dst_pts_xy)
+    dst_norm_forward = normalize(dst_pts_xy_forward)
+
+    if dst_pts_xy_backward is not None:
+        dst_norm_backward = normalize(dst_pts_xy_forward)
 
     # Forward: [x_src, y_src, x_dst, y_dst]
     forward = torch.stack([
         src_norm[0], src_norm[1],
-        dst_norm[0], dst_norm[1]
+        dst_norm_forward[0], dst_norm_forward[1]
     ], dim=-1)  # (H, W, 4)
 
     # Backward (approximate): [x_dst, y_dst, x_src, y_src]
-    backward = torch.stack([
-        dst_norm[0], dst_norm[1],
-        src_norm[0], src_norm[1]
-    ], dim=-1)  # (H, W, 4)
+    if dst_pts_xy_backward is not None:
+        backward = torch.stack([
+            src_norm[0], src_norm[1],
+            dst_norm_backward[0], dst_norm_backward[1]
+        ], dim=-1)  # (H, W, 4)
+    else:
+        backward = torch.stack([
+            dst_norm_forward[0], dst_norm_forward[1],
+            src_norm[0], src_norm[1]
+        ], dim=-1)  # (H, W, 4)
 
     # Concatenate along width → (H, 2W, 4)
     warp = torch.cat([forward, backward], dim=1)
     return warp
 
 
-def convert_certainty_to_roma_format(certainty: torch.Tensor) -> torch.Tensor:
+def convert_certainty_to_roma_format(certainty_forward: torch.Tensor, certainty_backward: torch.Tensor = None) ->\
+        torch.Tensor:
 
-    H, W = certainty.shape
-    roma_certainty = torch.zeros(H, 2 * W, dtype=certainty.dtype, device=certainty.device)
-    roma_certainty[:, :W] = certainty              # forward
-    roma_certainty[:, W:] = certainty              # approximate backward or zero if unsure
+    H, W = certainty_forward.shape
+    roma_certainty = torch.zeros(H, 2 * W, dtype=certainty_forward.dtype, device=certainty_forward.device)
+    roma_certainty[:, :W] = certainty_forward
+    if certainty_backward is not None:
+        roma_certainty[:, W:] = certainty_backward
+    else:
+        roma_certainty[:, W:] = torch.zeros_like(certainty_forward)
+
     return roma_certainty
