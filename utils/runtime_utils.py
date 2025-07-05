@@ -1,4 +1,5 @@
 import argparse
+import traceback
 from contextlib import contextmanager
 
 
@@ -17,3 +18,4 @@ def exception_logger(ignore_exceptions=(Exception,)):
         yield
     except ignore_exceptions as e:
         print(f"Exception caught: {type(e).__name__}: {e}")
+        traceback.print_exc()
