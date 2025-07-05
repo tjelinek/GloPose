@@ -350,13 +350,11 @@ class PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowP
 
     def __init__(self, device, roma_config: BaseRomaConfig, cache_dir: Path, data_graph: DataGraph = None,
                  allow_missing: bool = True, allow_disk_cache=True, purge_cache: bool = False):
-
         RoMaFlowProviderDirect.__init__(self, device, roma_config)
 
         # Then initialize PrecomputedFlowProviderDirect with its parameters
         PrecomputedFlowProviderDirect.__init__(self, device, cache_dir, data_graph,
                                                allow_missing, allow_disk_cache, purge_cache)
-
 
 
 class UFMFlowProviderDirect(FlowProviderDirect):
@@ -385,27 +383,32 @@ class UFMFlowProviderDirect(FlowProviderDirect):
         assert len(source_image_tensor.shape) == 3
         assert len(target_image_tensor.shape) == 3
 
-        source_image_tensor_hwc = rearrange(source_image_tensor, 'c h w -> h w c').to(torch.float)
-        target_image_tensor_hwc = rearrange(target_image_tensor, 'c h w -> h w c').to(torch.float)
+        source_image_tensor_bhwc = rearrange(source_image_tensor[None], 'b c h w -> b h w c').to(torch.float)
+        target_image_tensor_bhwc = rearrange(target_image_tensor[None], 'b c h w -> b h w c').to(torch.float)
 
-        result = self.model.predict_correspondences_batched(source_image=source_image_tensor_hwc,
-                                                            target_image=target_image_tensor_hwc,
+        if self.ufm_config.backward:
+            source_tensor_bhwc = torch.cat([source_image_tensor_bhwc, target_image_tensor_bhwc], dim=0)
+            target_tensor_bhwc = torch.cat([target_image_tensor_bhwc, source_image_tensor_bhwc], dim=0)
+        else:
+            source_tensor_bhwc = source_image_tensor_bhwc
+            target_tensor_bhwc = target_image_tensor_bhwc
+
+        result = self.model.predict_correspondences_batched(source_image=source_tensor_bhwc,
+                                                            target_image=target_tensor_bhwc,
                                                             data_norm_type='identity',)
 
-        flow = result.flow.flow_output[0]
-        covisibility = result.covisibility.mask[0]
+        flow_forward = result.flow.flow_output[0]
+        covisibility_forward = result.covisibility.mask[0]
+        flow_backward = None
+        covisibility_backward = None
+        if self.ufm_config.backward:
+            flow_backward = result.flow.flow_output[1]
+            covisibility_backward = result.covisibility.mask[1]
 
-        y, x = torch.meshgrid(
-            torch.arange(h, dtype=torch.float32, device=self.device),
-            torch.arange(w, dtype=torch.float32, device=self.device),
-            indexing='ij'
-        )
-        coords = torch.stack([x, y], dim=0)
+        dst_pts_xy_forward = self.get_dst_pts(flow_forward, h, w)
 
-        dst_pts_xy = coords + flow
-
-        dst_pts_xy_roma = convert_to_roma_warp(dst_pts_xy)
-        covisibility = convert_certainty_to_roma_format(covisibility)
+        dst_pts_xy_roma = convert_to_roma_warp(dst_pts_xy_forward, flow_backward)
+        covisibility = convert_certainty_to_roma_format(covisibility_forward, covisibility_backward)
 
         if zero_certainty_outside_segmentation and False:
             covisibility = self.zero_certainty_outside_segmentation(covisibility, source_image_segmentation,
@@ -415,6 +418,16 @@ class UFMFlowProviderDirect(FlowProviderDirect):
             dst_pts_xy_roma, covisibility = self.sample(dst_pts_xy_roma, covisibility, sample)
 
         return dst_pts_xy_roma, covisibility
+
+    def get_dst_pts(self, flow_forward, h, w):
+        y, x = torch.meshgrid(
+            torch.arange(h, dtype=torch.float32, device=self.device),
+            torch.arange(w, dtype=torch.float32, device=self.device),
+            indexing='ij'
+        )
+        coords = torch.stack([x, y], dim=0)
+        dst_pts_xy = coords + flow_forward
+        return dst_pts_xy
 
     def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
