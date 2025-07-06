@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
 
-import pandas as pd
 import torch
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
@@ -15,8 +14,9 @@ from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvide
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
-from pose.glomap import GlomapWrapper, get_image_Se3_world2cam, align_reconstruction_with_pose, align_with_kabsch
+from pose.glomap import GlomapWrapper, align_reconstruction_with_pose, align_with_kabsch
 from tracker_config import TrackerConfig
+from utils.eval_reconstruction import evaluate_reconstruction
 from utils.eval_sam import update_global_statistics, update_iou_frame_statistics
 from utils.results_logging import WriteResults
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
@@ -228,15 +228,22 @@ class Tracker6D:
             if alignment_success is None:
                 print("!!!Alignment failed")
 
-        csv_detailed_stats = self.write_folder.parent.parent / 'stats.csv'
-        csv_per_sequence_stats = self.write_folder.parent.parent / 'global_stats.csv'
+        rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_stats.csv'
+        rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_global_stats.csv'
 
         if reconstruction is not None:
-            self.evaluate_reconstruction(reconstruction, csv_detailed_stats, self.config.dataset, self.config.sequence)
+            image_name_to_frame_id = {}
+
+            for i in range(self.config.input_frames):
+                frame_data = self.data_graph.get_frame_data(i)
+                image_name_to_frame_id[str(frame_data.image_filename.name)] = i
+
+            evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id, rec_csv_detailed_stats,
+                                    self.config.dataset, self.config.sequence)
 
         num_keyframes = len(keyframe_graph.nodes)
         reconstruction_success = reconstruction is not None
-        update_global_statistics(csv_detailed_stats, csv_per_sequence_stats, num_keyframes, reconstruction,
+        update_global_statistics(rec_csv_detailed_stats, rec_csv_per_sequence_stats, num_keyframes, reconstruction,
                                  self.config.dataset, self.config.sequence, reconstruction_success,
                                  alignment_success)
 
@@ -292,52 +299,6 @@ class Tracker6D:
             raise ValueError(f'Unknown similarity transform method {self.config.similarity_transformation}')
 
         return reconstruction, align_success
-
-    def evaluate_reconstruction(self, reconstruction, csv_output_path: Path, dataset: str, sequence: str):
-
-        stats = []
-
-        images_paths_to_frame_index = {str(self.data_graph.get_frame_data(i).image_filename.name): i
-                                       for i in range(self.config.input_frames)}
-
-        for image in reconstruction.images.values():
-            image_frame_id = images_paths_to_frame_index[image.name]
-
-            Se3_obj2cam_pred = get_image_Se3_world2cam(image, 'cpu')
-
-            frame_data = self.data_graph.get_frame_data(image_frame_id)
-            Se3_world2cam_gt = frame_data.gt_Se3_world2cam
-
-            # Ground-truth rotation and translation
-            gt_rotation = Se3_world2cam_gt.rotation.matrix().tolist() if Se3_world2cam_gt is not None else None
-            gt_translation = Se3_world2cam_gt.translation.tolist() if Se3_world2cam_gt is not None else None
-
-            pred_rotation = Se3_obj2cam_pred.rotation.matrix().tolist()
-            pred_translation = Se3_obj2cam_pred.translation.tolist()
-
-            # Add stats for the current image frame
-            stats.append({
-                'dataset': dataset,
-                'sequence': sequence,
-                'image_frame_id': image_frame_id,
-                'gt_rotation': gt_rotation,
-                'gt_translation': gt_translation,
-                'pred_rotation': pred_rotation,
-                'pred_translation': pred_translation
-            })
-
-        # Convert stats to a Pandas DataFrame
-        stats_df = pd.DataFrame(stats)
-
-        # If the CSV file exists, append; otherwise, create a new one
-        if os.path.exists(csv_output_path):
-            existing_df = pd.read_csv(csv_output_path)
-            filtered_df = existing_df[~((existing_df['dataset'] == dataset) &
-                                        (existing_df['sequence'] == sequence))]
-            updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
-            updated_df.to_csv(csv_output_path, index=False)
-        else:
-            stats_df.to_csv(csv_output_path, index=False)
 
     def init_datagraph_frame(self, frame_i):
         self.data_graph.add_new_frame(frame_i)
