@@ -206,7 +206,7 @@ def _compute_iou_statistics_from_values(iou_values: np.ndarray, failure_threshol
     return stats
 
 
-def compute_sequence_statistics(csv_iou_frame_stats: Path, csv_iou_sequence_stats: Path):
+def compute_sequence_iou_statistics(csv_iou_frame_stats: Path, csv_iou_sequence_stats: Path):
     """
     Computes sequence-level statistics from frame-level IoU data.
 
@@ -262,7 +262,7 @@ def compute_sequence_statistics(csv_iou_frame_stats: Path, csv_iou_sequence_stat
     return stats_df
 
 
-def compute_dataset_statistics(csv_iou_sequence_stats: Path, csv_iou_dataset_stats: Path):
+def compute_dataset_iou_statistics(csv_iou_sequence_stats: Path, csv_iou_dataset_stats: Path):
     """
     Computes dataset-level statistics from sequence-level statistics.
 
@@ -331,5 +331,5 @@ if __name__ == '__main__':
     csv_per_sequence_iou_stats = data_root / 'stats_iou_per_sequence.csv'
     csv_per_dataset_iou_stats = data_root / 'stats_iou_per_dataset.csv'
 
-    compute_sequence_statistics(csv_per_frame_results_folder, csv_per_sequence_iou_stats)
-    compute_dataset_statistics(csv_per_sequence_iou_stats, csv_per_dataset_iou_stats)
+    compute_sequence_iou_statistics(csv_per_frame_results_folder, csv_per_sequence_iou_stats)
+    compute_dataset_iou_statistics(csv_per_sequence_iou_stats, csv_per_dataset_iou_stats)
