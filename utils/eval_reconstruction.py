@@ -62,9 +62,9 @@ def evaluate_reconstruction(
         stats_df.to_csv(csv_output_path, index=False)
 
 
-def update_global_statistics(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, num_keyframes: int,
-                             reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success: bool,
-                             pose_alignment_success: bool):
+def update_dataset_reconstructions_stats(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, num_keyframes: int,
+                                         reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success: bool,
+                                         pose_alignment_success: bool):
     # Read the input CSV file containing reconstruction data
     if not csv_per_frame_stats.exists():
         print(f"Error: Input file {csv_per_frame_stats} does not exist.")
