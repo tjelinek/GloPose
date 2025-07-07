@@ -61,7 +61,7 @@ def evaluate_reconstruction(
         stats_df.to_csv(csv_output_path, index=False)
 
 
-def update_dataset_reconstructions_stats(
+def update_sequence_reconstructions_stats(
         csv_per_frame_stats: Path,
         csv_per_sequence_stats: Path,
         num_keyframes: int,
