@@ -10,4 +10,9 @@
 #SBATCH --err=/mnt/personal/jelint19/results/PrecomputeSegs.err
 #SBATCH --out=/mnt/personal/jelint19/results/PrecomputeSegs.out
 
+
+modules_file=~/modules_glotracker.txt
+# shellcheck disable=SC2046
+ml $(<"$modules_file")
+
 python -m dataset_generators.precompute_segmented_object
