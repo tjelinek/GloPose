@@ -27,10 +27,9 @@ class BaseFrameFilter:
         if len(self.keyframe_graph.nodes) <= 2:
             nodes_list = sorted(list(self.keyframe_graph.nodes))
             middle_node = (nodes_list[-1] - nodes_list[0]) // 2
-            assert nodes_list[0] < middle_node < nodes_list[-1]
-
-            self.keyframe_graph.add_edge(nodes_list[0], middle_node)
-            self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
+            if nodes_list[0] < middle_node < nodes_list[-1]:
+                self.keyframe_graph.add_edge(nodes_list[0], middle_node)
+                self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
 
         return self.keyframe_graph
 
