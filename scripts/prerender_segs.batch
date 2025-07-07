@@ -1,0 +1,13 @@
+#!/bin/bash
+#SBATCH --time=03:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=128G
+#SBATCH --partition=gpulong
+#SBATCH --job-name=PrecomputeSegs
+#SBATCH --err=/mnt/personal/jelint19/results/PrecomputeSegs.err
+#SBATCH --out=/mnt/personal/jelint19/results/PrecomputeSegs.out
+
+python -m dataset_generators.precompute_segmented_object
