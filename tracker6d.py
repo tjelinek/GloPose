@@ -228,8 +228,8 @@ class Tracker6D:
             if alignment_success is None:
                 print("!!!Alignment failed")
 
-        rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_stats.csv'
-        rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_global_stats.csv'
+        rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
+        rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_sequence_stats.csv'
 
         if reconstruction is not None:
             image_name_to_frame_id = {}

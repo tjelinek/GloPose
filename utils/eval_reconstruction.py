@@ -1,3 +1,4 @@
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
@@ -251,23 +252,23 @@ def update_experiment_statistics(
 
 
 def generate_dataset_reconstruction_statistics(
-        sequence_stats_file: Path,
-        dataset_stats_file: Path,
+        keyframe_stats_file: Path,
+        per_sequence_stats_file: Path,
         dataset_name: str
 ):
     """
     Generate dataset-level statistics from sequence-level statistics.
 
     Args:
-        sequence_stats_file: Path to sequence statistics CSV
-        dataset_stats_file: Path to output dataset statistics CSV
+        keyframe_stats_file: Path to sequence statistics CSV
+        per_sequence_stats_file: Path to output dataset statistics CSV
         dataset_name: Name of the dataset
     """
-    if not sequence_stats_file.exists():
-        print(f"Error: Sequence stats file {sequence_stats_file} does not exist.")
+    if not keyframe_stats_file.exists():
+        print(f"Error: Sequence stats file {keyframe_stats_file} does not exist.")
         return
 
-    df = pd.read_csv(sequence_stats_file)
+    df = pd.read_csv(keyframe_stats_file)
     dataset_df = df[df['dataset'] == dataset_name]
 
     if len(dataset_df) == 0:
@@ -311,14 +312,49 @@ def generate_dataset_reconstruction_statistics(
     stats_df = pd.DataFrame([dataset_stats])
 
     # Write to CSV
-    if dataset_stats_file.exists():
-        existing_df = pd.read_csv(dataset_stats_file)
+    if per_sequence_stats_file.exists():
+        existing_df = pd.read_csv(per_sequence_stats_file)
         # Remove existing entry for this dataset
         filtered_df = existing_df[existing_df['dataset'] != dataset_name]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
-        updated_df.to_csv(dataset_stats_file, index=False)
+        updated_df.to_csv(per_sequence_stats_file, index=False)
     else:
-        stats_df.to_csv(dataset_stats_file, index=False)
+        stats_df.to_csv(per_sequence_stats_file, index=False)
 
-    print(f"Dataset statistics written to {dataset_stats_file}")
+    print(f"Dataset statistics written to {per_sequence_stats_file}")
     return stats_df
+
+
+if __name__ == '__main__':
+
+    base_experiments_folder = Path('/mnt/personal/jelint19/results/FlowTracker/matchability_thresholds')
+    for experiment_folder in sorted(base_experiments_folder.iterdir()):
+
+        if not experiment_folder.is_dir():
+            continue
+
+        old_kf_rec_stats_name = (experiment_folder / 'reconstruction_stats.csv')
+        if old_kf_rec_stats_name.exists():
+            shutil.copy(old_kf_rec_stats_name, experiment_folder / 'reconstruction_keyframe_stats.csv')
+
+        old_seq_rec_stats_name = (experiment_folder / 'reconstruction_global_stats.csv')
+        if old_seq_rec_stats_name.exists():
+            shutil.copy(old_seq_rec_stats_name, experiment_folder / 'reconstruction_sequence_stats.csv')
+
+        kf_stats_file = experiment_folder / 'reconstruction_stats.csv'
+        seq_stats_file = experiment_folder / 'reconstruction_sequence_stats.csv'
+
+        dataset_stats_files = {}
+        for dataset_folder in experiment_folder.iterdir():
+            if not dataset_folder.is_dir():
+                continue
+
+            dataset_name = dataset_folder.stem
+            stat_file = generate_dataset_reconstruction_statistics(kf_stats_file, seq_stats_file, dataset_folder.name)
+            if stat_file is not None:
+                dataset_stats_files[dataset_name] = stat_file
+
+        experiment_name = experiment_folder.stem
+        experiment_stats_file_path = base_experiments_folder / 'experiment_stats.csv'
+        update_experiment_statistics(experiment_name, dataset_stats_files, experiment_stats_file_path)
+        pass
