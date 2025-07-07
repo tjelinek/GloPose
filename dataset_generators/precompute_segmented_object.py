@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 import cv2
+from tqdm import tqdm
 
 from data_providers.frame_provider import FrameProviderAll
 from tracker_config import TrackerConfig
@@ -15,6 +16,8 @@ def get_segmentation_provider(segmentation_type, initial_segmentation, initial_i
     config = TrackerConfig()
 
     config.segmentation_provider = segmentation_type
+    config.frame_provider = 'precomputed'
+    config.write_folder = Path('/mnt/personal/jelint19/tmp/sam2_segs')
 
     tracker = FrameProviderAll(config,
                                initial_segmentation=initial_segmentation,
@@ -29,10 +32,10 @@ def process_bop_sequences(dataset, splits):
     bop_folder = Path('/mnt/personal/jelint19/data/bop').expanduser()
     dataset_path = bop_folder / dataset
 
-    for split in splits:
+    for split in tqdm(splits, desc='Split'):
         split_path = dataset_path / split
 
-        for sequence in split_path.iterdir():
+        for sequence in tqdm(split_path.iterdir(), desc='Sequence'):
 
             if not sequence.is_dir():
                 continue
@@ -51,26 +54,28 @@ def process_bop_sequences(dataset, splits):
 
 def process_ho3d_sequences(splits):
     ho3d_folder = Path('/mnt/personal/jelint19/data/HO3D').expanduser()
-    split_path = ho3d_folder / 'split_path'
 
-    for sequence in split_path.iterdir():
+    for split in tqdm(splits, desc='Split'):
+        split_path = ho3d_folder / split
 
-        if not sequence.is_dir():
-            continue
+        for sequence in tqdm(split_path.iterdir(), desc='Sequence'):
 
-        image_folder = sequence / 'rgb'
-        segmentation_folder = sequence / 'seg'
+            if not sequence.is_dir():
+                continue
 
-        images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
-        segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
+            image_folder = sequence / 'rgb'
+            segmentation_folder = sequence / 'seg'
 
-        first_image, first_segmentation = get_initial_image_and_segment(
-            images,
-            segs,
-            segmentation_channel=1
-        )
+            images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
+            segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
 
-        process_sequence(first_image, first_segmentation, images, segs, sequence)
+            first_image, first_segmentation = get_initial_image_and_segment(
+                images,
+                segs,
+                segmentation_channel=1
+            )
+
+            process_sequence(first_image, first_segmentation, images, segs, sequence)
 
 
 def process_sequence(first_image, first_segmentation, images, segs, sequence):
@@ -80,7 +85,7 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
     tracker_provider_sam2 = get_segmentation_provider('SAM2', first_segmentation,
                                                       first_image, images, segs, SAM2_cache_folder)
     sequence_length = len(images)
-    for frame_idx in range(sequence_length):
+    for frame_idx in tqdm(range(sequence_length), desc='Frame'):
         image_name = tracker_provider_precomputed.frame_provider.get_n_th_image_name(frame_idx).stem
         image = tracker_provider_precomputed.frame_provider.next_image_255(frame_idx).numpy(force=True)
         seg_gt = tracker_provider_precomputed.segmentation_provider.next_segmentation(frame_idx).numpy(force=True)
@@ -97,9 +102,13 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
     shutil.rmtree(SAM2_cache_folder)
 
 
-if __name__ == 'main':
+if __name__ == '__main__':
 
+    print('Processing HO3D')
     process_ho3d_sequences(['train', 'evaluation'])
 
+    print('Processing BOP HANDAL')
     process_bop_sequences('handal', ['train', 'test', 'onboarding_static'])
+
+    print('Processing BOP HOPEv2')
     process_bop_sequences('hope', ['train', 'test', 'onboarding_static', 'onboarding_dynamic'])
