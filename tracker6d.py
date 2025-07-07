@@ -211,7 +211,6 @@ class Tracker6D:
 
         assert len(keyframe_nodes_idxs) > 2
         print(keyframe_graph.edges)
-        # self.results_writer.log_keyframe_info(keyframe_graph)
         reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
 
         if reconstruction is not None and alignment_success:
