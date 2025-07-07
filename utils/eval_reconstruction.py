@@ -19,7 +19,6 @@ def evaluate_reconstruction(
         dataset: str,
         sequence: str
 ):
-
     stats = []
 
     for image in reconstruction.images.values():
@@ -62,9 +61,17 @@ def evaluate_reconstruction(
         stats_df.to_csv(csv_output_path, index=False)
 
 
-def update_dataset_reconstructions_stats(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, num_keyframes: int,
-                                         reconstruction: Reconstruction, dataset: str, sequence: str, reconstruction_success: bool,
-                                         pose_alignment_success: bool):
+def update_dataset_reconstructions_stats(
+        csv_per_frame_stats: Path,
+        csv_per_sequence_stats: Path,
+        num_keyframes: int,
+        input_frames: int,
+        reconstruction: Reconstruction,
+        dataset: str,
+        sequence: str,
+        reconstruction_success: bool,
+        pose_alignment_success: bool
+):
     # Read the input CSV file containing reconstruction data
     if not csv_per_frame_stats.exists():
         print(f"Error: Input file {csv_per_frame_stats} does not exist.")
@@ -80,16 +87,24 @@ def update_dataset_reconstructions_stats(csv_per_frame_stats: Path, csv_per_sequ
         'dataset': dataset,
         'sequence': sequence,
         'num_keyframes': num_keyframes,
+        'input_frames': input_frames,
         'colmap_registered_keyframes': reconstruction.num_reg_images() if reconstruction is not None else None,
         'mean_rotation_error': None,
-        'rot_accuracy_at_5_deg': None,
         'mean_translation_error': None,
+        'rot_accuracy_at_2_deg': None,
+        'rot_accuracy_at_5_deg': None,
+        'rot_accuracy_at_10_deg': None,
+        'trans_accuracy_at_0_05': None,
+        'trans_accuracy_at_0_10': None,
+        'trans_accuracy_at_0_50': None,
+        'reconstruction_success': reconstruction_success,
+        'alignment_success': pose_alignment_success,
         'timestamp': datetime.now().strftime("%d.%m.%Y, %H:%M:%S"),
         'note': str()
     }
 
     if not pose_alignment_success:
-        stats['note'] = ('Pose alignment with the reference pose failed.'
+        stats['note'] = ('Pose alignment with the reference pose failed. '
                          'This happens when COLMAP does not register the 1st image.')
     elif not reconstruction_success:
         stats['note'] = 'SfM reconstruction failed.'
@@ -123,15 +138,21 @@ def update_dataset_reconstructions_stats(csv_per_frame_stats: Path, csv_per_sequ
             translation_error = torch.linalg.norm(gt_trans - pred_trans).item()
             translation_errors.append(translation_error)
 
-        rotation_errors_np = np.asarray(rotation_errors)
-        translation_errors_np = np.asarray(translation_errors)
+        if rotation_errors and translation_errors:
+            rotation_errors_np = np.asarray(rotation_errors)
+            translation_errors_np = np.asarray(translation_errors)
 
-        # Update the existing stats dictionary instead of creating a new one
-        stats.update({
-            'mean_rotation_error': np.mean(rotation_errors_np),
-            'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
-            'mean_translation_error': np.mean(translation_errors_np)
-        })
+            # Update the existing stats dictionary
+            stats.update({
+                'mean_rotation_error': np.mean(rotation_errors_np),
+                'mean_translation_error': np.mean(translation_errors_np),
+                'rot_accuracy_at_2_deg': np.sum(rotation_errors_np <= 2) / len(rotation_errors_np),
+                'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
+                'rot_accuracy_at_10_deg': np.sum(rotation_errors_np <= 10) / len(rotation_errors_np),
+                'trans_accuracy_at_0_05': np.sum(translation_errors_np <= 0.05) / len(translation_errors_np),
+                'trans_accuracy_at_0_10': np.sum(translation_errors_np <= 0.10) / len(translation_errors_np),
+                'trans_accuracy_at_0_50': np.sum(translation_errors_np <= 0.50) / len(translation_errors_np),
+            })
 
     stats_df = pd.DataFrame([stats])
 
