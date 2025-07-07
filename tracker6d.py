@@ -16,8 +16,8 @@ from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
 from pose.glomap import GlomapWrapper, align_reconstruction_with_pose, align_with_kabsch
 from tracker_config import TrackerConfig
-from utils.eval_reconstruction import evaluate_reconstruction
-from utils.eval_sam import update_global_statistics, update_iou_frame_statistics
+from utils.eval_reconstruction import evaluate_reconstruction, update_global_statistics
+from utils.eval_sam import update_iou_frame_statistics
 from utils.results_logging import WriteResults
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
