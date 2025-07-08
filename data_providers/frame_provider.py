@@ -401,7 +401,10 @@ class FrameProviderAll:
         self.image_shape: ImageSize = self.frame_provider.image_shape
 
         if kwargs.get('depth_paths') is not None:
-            self.depth_provider = PrecomputedDepthProvider(config, self.image_shape, **kwargs)
+            if config.dataset == 'HO3D':
+                self.depth_provider = PrecomputedDepthProvider_HO3D(config, self.image_shape, **kwargs)
+            else:
+                self.depth_provider = PrecomputedDepthProvider(config, self.image_shape, **kwargs)
         else:
             self.depth_provider = None
 
@@ -446,7 +449,7 @@ class FrameProviderAll:
             image = image * segmentation
 
         depth = None
-        if self.depth_provider is not None and False:
+        if self.depth_provider is not None:
             depth = self.depth_provider.next_depth(frame_i, input_image=image)
 
         assert image.shape[-2:] == segmentation.shape[-2:]
