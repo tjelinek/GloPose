@@ -79,7 +79,7 @@ def process_ho3d_sequences(splits):
 
 
 def process_sequence(first_image, first_segmentation, images, segs, sequence):
-    SAM2_cache_folder = Path('/mnt/personal/jelint19/data/cache/generating_segmentations_cache')
+    SAM2_cache_folder = Path('/mnt/personal/jelint19/cache/generating_segmentations_cache')
     tracker_provider_precomputed = get_segmentation_provider('precomputed', first_segmentation,
                                                              first_image, images, segs, SAM2_cache_folder)
     tracker_provider_sam2 = get_segmentation_provider('SAM2', first_segmentation,
