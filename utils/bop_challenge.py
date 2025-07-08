@@ -82,14 +82,14 @@ def load_gt_images(image_folder: Path):
     return gt_images
 
 
-def load_gt_segmentations(segmentation_folder: Path, object_id: int = 0):
+def load_gt_segmentations(segmentation_folder: Path, object_id: int = None):
     """Load segmentation files, filtering by object ID."""
-    object_id_str = f"{object_id:06d}"  # Ensure it's a zero-padded 6-digit string
+    object_id_str = f"{object_id:06d}" if object_id is not None else None  # Ensure it's a zero-padded 6-digit string
 
     gt_segs = {
         int(file.stem.split('_')[0]): file
         for file in sorted(segmentation_folder.iterdir())
-        if file.stem.endswith(object_id_str)  # Dynamically filter by object ID
+        if object_id is None or file.stem.endswith(object_id_str)  # Dynamically filter by object ID
     }
 
     return gt_segs
@@ -130,7 +130,8 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, scale_factor: float, scene_obje
 
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
     gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()
-    gt_Se3_cam2obj = {frame: scale_Se3(dict_gt_Se3_obj2cam[frame].inverse()) for frame in gt_Se3_obj2cam_frames}
+    gt_Se3_cam2obj = {frame: scale_Se3(dict_gt_Se3_obj2cam[frame].inverse(), scale_factor)
+                      for frame in gt_Se3_obj2cam_frames}
 
     return gt_Se3_cam2obj
 
