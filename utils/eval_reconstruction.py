@@ -116,7 +116,7 @@ def update_sequence_reconstructions_stats(
         'rot_accuracy_at_2_deg': None,
         'rot_accuracy_at_5_deg': None,
         'rot_accuracy_at_10_deg': None,
-        'trans_accuracy_at_0_10_mm': None,
+        'trans_accuracy_at_0_05': None,
         'trans_accuracy_at_0_10': None,
         'trans_accuracy_at_0_50': None,
         'reconstruction_success': reconstruction_success,
