@@ -117,20 +117,12 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
     return frame_dict
 
 
-def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_folder: str, sequence_type: str, args,
+def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str, args,
                          config: TrackerConfig, gt_cam_scale, only_frames_with_known_poses: bool = False,
                          scene_obj_id: int = None):
 
     onboarding_type = config.bop_config.onboarding_type
-
-    # Determine output folder
-    if args.output_folder is not None:
-        write_folder = Path(args.output_folder) / dataset / config.sequence
-    else:
-        write_folder = config.default_results_folder / experiment_name / dataset / config.sequence
-    if scene_obj_id is not None:
-        write_folder_seq = write_folder.stem
-        write_folder = write_folder.parent / f'{write_folder_seq}_{scene_obj_id:06d}'
+    sequence = config.sequence
 
     # Path to BOP dataset
     bop_folder = config.default_data_folder / 'bop'
@@ -138,26 +130,35 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_folder: st
     if onboarding_type == 'static':
         static_onboarding_sequence = config.bop_config.static_onboarding_sequence
         config.special_hash = static_onboarding_sequence
+    elif onboarding_type == 'dynamic':
+        config.special_hash = 'dynamic'
+        static_onboarding_sequence = None
     elif sequence_type in ['test', 'train', 'val']:
-        config.special_hash = str(scene_obj_id)
+        config.special_hash = f'{scene_obj_id:06d}'
         static_onboarding_sequence = None
     else:
-        static_onboarding_sequence = None
+        raise ValueError("This should not happen")
+
+    # Determine output folder
+    if args.output_folder is not None:
+        write_folder = Path(args.output_folder) / dataset / f'{sequence}_{config.special_hash}'
+    else:
+        write_folder = config.default_results_folder / experiment_name / dataset / f'{sequence}_{config.special_hash}'
 
     # Load images and segmentations
     gt_images, gt_segs, gt_depths, sequence_starts =\
-        get_bop_images_and_segmentations(bop_folder, dataset, sequence_folder, sequence_type,
+        get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type,
                                          onboarding_type, static_onboarding_sequence, scene_obj_id=scene_obj_id)
 
     # Get camera-to-object transformations
-    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence_folder, sequence_type,
+    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
                                                               gt_cam_scale, onboarding_type,
                                                               sequence_starts, static_onboarding_sequence, scene_obj_id,
                                                               device=config.device)
 
     # Apply frame skipping
     if only_frames_with_known_poses:
-        valid_frames = list(dict_gt_Se3_cam2obj.keys())
+        valid_frames = sorted(dict_gt_Se3_cam2obj.keys())
     else:
         valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
 
@@ -175,12 +176,12 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_folder: st
     )
 
     # Get camera parameters
-    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence_folder, sequence_type, config.image_downsample,
+    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.image_downsample,
                                          onboarding_type, static_onboarding_sequence, sequence_starts, config.device)
 
     gt_Se3_world2cam = None
     if onboarding_type == 'static' or sequence_type in ['val', 'train']:
-        gt_Se3_world2cam = read_static_onboarding_world2cam(bop_folder, dataset, sequence_folder, sequence_type,
+        gt_Se3_world2cam = read_static_onboarding_world2cam(bop_folder, dataset, sequence, sequence_type,
                                                             onboarding_type, static_onboarding_sequence,
                                                             sequence_starts, config.device)
     if gt_Se3_world2cam is not None:

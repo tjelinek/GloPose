@@ -82,7 +82,8 @@ class Tracker6D:
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
         self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.dense_matching}_cache') /
-                                            config.roma_matcher_config.config_name / config.dataset / config.sequence)
+                                            config.roma_matcher_config.config_name / config.dataset /
+                                            f'{config.sequence}_{config.special_hash}')
         self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
                                         config.sift_matcher_config.config_name / config.dataset /
                                         f'{config.sequence}_{config.special_hash}')
