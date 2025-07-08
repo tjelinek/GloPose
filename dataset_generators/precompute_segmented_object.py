@@ -89,7 +89,7 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
         image_name = tracker_provider_precomputed.frame_provider.get_n_th_image_name(frame_idx).stem
         image = tracker_provider_precomputed.frame_provider.next_image_255(frame_idx).numpy(force=True)
         seg_gt = tracker_provider_precomputed.segmentation_provider.next_segmentation(frame_idx).numpy(force=True)
-        seg_sam2 = tracker_provider_sam2.segmentation_provider.next_segmentation(frame_idx).numpy(force=True)
+        seg_sam2 = tracker_provider_sam2.segmentation_provider.next_segmentation(frame_idx, image).numpy(force=True)
 
         image_seg_gt = overlay_mask(image, ~seg_gt, 1.0, (0, 0, 0))
         image_seg_sam2 = overlay_mask(image, ~seg_sam2, 1.0, (0, 0, 0))
