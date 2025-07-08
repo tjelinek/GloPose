@@ -41,11 +41,10 @@ def main():
             experiment_name = args.experiment
 
             config.experiment_name = experiment_name
-            config.sequence = sequence
             config.dataset = dataset
             config.image_downsample = 0.5
             config.large_images_results_write_frequency = 5
-            config.similarity_transformation = 'depths'
+            config.depth_scale_to_meter = 0.001
 
             if config.per_dataset_skip_indices:
                 config.skip_indices = 1
@@ -58,16 +57,19 @@ def main():
                 if sequence_name_split[2] == 'down':
                     config.bop_config.onboarding_type = 'static'
                     config.bop_config.static_onboarding_sequence = 'down'
+                    config.similarity_transformation = 'kabsch'
                 elif sequence_name_split[2] == 'up':
                     config.bop_config.onboarding_type = 'static'
                     config.bop_config.static_onboarding_sequence = 'up'
+                    config.similarity_transformation = 'kabsch'
                 elif sequence_name_split[2] == 'dynamic':
                     config.bop_config.onboarding_type = 'dynamic'
+                    config.similarity_transformation = 'depths'
                     run_only_on_frames_with_known_pose = False
-                    sequence = '_'.join(sequence_name_split[:2])
                     config.skip_indices = 4
+                config.sequence = '_'.join(sequence_name_split[:2])
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0,
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0,
                                  only_frames_with_known_poses=run_only_on_frames_with_known_pose)
 
 

@@ -48,7 +48,7 @@ def main():
 
             sequence_type = 'val'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0, True,
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0, True,
                                  scene_obj_id=obj_id)
 
 

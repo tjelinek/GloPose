@@ -404,7 +404,9 @@ class FrameProviderAll:
             if config.dataset == 'HO3D':
                 self.depth_provider = PrecomputedDepthProvider_HO3D(config, self.image_shape, **kwargs)
             else:
-                self.depth_provider = PrecomputedDepthProvider(config, self.image_shape, **kwargs)
+                self.depth_provider = PrecomputedDepthProvider(config, self.image_shape,
+                                                               depth_scale_to_meter=config.depth_scale_to_meter,
+                                                               **kwargs)
         else:
             self.depth_provider = None
 
@@ -486,14 +488,13 @@ class DepthProvider(ABC):
 class PrecomputedDepthProvider(DepthProvider):
 
     def __init__(self, config: TrackerConfig, image_shape: ImageSize, depth_paths: List[Path],
-                 depth_scale_to_meter: float = None, output_unit: str = None, **kwargs):
+                 depth_scale_to_meter: float = 1.0, output_unit: str = None, **kwargs):
         super().__init__(image_shape, config)
 
         self.image_shape: ImageSize = image_shape
         self.depth_paths: List[Path] = depth_paths
-        self.depth_scales: List[float]
 
-        self.depth_scale_to_meter: float = depth_scale_to_meter if depth_scale_to_meter is not None else 1.0
+        self.depth_scale_to_meter: float = depth_scale_to_meter
         if output_unit is not None:
             self.conversion_scale = get_scale_from_meter(output_unit)
         else:

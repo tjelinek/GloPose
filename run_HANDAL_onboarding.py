@@ -41,6 +41,7 @@ def main():
             config.large_images_results_write_frequency = 2
             config.bop_config.onboarding_type = 'static'
             config.bop_config.static_onboarding_sequence = 'down'
+            config.depth_scale_to_meter = 0.001
 
             if config.per_dataset_skip_indices:
                 config.skip_indices = 1
@@ -56,9 +57,11 @@ def main():
                 elif sequence_name_split[2] == 'dynamic':
                     raise NotImplementedError()
 
+                config.sequence = '_'.join(sequence_name_split[:2])
+
             sequence_type = 'onboarding'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0, True)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0, True)
 
 
 if __name__ == "__main__":

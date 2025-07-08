@@ -237,7 +237,8 @@ class Tracker6D:
                 frame_data = self.data_graph.get_frame_data(i)
                 image_name_to_frame_id[str(frame_data.image_filename.name)] = i
 
-            evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id, rec_csv_detailed_stats,
+            evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id,
+                                    rec_csv_detailed_stats,
                                     self.config.dataset, self.config.sequence)
 
         num_keyframes = len(keyframe_graph.nodes)
@@ -284,8 +285,14 @@ class Tracker6D:
 
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
-            gt_Se3_world2cam = self.gt_Se3_world2cam[0]
-            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_world2cam, None,
+            gt_Se3_obj2cam = self.gt_Se3_cam2obj[0].inverse()
+
+            image_depths = {}
+            for i in self.data_graph.G.nodes:
+                frame_data = self.data_graph.get_frame_data(i)
+                image_depths[frame_data.image_filename] = frame_data.frame_observation.depth.squeeze()
+
+            reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_obj2cam, image_depths,
                                                                            first_image_filename)
         elif self.config.similarity_transformation == 'kabsch':
             gt_Se3_world2cam_poses = {
@@ -335,7 +342,6 @@ class Tracker6D:
 
         iou_list = []
         for frame_i in range(self.config.input_frames):
-
             image = self.tracker.frame_provider.next_image(frame_i)
 
             gt_segmentation = precomputed_segmentation_provider.next_segmentation(frame_i).squeeze()
