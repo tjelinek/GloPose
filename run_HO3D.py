@@ -13,7 +13,7 @@ from utils.general import load_config
 
 def main():
     dataset = 'HO3D'
-    split = 'train'  # 'evaluation' or 'train'
+    split = 'evaluation'  # 'evaluation' or 'train'
 
     train_sequences = [
                 'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
@@ -92,7 +92,7 @@ def main():
 
                 cam_K = data_dict['camMat']
                 gt_rot = data_dict['objRot']
-                gt_trans = data_dict['objTrans']
+                gt_trans = data_dict['objTrans'] * 1000.0  # Scaling from m to mm
 
                 if cam_K is None or gt_rot is None or gt_trans is None:
                     nones.add(i)
