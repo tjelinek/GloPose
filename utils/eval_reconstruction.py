@@ -12,6 +12,23 @@ from pycolmap import Reconstruction
 from pose.glomap import get_image_Se3_world2cam
 
 
+def round_numeric_columns(df: pd.DataFrame, decimals: int = 3) -> pd.DataFrame:
+    """
+    Round all numeric columns in a DataFrame to specified decimal places.
+
+    Args:
+        df: Input DataFrame
+        decimals: Number of decimal places to round to
+
+    Returns:
+        DataFrame with rounded numeric columns
+    """
+    df_copy = df.copy()
+    numeric_columns = df_copy.select_dtypes(include=[np.number]).columns
+    df_copy[numeric_columns] = df_copy[numeric_columns].round(decimals)
+    return df_copy
+
+
 def evaluate_reconstruction(
         reconstruction,
         ground_truth_poses: Dict[int, Se3],
@@ -57,8 +74,12 @@ def evaluate_reconstruction(
         filtered_df = existing_df[~((existing_df['dataset'] == dataset) &
                                     (existing_df['sequence'] == sequence))]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+        # Round numeric columns before saving
+        updated_df = round_numeric_columns(updated_df)
         updated_df.to_csv(csv_output_path, index=False)
     else:
+        # Round numeric columns before saving
+        stats_df = round_numeric_columns(stats_df)
         stats_df.to_csv(csv_output_path, index=False)
 
 
@@ -95,7 +116,7 @@ def update_sequence_reconstructions_stats(
         'rot_accuracy_at_2_deg': None,
         'rot_accuracy_at_5_deg': None,
         'rot_accuracy_at_10_deg': None,
-        'trans_accuracy_at_0_05': None,
+        'trans_accuracy_at_0_10_mm': None,
         'trans_accuracy_at_0_10': None,
         'trans_accuracy_at_0_50': None,
         'reconstruction_success': reconstruction_success,
@@ -164,8 +185,12 @@ def update_sequence_reconstructions_stats(
         filtered_df = existing_df[~existing_df.set_index(['dataset', 'sequence']).index.isin(
             stats_df.set_index(['dataset', 'sequence']).index)]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+        # Round numeric columns before saving
+        updated_df = round_numeric_columns(updated_df)
         updated_df.to_csv(csv_per_sequence_stats, index=False)
     else:
+        # Round numeric columns before saving
+        stats_df = round_numeric_columns(stats_df)
         stats_df.to_csv(csv_per_sequence_stats, index=False)
 
     print(f"Statistics written to {csv_per_sequence_stats}")
@@ -243,8 +268,12 @@ def update_experiment_statistics(
         # Remove existing entry for this experiment
         filtered_df = existing_df[existing_df['experiment'] != experiment_name]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+        # Round numeric columns before saving
+        updated_df = round_numeric_columns(updated_df)
         updated_df.to_csv(experiment_stats_file, index=False)
     else:
+        # Round numeric columns before saving
+        stats_df = round_numeric_columns(stats_df)
         stats_df.to_csv(experiment_stats_file, index=False)
 
     print(f"Experiment statistics written to {experiment_stats_file}")
@@ -317,8 +346,12 @@ def generate_dataset_reconstruction_statistics(
         # Remove existing entry for this dataset
         filtered_df = existing_df[existing_df['dataset'] != dataset_name]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+        # Round numeric columns before saving
+        updated_df = round_numeric_columns(updated_df)
         updated_df.to_csv(per_sequence_stats_file, index=False)
     else:
+        # Round numeric columns before saving
+        stats_df = round_numeric_columns(stats_df)
         stats_df.to_csv(per_sequence_stats_file, index=False)
 
     print(f"Dataset statistics written to {per_sequence_stats_file}")
