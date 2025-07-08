@@ -49,8 +49,7 @@ def main():
             sequence_type = 'val'
             onboarding_type = None
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type,
-                                 True, scene_obj_id=obj_id)
+            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0, onboarding_type, True, scene_obj_id=obj_id)
 
 
 if __name__ == "__main__":

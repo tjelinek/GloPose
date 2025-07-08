@@ -37,7 +37,7 @@ def main():
             sequence_type = 'onboarding'
             onboarding_type = config.bop_config.onboarding_type
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type)
+            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0, onboarding_type)
 
 
 if __name__ == "__main__":

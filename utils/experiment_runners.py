@@ -118,8 +118,8 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequence_type: str, args,
-                         config: TrackerConfig, onboarding_type: str = None, only_frames_with_known_poses: bool = False,
-                         scene_obj_id: int = None):
+                         config: TrackerConfig, gt_cam_scale, onboarding_type: str = None,
+                         only_frames_with_known_poses: bool = False, scene_obj_id: int = None):
 
     # Determine output folder
     if args.output_folder is not None:
@@ -149,7 +149,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence: str, sequ
 
     # Get camera-to-object transformations
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
-                                                              onboarding_type, sequence_starts,
+                                                              gt_cam_scale, onboarding_type, sequence_starts,
                                                               static_onboarding_sequence, scene_obj_id,
                                                               device=config.device)
 

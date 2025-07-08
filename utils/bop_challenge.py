@@ -15,7 +15,7 @@ from pose.glomap import predict_poses
 from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.image_utils import get_target_shape
-
+from utils.math_utils import scale_Se3
 
 FLOW_PROVIDER_GLOBAL: Optional[RoMaFlowProviderDirect] = None
 
@@ -113,8 +113,8 @@ def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_
         raise ValueError(f'Unknown sequence type: {sequence_type}')
 
 
-def extract_gt_Se3_cam2obj(pose_json_path: Path, scene_object_object_id: int = None, object_id: int = None,
-                           device: str = 'cpu') -> Dict[int, Se3]:
+def extract_gt_Se3_cam2obj(pose_json_path: Path, scale_factor: float, scene_object_object_id: int = None,
+                           object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
 
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
 
@@ -130,7 +130,7 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, scene_object_object_id: int = N
 
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
     gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()
-    gt_Se3_cam2obj = {frame: dict_gt_Se3_obj2cam[frame].inverse() for frame in gt_Se3_obj2cam_frames}
+    gt_Se3_cam2obj = {frame: scale_Se3(dict_gt_Se3_obj2cam[frame].inverse()) for frame in gt_Se3_obj2cam_frames}
 
     return gt_Se3_cam2obj
 
@@ -237,17 +237,10 @@ def get_bop_images_and_segmentations(
         return gt_images, gt_segs, gt_depths, None
 
 
-def read_gt_Se3_cam2obj_transformations(
-    bop_folder: Path,
-    dataset: str,
-    sequence: str,
-    sequence_type: str,
-    onboarding_type: str = None,
-    sequence_starts: Optional[List[int]] = None,
-    static_onboarding_sequence: Optional[str] = None,
-    scene_obj_id: int = None,
-    device: str = 'cpu'
-) -> Dict[int, Se3]:
+def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale_factor,
+                                        onboarding_type: str = None, sequence_starts: Optional[List[int]] = None,
+                                        static_onboarding_sequence: Optional[str] = None, scene_obj_id: int = None,
+                                        device: str = 'cpu') -> Dict[int, Se3]:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         return load_static_onboarding_parts(
             bop_folder,
@@ -256,13 +249,13 @@ def read_gt_Se3_cam2obj_transformations(
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: extract_gt_Se3_cam2obj(p / 'scene_gt.json', device=device),
+            loader_fn=lambda p: extract_gt_Se3_cam2obj(p / 'scene_gt.json', scale_factor, device=device),
             sequence_starts=sequence_starts
         )
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / 'scene_gt.json'
-        return extract_gt_Se3_cam2obj(pose_json_path, scene_obj_id, device=device)
+        return extract_gt_Se3_cam2obj(pose_json_path, scale_factor, scene_obj_id, device=device)
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,

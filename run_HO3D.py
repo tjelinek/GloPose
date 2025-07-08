@@ -33,7 +33,7 @@ def main():
         if split == 'train':
             sequences = train_sequences[:1]
         else:
-            sequences = test_sequences[:1]
+            sequences = test_sequences[3:4]
 
     for sequence in sequences:
 

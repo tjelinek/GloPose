@@ -32,3 +32,7 @@ def Se3_cam_to_obj_to_Se3_obj_1_to_obj_i(Se3_cam_to_obj: Se3) -> Se3:
 def Se3_obj_relative_to_Se3_cam2obj(Se3_obj_relative: Se3, Se3_obj_ref_to_cam: Se3) -> Se3:
     Se3_cam2obj = Se3_obj_ref_to_cam.inverse() * Se3_obj_relative
     return Se3_cam2obj
+
+
+def scale_Se3(Se3_pose: Se3, scale: float) -> Se3:
+    return Se3(Se3_pose.rotation, Se3_pose.translation * scale)

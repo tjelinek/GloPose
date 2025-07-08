@@ -11,7 +11,7 @@ def main():
     else:
         sequences = [
             # 'obj_000001',
-            'obj_000010',
+            # 'obj_000010',
             'obj_000020',
             'obj_000030',
             'obj_000040',
@@ -37,7 +37,7 @@ def main():
             sequence_type = 'onboarding'
             onboarding_type = 'static'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, onboarding_type, True)
+            run_on_bop_sequences(dataset, experiment_name, sequence, sequence_type, args, config, 1.0, onboarding_type, True)
 
 
 if __name__ == "__main__":
