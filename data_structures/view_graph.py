@@ -55,6 +55,7 @@ class ViewGraph:
 
         with open(graph_path, "wb") as f:
             pickle.dump(self, f)
+            print(f"Written view graph to {str(graph_path)}")
 
         if save_images:
             image_save_dir = save_dir / "images"
