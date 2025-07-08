@@ -92,7 +92,7 @@ def main():
 
                 cam_K = data_dict['camMat']
                 gt_rot = data_dict['objRot']
-                gt_trans = data_dict['objTrans'] * 1000.0  # Scaling from m to mm
+                gt_trans = data_dict['objTrans']
 
                 if cam_K is None or gt_rot is None or gt_trans is None:
                     nones.add(i)
@@ -118,6 +118,7 @@ def main():
 
             cam2obj_rotations = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.device)
             cam2obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
+            cam2obj_translations *= 1000.0  # Scaling from mm to m
 
             Se3_cam2obj = Se3(Quaternion.from_axis_angle(cam2obj_rotations), cam2obj_translations)
             Se3_obj2cam = Se3_cam2obj.inverse()
