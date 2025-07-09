@@ -19,7 +19,7 @@ from matplotlib.colors import Normalize
 from data_structures.data_graph import DataGraph
 from data_structures.rerun_annotations import RerunAnnotations
 from flow import (source_coords_to_target_coords_image)
-from pose.glomap import world2cam_from_reconstruction
+from pose.colmap_utils import world2cam_from_reconstruction
 from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
