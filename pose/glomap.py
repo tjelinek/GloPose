@@ -619,18 +619,31 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
         print("Alignment error. The 1st image was not registered.")
         return reconstruction, False
 
-    gt_first_image_world2cam = Se3_to_Rigid3d(first_image_gt_Se3_world2cam)
+    first_image = reconstruction.find_image_with_name(first_image_name)
+    first_image_name = first_image.name
+    cam_from_world = first_image.cam_from_world
 
-    colmap_first_image_world2cam = first_image_colmap.cam_from_world
+    pred_first_image_point_depths = []
+    gt_first_image_point_depths = []
 
-    C_gt_world = gt_first_image_world2cam.inverse().translation  # metric
-    C_colmap = colmap_first_image_world2cam.inverse().translation  # non-metric
+    for point2D in first_image.points2D:
+        if point2D.has_point3D():
+            point2D_x, point2D_y = point2D.xy.astype('int')
 
-    scale = np.linalg.norm(C_gt_world) / np.linalg.norm(C_colmap)
+            point3D_id = point2D.point3D_id
+            point3D = reconstruction.point3D(point3D_id)
 
-    Sim3d_gt_world = Sim3d(scale, gt_first_image_world2cam.rotation.matrix(), gt_first_image_world2cam.translation)
-    Sim3d_colmap = Sim3d(1.0, colmap_first_image_world2cam.rotation.matrix(), colmap_first_image_world2cam.translation)
+            point3D_cam = cam_from_world * point3D.xyz  # Transform 3D point from world to camera coordinates
+            depth_pred = point3D_cam[2]
+            depth_gt = image_depths[first_image_name][point2D_y, point2D_x].item()
 
+            pred_first_image_point_depths.append(depth_pred)
+            gt_first_image_point_depths.append(depth_gt)
+
+    pred_first_image_point_depths = np.asarray(pred_first_image_point_depths)
+    gt_first_image_point_depths = np.asarray(gt_first_image_point_depths)
+
+    scale = np.median(gt_first_image_point_depths) / np.median(pred_first_image_point_depths)
     Sim3d_pred2gt = Sim3d_gt_world * Sim3d_colmap.inverse()
 
     reconstruction.transform(Sim3d_pred2gt)
