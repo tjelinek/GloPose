@@ -7,7 +7,8 @@ from pathlib import Path
 class Datasets(Enum):
     SyntheticObjects = "SyntheticObjects"
     GoogleScannedObjects = "GoogleScannedObjects"
-    HO3D = "HO3D"
+    HO3D_eval = "HO3D_eval"
+    HO3D_train = "HO3D_train"
     HANDAL = "HANDAL"
     HANDAL_ONBOARDING = "HANDAL_ONBOARDING"
     HOPE_ONBOARDING_STATIC = "HOPE_ONBOARDING_STATIC"
@@ -19,7 +20,8 @@ class Datasets(Enum):
 runners = {
     Datasets.SyntheticObjects: "run_SyntheticObjects.py",
     Datasets.GoogleScannedObjects: "run_GoogleScannedObjects.py",
-    Datasets.HO3D: "run_HO3D.py",
+    Datasets.HO3D_eval: "run_HO3D.py",
+    Datasets.HO3D_train: "run_HO3D.py",
     Datasets.HANDAL: "run_HANDAL.py",
     Datasets.HANDAL_ONBOARDING: "run_HANDAL_onboarding.py",
     Datasets.HOPE_ONBOARDING_STATIC: "run_HOPE.py",
@@ -164,13 +166,17 @@ def main():
             # 'TOP_TEN_HI',
             'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
-        Datasets.HO3D: [
-            'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', #'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
-            # 'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
-            # 'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
-            # 'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
-            # 'ABF14', #'BB14', 'GPMF14', #'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
+        Datasets.HO3D_eval: [
+            'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
+            'AP11', 'AP13', 'MPM10', 'MPM12', 'MPM14', 'SB13',
         ],
+        Datasets.HO3D_train: [
+            'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10',  'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+            'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
+            'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
+            'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
+            'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
+            ],
         Datasets.HANDAL: [
             '000001_000000', '000001_000001', '000001_000002', '000001_000003', '000001_000004',
             '000002_000000', '000002_000001', '000002_000002', '000002_000003', '000002_000004', '000002_000005',
