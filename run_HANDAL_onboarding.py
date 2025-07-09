@@ -43,8 +43,7 @@ def main():
             config.bop_config.static_onboarding_sequence = 'down'
             config.depth_scale_to_meter = 0.001
 
-            if config.per_dataset_skip_indices:
-                config.skip_indices = 1
+            config.skip_indices *= 1
 
             sequence_name_split = sequence.split('_')
             if len(sequence_name_split) == 3:

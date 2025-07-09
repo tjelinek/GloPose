@@ -45,8 +45,7 @@ def main():
     config.image_downsample = 1.0
     config.large_images_results_write_frequency = 20
 
-    if config.per_dataset_skip_indices:
-        config.skip_indices = 10
+    config.skip_indices *= 10
 
     if args.output_folder is not None:
         write_folder = Path(args.output_folder) / dataset / sequence

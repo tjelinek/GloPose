@@ -46,8 +46,7 @@ def main():
         with exception_logger():
             config = load_config(args.config)
 
-            if config.per_dataset_skip_indices:
-                config.skip_indices = 10
+            config.skip_indices *= 10
 
             if config.gt_flow_source == 'GenerateSynthetic':
                 exit()
