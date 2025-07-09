@@ -191,6 +191,10 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     if gt_Se3_world2cam is not None:
         gt_Se3_world2cam = reindex_frame_dict(gt_Se3_world2cam, valid_frames)
 
+    if gt_Se3_world2cam is None and dict_gt_Se3_cam2obj is not None:
+        gt_Se3_world2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
+        dict_gt_Se3_cam2obj = None
+
     # Update config with frame information
     config.input_frames = len(gt_images)
     config.frame_provider = 'precomputed'
