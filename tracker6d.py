@@ -232,6 +232,10 @@ class Tracker6D:
         rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
         rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_sequence_stats.csv'
 
+        sequence_name = self.config.sequence
+        if self.config.special_hash is not None and len(self.config.special_hash) > 0:
+            sequence_name = f'{sequence_name}_{self.config.special_hash}'
+
         if reconstruction is not None:
             image_name_to_frame_id = {}
 
@@ -239,15 +243,17 @@ class Tracker6D:
                 frame_data = self.data_graph.get_frame_data(i)
                 image_name_to_frame_id[str(frame_data.image_filename.name)] = i
 
-            evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id,
-                                    rec_csv_detailed_stats,
-                                    self.config.dataset, self.config.sequence)
+            if known_gt_poses:
+                evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id,
+                                        rec_csv_detailed_stats, self.config.dataset, sequence_name)
 
         num_keyframes = len(keyframe_graph.nodes)
         reconstruction_success = reconstruction is not None
-        update_sequence_reconstructions_stats(rec_csv_detailed_stats, rec_csv_per_sequence_stats, num_keyframes,
-                                              self.config.input_frames, reconstruction, self.config.dataset,
-                                              self.config.sequence, reconstruction_success, alignment_success)
+
+        if known_gt_poses:
+            update_sequence_reconstructions_stats(rec_csv_detailed_stats, rec_csv_per_sequence_stats, num_keyframes,
+                                                  self.config.input_frames, reconstruction, self.config.dataset,
+                                                  sequence_name, reconstruction_success, alignment_success)
 
         return
 
