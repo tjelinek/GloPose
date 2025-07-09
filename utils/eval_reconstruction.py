@@ -366,14 +366,6 @@ if __name__ == '__main__':
         if not experiment_folder.is_dir():
             continue
 
-        old_kf_rec_stats_name = (experiment_folder / 'reconstruction_stats.csv')
-        if old_kf_rec_stats_name.exists():
-            shutil.copy(old_kf_rec_stats_name, experiment_folder / 'reconstruction_keyframe_stats.csv')
-
-        old_seq_rec_stats_name = (experiment_folder / 'reconstruction_global_stats.csv')
-        if old_seq_rec_stats_name.exists():
-            shutil.copy(old_seq_rec_stats_name, experiment_folder / 'reconstruction_sequence_stats.csv')
-
         kf_stats_file = experiment_folder / 'reconstruction_stats.csv'
         seq_stats_file = experiment_folder / 'reconstruction_sequence_stats.csv'
 
