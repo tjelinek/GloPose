@@ -171,8 +171,6 @@ def update_sequence_reconstructions_stats(
         'rot_accuracy_at_2_deg': None,
         'rot_accuracy_at_5_deg': None,
         'rot_accuracy_at_10_deg': None,
-        'trans_accuracy_at_0_1_cm': None,
-        'trans_accuracy_at_0_5_cm': None,
         'trans_accuracy_at_1_cm': None,
         'trans_accuracy_at_5_cm': None,
         'trans_accuracy_at_10_cm': None,
@@ -229,10 +227,6 @@ def update_sequence_reconstructions_stats(
                 'rot_accuracy_at_2_deg': np.sum(rotation_errors_np <= 2) / len(rotation_errors_np),
                 'rot_accuracy_at_5_deg': np.sum(rotation_errors_np <= 5) / len(rotation_errors_np),
                 'rot_accuracy_at_10_deg': np.sum(rotation_errors_np <= 10) / len(rotation_errors_np),
-                'trans_accuracy_at_0_1_cm': np.sum(translation_errors_np <= translation_thresholds['0_1']) / len(
-                    translation_errors_np),
-                'trans_accuracy_at_0_5_cm': np.sum(translation_errors_np <= translation_thresholds['0_5']) / len(
-                    translation_errors_np),
                 'trans_accuracy_at_1_cm': np.sum(translation_errors_np <= translation_thresholds['1']) / len(
                     translation_errors_np),
                 'trans_accuracy_at_5_cm': np.sum(translation_errors_np <= translation_thresholds['5']) / len(
@@ -314,10 +308,6 @@ def update_experiment_statistics(
             experiment_stats[f"{dataset_prefix}rot_accuracy_at_10_deg"] = successful_df['rot_accuracy_at_10_deg'].mean()
 
             # Translation accuracy at different thresholds
-            experiment_stats[f"{dataset_prefix}trans_accuracy_at_0_1_cm"] = successful_df[
-                'trans_accuracy_at_0_1_cm'].mean()
-            experiment_stats[f"{dataset_prefix}trans_accuracy_at_0_5_cm"] = successful_df[
-                'trans_accuracy_at_0_5_cm'].mean()
             experiment_stats[f"{dataset_prefix}trans_accuracy_at_1_cm"] = successful_df['trans_accuracy_at_1_cm'].mean()
             experiment_stats[f"{dataset_prefix}trans_accuracy_at_5_cm"] = successful_df['trans_accuracy_at_5_cm'].mean()
             experiment_stats[f"{dataset_prefix}trans_accuracy_at_10_cm"] = successful_df[
@@ -326,7 +316,6 @@ def update_experiment_statistics(
             # No successful reconstructions for this dataset
             for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
                            'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
-                           'trans_accuracy_at_0_1_cm', 'trans_accuracy_at_0_5_cm',
                            'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
                            'trans_accuracy_at_10_cm']:
                 experiment_stats[f"{dataset_prefix}{metric}"] = None
@@ -371,10 +360,10 @@ def generate_dataset_reconstruction_statistics(
         output_translation_unit: Unit for translation measurements
     """
     if not keyframe_stats_file.exists():
-        print(f"Error: Sequence stats file {keyframe_stats_file} does not exist.")
+        print(f"Error: Sequence stats file {per_sequence_stats_file} does not exist.")
         return
 
-    df = pd.read_csv(keyframe_stats_file)
+    df = pd.read_csv(per_sequence_stats_file)
     dataset_df = df[df['dataset'] == dataset_name]
 
     if len(dataset_df) == 0:
@@ -404,8 +393,6 @@ def generate_dataset_reconstruction_statistics(
             'rot_accuracy_at_2_deg': successful_df['rot_accuracy_at_2_deg'].mean(),
             'rot_accuracy_at_5_deg': successful_df['rot_accuracy_at_5_deg'].mean(),
             'rot_accuracy_at_10_deg': successful_df['rot_accuracy_at_10_deg'].mean(),
-            'trans_accuracy_at_0_1_cm': successful_df['trans_accuracy_at_0_1_cm'].mean(),
-            'trans_accuracy_at_0_5_cm': successful_df['trans_accuracy_at_0_5_cm'].mean(),
             'trans_accuracy_at_1_cm': successful_df['trans_accuracy_at_1_cm'].mean(),
             'trans_accuracy_at_5_cm': successful_df['trans_accuracy_at_5_cm'].mean(),
             'trans_accuracy_at_10_cm': successful_df['trans_accuracy_at_10_cm'].mean(),
@@ -414,7 +401,6 @@ def generate_dataset_reconstruction_statistics(
         # No successful reconstructions
         for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
                        'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
-                       'trans_accuracy_at_0_1_cm', 'trans_accuracy_at_0_5_cm',
                        'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
                        'trans_accuracy_at_10_cm']:
             dataset_stats[metric] = None
