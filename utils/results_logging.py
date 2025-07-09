@@ -445,7 +445,8 @@ class WriteResults:
 
         # self.visualize_3d_camera_space(frame_i, keyframe_graph)
 
-    def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction):
+    def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction,
+                               visualize_also_gt_poses: bool):
         rr.set_time_sequence("frame", frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -462,36 +463,37 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        gt_Se3_world2cam = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
+        if visualize_also_gt_poses:
+            gt_Se3_world2cam = self.accumulate_Se3_attributes(all_frames_from_0, 'gt_Se3_world2cam')
 
-        gt_t_world2cam = gt_Se3_world2cam.inverse().translation.numpy(force=True)
-        pred_t_world2cam = np.stack([pred_Se3_world2cam[frm].inverse().t.numpy(force=True)
-                                     for frm in sorted(pred_Se3_world2cam)])
+            gt_t_world2cam = gt_Se3_world2cam.inverse().translation.numpy(force=True)
+            pred_t_world2cam = np.stack([pred_Se3_world2cam[frm].inverse().t.numpy(force=True)
+                                         for frm in sorted(pred_Se3_world2cam)])
 
-        cmap_gt = plt.get_cmap('Reds')
-        cmap_pred = plt.get_cmap('Blues')
-        gradient = np.linspace(1., 0.5, self.config.input_frames)
-        colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
-        colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(
-            np.uint8)
+            cmap_gt = plt.get_cmap('Reds')
+            cmap_pred = plt.get_cmap('Blues')
+            gradient = np.linspace(1., 0.5, self.config.input_frames)
+            colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
+            colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(
+                np.uint8)
 
-        strips_gt = np.stack([gt_t_world2cam[:-1], gt_t_world2cam[1:]], axis=1)
-        strips_pred = np.stack([pred_t_world2cam[:-1], pred_t_world2cam[1:]], axis=1)
+            strips_gt = np.stack([gt_t_world2cam[:-1], gt_t_world2cam[1:]], axis=1)
+            strips_pred = np.stack([pred_t_world2cam[:-1], pred_t_world2cam[1:]], axis=1)
 
-        object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
-        strips_radii = [0.005 * object_size] * n_poses
+            object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
+            strips_radii = [0.005 * object_size] * n_poses
 
-        rr.log(RerunAnnotations.colmap_gt_camera_track,
-               rr.LineStrips3D(strips=strips_gt,  # gt_t_world2cam
-                               colors=colors_gt,
-                               radii=strips_radii),
-               static=True)
+            rr.log(RerunAnnotations.colmap_gt_camera_track,
+                   rr.LineStrips3D(strips=strips_gt,  # gt_t_world2cam
+                                   colors=colors_gt,
+                                   radii=strips_radii),
+                   static=True)
 
-        # rr.log(RerunAnnotations.colmap_pred_camera_track,
-        #        rr.LineStrips3D(strips=strips_pred,  # gt_t_world2cam
-        #                        colors=colors_pred,
-        #                        radii=strips_radii),
-        #        static=True)
+            # rr.log(RerunAnnotations.colmap_pred_camera_track,
+            #        rr.LineStrips3D(strips=strips_pred,  # gt_t_world2cam
+            #                        colors=colors_pred,
+            #                        radii=strips_radii),
+            #        static=True)
 
         image_id_to_poses = {}
         image_name_to_image_id = {image.name: image_id for image_id, image in colmap_reconstruction.images.items()}
