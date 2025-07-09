@@ -344,8 +344,7 @@ def update_experiment_statistics(
     return stats_df
 
 
-def generate_dataset_reconstruction_statistics(
-        keyframe_stats_file: Path,
+def update_dataset_reconstruction_statistics(
         per_sequence_stats_file: Path,
         dataset_name: str,
         output_translation_unit: str = 'cm'
@@ -354,14 +353,10 @@ def generate_dataset_reconstruction_statistics(
     Generate dataset-level statistics from sequence-level statistics.
 
     Args:
-        keyframe_stats_file: Path to sequence statistics CSV
         per_sequence_stats_file: Path to output dataset statistics CSV
         dataset_name: Name of the dataset
         output_translation_unit: Unit for translation measurements
     """
-    if not keyframe_stats_file.exists():
-        print(f"Error: Sequence stats file {per_sequence_stats_file} does not exist.")
-        return
 
     df = pd.read_csv(per_sequence_stats_file)
     dataset_df = df[df['dataset'] == dataset_name]
@@ -374,9 +369,9 @@ def generate_dataset_reconstruction_statistics(
     dataset_stats = {
         'dataset': dataset_name,
         'num_sequences': len(dataset_df),
-        'total_keyframes': dataset_df['num_keyframes'].sum(),
-        'total_input_frames': dataset_df['input_frames'].sum(),
-        'total_registered_keyframes': dataset_df['colmap_registered_keyframes'].sum(),
+        'mean_input_frames': dataset_df['input_frames'].mean(),
+        'mean_keyframes': dataset_df['num_keyframes'].mean(),
+        'mean_colmap_registered_keyframes': dataset_df['colmap_registered_keyframes'].mean(),
         'reconstruction_success_rate': dataset_df['reconstruction_success'].sum() / len(dataset_df),
         'alignment_success_rate': dataset_df['alignment_success'].sum() / len(dataset_df),
         'timestamp': datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
@@ -408,21 +403,23 @@ def generate_dataset_reconstruction_statistics(
     # Convert to DataFrame and save
     stats_df = pd.DataFrame([dataset_stats])
 
+    per_dataset_stats_file = per_sequence_stats_file.parent / f"reconstruction_dataset_stats.csv"
+
     # Write to CSV
-    if per_sequence_stats_file.exists():
-        existing_df = pd.read_csv(per_sequence_stats_file)
+    if per_dataset_stats_file.exists():
+        existing_df = pd.read_csv(per_dataset_stats_file)
         # Remove existing entry for this dataset
         filtered_df = existing_df[existing_df['dataset'] != dataset_name]
         updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
         # Round numeric columns before saving
         updated_df = round_numeric_columns(updated_df)
-        updated_df.to_csv(per_sequence_stats_file, index=False)
+        updated_df.to_csv(per_dataset_stats_file, index=False)
     else:
         # Round numeric columns before saving
         stats_df = round_numeric_columns(stats_df)
-        stats_df.to_csv(per_sequence_stats_file, index=False)
+        stats_df.to_csv(per_dataset_stats_file, index=False)
 
-    print(f"Dataset statistics written to {per_sequence_stats_file}")
+    print(f"Dataset statistics for {dataset_name} written to {per_dataset_stats_file}")
     return stats_df
 
 
@@ -443,7 +440,7 @@ if __name__ == '__main__':
                 continue
 
             dataset_name = dataset_folder.stem
-            stat_file = generate_dataset_reconstruction_statistics(kf_stats_file, seq_stats_file, dataset_folder.name)
+            stat_file = update_dataset_reconstruction_statistics(seq_stats_file, dataset_name)
             if stat_file is not None:
                 dataset_stats_files[dataset_name] = stat_file
 
