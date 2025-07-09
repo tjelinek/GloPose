@@ -453,7 +453,7 @@ if __name__ == '__main__':
 
         dataset_stats_files = {}
         for dataset_folder in experiment_folder.iterdir():
-            if not dataset_folder.is_dir():
+            if not dataset_folder.is_dir() or dataset_folder.stem == 'logs':
                 continue
 
             dataset_name = dataset_folder.stem
