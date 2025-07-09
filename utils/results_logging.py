@@ -60,7 +60,7 @@ class WriteResults:
     def rerun_init(self):
         rr.init(f'{self.config.sequence}-{self.config.experiment_name}')
         rerun_file = (self.write_folder /
-                      f'rerun_{self.config.experiment_name}_{self.config.sequence}.rrd')
+                      f'rerun_{self.config.experiment_name}_{self.config.sequence}_{self.config.special_hash}.rrd')
         rr.save(rerun_file)
 
         self.template_fields = {
