@@ -281,36 +281,36 @@ def update_experiment_statistics(
         df = pd.read_csv(stats_file)
 
         # Calculate aggregated statistics for this dataset
-        dataset_prefix = f"{dataset_name}_"
+        dataset_prefix = f"{dataset_name}"
 
         # Basic counts
-        experiment_stats[f"{dataset_prefix}num_sequences"] = len(df)
-        experiment_stats[f"{dataset_prefix}total_keyframes"] = df['num_keyframes'].sum()
-        experiment_stats[f"{dataset_prefix}total_input_frames"] = df['input_frames'].sum()
-        experiment_stats[f"{dataset_prefix}total_registered_keyframes"] = df['colmap_registered_keyframes'].sum()
+        experiment_stats[f"{dataset_prefix}_num_sequences"] = len(df)
+        experiment_stats[f"{dataset_prefix}_mean_input_frames"] = df['input_frames'].mean()
+        experiment_stats[f"{dataset_prefix}_mean_keyframes"] = df['num_keyframes'].mean()
+        experiment_stats[f"{dataset_prefix}_mean_colmap_keyframes"] = df['colmap_registered_keyframes'].mean()
 
         # Success rates
-        experiment_stats[f"{dataset_prefix}reconstruction_success_rate"] = df['reconstruction_success'].sum() / len(df)
-        experiment_stats[f"{dataset_prefix}alignment_success_rate"] = df['alignment_success'].sum() / len(df)
+        experiment_stats[f"{dataset_prefix}_reconstruction_success_rate"] = df['reconstruction_success'].sum() / len(df)
+        experiment_stats[f"{dataset_prefix}_alignment_success_rate"] = df['alignment_success'].sum() / len(df)
 
         # Only calculate accuracy metrics for successful reconstructions
         successful_df = df[df['reconstruction_success'] & df['alignment_success']]
 
         if len(successful_df) > 0:
             # Mean errors
-            experiment_stats[f"{dataset_prefix}mean_rotation_error"] = successful_df['mean_rotation_error'].mean()
-            experiment_stats[f"{dataset_prefix}mean_translation_error_{output_translation_unit}"] = successful_df[
+            experiment_stats[f"{dataset_prefix}_mean_rotation_error"] = successful_df['mean_rotation_error'].mean()
+            experiment_stats[f"{dataset_prefix}_mean_translation_error_{output_translation_unit}"] = successful_df[
                 f'mean_translation_error_{output_translation_unit}'].mean()
 
             # Rotation accuracy at different thresholds
-            experiment_stats[f"{dataset_prefix}rot_accuracy_at_2_deg"] = successful_df['rot_accuracy_at_2_deg'].mean()
-            experiment_stats[f"{dataset_prefix}rot_accuracy_at_5_deg"] = successful_df['rot_accuracy_at_5_deg'].mean()
-            experiment_stats[f"{dataset_prefix}rot_accuracy_at_10_deg"] = successful_df['rot_accuracy_at_10_deg'].mean()
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_2_deg"] = successful_df['rot_accuracy_at_2_deg'].mean()
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_5_deg"] = successful_df['rot_accuracy_at_5_deg'].mean()
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_10_deg"] = successful_df['rot_accuracy_at_10_deg'].mean()
 
             # Translation accuracy at different thresholds
-            experiment_stats[f"{dataset_prefix}trans_accuracy_at_1_cm"] = successful_df['trans_accuracy_at_1_cm'].mean()
-            experiment_stats[f"{dataset_prefix}trans_accuracy_at_5_cm"] = successful_df['trans_accuracy_at_5_cm'].mean()
-            experiment_stats[f"{dataset_prefix}trans_accuracy_at_10_cm"] = successful_df[
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_1_cm"] = successful_df['trans_accuracy_at_1_cm'].mean()
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_5_cm"] = successful_df['trans_accuracy_at_5_cm'].mean()
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_10_cm"] = successful_df[
                 'trans_accuracy_at_10_cm'].mean()
         else:
             # No successful reconstructions for this dataset
@@ -318,10 +318,10 @@ def update_experiment_statistics(
                            'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
                            'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
                            'trans_accuracy_at_10_cm']:
-                experiment_stats[f"{dataset_prefix}{metric}"] = None
 
     # Add timestamp
     experiment_stats['timestamp'] = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
+                experiment_stats[f"{dataset_prefix}_{metric}"] = None
 
     # Convert to DataFrame
     stats_df = pd.DataFrame([experiment_stats])
