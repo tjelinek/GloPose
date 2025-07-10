@@ -232,6 +232,9 @@ class Tracker6D:
 
         rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
         rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_sequence_stats.csv'
+        dataset_name_for_eval = self.config.dataset
+        if self.config.bop_config.onboarding_type is not None:
+            dataset_name_for_eval = f'{dataset_name_for_eval}_{self.config.bop_config.onboarding_type}_onboarding'
 
         sequence_name = self.config.sequence
         if self.config.special_hash is not None and len(self.config.special_hash) > 0:
