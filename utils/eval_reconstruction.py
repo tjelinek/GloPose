@@ -256,91 +256,6 @@ def update_sequence_reconstructions_stats(
     return stats_df
 
 
-def update_experiment_statistics(
-        experiment_name: str,
-        dataset_stats_files: Dict[str, Path],
-        experiment_stats_file: Path,
-        output_translation_unit: str = 'cm'
-):
-    """
-    Aggregate dataset statistics into experiment-level statistics.
-
-    Args:
-        experiment_name: Name of the experiment
-        dataset_stats_files: Dict mapping dataset names to their stats CSV files
-        experiment_stats_file: Path to output experiment statistics CSV
-        output_translation_unit: Unit for translation measurements
-    """
-    experiment_stats = {'experiment': experiment_name}
-
-    for dataset_name, stats_file in dataset_stats_files.items():
-        if not stats_file.exists():
-            print(f"Warning: Dataset stats file {stats_file} does not exist. Skipping {dataset_name}.")
-            continue
-
-        df = pd.read_csv(stats_file)
-
-        # Calculate aggregated statistics for this dataset
-        dataset_prefix = f"{dataset_name}"
-
-        # Basic counts
-        experiment_stats[f"{dataset_prefix}_num_sequences"] = len(df)
-        experiment_stats[f"{dataset_prefix}_mean_input_frames"] = df['input_frames'].mean()
-        experiment_stats[f"{dataset_prefix}_mean_keyframes"] = df['num_keyframes'].mean()
-        experiment_stats[f"{dataset_prefix}_mean_colmap_keyframes"] = df['colmap_registered_keyframes'].mean()
-
-        # Success rates
-        experiment_stats[f"{dataset_prefix}_reconstruction_success_rate"] = df['reconstruction_success'].sum() / len(df)
-        experiment_stats[f"{dataset_prefix}_alignment_success_rate"] = df['alignment_success'].sum() / len(df)
-
-        # Only calculate accuracy metrics for successful reconstructions
-        successful_df = df[df['reconstruction_success'] & df['alignment_success']]
-
-        if len(successful_df) > 0:
-            # Mean errors
-            experiment_stats[f"{dataset_prefix}_mean_rotation_error"] = successful_df['mean_rotation_error'].mean()
-            experiment_stats[f"{dataset_prefix}_mean_translation_error_{output_translation_unit}"] = successful_df[
-                f'mean_translation_error_{output_translation_unit}'].mean()
-
-            # Rotation accuracy at different thresholds
-            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_2_deg"] = successful_df['rot_accuracy_at_2_deg'].mean()
-            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_5_deg"] = successful_df['rot_accuracy_at_5_deg'].mean()
-            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_10_deg"] = successful_df['rot_accuracy_at_10_deg'].mean()
-
-            # Translation accuracy at different thresholds
-            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_1_cm"] = successful_df['trans_accuracy_at_1_cm'].mean()
-            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_5_cm"] = successful_df['trans_accuracy_at_5_cm'].mean()
-            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_10_cm"] = successful_df[
-                'trans_accuracy_at_10_cm'].mean()
-        else:
-            # No successful reconstructions for this dataset
-            for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
-                           'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
-                           'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
-                           'trans_accuracy_at_10_cm']:
-                experiment_stats[f"{dataset_prefix}_{metric}"] = None
-
-    # Convert to DataFrame
-    stats_df = pd.DataFrame([experiment_stats])
-
-    # Write to CSV
-    if experiment_stats_file.exists():
-        existing_df = pd.read_csv(experiment_stats_file)
-        # Remove existing entry for this experiment
-        filtered_df = existing_df[existing_df['experiment'] != experiment_name]
-        updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
-        # Round numeric columns before saving
-        updated_df = round_numeric_columns(updated_df)
-        updated_df.to_csv(experiment_stats_file, index=False)
-    else:
-        # Round numeric columns before saving
-        stats_df = round_numeric_columns(stats_df)
-        stats_df.to_csv(experiment_stats_file, index=False)
-
-    print(f"Experiment statistics written to {experiment_stats_file}")
-    return stats_df
-
-
 def update_dataset_reconstruction_statistics(
         per_sequence_stats_file: Path,
         dataset_name: str,
@@ -416,6 +331,114 @@ def update_dataset_reconstruction_statistics(
         stats_df.to_csv(per_dataset_stats_file, index=False)
 
     print(f"Dataset statistics for {dataset_name} written to {per_dataset_stats_file}")
+    return stats_df
+
+
+def update_experiment_statistics(
+        experiment_name: str,
+        kf_stats_file: Path,
+        experiment_stats_file: Path,
+        output_translation_unit: str = 'cm'
+):
+    """
+    Aggregate dataset statistics into experiment-level statistics.
+
+    Reads from a single keyframe stats file and creates column groups for each distinct dataset,
+    using the same calculation logic as update_dataset_reconstruction_statistics.
+
+    Args:
+        experiment_name: Name of the experiment
+        kf_stats_file: Path to keyframe statistics CSV file containing all sequences
+        experiment_stats_file: Path to output experiment statistics CSV
+        output_translation_unit: Unit for translation measurements
+    """
+    if not kf_stats_file.exists():
+        print(f"Error: Keyframe stats file {kf_stats_file} does not exist.")
+        return
+
+    # Read the keyframe stats file
+    df = pd.read_csv(kf_stats_file)
+
+    # Get all distinct datasets
+    distinct_datasets = df['dataset'].unique()
+
+    # Initialize experiment stats with experiment name
+    experiment_stats = {'experiment': experiment_name}
+
+    # Process each dataset
+    for dataset_name in distinct_datasets:
+        dataset_df = df[df['dataset'] == dataset_name]
+
+        if len(dataset_df) == 0:
+            print(f"Warning: No data found for dataset {dataset_name}. Skipping.")
+            continue
+
+        # Calculate aggregated statistics for this dataset
+        dataset_prefix = f"{dataset_name}"
+
+        # Basic counts and means (same as update_dataset_reconstruction_statistics)
+        experiment_stats[f"{dataset_prefix}_num_sequences"] = len(dataset_df)
+        experiment_stats[f"{dataset_prefix}_mean_input_frames"] = dataset_df['input_frames'].mean()
+        experiment_stats[f"{dataset_prefix}_mean_keyframes"] = dataset_df['num_keyframes'].mean()
+        experiment_stats[f"{dataset_prefix}_mean_colmap_registered_keyframes"] = dataset_df[
+            'colmap_registered_keyframes'].mean()
+
+        # Success rates
+        experiment_stats[f"{dataset_prefix}_reconstruction_success_rate"] = dataset_df[
+                                                                                'reconstruction_success'].sum() / len(
+            dataset_df)
+        experiment_stats[f"{dataset_prefix}_alignment_success_rate"] = dataset_df['alignment_success'].sum() / len(
+            dataset_df)
+
+        # Only calculate accuracy metrics for successful reconstructions
+        successful_df = dataset_df[dataset_df['reconstruction_success'] & dataset_df['alignment_success']]
+
+        if len(successful_df) > 0:
+            # Mean errors
+            experiment_stats[f"{dataset_prefix}_mean_rotation_error"] = successful_df['mean_rotation_error'].mean()
+            experiment_stats[f"{dataset_prefix}_mean_translation_error_{output_translation_unit}"] = successful_df[
+                f'mean_translation_error_{output_translation_unit}'].mean()
+
+            # Rotation accuracy at different thresholds
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_2_deg"] = successful_df['rot_accuracy_at_2_deg'].mean()
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_5_deg"] = successful_df['rot_accuracy_at_5_deg'].mean()
+            experiment_stats[f"{dataset_prefix}_rot_accuracy_at_10_deg"] = successful_df[
+                'rot_accuracy_at_10_deg'].mean()
+
+            # Translation accuracy at different thresholds
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_1_cm"] = successful_df[
+                'trans_accuracy_at_1_cm'].mean()
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_5_cm"] = successful_df[
+                'trans_accuracy_at_5_cm'].mean()
+            experiment_stats[f"{dataset_prefix}_trans_accuracy_at_10_cm"] = successful_df[
+                'trans_accuracy_at_10_cm'].mean()
+        else:
+            # No successful reconstructions for this dataset
+            for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
+                           'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
+                           'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
+                           'trans_accuracy_at_10_cm']:
+                experiment_stats[f"{dataset_prefix}_{metric}"] = None
+
+    # Convert to DataFrame
+    stats_df = pd.DataFrame([experiment_stats])
+
+    # Write to CSV
+    if experiment_stats_file.exists():
+        existing_df = pd.read_csv(experiment_stats_file)
+        # Remove existing entry for this experiment
+        filtered_df = existing_df[existing_df['experiment'] != experiment_name]
+        updated_df = pd.concat([filtered_df, stats_df], ignore_index=True)
+        # Round numeric columns before saving
+        updated_df = round_numeric_columns(updated_df)
+        updated_df.to_csv(experiment_stats_file, index=False)
+    else:
+        # Round numeric columns before saving
+        stats_df = round_numeric_columns(stats_df)
+        stats_df.to_csv(experiment_stats_file, index=False)
+
+    print(f"Experiment statistics written to {experiment_stats_file}")
+    print(f"Processed datasets: {', '.join(distinct_datasets)}")
     return stats_df
 
 
