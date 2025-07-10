@@ -181,8 +181,7 @@ def update_sequence_reconstructions_stats(
     }
 
     if not pose_alignment_success:
-        stats['note'] = ('Pose alignment with the reference pose failed. '
-                         'This happens when COLMAP does not register the 1st image.')
+        stats['note'] = 'Pose alignment failed.'
     elif not reconstruction_success:
         stats['note'] = 'SfM reconstruction failed.'
     else:
