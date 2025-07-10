@@ -224,6 +224,8 @@ class Tracker6D:
             reconstruction.write(str(reconstruction_path))
 
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, known_gt_poses)
+        elif reconstruction is not None:
+            self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, False)
         else:
             if reconstruction is None:
                 print("!!!Reconstruction failed")
