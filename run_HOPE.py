@@ -42,7 +42,7 @@ def main():
 
             config.experiment_name = experiment_name
             config.dataset = dataset
-            config.image_downsample = 0.5
+            config.image_downsample = 0.25
             config.large_images_results_write_frequency = 5
             config.depth_scale_to_meter = 0.001
 
@@ -65,7 +65,7 @@ def main():
                     config.bop_config.onboarding_type = 'dynamic'
                     config.similarity_transformation = 'depths'
                     run_only_on_frames_with_known_pose = False
-                    config.skip_indices *= 8
+                    config.skip_indices *= 2
                 config.sequence = '_'.join(sequence_name_split[:2])
 
             run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0,

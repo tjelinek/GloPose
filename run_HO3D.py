@@ -58,7 +58,7 @@ def main():
             config.image_downsample = 1.0
 
             if args.output_folder is not None:
-                write_folder = Path(args.output_folder) / dataset / sequence
+                write_folder = Path(args.output_folder) / 'quick_experiments' / dataset / sequence
             else:
                 write_folder = config.default_results_folder / experiment_name / dataset / sequence
 

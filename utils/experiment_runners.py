@@ -97,7 +97,7 @@ def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=
 
     # Set up output folder
     if output_folder is not None:
-        write_folder = Path(output_folder) / dataset / sequence
+        write_folder = Path(output_folder) / 'quick_experiments' / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment / dataset / sequence
     # Create and run tracker
@@ -141,7 +141,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
 
     # Determine output folder
     if args.output_folder is not None:
-        write_folder = Path(args.output_folder) / dataset / f'{sequence}_{config.special_hash}'
+        write_folder = Path(args.output_folder) / 'quick_experiments' / dataset / f'{sequence}_{config.special_hash}'
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / f'{sequence}_{config.special_hash}'
 
