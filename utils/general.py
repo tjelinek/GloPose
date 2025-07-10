@@ -98,7 +98,7 @@ def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observe
     return src_pts_yx, not_occluded_foreground_mask
 
 
-def load_config(config_path) -> TrackerConfig:
+def load_config(config_path: Path) -> TrackerConfig:
     config_path = Path(config_path)
 
     spec = importlib.util.spec_from_file_location("module.name", config_path)
