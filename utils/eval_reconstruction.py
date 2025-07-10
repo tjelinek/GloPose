@@ -318,9 +318,6 @@ def update_experiment_statistics(
                            'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
                            'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
                            'trans_accuracy_at_10_cm']:
-
-    # Add timestamp
-    experiment_stats['timestamp'] = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
                 experiment_stats[f"{dataset_prefix}_{metric}"] = None
 
     # Convert to DataFrame
@@ -374,7 +371,6 @@ def update_dataset_reconstruction_statistics(
         'mean_colmap_registered_keyframes': dataset_df['colmap_registered_keyframes'].mean(),
         'reconstruction_success_rate': dataset_df['reconstruction_success'].sum() / len(dataset_df),
         'alignment_success_rate': dataset_df['alignment_success'].sum() / len(dataset_df),
-        'timestamp': datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
     }
 
     # Only calculate accuracy metrics for successful reconstructions
