@@ -19,7 +19,6 @@ class TrackerConfig:
     write_folder: Path = None
     purge_cache: bool = False
 
-    matching_visualization_type: str = 'matching'  # Either 'dots' or 'matching'
     dataset: str = None
     sequence: str = None
     experiment_name: str = None
