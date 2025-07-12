@@ -595,7 +595,6 @@ def get_first_occurrence_indices(elements: torch.Tensor, dim: Optional[int] = No
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, first_image_gt_Se3_world2cam: Se3,
                                    image_depths: Dict[str, torch.Tensor], first_image_name: str) \
         -> Tuple[pycolmap.Reconstruction, bool]:
-    # The alignment assumes that the COLMAP and GT spaces have the same origins.
     reconstruction = copy.deepcopy(reconstruction)
 
     if not (first_image_colmap := reconstruction.find_image_with_name(first_image_name)):
