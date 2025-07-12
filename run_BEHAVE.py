@@ -48,7 +48,7 @@ def main():
     config.skip_indices *= 10
 
     if args.output_folder is not None:
-        write_folder = Path(args.output_folder) / 'quick_experiments' / dataset / sequence
+        write_folder = Path(args.output_folder) / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
