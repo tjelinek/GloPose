@@ -69,7 +69,6 @@ class TrackerConfig:
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.5
     flow_reliability_threshold: float = 0.5
-    flow_reliability_densification_threshold: float = 0.8
     min_number_of_reliable_matches: int = 0
     matchability_based_reliability: bool = False
     frame_filter: str = 'dense_matching'  # Either 'dense_matching', 'SIFT', or 'passthrough'
