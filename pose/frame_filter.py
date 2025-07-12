@@ -52,7 +52,6 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.current_flow_reliability_threshold = self.config.flow_reliability_threshold
 
-
     def update_flow_reliability_threshold(self):
         all_frames = self.data_graph.G.nodes
         template_reliabilities = []
