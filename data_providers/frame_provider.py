@@ -17,6 +17,7 @@ from data_structures.keyframe_buffer import FrameObservation
 from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter
+from utils.general import erode_segment_mask2
 from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length
 
 
@@ -386,7 +387,7 @@ class FrameProviderAll:
         self.downsample_factor = config.image_downsample
         self.image_shape: Optional[ImageSize] = None
         self.device = config.device
-        self.black_background: bool = config.black_background
+        self.config = config.frame_provider_config
 
         self.frame_provider: FrameProvider
         self.segmentation_provider: SegmentationProvider
@@ -447,7 +448,10 @@ class FrameProviderAll:
         image_squeezed = image.squeeze()
         segmentation = self.segmentation_provider.next_segmentation(frame_i, image=image_squeezed)
 
-        if self.black_background:
+        if self.config.erode_segmentation:
+            segmentation = erode_segment_mask2(self.config.erode_segmentation_iters, segmentation)
+
+        if self.config.black_background:
             image = image * segmentation
 
         depth = None

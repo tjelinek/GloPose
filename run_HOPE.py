@@ -64,6 +64,7 @@ def main():
                 elif sequence_name_split[2] == 'dynamic':
                     config.bop_config.onboarding_type = 'dynamic'
                     config.similarity_transformation = 'depths'
+                    config.frame_provider_config.erode_segmentation = True
                     run_only_on_frames_with_known_pose = False
                     config.skip_indices *= 2
                 config.sequence = '_'.join(sequence_name_split[:2])

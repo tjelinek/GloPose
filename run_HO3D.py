@@ -56,6 +56,7 @@ def main():
             config.sequence = sequence
             config.dataset = dataset
             config.image_downsample = 1.0
+            config.frame_provider_config.erode_segmentation = True
 
             if args.output_folder is not None:
                 write_folder = Path(args.output_folder) / dataset / sequence

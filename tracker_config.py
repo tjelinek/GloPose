@@ -5,6 +5,7 @@ from typing import Tuple
 from kornia.image import ImageSize
 
 from configs.components_config.base_BOP_config import BaseBOPConfig
+from configs.components_config.frame_provider_config import BaseFrameProviderConfig
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
 from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
@@ -35,7 +36,7 @@ class TrackerConfig:
     input_frames: int = None
     skip_indices: int = 1
     frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
-    black_background: bool = False
+    frame_provider_config: BaseFrameProviderConfig = field(default_factory=BaseFrameProviderConfig)
     segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2', 'whites', or 'synthetic'
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     image_downsample: float = 1.0
