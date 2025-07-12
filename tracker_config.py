@@ -62,7 +62,6 @@ class TrackerConfig:
     rot_init: Tuple[float] = (0., 0., 0.)   # (0., 0., 0.)
 
     # Optical flow and segmentation settings
-    segmentation_mask_threshold: float = 0.99
     occlusion_coef_threshold: float = 0.95
 
     # Frame Filter configurations
