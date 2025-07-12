@@ -34,10 +34,6 @@ class BaseFrameFilter:
         return self.keyframe_graph
 
     @abstractmethod
-    def densify(self):
-        pass
-
-    @abstractmethod
     def add_keyframe(self, frame_i: int):
         pass
 
@@ -56,14 +52,6 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.current_flow_reliability_threshold = self.config.flow_reliability_threshold
 
-    def densify(self):
-        keyframe_nodes = sorted(self.keyframe_graph.nodes)
-        for n in range(1, len(keyframe_nodes) - 1):
-            u = keyframe_nodes[n - 1]
-            v = keyframe_nodes[n + 1]
-            reliability = self.flow_reliability(u, v)
-            if reliability > self.config.flow_reliability_densification_threshold:
-                self.keyframe_graph.add_edge(u, v)
 
     def update_flow_reliability_threshold(self):
         all_frames = self.data_graph.G.nodes
@@ -327,9 +315,6 @@ class FrameFilterPassThrough(BaseFrameFilter):
 
         frame_data = self.data_graph.get_frame_data(frame_i)
         frame_data.matching_source_keyframe = frame_i - 1 if frame_i > 0 else 0
-
-    def densify(self):
-        pass
 
 
 class FrameFilterSift(BaseFrameFilter):

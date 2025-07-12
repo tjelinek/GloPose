@@ -83,7 +83,7 @@ class Tracker6D:
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
         self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.dense_matching}_cache') /
-                                            config.roma_matcher_config.config_name / config.dataset /
+                                            config.roma_config.config_name / config.dataset /
                                             f'{config.sequence}_{config.special_hash}')
         self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
                                         config.sift_matcher_config.config_name / config.dataset /
@@ -93,7 +93,8 @@ class Tracker6D:
                                         str(self.config.image_downsample))
 
         self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
-                                              config.dataset / f'{config.sequence}_{config.special_hash}')
+                                              config.experiment_name / config.dataset /
+                                              f'{config.sequence}_{config.special_hash}')
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
                                        segmentation_paths, segmentation_video_path, video_path, depth_paths, 0)
@@ -104,12 +105,12 @@ class Tracker6D:
         if self.config.dense_matching == 'RoMa':
             self.flow_provider = PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
                                                                    self.matching_cache_folder, self.data_graph,
-                                                                   allow_disk_cache=self.config.roma_allow_disk_cache,
+                                                                   allow_disk_cache=self.config.dense_matching_allow_disk_cache,
                                                                    purge_cache=self.config.purge_cache)
         elif self.config.dense_matching == 'UFM':
             self.flow_provider = PrecomputedUFMFlowProviderDirect(self.config.device, self.config.ufm_config,
                                                                   self.matching_cache_folder, self.data_graph,
-                                                                  allow_disk_cache=self.config.roma_allow_disk_cache,
+                                                                  allow_disk_cache=self.config.dense_matching_allow_disk_cache,
                                                                   purge_cache=self.config.purge_cache)
         else:
             raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
@@ -280,8 +281,6 @@ class Tracker6D:
             start = time.time()
 
             self.frame_filter.filter_frames(frame_i)
-            if self.config.densify_view_graph:
-                self.frame_filter.densify()
 
             self.results_writer.write_results(frame_i=frame_i, keyframe_graph=self.frame_filter.keyframe_graph)
 

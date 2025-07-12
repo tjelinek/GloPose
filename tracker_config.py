@@ -65,21 +65,19 @@ class TrackerConfig:
     segmentation_mask_threshold: float = 0.99
     occlusion_coef_threshold: float = 0.95
 
-    # Matcher configurations
-    roma_matcher_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
+    # Frame Filter configurations
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.5
     flow_reliability_threshold: float = 0.5
     flow_reliability_densification_threshold: float = 0.8
     min_number_of_reliable_matches: int = 0
-    densify_view_graph: bool = True
     matchability_based_reliability: bool = False
     frame_filter: str = 'dense_matching'  # Either 'dense_matching', 'SIFT', or 'passthrough'
-    roma_allow_disk_cache: bool = True
     passthrough_frame_filter_skip: int = 1
 
-    # RoMa config
+    # Dense matching config
     dense_matching: str = 'UFM'  # 'UFM' or 'RoMa'
+    dense_matching_allow_disk_cache: bool = True
     roma_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     ufm_config: BaseUFMConfig = field(default_factory=BaseUFMConfig)
 

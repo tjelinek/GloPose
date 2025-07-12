@@ -15,5 +15,4 @@ class BaseUFMConfig:
         self.config_name: str = self.__class__.__name__
 
         self.use_custom_weights: bool = False
-
         self.backward: bool = True
