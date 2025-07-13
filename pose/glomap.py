@@ -645,12 +645,27 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     colmap_world_from_cam = colmap_cam_from_world.inverse()  # world_from_cam
 
-    Sim3d_first_image_colmap2gt = pycolmap.Sim3d(
+    gt_world_from_cam_scaled = pycolmap.Sim3d(
         scale=1.0/scale,
-        rotation=gt_world_from_cam.rotation * colmap_world_from_cam.rotation.inverse(),
-        translation=gt_world_from_cam.translation - scale * (
-                    gt_world_from_cam.rotation.matrix() @ colmap_world_from_cam.translation)
+        rotation=gt_world_from_cam.rotation,
+        translation=gt_world_from_cam.translation
     )
+
+    colmap_world_from_cam_sim3d = pycolmap.Sim3d(
+        scale=1.0,
+        rotation=colmap_world_from_cam.rotation,
+        translation=colmap_world_from_cam.translation
+    )
+
+    Sim3d_first_image_colmap2gt = gt_world_from_cam_scaled * colmap_world_from_cam_sim3d.inverse()
+
+    # Sim3d_first_image_colmap2gt_old = pycolmap.Sim3d(
+    #     scale=1.0 / scale,
+    #     rotation=gt_world_from_cam.rotation * colmap_world_from_cam.rotation.inverse(),
+    #     translation=gt_world_from_cam.translation - scale * (
+    #         gt_world_from_cam.rotation.matrix() @ colmap_world_from_cam.translation))
+    #
+    # test_sim3d_equivalence(Sim3d_first_image_colmap2gt, Sim3d_first_image_colmap2gt_old)
 
     for point3D_id, point3D in reconstruction.points3D.items():
         point3D.xyz = Sim3d_first_image_colmap2gt * point3D.xyz
