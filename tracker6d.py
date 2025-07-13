@@ -299,7 +299,7 @@ class Tracker6D:
 
             first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
 
-            gt_Se3_obj2cam = self.gt_Se3_world2cam[0].inverse()
+            gt_Se3_obj2cam = self.gt_Se3_world2cam[0]
 
             image_depths = {}
             for i in self.data_graph.G.nodes:
