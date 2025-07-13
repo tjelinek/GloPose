@@ -626,7 +626,18 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
     gt_first_image_point_depths = np.asarray(gt_first_image_point_depths)
 
     scale = np.median(gt_first_image_point_depths) / np.median(pred_first_image_point_depths)
-    Sim3d_pred2gt = Sim3d_gt_world * Sim3d_colmap.inverse()
+
+    colmap_cam_from_world = first_image_colmap.cam_from_world
+    gt_cam_from_world = Se3_to_Rigid3d(first_image_gt_Se3_world2cam)
+
+    Sim3D_img1_gt = Sim3d(scale, gt_cam_from_world.rotation.matrix(), gt_cam_from_world.translation)
+    Sim3D_img1_colmap = Sim3d(1.0, colmap_cam_from_world.rotation.matrix(), colmap_cam_from_world.translation)
+
+    # Sim3d_first_image_colmap2gt = Sim3D_img1_colmap.inverse() * Sim3D_img1_gt
+    Sim3d_first_image_colmap2gt = Sim3D_img1_gt.inverse() * Sim3D_img1_colmap
+
+    for point3D_id, point3D in reconstruction.points3D.items():
+        point3D.xyz = Sim3d_first_image_colmap2gt * point3D.xyz
 
     reconstruction.transform(Sim3d_pred2gt)
     return reconstruction, True
