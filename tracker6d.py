@@ -284,8 +284,8 @@ class Tracker6D:
 
             self.results_writer.write_results(frame_i=frame_i, keyframe_graph=self.frame_filter.keyframe_graph)
 
-            print('Elapsed time in seconds: ', time.time() - start, "Frame ", frame_i, "out of",
-                  self.config.input_frames - 1)
+            print(f'Elapsed time in seconds: {time.time() - start:3d} Frame {frame_i} out of '
+                  f'{self.config.input_frames - 1}')
 
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) -> \
             Tuple[Optional[Reconstruction], bool]:
