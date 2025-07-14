@@ -20,7 +20,7 @@ from data_providers.frame_provider import PrecomputedSegmentationProvider, Preco
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.view_graph import ViewGraph
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect, FlowProviderDirect
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
@@ -315,7 +315,7 @@ def get_match_points_indices(keypoints, match_pts):
 
 
 def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor, camera_K: np.ndarray,
-                  view_graph: ViewGraph, flow_provider: RoMaFlowProviderDirect | SIFTMatchingProvider,
+                  view_graph: ViewGraph, flow_provider: FlowProviderDirect | SIFTMatchingProvider,
                   config: TrackerConfig):
     device = config.device
     sequence = 'obj_000010'
