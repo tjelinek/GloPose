@@ -14,20 +14,21 @@ from data_structures.keyframe_buffer import FrameObservation
 
 @dataclass
 class ViewGraphNode:
-    Se3_cam2obj: Se3
+    Se3_obj2cam: Se3
     observation: FrameObservation
     colmap_db_image_id: int
     colmap_db_image_name: str
 
 
 class ViewGraph:
-    def __init__(self, device: str):
+    def __init__(self, object_id: int | str, device: str):
         self.view_graph = nx.DiGraph()
+        self.object_id: int | str = object_id
         self.device: str = device
 
-    def add_node(self, node_id, se3_cam2obj, observation, colmap_db_image_id, colmap_db_image_name):
+    def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
-        self.view_graph.add_node(node_id, data=ViewGraphNode(se3_cam2obj, observation, colmap_db_image_id,
+        self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
                                                              colmap_db_image_name))
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
@@ -83,7 +84,7 @@ class ViewGraph:
         for node_id, data in self.view_graph.nodes(data=True):
             node_data: ViewGraphNode = data["data"]
             node_data.observation = node_data.observation.send_to_device(device)
-            node_data.Se3_cam2obj = node_data.Se3_cam2obj.to(device)
+            node_data.Se3_obj2cam = node_data.Se3_obj2cam.to(device)
 
 
 def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
@@ -97,11 +98,11 @@ def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
 
 
 def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colmap_reconstruction:
-                              pycolmap.Reconstruction) -> ViewGraph:
+                              pycolmap.Reconstruction, object_id: int | str) -> ViewGraph:
     all_image_names = [str(data_graph.get_frame_data(i).image_filename)
                        for i in range(len(data_graph.G.nodes))]
 
-    view_graph = ViewGraph(data_graph.storage_device)
+    view_graph = ViewGraph(object_id, data_graph.storage_device)
 
     for image_id, image in colmap_reconstruction.images.items():
         frame_index = all_image_names.index(image.name)
@@ -110,12 +111,11 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colm
         image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)[None]
         image_q_obj2cam_wxyz = image_q_obj2cam_xyzw[:, [3, 0, 1, 2]]
 
-        gt_Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
-        gt_Se3_cam2obj = gt_Se3_obj2cam.inverse()
+        Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
 
         frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
-        view_graph.add_node(frame_index, gt_Se3_cam2obj, frame_observation, image_id, image.name)
+        view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name)
 
     # TODO this causes errors when COLMAP does not register an image
     # for u, v in structure.edges:

@@ -9,7 +9,7 @@ from dataset_generators import scenarios
 from models.rendering import get_Se3_obj2cam_from_kaolin_params
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
-    read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params
+    read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from tracker6d import Tracker6D
 from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segment
@@ -155,6 +155,10 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
                                                               gt_cam_scale, onboarding_type,
                                                               sequence_starts, static_onboarding_sequence, scene_obj_id,
                                                               device=config.device)
+
+    object_id = read_object_id(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                               static_onboarding_sequence, scene_obj_id)
+    config.object_id = object_id
 
     # Apply frame skipping
     if only_frames_with_known_poses:

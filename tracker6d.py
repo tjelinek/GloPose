@@ -217,7 +217,8 @@ class Tracker6D:
 
         known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
         if reconstruction is not None and alignment_success:
-            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction)
+            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction,
+                                                   self.config.object_id)
             view_graph.save(self.cache_folder_view_graph, save_images=True, to_cpu=True)
 
             reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
