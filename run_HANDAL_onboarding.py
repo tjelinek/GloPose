@@ -38,7 +38,7 @@ def main():
             config.sequence = sequence
             config.dataset = dataset
             config.image_downsample = 0.25
-            config.large_images_results_write_frequency = 2
+            config.large_images_results_write_frequency = 4
             config.bop_config.onboarding_type = 'static'
             config.bop_config.static_onboarding_sequence = 'down'
             config.depth_scale_to_meter = 0.001
