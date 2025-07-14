@@ -16,14 +16,14 @@ from utils.image_utils import get_target_shape
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, view_graph_save_paths: Path):
+    def __init__(self, config: TrackerConfig, view_graph_save_paths: Path, onboarding_type: str):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
         self.view_graphs: List[ViewGraph] = []
 
         self._initialize_flow_provider()
-        self.load_view_graphs(view_graph_save_paths)
+        self.load_view_graphs(view_graph_save_paths, onboarding_type)
 
     def _initialize_flow_provider(self) -> None:
 
@@ -34,19 +34,28 @@ class BOPChallengePosePredictor:
         else:
             raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
 
-    def load_view_graphs(self, view_graph_save_paths: Path) -> None:
+    def load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
         self.view_graphs = []
         for view_graph_dir in view_graph_save_paths.iterdir():
             if view_graph_dir.is_dir():
+                if onboarding_type == 'static':
+                    if not view_graph_dir.stem.endswith('_up') and not view_graph_dir.stem.endswith('_up'):
+                        continue
+                elif onboarding_type == 'dynamic':
+                    if not view_graph_dir.stem.endswith('_dynamic'):
+                        continue
+                else:
+                    raise ValueError(f"Unknown onboarding type {onboarding_type}")
+
                 view_graph = load_view_graph(view_graph_dir, device=self.config.device)
                 self.view_graphs.append(view_graph)
 
-    def predict_poses_for_bop_challenge(self, bop_targets_path: Path) -> None:
+    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str) -> None:
 
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
 
-        test_dataset_path = bop_targets_path.parent.parent / 'test'
+        test_dataset_path = base_dataset_folder / split
 
         for item in test_annotations:
             im_id = item['im_id']
@@ -90,8 +99,6 @@ class BOPChallengePosePredictor:
         )
         image = image.squeeze()
 
-        self.config.device = 'cuda'
-
         for segmentation_path in segmentation_paths:
             segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(
                 segmentation_path, target_shape, self.config.device
@@ -110,13 +117,15 @@ class BOPChallengePosePredictor:
 
 def main():
     """Example usage of the BOPChallengePosePredictor class."""
-    bop_targets_path = Path('/mnt/personal/jelint19/data/bop/handal/handal_base/test_targets_bop24.json')
-    view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/handal')
+    base_dataset_folder = Path('/mnt/personal/jelint19/data/bop/hope')
+    bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
+    view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/default/hope')
 
     config = TrackerConfig()
-    predictor = BOPChallengePosePredictor(config, view_graph_location)
+    config.device = 'cpu'
+    predictor = BOPChallengePosePredictor(config, view_graph_location, 'static')
 
-    predictor.predict_poses_for_bop_challenge(bop_targets_path)
+    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test')
 
 
 if __name__ == '__main__':
