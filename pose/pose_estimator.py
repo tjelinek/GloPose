@@ -24,6 +24,7 @@ class BOPChallengePosePredictor:
 
         self._initialize_flow_provider()
         self.load_view_graphs(view_graph_save_paths, onboarding_type)
+        self.onboarding_type: str = onboarding_type
 
     def _initialize_flow_provider(self) -> None:
 
@@ -117,15 +118,24 @@ class BOPChallengePosePredictor:
 
 def main():
     """Example usage of the BOPChallengePosePredictor class."""
-    base_dataset_folder = Path('/mnt/personal/jelint19/data/bop/hope')
+
+    dataset = 'hope'
+    onboarding_type = 'static'
+
+    base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
     bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
-    view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/default/hope')
+    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/default/{dataset}')
+
+    default_detections_dir = (base_dataset_folder / 'h3_bop24_model_free_unseen' / 'cnos-sam' /
+                              f'onboarding_{onboarding_type}')
+    default_detections_file = list(default_detections_dir.glob(f"*{dataset}*.json"))[0]
 
     config = TrackerConfig()
     config.device = 'cpu'
-    predictor = BOPChallengePosePredictor(config, view_graph_location, 'static')
+    predictor = BOPChallengePosePredictor(config, view_graph_location, onboarding_type)
 
-    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test')
+    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test',
+                                              default_detections_file)
 
 
 if __name__ == '__main__':
