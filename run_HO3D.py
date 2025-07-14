@@ -131,7 +131,7 @@ def main():
 
             config.camera_intrinsics = cam_intrinsics_list[0]
             config.camera_extrinsics = T_obj_to_cam.numpy(force=True)
-            config.large_images_results_write_frequency = 4
+            config.large_images_results_write_frequency = 8
 
             config.segmentation_provider = 'SAM2'
             config.frame_provider = 'precomputed'
