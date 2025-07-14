@@ -592,6 +592,54 @@ def get_first_occurrence_indices(elements: torch.Tensor, dim: Optional[int] = No
     return first_occurrence_indices, element_to_unique_mapping
 
 
+def test_sim3d_equivalence(sim3d_new, sim3d_old):
+    """Test if the two Sim3D construction methods are equivalent."""
+
+    # Compare components
+    print("=== COMPARISON ===")
+    print(f"Scale - Old: {sim3d_old.scale:.6f}, New: {sim3d_new.scale:.6f}")
+    print(f"Scale diff: {abs(sim3d_old.scale - sim3d_new.scale):.2e}")
+
+    # Compare rotations (quaternions)
+    old_quat = sim3d_old.rotation.quat
+    new_quat = sim3d_new.rotation.quat
+    quat_diff = np.linalg.norm(old_quat - new_quat)
+    print(f"Rotation diff (quat norm): {quat_diff:.2e}")
+
+    # Compare translations
+    trans_diff = np.linalg.norm(sim3d_old.translation - sim3d_new.translation)
+    print(f"Translation diff (norm): {trans_diff:.2e}")
+
+    # Test on a sample point
+    test_point = np.array([1.0, 2.0, 3.0])
+    point_old = sim3d_old * test_point
+    point_new = sim3d_new * test_point
+    point_diff = np.linalg.norm(point_old - point_new)
+    print(f"Point transformation diff: {point_diff:.2e}")
+
+    # Test on camera pose
+    test_cam = pycolmap.Rigid3d(
+        rotation=pycolmap.Rotation3d(),
+        translation=np.array([0.0, 0.0, 5.0])
+    )
+    cam_old = sim3d_old.transform_camera_world(test_cam)
+    cam_new = sim3d_new.transform_camera_world(test_cam)
+    cam_trans_diff = np.linalg.norm(cam_old.translation - cam_new.translation)
+    cam_quat_diff = np.linalg.norm(cam_old.rotation.quat - cam_new.rotation.quat)
+    print(f"Camera translation diff: {cam_trans_diff:.2e}")
+    print(f"Camera rotation diff: {cam_quat_diff:.2e}")
+
+    # Overall equivalence check
+    is_equivalent = (
+            abs(sim3d_old.scale - sim3d_new.scale) < 1e-8 and
+            quat_diff < 1e-8 and
+            trans_diff < 1e-8
+    )
+
+    print(f"\n*** EQUIVALENT: {is_equivalent} ***")
+    return is_equivalent
+
+
 def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, first_image_gt_Se3_world2cam: Se3,
                                    image_depths: Dict[str, torch.Tensor], first_image_name: str) \
         -> Tuple[pycolmap.Reconstruction, bool]:
