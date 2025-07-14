@@ -8,11 +8,8 @@ import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
-from data_providers.flow_provider import RoMaFlowProviderDirect
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.math_utils import scale_Se3
-
-FLOW_PROVIDER_GLOBAL: Optional[RoMaFlowProviderDirect] = None
 
 
 def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -> Dict[int, PinholeCamera]:
