@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
-from data_providers.flow_provider import RoMaFlowProviderDirect
+from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider, PrecomputedSegmentationProvider
 
 from data_structures.view_graph import ViewGraph, load_view_graph
@@ -14,69 +14,110 @@ from utils.bop_challenge import get_gop_camera_intrinsics
 from utils.image_utils import get_target_shape
 
 
-def predict_poses_for_bop_challenge(bop_targets_path: Path, view_graph_save_paths: Path, config: TrackerConfig) -> None:
-    with bop_targets_path.open('r') as file:
-        test_annotations = json.load(file)
+class BOPChallengePosePredictor:
 
-    test_dataset_path = bop_targets_path.parent.parent / 'test'
+    def __init__(self, config: TrackerConfig, view_graph_save_paths: Path):
 
-    for item in test_annotations:
-        im_id = item['im_id']
-        scene_id = item['scene_id']
+        self.config = config
+        self.flow_provider: Optional[FlowProviderDirect] = None
+        self.view_graphs: List[ViewGraph] = []
 
-        scene_folder_name = f'{scene_id:06d}'
-        image_id_str = f'{im_id:06d}'
+        self._initialize_flow_provider()
+        self.load_view_graphs(view_graph_save_paths)
+
+    def _initialize_flow_provider(self) -> None:
+
+        if self.config.dense_matching == 'RoMa':
+            self.flow_provider = RoMaFlowProviderDirect(self.config.device, self.config.roma_config)
+        elif self.config.dense_matching == 'UFM':
+            self.flow_provider = UFMFlowProviderDirect(self.config.device, self.config.ufm_config)
+        else:
+            raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
+
+    def load_view_graphs(self, view_graph_save_paths: Path) -> None:
+        self.view_graphs = []
+        for view_graph_dir in view_graph_save_paths.iterdir():
+            if view_graph_dir.is_dir():
+                view_graph = load_view_graph(view_graph_dir, device=self.config.device)
+                self.view_graphs.append(view_graph)
+
+    def predict_poses_for_bop_challenge(self, bop_targets_path: Path) -> None:
+
+        with bop_targets_path.open('r') as file:
+            test_annotations = json.load(file)
+
+        test_dataset_path = bop_targets_path.parent.parent / 'test'
+
+        for item in test_annotations:
+            im_id = item['im_id']
+            scene_id = item['scene_id']
+
+            # Construct paths
+            scene_folder_name = f'{scene_id:06d}'
+            image_id_str = f'{im_id:06d}'
+            path_to_scene = test_dataset_path / scene_folder_name
+            path_to_image = self._get_image_path(path_to_scene, image_id_str)
+            path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
+            segmentation_paths = path_to_scene / 'mask_visib'
+
+            # Get segmentation files and camera intrinsics
+            segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
+            camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+            # Predict poses for this image
+            self.predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics)
+
+    @staticmethod
+    def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
+
+        # Try .png first
         image_filename = f'{image_id_str}.png'
-
-        path_to_scene = test_dataset_path / scene_folder_name
         path_to_image = path_to_scene / 'rgb' / image_filename
+
         if not path_to_image.exists():
             image_filename = f'{image_id_str}.jpg'
             path_to_image = path_to_scene / 'rgb' / image_filename
-            assert path_to_image.exists()
+            assert path_to_image.exists(), f"Image file not found: {path_to_image}"
 
-        path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
-        segmentation_paths = path_to_scene / 'mask_visib'
+        return path_to_image
 
-        segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
-        camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+    def predict_all_poses_in_image(self, image_path: Path, segmentation_paths: List[Path],
+                                   camera_K: np.ndarray) -> None:
 
-        view_graphs: List[ViewGraph] = []
-        for view_graph_dir in view_graph_save_paths.iterdir():
-            if view_graph_dir.is_dir():
-                view_graph = load_view_graph(view_graph_dir, device=config.device)
-                view_graphs.append(view_graph)
+        # Load and preprocess image
+        target_shape = get_target_shape(image_path, self.config.image_downsample)
+        image = PrecomputedFrameProvider.load_and_downsample_image(
+            image_path, self.config.image_downsample, self.config.device
+        )
+        image = image.squeeze()
 
-        predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics, view_graphs, config)
+        self.config.device = 'cuda'
+
+        for segmentation_path in segmentation_paths:
+            segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(
+                segmentation_path, target_shape, self.config.device
+            )
+            segmentation = segmentation.squeeze()
+            if self.view_graphs:
+                predict_poses(
+                    image,
+                    segmentation,
+                    camera_K=camera_K,
+                    view_graph=self.view_graphs[0],
+                    flow_provider=self.flow_provider,
+                    config=self.config
+                )
 
 
-def predict_all_poses_in_image(image_path: Path, segmentation_paths: List[Path], camera_K: np.ndarray,
-                               view_graphs: List[ViewGraph],
-                               config: TrackerConfig) -> None:
-    target_shape = get_target_shape(image_path, config.image_downsample)
-    image = PrecomputedFrameProvider.load_and_downsample_image(image_path, config.image_downsample, config.device)
-    image = image.squeeze()
+def main():
+    """Example usage of the BOPChallengePosePredictor class."""
+    bop_targets_path = Path('/mnt/personal/jelint19/data/bop/handal/handal_base/test_targets_bop24.json')
+    view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/handal')
 
-    config.device = 'cuda'
-    global FLOW_PROVIDER_GLOBAL
+    config = TrackerConfig()
+    predictor = BOPChallengePosePredictor(config, view_graph_location)
 
-    if FLOW_PROVIDER_GLOBAL is None:
-        FLOW_PROVIDER_GLOBAL = RoMaFlowProviderDirect(config.device, config.roma_config)
-
-    for segmentation_paths in segmentation_paths:
-        segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(segmentation_paths,
-                                                                                        target_shape,
-                                                                                        config.device)
-        segmentation = segmentation.squeeze()
-
-        # TODO iterate over all view graphs
-        predict_poses(image, segmentation, camera_K=camera_K, view_graph=view_graphs[0],
-                      flow_provider=FLOW_PROVIDER_GLOBAL, config=config)
+    predictor.predict_poses_for_bop_challenge(bop_targets_path)
 
 
 if __name__ == '__main__':
-    _bop_targets_path = Path('/mnt/personal/jelint19/data/bop/handal/handal_base/test_targets_bop24.json')
-    _view_graph_location = Path('/mnt/personal/jelint19/cache/view_graph_cache/handal')
-
-    _config = TrackerConfig()
-    predict_poses_for_bop_challenge(_bop_targets_path, _view_graph_location, _config)
+    main()
