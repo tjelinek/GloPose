@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 
 import cv2
 import imageio
@@ -276,3 +277,20 @@ def otsu_threshold(tensor: torch.Tensor) -> float | None:
     threshold = bin_centers[idx]
 
     return threshold.item()
+
+
+def decode_rle_list(rle_dict: Dict):
+    """Decode RLE with counts as list of integers"""
+    h, w = rle_dict['size']
+    counts = rle_dict['counts']
+
+    mask = np.zeros(h * w, dtype=np.uint8)
+    idx = 0
+    flag = 0  # 0 for background, 1 for object
+
+    for count in counts:
+        mask[idx:idx + count] = flag
+        idx += count
+        flag = 1 - flag  # toggle between 0 and 1
+
+    return mask.reshape((h, w), order='F')  # Fortran order

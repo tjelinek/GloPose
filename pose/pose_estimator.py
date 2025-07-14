@@ -1,6 +1,9 @@
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
+
+import torch
 
 import numpy as np
 
@@ -11,7 +14,7 @@ from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.glomap import predict_poses
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
-from utils.image_utils import get_target_shape
+from utils.image_utils import get_target_shape, decode_rle_list
 
 
 class BOPChallengePosePredictor:
@@ -51,14 +54,26 @@ class BOPChallengePosePredictor:
                 view_graph = load_view_graph(view_graph_dir, device=self.config.device)
                 self.view_graphs.append(view_graph)
 
-    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str) -> None:
+    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str,
+                                        default_detections_file: Path = None) -> None:
 
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
 
         test_dataset_path = base_dataset_folder / split
 
-        for item in test_annotations:
+        if split == 'test':
+            with open(default_detections_file, 'r') as f:
+                default_detections_data = json.load(f)
+                default_detections_data_img_idx = defaultdict(list)
+                for i, item in enumerate(default_detections_data):
+                    im_id = item['image_id']
+                    scene_id = item['scene_id']
+                    default_detections_data_img_idx[(im_id, scene_id)].append(i)
+        else:
+            default_detections_data = None
+
+        for i, item in enumerate(test_annotations):
             im_id = item['im_id']
             scene_id = item['scene_id']
 
@@ -71,10 +86,28 @@ class BOPChallengePosePredictor:
             segmentation_paths = path_to_scene / 'mask_visib'
 
             # Get segmentation files and camera intrinsics
+
+            if default_detections_data is not None:
+                self.get_default_detections_for_image(default_detections_data, default_detections_data_img_idx,
+                                                      scene_id, im_id)
+
             segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
             camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
-            # Predict poses for this image
+
             self.predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics)
+
+    def get_default_detections_for_image(self, default_detections_data, default_detections_data_img_idx, scene_id,
+                                         im_id):
+        detections_for_image = []
+        for detections_data_idx in default_detections_data_img_idx[(im_id, scene_id)]:
+            detections_data = default_detections_data[detections_data_idx]
+            segmentation_rle_format = detections_data['segmentation']
+
+            mask = decode_rle_list(segmentation_rle_format)
+            mask_tensor = torch.tensor(mask, device=self.config.device)
+            detections_data['segmentation_tensor'] = mask_tensor
+
+            detections_for_image.append(detections_data)
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
