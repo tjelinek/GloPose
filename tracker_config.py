@@ -24,6 +24,7 @@ class TrackerConfig:
     sequence: str = None
     experiment_name: str = None
     special_hash: str = ''
+    object_id: int | str = None
 
     # Experiments settings
     evaluate_sam2_only: bool = False

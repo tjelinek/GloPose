@@ -13,7 +13,7 @@ from utils.general import load_config
 
 def main():
     dataset = 'HO3D'
-    split = 'evaluation'  # 'evaluation' or 'train'
+    split = 'train'  # 'evaluation' or 'train'
 
     train_sequences = [
                 'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
@@ -31,7 +31,7 @@ def main():
         sequences = args.sequences
     else:
         if split == 'train':
-            sequences = train_sequences[:1]
+            sequences = train_sequences[0:1]
         else:
             sequences = test_sequences[3:4]
 
@@ -54,6 +54,7 @@ def main():
             experiment_name = args.experiment
             config.experiment_name = experiment_name
             config.sequence = sequence
+            config.object_id = sequence
             config.dataset = dataset
             config.image_downsample = 1.0
             config.frame_provider_config.erode_segmentation = True
