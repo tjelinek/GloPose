@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import torch
 
@@ -10,11 +10,11 @@ import numpy as np
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider, PrecomputedSegmentationProvider
 
-from data_structures.view_graph import ViewGraph, load_view_graph
+from data_structures.view_graph import ViewGraph, load_view_graph, ViewGraphNode
 from pose.glomap import predict_poses
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
-from utils.image_utils import get_target_shape, decode_rle_list
+from utils.image_utils import decode_rle_list
 
 
 class BOPChallengePosePredictor:
@@ -24,6 +24,7 @@ class BOPChallengePosePredictor:
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
         self.view_graphs: List[ViewGraph] = []
+        self.view_graph_nodes: Dict[int, List[ViewGraphNode]] = defaultdict(list)  # Object id -> list of nodes
 
         self._initialize_flow_provider()
         self.load_view_graphs(view_graph_save_paths, onboarding_type)
@@ -39,6 +40,7 @@ class BOPChallengePosePredictor:
             raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
 
     def load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
+
         self.view_graphs = []
         for view_graph_dir in view_graph_save_paths.iterdir():
             if view_graph_dir.is_dir():
@@ -51,8 +53,14 @@ class BOPChallengePosePredictor:
                 else:
                     raise ValueError(f"Unknown onboarding type {onboarding_type}")
 
-                view_graph = load_view_graph(view_graph_dir, device=self.config.device)
+                view_graph: ViewGraph = load_view_graph(view_graph_dir, device=self.config.device)
                 self.view_graphs.append(view_graph)
+
+        for view_graph in self.view_graphs:
+            object_id = view_graph.object_id
+            for frame_idx in view_graph.view_graph.nodes:
+                view_graph_node = view_graph.get_node_data(frame_idx)
+                self.view_graph_nodes[object_id].append(view_graph_node)
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str,
                                         default_detections_file: Path = None) -> None:
