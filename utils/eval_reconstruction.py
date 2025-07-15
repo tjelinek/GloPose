@@ -130,19 +130,11 @@ def evaluate_reconstruction(
         stats_df.to_csv(csv_output_path, index=False)
 
 
-def update_sequence_reconstructions_stats(
-        csv_per_frame_stats: Path,
-        csv_per_sequence_stats: Path,
-        num_keyframes: int,
-        input_frames: int,
-        reconstruction: Reconstruction,
-        dataset: str,
-        sequence: str,
-        reconstruction_success: bool,
-        pose_alignment_success: bool,
-        input_translation_unit: str = 'mm',
-        output_translation_unit: str = 'cm'
-):
+def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_sequence_stats: Path, num_keyframes: int,
+                                          input_frames: int, reconstruction: Reconstruction, dataset: str,
+                                          sequence: str, reconstruction_success: bool, pose_alignment_success: bool,
+                                          frame_filtering_time: float, reconstruction_time: float,
+                                          input_translation_unit: str = 'mm', output_translation_unit: str = 'cm'):
     # Read the input CSV file containing reconstruction data
     if not csv_per_frame_stats.exists():
         print(f"Error: Input file {csv_per_frame_stats} does not exist.")
@@ -176,6 +168,8 @@ def update_sequence_reconstructions_stats(
         'trans_accuracy_at_10_cm': None,
         'reconstruction_success': reconstruction_success,
         'alignment_success': pose_alignment_success,
+        'frame_filtering_time': frame_filtering_time,
+        'reconstruction_time': reconstruction_time,
         'timestamp': datetime.now().strftime("%d.%m.%Y, %H:%M:%S"),
         'note': str()
     }
@@ -285,6 +279,8 @@ def update_dataset_reconstruction_statistics(
         'mean_colmap_registered_keyframes': dataset_df['colmap_registered_keyframes'].mean(),
         'reconstruction_success_rate': dataset_df['reconstruction_success'].sum() / len(dataset_df),
         'alignment_success_rate': dataset_df['alignment_success'].sum() / len(dataset_df),
+        'mean_frame_filtering_time': dataset_df['frame_filtering_time'].mean(),
+        'mean_reconstruction_time': dataset_df['reconstruction_time'].mean(),
     }
 
     # Only calculate accuracy metrics for successful reconstructions
@@ -381,6 +377,8 @@ def update_experiment_statistics(
             'mean_colmap_registered_keyframes': dataset_df['colmap_registered_keyframes'].mean(),
             'reconstruction_success_rate': dataset_df['reconstruction_success'].sum() / len(dataset_df),
             'alignment_success_rate': dataset_df['alignment_success'].sum() / len(dataset_df),
+            'mean_frame_filtering_time': dataset_df['frame_filtering_time'].mean(),
+            'mean_reconstruction_time': dataset_df['reconstruction_time'].mean(),
         }
 
         # Only calculate accuracy metrics for successful reconstructions

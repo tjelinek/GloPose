@@ -190,7 +190,11 @@ class Tracker6D:
             self.evaluate_sam()
             return
 
+        start_time = time.time()
         self.filter_frames()
+        end_time = time.time()
+
+        frame_filtering_time = end_time - start_time
 
         keyframe_graph = self.frame_filter.get_keyframe_graph()
 
@@ -213,7 +217,11 @@ class Tracker6D:
 
         assert len(keyframe_nodes_idxs) > 2
         print(keyframe_graph.edges)
+
+        start_time = time.time()
         reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
+        end_time = time.time()
+        reconstruction_time = end_time - start_time
 
         known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
         if reconstruction is not None and alignment_success:
@@ -261,7 +269,8 @@ class Tracker6D:
         if known_gt_poses:
             update_sequence_reconstructions_stats(rec_csv_detailed_stats, rec_csv_per_sequence_stats, num_keyframes,
                                                   self.config.input_frames, reconstruction, dataset_name_for_eval,
-                                                  sequence_name, reconstruction_success, alignment_success)
+                                                  sequence_name, reconstruction_success, alignment_success,
+                                                  frame_filtering_time, reconstruction_time)
             update_dataset_reconstruction_statistics(rec_csv_per_sequence_stats, dataset_name_for_eval)
 
         return
