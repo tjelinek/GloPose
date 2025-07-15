@@ -6,6 +6,6 @@ def get_config() -> TrackerConfig:
 
     cfg.frame_filter = 'passthrough'
     cfg.dense_matching_allow_disk_cache = False
-    cfg.skip_indices = 32
+    cfg.passthrough_frame_filter_skip = 32
 
     return cfg
