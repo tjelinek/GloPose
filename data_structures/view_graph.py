@@ -1,4 +1,5 @@
 import pickle
+import shutil
 from pathlib import Path
 
 import networkx as nx
@@ -21,9 +22,12 @@ class ViewGraphNode:
 
 
 class ViewGraph:
-    def __init__(self, object_id: int | str, device: str):
+    def __init__(self, object_id: int | str, colmap_db_path: Path,
+                 colmap_output_path: Path, device: str):
         self.view_graph = nx.DiGraph()
         self.object_id: int | str = object_id
+        self.colmap_db_path: Path = colmap_db_path
+        self.colmap_reconstruction_path: Path = colmap_output_path
         self.device: str = device
 
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
@@ -38,15 +42,24 @@ class ViewGraph:
         else:
             raise KeyError(f"Node {frame_idx} not found in the graph.")
 
-    def save(self, save_dir: Path, save_images: bool = False, overwrite: bool = True, to_cpu: bool = False):
+    def save_viewgraph(self, save_dir: Path, colmap_reconstruction: pycolmap.Reconstruction,
+                       save_images: bool = False, overwrite: bool = True, to_cpu: bool = False):
         """Saves the graph structure and associated images/segmentations to disk."""
         graph_path = save_dir / Path("graph.pkl")
 
-        if graph_path.exists() and overwrite:
-            if graph_path.is_dir():
-                graph_path.rmdir()
-            if graph_path.is_file():
-                graph_path.unlink()
+        if save_dir.exists() and overwrite:
+            shutil.rmtree(save_dir)
+        if not save_dir.exists():
+            save_dir.mkdir(parents=True)
+
+        reconstruction_path = save_dir / 'reconstruction' / '0'
+        reconstruction_path.mkdir(exist_ok=True, parents=True)
+        colmap_reconstruction.write(str(reconstruction_path))
+        self.colmap_reconstruction_path = reconstruction_path
+
+        new_db_path = save_dir / self.colmap_db_path.name
+        shutil.copy(self.colmap_db_path, new_db_path)
+        self.colmap_db_path = new_db_path
 
         graph_path.parent.mkdir(parents=True, exist_ok=True)
         graph_path.is_file()
@@ -97,12 +110,14 @@ def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
     return view_graph
 
 
-def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph, colmap_reconstruction:
-                              pycolmap.Reconstruction, object_id: int | str) -> ViewGraph:
+def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
+                              colmap_reconstruction: pycolmap.Reconstruction, colmap_db_path,
+                              colmap_output_path, object_id: int | str) -> ViewGraph:
     all_image_names = [str(data_graph.get_frame_data(i).image_filename)
                        for i in range(len(data_graph.G.nodes))]
 
-    view_graph = ViewGraph(object_id, data_graph.storage_device)
+    view_graph = ViewGraph(object_id, colmap_db_path, colmap_output_path,
+                           data_graph.storage_device)
 
     for image_id, image in colmap_reconstruction.images.items():
         frame_index = all_image_names.index(image.name)

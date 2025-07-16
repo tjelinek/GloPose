@@ -225,13 +225,12 @@ class Tracker6D:
 
         known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
         if reconstruction is not None and alignment_success:
-            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction,
-                                                   self.config.object_id)
-            view_graph.save(self.cache_folder_view_graph, save_images=True, to_cpu=True)
-
-            reconstruction_path = self.cache_folder_view_graph / 'reconstruction' / '0'
-            reconstruction_path.mkdir(exist_ok=True, parents=True)
-            reconstruction.write(str(reconstruction_path))
+            colmap_db_path = self.glomap_wrapper.colmap_db_path
+            colmap_output_path = self.glomap_wrapper.colmap_output_path
+            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
+                                                   colmap_output_path, self.config.object_id)
+            view_graph.save_viewgraph(self.cache_folder_view_graph, reconstruction, save_images=True,
+                                      overwrite=True, to_cpu=True)
 
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, known_gt_poses)
         elif reconstruction is not None:
@@ -239,7 +238,7 @@ class Tracker6D:
         else:
             if reconstruction is None:
                 print("!!!Reconstruction failed")
-            if alignment_success is None:
+            if not alignment_success:
                 print("!!!Alignment failed")
 
         rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
