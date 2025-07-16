@@ -1,14 +1,14 @@
 import shutil
 from pathlib import Path
 
-import cv2
+from torchvision.utils import save_image
 from tqdm import tqdm
 
 from data_providers.frame_provider import FrameProviderAll
 from tracker_config import TrackerConfig
 from utils.bop_challenge import load_gt_images, load_gt_segmentations
 from utils.data_utils import get_initial_image_and_segment
-from utils.image_utils import overlay_mask
+from utils.image_utils import overlay_mask_torch
 
 
 def get_segmentation_provider(segmentation_type, initial_segmentation, initial_image, images_paths, segmentation_paths,
@@ -85,20 +85,30 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
     tracker_provider_sam2 = get_segmentation_provider('SAM2', first_segmentation,
                                                       first_image, images, segs, SAM2_cache_folder)
     sequence_length = len(images)
+
+    gt_seg_path = sequence / 'rgb_segmented_gt'
+    sam2_seg_path = sequence / 'rgb_segmented_sam2'
+
+    gt_seg_path.mkdir(parents=True, exist_ok=True)
+    sam2_seg_path.mkdir(parents=True, exist_ok=True)
+
     for frame_idx in tqdm(range(sequence_length), desc='Frame'):
         image_name = tracker_provider_precomputed.frame_provider.get_n_th_image_name(frame_idx).stem
-        image = tracker_provider_precomputed.frame_provider.next_image_255(frame_idx).numpy(force=True)
-        seg_gt = tracker_provider_precomputed.segmentation_provider.next_segmentation(frame_idx).numpy(force=True)
-        seg_sam2 = tracker_provider_sam2.segmentation_provider.next_segmentation(frame_idx, image).numpy(force=True)
+        image = tracker_provider_precomputed.frame_provider.next_image_255(frame_idx)
+        seg_gt = tracker_provider_precomputed.segmentation_provider.next_segmentation(frame_idx)
+        seg_sam2 = tracker_provider_sam2.segmentation_provider.next_segmentation(frame_idx, image)
 
-        image_seg_gt = overlay_mask(image, ~seg_gt, 1.0, (0, 0, 0))
-        image_seg_sam2 = overlay_mask(image, ~seg_sam2, 1.0, (0, 0, 0))
+        image_seg_gt = overlay_mask_torch(image, 1 - seg_gt, 1.0, (0, 0, 0))
+        image_seg_sam2 = overlay_mask_torch(image, 1 - seg_sam2, 1.0, (0, 0, 0))
 
-        image_seg_gt_path = sequence / 'rgb_segmented_gt' / f'{image_name}.png'
-        image_seg_sa2_path = sequence / 'rgb_segmented_sam2' / f'{image_name}.png'
+        image_seg_gt_path = gt_seg_path / f'{image_name}.jpg'
+        image_seg_sa2_path = sam2_seg_path / f'{image_name}.jpg'
 
-        cv2.imwrite(str(image_seg_gt_path), image_seg_gt)
-        cv2.imwrite(str(image_seg_sa2_path), image_seg_sam2)
+        image_seg_gt_norm = image_seg_gt.squeeze().float() / 255.0
+        image_seg_sam2_norm = image_seg_gt.squeeze().float() / 255.0
+
+        save_image(image_seg_gt_norm, str(image_seg_gt_path))
+        save_image(image_seg_sam2_norm, str(image_seg_sa2_path))
     shutil.rmtree(SAM2_cache_folder)
 
 

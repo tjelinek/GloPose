@@ -182,6 +182,53 @@ def overlay_mask(image: np.ndarray, mask: np.ndarray, alpha: float = 0.5, color=
     return overlay_image.astype(np.uint8)
 
 
+def overlay_mask_torch(image: torch.Tensor, mask: torch.Tensor, alpha: float = 0.5, color=(255, 255, 255)):
+    """
+    Overlay a colored mask onto an image with adjustable transparency.
+
+    Args:
+        image (torch.Tensor): Input image of shape (*, C, H, W) or (*, H, W), dtype uint8 or float.
+        mask (torch.Tensor): Mask of shape (*, H, W) or (*, 1, H, W), with values in [0, 1].
+        alpha (float): Blending factor for the mask, where 0 = no effect, 1 = full color overlay.
+        color (tuple): RGB tuple for overlay color (default is white).
+
+    Returns:
+        torch.Tensor: Image with mask overlaid, same shape and dtype as input image.
+    """
+    # Ensure mask is in range [0, 1] and has shape (*, 1, H, W)
+    mask = torch.clamp(mask, 0, 1)
+    if mask.dim() == image.dim() - 1:  # mask is (*, H, W)
+        mask = mask.unsqueeze(-3)  # Add channel dimension -> (*, 1, H, W)
+    elif mask.shape[-3] != 1:  # mask has multiple channels, squeeze to 1
+        mask = mask.mean(dim=-3, keepdim=True)
+
+    # Handle grayscale images - convert to RGB
+    if image.dim() >= 2 and image.shape[-3] == 1:
+        image = image.expand(*image.shape[:-3], 3, *image.shape[-2:])
+    elif image.dim() == image.dim() and image.shape[-3] not in [1, 3]:
+        # If not 1 or 3 channels, assume it's grayscale without channel dim
+        image = image.unsqueeze(-3).expand(*image.shape[:-2], 3, *image.shape[-2:])
+
+    # Convert to float for computation
+    original_dtype = image.dtype
+    image = image.float()
+
+    # Create overlay color tensor with same device and batch dimensions
+    color_tensor = torch.tensor(color, dtype=torch.float32, device=image.device)
+    overlay_color = color_tensor.view(1, 3, 1, 1).expand_as(image)
+
+    # Apply overlay
+    overlay_image = (1 - alpha * mask) * image + (alpha * mask) * overlay_color
+
+    # Convert back to original dtype
+    if original_dtype == torch.uint8:
+        overlay_image = torch.clamp(overlay_image, 0, 255).to(torch.uint8)
+    else:
+        overlay_image = overlay_image.to(original_dtype)
+
+    return overlay_image
+
+
 def get_intrinsics_from_exif(image_path: Path, err_on_default=False) -> torch.tensor:
     image = Image.open(image_path)
     max_size = max(image.size)
