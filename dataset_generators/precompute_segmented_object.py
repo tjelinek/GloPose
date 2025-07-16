@@ -102,13 +102,13 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
         image_seg_sam2 = overlay_mask_torch(image, 1 - seg_sam2, 1.0, (0, 0, 0))
 
         image_seg_gt_path = gt_seg_path / f'{image_name}.jpg'
-        image_seg_sa2_path = sam2_seg_path / f'{image_name}.jpg'
+        image_seg_sam2_path = sam2_seg_path / f'{image_name}.jpg'
 
         image_seg_gt_norm = image_seg_gt.squeeze().float() / 255.0
-        image_seg_sam2_norm = image_seg_gt.squeeze().float() / 255.0
+        image_seg_sam2_norm = image_seg_sam2.squeeze().float() / 255.0
 
         save_image(image_seg_gt_norm, str(image_seg_gt_path))
-        save_image(image_seg_sam2_norm, str(image_seg_sa2_path))
+        save_image(image_seg_sam2_norm, str(image_seg_sam2_path))
     shutil.rmtree(SAM2_cache_folder)
 
 
