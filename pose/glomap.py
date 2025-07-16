@@ -314,9 +314,9 @@ def get_match_points_indices(keypoints, match_pts):
     return match_pts_indices
 
 
-def predict_poses(query_img: torch.Tensor, query_img_segmentation: torch.Tensor, camera_K: np.ndarray,
-                  view_graph: ViewGraph, flow_provider: FlowProviderDirect | SIFTMatchingProvider,
-                  config: TrackerConfig):
+def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
+                  flow_provider: FlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig,
+                  query_img_segmentation: Optional[torch.Tensor] = None):
     device = config.device
     sequence = 'obj_000010'
     base_results_path = Path(f'/mnt/personal/jelint19/results/FlowTracker/')
