@@ -234,8 +234,16 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
     initial_pair_provided = first_image_id is not None and second_image_id is not None
     if mapper in ['colmap', 'glomap']:
         if mapper == 'glomap':
+
+            import platform
+            import os
+
+            hostname = platform.node()
+            binary = "glomap_amd" if hostname.startswith("g") else "glomap"
+            glomap_path = os.path.expanduser(f"~/bin/{binary}")
+
             command = [
-                "glomap",
+                f"{glomap_path}",
                 "mapper",
                 "--database_path", str(colmap_db_path),
                 "--output_path", str(colmap_output_path),
