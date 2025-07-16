@@ -70,10 +70,19 @@ class FlowProviderDirect(ABC):
             src_pts_xy, dst_pts_xy = src_pts_xy_int, dst_pts_xy_int
 
         if only_foreground_matches:
-            assert source_image_segmentation is not None and target_image_segmentation is not None
-            assert len(source_image_segmentation.shape) == 2 and len(target_image_segmentation.shape) == 2
-            in_segment_mask_src = source_image_segmentation[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
-            in_segment_mask_tgt = target_image_segmentation[dst_pts_xy_int[:, 1], dst_pts_xy_int[:, 0]].bool()
+            assert source_image_segmentation is not None or target_image_segmentation is not None
+
+            if source_image_segmentation is not None:
+                assert len(source_image_segmentation.shape) == 2
+                in_segment_mask_src = source_image_segmentation[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+            else:
+                in_segment_mask_src = torch.ones_like(src_pts_xy_int[:, 0], dtype=torch.bool)
+
+            if target_image_segmentation is not None:
+                assert len(target_image_segmentation.shape) == 2
+                in_segment_mask_tgt = target_image_segmentation[dst_pts_xy_int[:, 1], dst_pts_xy_int[:, 0]].bool()
+            else:
+                in_segment_mask_tgt = torch.ones_like(dst_pts_xy_int[:, 0], dtype=torch.bool)
 
             fg_matches = in_segment_mask_src * in_segment_mask_tgt
 
