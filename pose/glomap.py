@@ -23,6 +23,7 @@ from data_structures.view_graph import ViewGraph
 
 from data_providers.flow_provider import PrecomputedFlowProviderDirect, FlowProviderDirect
 from data_structures.data_graph import DataGraph
+from pose.frame_filter import compute_matching_reliability
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
 from utils.general import colmap_K_params_vec
