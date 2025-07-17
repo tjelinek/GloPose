@@ -49,7 +49,7 @@ def process_bop_sequences(dataset, splits):
                 segmentation_channel=0
             )
 
-            process_sequence(first_image, first_segmentation, images, segs, sequence)
+            process_sequence(first_image, first_segmentation, images, segs, sequence, True)
 
 
 def process_ho3d_sequences(splits):
@@ -64,7 +64,7 @@ def process_ho3d_sequences(splits):
                 continue
 
             image_folder = sequence / 'rgb'
-            segmentation_folder = sequence / 'seg'
+            segmentation_folder = sequence / 'seg' if split == 'train' else 'segmentation_rendered'
 
             images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
             segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
@@ -78,7 +78,7 @@ def process_ho3d_sequences(splits):
             process_sequence(first_image, first_segmentation, images, segs, sequence)
 
 
-def process_sequence(first_image, first_segmentation, images, segs, sequence):
+def process_sequence(first_image, first_segmentation, images, segs, sequence, skip_computed=True):
     SAM2_cache_folder = Path('/mnt/personal/jelint19/cache/generating_segmentations_cache')
     tracker_provider_precomputed = get_segmentation_provider('precomputed', first_segmentation,
                                                              first_image, images, segs, SAM2_cache_folder)
@@ -88,6 +88,10 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
 
     gt_seg_path = sequence / 'rgb_segmented_gt'
     sam2_seg_path = sequence / 'rgb_segmented_sam2'
+
+    if skip_computed and gt_seg_path.exists() and len(list(gt_seg_path.iterdir())) == sequence_length and \
+            sam2_seg_path.exists() and len(list(sam2_seg_path.iterdir())) == sequence_length:
+        return
 
     gt_seg_path.mkdir(parents=True, exist_ok=True)
     sam2_seg_path.mkdir(parents=True, exist_ok=True)
@@ -113,7 +117,6 @@ def process_sequence(first_image, first_segmentation, images, segs, sequence):
 
 
 if __name__ == '__main__':
-
     print('Processing HO3D')
     process_ho3d_sequences(['train', 'evaluation'])
 
