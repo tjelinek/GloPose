@@ -238,17 +238,8 @@ class RoMaFrameFilter(BaseFrameFilter):
         certain_matches_share_threshold = self.current_flow_reliability_threshold
         match_certainty_threshold = source_datagraph_node.roma_certainty_threshold
 
-        fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
-
-        fg_certainties = certainty[fg_matches_mask]
-        fg_certainties_above_threshold = fg_certainties > match_certainty_threshold
-
-        reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
-
-        sufficient_reliable_matches = (fg_certainties_above_threshold.numel() > min_num_of_certain_matches)
-
-        reliability *= float(sufficient_reliable_matches)
-        reliability = reliability.item()
+        reliability = compute_matching_reliability(src_pts_xy_int, certainty, source_segmentation_mask,
+                                                   match_certainty_threshold, min_num_of_certain_matches)
 
         edge_data.reliability_score = reliability
         edge_data.is_match_reliable = reliability >= certain_matches_share_threshold
@@ -424,3 +415,16 @@ class FrameFilterSift(BaseFrameFilter):
         edge_data.is_match_reliable = num_matches >= self.config.sift_filter_min_matches
 
         return num_matches
+
+
+def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.Tensor,
+                                 source_segmentation_mask: torch.Tensor, match_certainty_threshold: float,
+                                 min_num_of_certain_matches: int = 0):
+    fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+    fg_certainties = certainty[fg_matches_mask]
+    fg_certainties_above_threshold = fg_certainties > match_certainty_threshold
+    reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
+    enough_certain_matches = (fg_certainties_above_threshold.numel() > min_num_of_certain_matches)
+    reliability *= float(enough_certain_matches)
+    reliability = reliability.item()
+    return reliability
