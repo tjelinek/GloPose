@@ -324,10 +324,9 @@ def get_match_points_indices(keypoints, match_pts):
 
 
 def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
-                  flow_provider: FlowProviderDirect | SIFTMatchingProvider, config: TrackerConfig,
-                  query_img_segmentation: Optional[torch.Tensor] = None):
-
-    device = config.device
+                  flow_provider: FlowProviderDirect | SIFTMatchingProvider, match_sample_size, match_min_certainty=0.,
+                  match_reliability_threshold=0., query_img_segmentation: Optional[torch.Tensor] = None,
+                  device: str = 'cuda') -> Se3 | None:
 
     path_to_colmap_db = view_graph.colmap_db_path
     path_to_reconstruction = view_graph.colmap_reconstruction_path
@@ -374,16 +373,23 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
                 query_seg_resized = TF.resize(query_img_segmentation, list(pose_graph_segmentation.shape[-2:]))
             else:
                 query_seg_resized = None
-            query_img_pts_xy, db_img_pts_xy, certainties = (
-                flow_provider.get_source_target_points(query_img_resized, pose_graph_image, config.roma_sample_size,
-                                                       query_seg_resized, pose_graph_segmentation,
+            db_img_pts_xy, query_img_pts_xy, certainties = (
+                flow_provider.get_source_target_points(pose_graph_image, query_img_resized, match_sample_size,
+                                                       pose_graph_segmentation, query_seg_resized,
                                                        as_int=True, zero_certainty_outside_segmentation=True,
                                                        only_foreground_matches=True))
         else:
             raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
-        matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
-        matching_edges_certainties[(new_image_id, db_img_id)] = certainties
+        reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
+                                                   match_min_certainty)
+
+        if reliability >= match_reliability_threshold:
+            matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
+            matching_edges_certainties[(new_image_id, db_img_id)] = certainties
+
+    if len(matching_edges) == 0:
+        return None
 
     keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database,
                                                                   eliminate_one_to_many_matches=True,
