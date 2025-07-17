@@ -203,9 +203,11 @@ class RoMaFrameFilter(BaseFrameFilter):
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         dev = self.config.device
         source_datagraph_node = self.data_graph.get_frame_data(source_frame)
-        fg_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
+        source_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
 
         H_A, W_A = source_datagraph_node.image_shape.height, source_datagraph_node.image_shape.width
+        assert source_segmentation_mask.shape[-2:] == (H_A, W_A)
+
         src_pts_xy_int, dst_pts_xy_int, certainty = (
             self.flow_provider.get_source_target_points_datagraph(source_frame, target_frame,
                                                                   self.config.roma_sample_size, as_int=True,
@@ -218,8 +220,6 @@ class RoMaFrameFilter(BaseFrameFilter):
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
 
         fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
-
-        breakpoint()
 
         assert certainty.shape == fg_matches_mask.shape
 
