@@ -218,16 +218,16 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
+        assert certainty.shape[0] == src_pts_xy_int.shape[0] and certainty.shape[0] == dst_pts_xy_int.shape[0]
 
         fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-        assert certainty.shape == fg_matches_mask.shape
+        in_segmentation_items = float(fg_matches_mask.sum())
 
         if self.config.matchability_based_reliability:
             matchability_mask = source_datagraph_node.matchability_mask
             in_matchability_mask_yx = matchability_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-            in_segmentation_items = float(fg_matches_mask.sum())
             fg_matches_mask &= in_matchability_mask_yx
 
             relative_area_matchable = float(fg_matches_mask.sum()) / (in_segmentation_items + 1e-5)
