@@ -220,36 +220,38 @@ class RoMaFrameFilter(BaseFrameFilter):
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
         assert certainty.shape[0] == src_pts_xy_int.shape[0] and certainty.shape[0] == dst_pts_xy_int.shape[0]
 
-        fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
-
-        in_segmentation_items = float(fg_matches_mask.sum())
-
         if self.config.matchability_based_reliability:
             matchability_mask = source_datagraph_node.matchability_mask
-            in_matchability_mask_yx = matchability_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+            source_segmentation_mask = source_segmentation_mask * matchability_mask
+            matchable_fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-            fg_matches_mask &= in_matchability_mask_yx
-
+            fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+            in_segmentation_items = float(fg_matches_mask.sum())
             relative_area_matchable = float(fg_matches_mask.sum()) / (in_segmentation_items + 1e-5)
 
-            edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[fg_matches_mask]
-            edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[fg_matches_mask]
-            edge_data.src_dst_certainty_roma_matchable = certainty[fg_matches_mask]
+            edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[matchable_fg_matches_mask]
+            edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[matchable_fg_matches_mask]
+            edge_data.src_dst_certainty_roma_matchable = certainty[matchable_fg_matches_mask]
             source_datagraph_node.relative_area_matchable = relative_area_matchable
 
+        min_num_of_certain_matches = self.config.min_number_of_reliable_matches
+        certain_matches_share_threshold = self.current_flow_reliability_threshold
+        match_certainty_threshold = source_datagraph_node.roma_certainty_threshold
+
+        fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+
         fg_certainties = certainty[fg_matches_mask]
-        fg_certainties_above_threshold = fg_certainties > source_datagraph_node.roma_certainty_threshold
+        fg_certainties_above_threshold = fg_certainties > match_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
 
-        sufficient_reliable_matches = (fg_certainties_above_threshold.numel() >
-                                       self.config.min_number_of_reliable_matches)
+        sufficient_reliable_matches = (fg_certainties_above_threshold.numel() > min_num_of_certain_matches)
 
         reliability *= float(sufficient_reliable_matches)
         reliability = reliability.item()
 
         edge_data.reliability_score = reliability
-        edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
+        edge_data.is_match_reliable = reliability >= certain_matches_share_threshold
 
         return reliability
 
