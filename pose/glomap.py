@@ -370,10 +370,15 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
         pose_graph_image = view_graph_node.observation.observed_image.to(device).squeeze()
         pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
 
-        if type(flow_provider) is RoMaFlowProviderDirect or True:
+        if type(flow_provider) is FlowProviderDirect or True:
+            query_img_resized = TF.resize(query_img, list(pose_graph_image.shape[-2:]))
+            if query_img_segmentation is not None:
+                query_seg_resized = TF.resize(query_img_segmentation, list(pose_graph_segmentation.shape[-2:]))
+            else:
+                query_seg_resized = None
             query_img_pts_xy, db_img_pts_xy, certainties = (
-                flow_provider.get_source_target_points(query_img, pose_graph_image, config.roma_sample_size,
-                                                       query_img_segmentation, pose_graph_segmentation,
+                flow_provider.get_source_target_points(query_img_resized, pose_graph_image, config.roma_sample_size,
+                                                       query_seg_resized, pose_graph_segmentation,
                                                        as_int=True, zero_certainty_outside_segmentation=True,
                                                        only_foreground_matches=True))
         else:
