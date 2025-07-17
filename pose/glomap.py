@@ -427,18 +427,20 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
 
     database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
 
+    reconstruction = pycolmap.Reconstruction()
+    reconstruction.read(str(path_to_reconstruction))
+    reconstruction.add_camera(new_camera)
+    reconstruction.add_image(new_database_image)
+
     mapper = pycolmap.IncrementalMapper(database_cache)
+    mapper.begin_reconstruction(reconstruction)
     mapper_options = pycolmap.IncrementalMapperOptions()
 
-    reconstruction_manager = pycolmap.ReconstructionManager()
-    reconstruction_manager.read(str(path_to_reconstruction))
-
-    reconstruction_idx = reconstruction_manager.add()
-    reconstruction = pycolmap.Reconstruction(str(path_to_reconstruction))
-
-    mapper.begin_reconstruction(reconstruction)
-
     # Register the new image
+    print(f"Registering image #{new_image_id}")
+    print(f"=> Image sees {mapper.observation_manager.num_visible_points3D(new_image_id)} / "
+          f"{mapper.observation_manager.num_observations(new_image_id)} points")
+
     success = mapper.register_next_image(mapper_options, new_image_id)
 
     if success:
