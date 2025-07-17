@@ -31,11 +31,11 @@ from utils.general import colmap_K_params_vec
 class GlomapWrapper:
 
     def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
-                 flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = None):
+                 flow_provider: Optional[PrecomputedFlowProviderDirect] = None):
         self.write_folder = write_folder
         self.config = tracking_config
 
-        self.flow_provider: Optional[PrecomputedRoMaFlowProviderDirect] = flow_provider
+        self.flow_provider: Optional[PrecomputedFlowProviderDirect] = flow_provider
 
         self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
 
