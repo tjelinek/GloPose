@@ -5,6 +5,7 @@ from typing import Tuple
 from kornia.image import ImageSize
 
 from configs.components_config.base_BOP_config import BaseBOPConfig
+from configs.components_config.base_pose_estimation_config import BasePoseEstimationConfig
 from configs.components_config.frame_provider_config import BaseFrameProviderConfig
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
@@ -97,3 +98,6 @@ class TrackerConfig:
     # BOP Config
     bop_config: BaseBOPConfig = field(default_factory=BaseBOPConfig)
     export_view_graph: bool = False
+
+    # Pose Estimation Config
+    pose_estimation_config: BasePoseEstimationConfig = field(default_factory=BasePoseEstimationConfig)
