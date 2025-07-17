@@ -397,10 +397,19 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
     non_matched_images_ids = all_image_ids - matched_images_ids
     non_matched_keypoints = {img_id: database.read_keypoints(img_id) for img_id in non_matched_images_ids}
 
+    old_keypoints = {}
+    for colmap_image_id in set(keypoints.keys()) - {new_image_id}:
+        keypoints_np = database.read_keypoints(colmap_image_id)
+        old_keypoints[colmap_image_id] = keypoints_np
+
     database.clear_keypoints()
     for colmap_image_id in sorted(keypoints.keys()):
-        keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
-        database.write_keypoints(colmap_image_id, keypoints_np)
+        if colmap_image_id == new_image_id:
+            keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
+            database.write_keypoints(colmap_image_id, keypoints_np)
+        else:
+            keypoints_np = old_keypoints[colmap_image_id]
+            database.write_keypoints(colmap_image_id, keypoints_np)
 
     for colmap_image_u, colmap_image_v in edge_match_indices.keys():
         match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
