@@ -1,16 +1,16 @@
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 import torch
 
 import numpy as np
 
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
-from data_providers.frame_provider import PrecomputedFrameProvider, PrecomputedSegmentationProvider
+from data_providers.frame_provider import PrecomputedFrameProvider
 
-from data_structures.view_graph import ViewGraph, load_view_graph, ViewGraphNode
+from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.glomap import predict_poses
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
@@ -24,10 +24,9 @@ class BOPChallengePosePredictor:
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
         self.view_graphs: List[ViewGraph] = []
-        self.view_graph_nodes: Dict[int, List[ViewGraphNode]] = defaultdict(list)  # Object id -> list of nodes
 
         self._initialize_flow_provider()
-        self.load_view_graphs(view_graph_save_paths, onboarding_type)
+        self._load_view_graphs(view_graph_save_paths, onboarding_type)
         self.onboarding_type: str = onboarding_type
 
     def _initialize_flow_provider(self) -> None:
@@ -39,9 +38,8 @@ class BOPChallengePosePredictor:
         else:
             raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
 
-    def load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
+    def _load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
 
-        self.view_graphs = []
         for view_graph_dir in view_graph_save_paths.iterdir():
             if view_graph_dir.is_dir():
                 if onboarding_type == 'static':
@@ -56,11 +54,7 @@ class BOPChallengePosePredictor:
                 view_graph: ViewGraph = load_view_graph(view_graph_dir, device=self.config.device)
                 self.view_graphs.append(view_graph)
 
-        for view_graph in self.view_graphs:
-            object_id = view_graph.object_id
-            for frame_idx in view_graph.view_graph.nodes:
-                view_graph_node = view_graph.get_node_data(frame_idx)
-                self.view_graph_nodes[object_id].append(view_graph_node)
+        self.view_graphs.sort(key=lambda vg: vg.object_id)
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str,
                                         default_detections_file: Path = None) -> None:
@@ -102,7 +96,17 @@ class BOPChallengePosePredictor:
             segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
             camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
-            self.predict_all_poses_in_image(path_to_image, segmentation_files, camera_intrinsics)
+            image = PrecomputedFrameProvider.load_and_downsample_image(
+                path_to_image, self.config.image_downsample, self.config.device
+            )
+            image = image.squeeze()
+
+            # for segmentation_path in segmentation_paths:
+            #     segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(
+            #         segmentation_path, target_shape, self.config.device
+            #     )
+
+            self.predict_all_poses_in_image(image, camera_intrinsics)
 
     def get_default_detections_for_image(self, default_detections_data, default_detections_data_img_idx, scene_id,
                                          im_id):
@@ -131,30 +135,17 @@ class BOPChallengePosePredictor:
 
         return path_to_image
 
-    def predict_all_poses_in_image(self, image_path: Path, segmentation_paths: List[Path],
-                                   camera_K: np.ndarray) -> None:
+    def predict_all_poses_in_image(self, query_image: torch.Tensor, camera_K: np.ndarray) -> None:
 
-        # Load and preprocess image
-        target_shape = get_target_shape(image_path, self.config.image_downsample)
-        image = PrecomputedFrameProvider.load_and_downsample_image(
-            image_path, self.config.image_downsample, self.config.device
-        )
-        image = image.squeeze()
+        match_sample_size = self.config.roma_sample_size
+        min_match_certainty = self.config.min_roma_certainty_threshold
+        min_reliability = self.config.flow_reliability_threshold
 
-        for segmentation_path in segmentation_paths:
-            segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(
-                segmentation_path, target_shape, self.config.device
-            )
-            segmentation = segmentation.squeeze()
-            if self.view_graphs:
-                predict_poses(
-                    image,
-                    segmentation,
-                    camera_K=camera_K,
-                    view_graph=self.view_graphs[0],
-                    flow_provider=self.flow_provider,
-                    config=self.config
-                )
+        for view_graph in self.view_graphs:
+            print(f'Testing view graph for object {view_graph.object_id}')
+            predict_poses(query_image, camera_K, view_graph, self.flow_provider, match_sample_size,
+                          match_min_certainty=min_match_certainty, match_reliability_threshold=min_reliability,
+                          query_img_segmentation=None, device=self.config.device)
 
 
 def main():
@@ -165,14 +156,14 @@ def main():
 
     base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
     bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
-    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/default/{dataset}')
+    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/base_config/{dataset}')
 
     default_detections_dir = (base_dataset_folder / 'h3_bop24_model_free_unseen' / 'cnos-sam' /
                               f'onboarding_{onboarding_type}')
     default_detections_file = list(default_detections_dir.glob(f"*{dataset}*.json"))[0]
 
     config = TrackerConfig()
-    config.device = 'cpu'
+    config.device = 'cuda'
     predictor = BOPChallengePosePredictor(config, view_graph_location, onboarding_type)
 
     predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test',
