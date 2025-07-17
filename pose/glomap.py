@@ -331,10 +331,11 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
     db_relative_path = Path(f'handal/{sequence}/glomap_{sequence}/')
     db_filename = Path('database.db')
 
-    path_to_colmap_db = base_results_path / db_relative_path / db_filename
-    path_to_reconstruction = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/handal/{sequence}_down/reconstruction/0')
-    path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / db_relative_path
-    cache_db_file = path_to_cache / db_filename
+    path_to_colmap_db = view_graph.colmap_db_path
+    path_to_reconstruction = view_graph.colmap_reconstruction_path
+
+    path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / str(view_graph.object_id)
+    cache_db_file = path_to_cache / path_to_colmap_db.name
 
     if path_to_cache.exists() and path_to_cache.is_dir():
         shutil.rmtree(path_to_cache)
@@ -398,7 +399,14 @@ def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: Vie
 
     for colmap_image_u, colmap_image_v in edge_match_indices.keys():
         match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
-        database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
+
+        keypoints_u = database.read_keypoints(colmap_image_u)
+        keypoints_v = database.read_keypoints(colmap_image_v)
+
+        valid_match_mask = (match_indices_np[:, 0] < len(keypoints_u)) & (match_indices_np[:, 1] < len(keypoints_v))
+        filtered_match_indices = match_indices_np[valid_match_mask]
+
+        database.write_matches(colmap_image_u, colmap_image_v, filtered_match_indices)
 
     for img_id, keypoints in non_matched_keypoints.items():
         database.write_keypoints(img_id, keypoints)
