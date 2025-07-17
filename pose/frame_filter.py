@@ -419,7 +419,7 @@ class FrameFilterSift(BaseFrameFilter):
 
 def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.Tensor,
                                  source_segmentation_mask: torch.Tensor, match_certainty_threshold: float,
-                                 min_num_of_certain_matches: int = 0):
+                                 min_num_of_certain_matches: int = 0) -> float:
     fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
     fg_certainties = certainty[fg_matches_mask]
     fg_certainties_above_threshold = fg_certainties > match_certainty_threshold
