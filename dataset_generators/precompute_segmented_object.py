@@ -64,7 +64,8 @@ def process_ho3d_sequences(splits):
                 continue
 
             image_folder = sequence / 'rgb'
-            segmentation_folder = sequence / 'seg' if split == 'train' else 'segmentation_rendered'
+            seg_dir_name = 'seg' if split == 'train' else 'segmentation_rendered'
+            segmentation_folder = sequence / seg_dir_name
 
             images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
             segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
