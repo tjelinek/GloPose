@@ -229,11 +229,11 @@ class RoMaFrameFilter(BaseFrameFilter):
             in_segmentation_items = float(in_segmentation_mask_yx.sum())
             in_segmentation_mask_yx &= in_matchability_mask_yx
 
+            relative_area_matchable = float(in_segmentation_mask_yx.sum()) / (in_segmentation_items + 1e-5)
+
             edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[in_segmentation_mask_yx]
             edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[in_segmentation_mask_yx]
             edge_data.src_dst_certainty_roma_matchable = certainty[in_segmentation_mask_yx]
-
-            relative_area_matchable = float(in_segmentation_mask_yx.sum()) / (in_segmentation_items + 1e-5)
             source_datagraph_node.relative_area_matchable = relative_area_matchable
 
         fg_certainties = certainty[in_segmentation_mask_yx]
