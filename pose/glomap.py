@@ -11,6 +11,7 @@ import networkx as nx
 import numpy as np
 import pycolmap
 import torch
+import torchvision.transforms.functional as TF
 from kornia.geometry import Se3
 from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions, Sim3d
@@ -20,7 +21,7 @@ from data_providers.frame_provider import PrecomputedSegmentationProvider, Preco
 from data_providers.matching_provider_sift import SIFTMatchingProvider
 from data_structures.view_graph import ViewGraph
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, RoMaFlowProviderDirect, FlowProviderDirect
+from data_providers.flow_provider import PrecomputedFlowProviderDirect, FlowProviderDirect
 from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
