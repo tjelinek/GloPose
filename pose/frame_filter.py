@@ -216,27 +216,28 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         assert ((src_pts_xy_int[:, 0] >= 0) & (src_pts_xy_int[:, 0] < W_A)).all()
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
-        assert fg_segmentation_mask.shape[-2:] == (H_A, W_A)
 
-        in_segmentation_mask_yx = fg_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
+        fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-        assert certainty.shape == in_segmentation_mask_yx.shape
+        breakpoint()
+
+        assert certainty.shape == fg_matches_mask.shape
 
         if self.config.matchability_based_reliability:
             matchability_mask = source_datagraph_node.matchability_mask
             in_matchability_mask_yx = matchability_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
 
-            in_segmentation_items = float(in_segmentation_mask_yx.sum())
-            in_segmentation_mask_yx &= in_matchability_mask_yx
+            in_segmentation_items = float(fg_matches_mask.sum())
+            fg_matches_mask &= in_matchability_mask_yx
 
-            relative_area_matchable = float(in_segmentation_mask_yx.sum()) / (in_segmentation_items + 1e-5)
+            relative_area_matchable = float(fg_matches_mask.sum()) / (in_segmentation_items + 1e-5)
 
-            edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[in_segmentation_mask_yx]
-            edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[in_segmentation_mask_yx]
-            edge_data.src_dst_certainty_roma_matchable = certainty[in_segmentation_mask_yx]
+            edge_data.src_pts_xy_roma_matchable = src_pts_xy_int[fg_matches_mask]
+            edge_data.dst_pts_xy_roma_matchable = dst_pts_xy_int[fg_matches_mask]
+            edge_data.src_dst_certainty_roma_matchable = certainty[fg_matches_mask]
             source_datagraph_node.relative_area_matchable = relative_area_matchable
 
-        fg_certainties = certainty[in_segmentation_mask_yx]
+        fg_certainties = certainty[fg_matches_mask]
         fg_certainties_above_threshold = fg_certainties > source_datagraph_node.roma_certainty_threshold
 
         reliability = fg_certainties_above_threshold.sum() / (fg_certainties.numel() + 1e-5)
