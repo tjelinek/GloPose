@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 import torch
 import torchvision.transforms.functional as TF
 from matplotlib import pyplot as plt
@@ -9,6 +12,71 @@ from data_structures.rerun_annotations import RerunAnnotations
 from tracker_config import TrackerConfig
 from utils.image_utils import overlay_mask
 from utils.results_logging import log_correspondences_rerun
+
+
+class PoseEstimatorLogger:
+
+    def __init__(self):
+
+        self.init_rerun()
+        self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
+
+    def init_rerun(self):
+        rr.init(f'{0}')
+        rerun_file = self.write_folder / f'rerun_pose_estimation.rrd'
+        rr.save(rerun_file)
+
+        match_reliability_statistics = rrb.TimeSeriesView(name=f"Matching Reliability",
+                                                          origin=RerunAnnotations.matching_reliability_plot,
+                                                          axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
+                                                                                zoom_lock=True),
+                                                          plot_legend=rrb.PlotLegend(visible=True))
+        blueprint = rrb.Blueprint(
+            rrb.Tabs(
+                contents=[
+                    rrb.Tabs(
+                        contents=[
+                            rrb.Vertical(
+                                contents=[
+                                    rrb.Horizontal(
+                                        contents=[
+                                            rrb.Spatial2DView(
+                                                name=f"Matches High Certainty",
+                                                origin=RerunAnnotations.matches_high_certainty),
+                                            rrb.Spatial2DView(
+                                                name=f"Matches Low Certainty",
+                                                origin=RerunAnnotations.matches_low_certainty),
+                                            [rrb.Spatial2DView(
+                                                name=f"Matching Certainty",
+                                                origin=RerunAnnotations.matching_certainty)],
+
+                                        ],
+                                        name='Matching'
+                                    ),
+                                    match_reliability_statistics,
+                                ],
+                                row_shares=[0.8, 0.2],
+                                name='Matching'
+                            ),
+                        ],
+                        name='Matching'
+                    ),
+                ],
+                name=f'Results'
+            )
+        )
+
+        rr.log(RerunAnnotations.matching_reliability_threshold_roma,
+               rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
+        rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
+               static=True)
+        rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
+               rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
+        rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
+               rr.SeriesLine(color=[0, 0, 255], name=f"min match certainty"),
+               static=True)
+
+        rr.send_blueprint(blueprint)
 
 
 def visualize_flow_with_matching_rerun(frame_i: int, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor,
