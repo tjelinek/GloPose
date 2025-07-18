@@ -36,6 +36,8 @@ class BOPChallengePosePredictor:
         self._load_view_graphs(view_graph_save_paths, onboarding_type)
         self.onboarding_type: str = onboarding_type
 
+        self.pose_logger = PoseEstimatorLogger()
+
     def _initialize_flow_provider(self) -> None:
 
         if self.config.dense_matching == 'RoMa':
