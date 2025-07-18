@@ -35,8 +35,7 @@ class BOPChallengePosePredictor:
         self._initialize_flow_provider()
         self._load_view_graphs(view_graph_save_paths, onboarding_type)
         self.onboarding_type: str = onboarding_type
-
-        self.pose_logger = PoseEstimatorLogger()
+        self.pose_logger = None
 
     def _initialize_flow_provider(self) -> None:
 
@@ -307,9 +306,12 @@ def main():
     bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
     view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/base_config/{dataset}')
 
-    default_detections_dir = (base_dataset_folder / 'h3_bop24_model_free_unseen' / 'cnos-sam' /
-                              f'onboarding_{onboarding_type}')
-    default_detections_file = list(default_detections_dir.glob(f"*{dataset}*.json"))[0]
+    if dataset == 'hope':
+        default_detections_dir = (base_dataset_folder / 'h3_bop24_model_free_unseen' / 'cnos-sam' /
+                                  f'onboarding_{onboarding_type}')
+        default_detections_file = list(default_detections_dir.glob(f"*{dataset}*.json"))[0]
+    else:
+        default_detections_file = None
 
     config = TrackerConfig()
     config.device = 'cuda'
