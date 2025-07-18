@@ -1,6 +1,5 @@
 import copy
 import select
-import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -11,19 +10,15 @@ import networkx as nx
 import numpy as np
 import pycolmap
 import torch
-import torchvision.transforms.functional as TF
 from kornia.geometry import Se3
 from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions, Sim3d
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
-from data_providers.matching_provider_sift import SIFTMatchingProvider
-from data_structures.view_graph import ViewGraph
 
-from data_providers.flow_provider import PrecomputedFlowProviderDirect, FlowProviderDirect
+from data_providers.flow_provider import PrecomputedFlowProviderDirect
 from data_structures.data_graph import DataGraph
-from pose.frame_filter import compute_matching_reliability
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
 from utils.general import colmap_K_params_vec
@@ -212,11 +207,11 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
     gt_camera_centers = np.stack(gt_camera_centers)
     pred_camera_centers = np.stack(pred_camera_centers)
 
-    sim3d_report = pycolmap.estimate_sim3d_robust(pred_camera_centers, gt_camera_centers)
+    sim3d_report = pycolmap.estimate_sim3d(pred_camera_centers, gt_camera_centers)
     if sim3d_report is None:
         return reconstruction, False
 
-    sim3d = sim3d_report['tgt_from_src']
+    sim3d = sim3d_report#['tgt_from_src']
     reconstruction.transform(sim3d)
 
     return reconstruction, True
@@ -322,140 +317,6 @@ def get_match_points_indices(keypoints, match_pts):
     assert torch.equal(keypoints[kpts_and_match_pts_indices[:N]], keypoints)
     match_pts_indices = kpts_and_match_pts_indices[N:]
     return match_pts_indices
-
-
-def predict_poses(query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
-                  flow_provider: FlowProviderDirect | SIFTMatchingProvider, match_sample_size, match_min_certainty=0.,
-                  match_reliability_threshold=0., query_img_segmentation: Optional[torch.Tensor] = None,
-                  device: str = 'cuda') -> Se3 | None:
-
-    path_to_colmap_db = view_graph.colmap_db_path
-    path_to_reconstruction = view_graph.colmap_reconstruction_path
-
-    path_to_cache = Path('/mnt/personal/jelint19/tmp/colmap_db_cache') / str(view_graph.object_id)
-    cache_db_file = path_to_cache / path_to_colmap_db.name
-
-    if path_to_cache.exists() and path_to_cache.is_dir():
-        shutil.rmtree(path_to_cache)
-    path_to_cache.mkdir(exist_ok=True, parents=True)
-    shutil.copy(path_to_colmap_db, cache_db_file)
-
-    database = pycolmap.Database(str(cache_db_file))
-
-    h, w = query_img.shape[-2:]
-    f_x = float(camera_K[0, 0])
-    f_y = float(camera_K[1, 1])
-    c_x = float(camera_K[0, 2])
-    c_y = float(camera_K[1, 2])
-
-    new_camera_id = database.num_cameras + 1
-    new_camera = pycolmap.Camera(camera_id=new_camera_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
-                                 params=[f_x, f_y, c_x, c_y])
-
-    new_image_id = database.num_images + 1
-    new_database_image = pycolmap.Image(image_id=new_image_id, camera_id=new_camera_id, name='tmp_target')
-
-    database.write_camera(new_camera, use_camera_id=True)
-    database.write_image(new_database_image, use_image_id=True)
-
-    matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
-    matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
-
-    for frame_idx in view_graph.view_graph.nodes():
-        view_graph_node = view_graph.get_node_data(frame_idx)
-        db_img_id = view_graph_node.colmap_db_image_id
-
-        pose_graph_image = view_graph_node.observation.observed_image.to(device).squeeze()
-        pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
-
-        if type(flow_provider) is FlowProviderDirect or True:
-            query_img_resized = TF.resize(query_img, list(pose_graph_image.shape[-2:]))
-            if query_img_segmentation is not None:
-                query_seg_resized = TF.resize(query_img_segmentation, list(pose_graph_segmentation.shape[-2:]))
-            else:
-                query_seg_resized = None
-            db_img_pts_xy, query_img_pts_xy, certainties = (
-                flow_provider.get_source_target_points(pose_graph_image, query_img_resized, match_sample_size,
-                                                       pose_graph_segmentation, query_seg_resized,
-                                                       as_int=True, zero_certainty_outside_segmentation=True,
-                                                       only_foreground_matches=True))
-        else:
-            raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
-
-        reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
-                                                   match_min_certainty)
-
-        if reliability >= match_reliability_threshold:
-            matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
-            matching_edges_certainties[(new_image_id, db_img_id)] = certainties
-
-    if len(matching_edges) == 0:
-        return None
-
-    keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database,
-                                                                  eliminate_one_to_many_matches=True,
-                                                                  matching_edges_certainties=matching_edges_certainties,
-                                                                  device=device)
-
-    all_image_ids = {img.image_id for img in database.read_all_images()}
-    matched_images_ids = {node for edge in edge_match_indices.keys() for node in edge}
-    non_matched_images_ids = all_image_ids - matched_images_ids
-    non_matched_keypoints = {img_id: database.read_keypoints(img_id) for img_id in non_matched_images_ids}
-
-    old_keypoints = {}
-    for colmap_image_id in set(keypoints.keys()) - {new_image_id}:
-        keypoints_np = database.read_keypoints(colmap_image_id)
-        old_keypoints[colmap_image_id] = keypoints_np
-
-    database.clear_keypoints()
-    for colmap_image_id in sorted(keypoints.keys()):
-        if colmap_image_id == new_image_id:
-            keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
-            database.write_keypoints(colmap_image_id, keypoints_np)
-        else:
-            keypoints_np = old_keypoints[colmap_image_id]
-            database.write_keypoints(colmap_image_id, keypoints_np)
-
-    for colmap_image_u, colmap_image_v in edge_match_indices.keys():
-        match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
-
-        keypoints_u = database.read_keypoints(colmap_image_u)
-        keypoints_v = database.read_keypoints(colmap_image_v)
-
-        valid_match_mask = (match_indices_np[:, 0] < len(keypoints_u)) & (match_indices_np[:, 1] < len(keypoints_v))
-        filtered_match_indices = match_indices_np[valid_match_mask]
-
-        database.write_matches(colmap_image_u, colmap_image_v, filtered_match_indices)
-
-    for img_id, keypoints in non_matched_keypoints.items():
-        database.write_keypoints(img_id, keypoints)
-
-    database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
-
-    reconstruction = pycolmap.Reconstruction()
-    reconstruction.read(str(path_to_reconstruction))
-    reconstruction.add_camera(new_camera)
-    reconstruction.add_image(new_database_image)
-
-    mapper = pycolmap.IncrementalMapper(database_cache)
-    mapper.begin_reconstruction(reconstruction)
-    mapper_options = pycolmap.IncrementalMapperOptions()
-
-    # Register the new image
-    print(f"Registering image #{new_image_id}")
-    print(f"=> Image sees {mapper.observation_manager.num_visible_points3D(new_image_id)} / "
-          f"{mapper.observation_manager.num_observations(new_image_id)} points")
-
-    success = mapper.register_next_image(mapper_options, new_image_id)
-
-    if success:
-        print(f"Successfully registered image {new_image_id} into the reconstruction.")
-        mapper.triangulate_image(
-            mapper_options.triangulation, new_image_id
-        )
-        reconstruction.normalize()
-    else:
-        print(f"Failed to register image {new_image_id}.")
 
 
 def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
