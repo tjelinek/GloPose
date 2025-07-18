@@ -9,21 +9,20 @@ from matplotlib import pyplot as plt
 from kornia.image import ImageSize
 
 from data_structures.rerun_annotations import RerunAnnotations
-from tracker_config import TrackerConfig
 from utils.image_utils import overlay_mask
 from utils.results_logging import log_correspondences_rerun
 
 
 class PoseEstimatorLogger:
 
-    def __init__(self):
-        self.init_rerun()
+    def __init__(self, dataset: str):
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
+        self.init_rerun(dataset)
         self.rerun_frame_id: int = 0
 
-    def init_rerun(self):
+    def init_rerun(self, dataset: str):
         rr.init(f'{0}')
-        rerun_file = self.write_folder / f'rerun_pose_estimation.rrd'
+        rerun_file = self.write_folder / f'rerun_pose_estimation_{dataset}.rrd'
         rr.save(rerun_file)
 
         match_reliability_statistics = rrb.TimeSeriesView(name=f"Matching Reliability",
@@ -47,9 +46,9 @@ class PoseEstimatorLogger:
                                             rrb.Spatial2DView(
                                                 name=f"Matches Low Certainty",
                                                 origin=RerunAnnotations.matches_low_certainty),
-                                            [rrb.Spatial2DView(
+                                            rrb.Spatial2DView(
                                                 name=f"Matching Certainty",
-                                                origin=RerunAnnotations.matching_certainty)],
+                                                origin=RerunAnnotations.matching_certainty),
 
                                         ],
                                         name='Matching'
@@ -79,11 +78,10 @@ class PoseEstimatorLogger:
 
         rr.send_blueprint(blueprint)
 
-    def visualize_flow_with_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor,
-                                           certainty: torch.Tensor, config: TrackerConfig,
-                                           viewgraph_image: torch.Tensor, query_image: torch.Tensor, reliability: float,
-                                           reliability_threshold: float, certainty_threshold,
-                                           match_certainty_map: torch.Tensor = None, ):
+    def visualize_pose_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor,
+                                      certainty: torch.Tensor, viewgraph_image: torch.Tensor, query_image: torch.Tensor,
+                                      reliability: float, reliability_threshold: float, certainty_threshold,
+                                      match_certainty_map: torch.Tensor = None, ):
         template_image = viewgraph_image
         target_image = query_image
 
@@ -95,15 +93,13 @@ class PoseEstimatorLogger:
                rr.Scalar(reliability_threshold))
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
-        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True)
+        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True) * 255.
         rerun_image = rr.Image(template_target_image_np)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
         certainties = certainty.numpy(force=True)
         threshold = certainty_threshold
-        if threshold is None:
-            threshold = config.min_roma_certainty_threshold
 
         above_threshold_mask = certainties >= threshold
         src_pts_xy_roma = src_pts_xy[:, [1, 0]].numpy(force=True)
@@ -115,8 +111,8 @@ class PoseEstimatorLogger:
         outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
 
         roma_certainty_map = match_certainty_map if match_certainty_map is not None else torch.ones_like(
-            template_target_image)
-        roma_h, roma_w = roma_certainty_map.shape[0], roma_certainty_map.shape[1] // 2
+            template_target_image[0, ...])
+        roma_h, roma_w = roma_certainty_map.shape[-2], roma_certainty_map.shape[-1] // 2
         certainty_map_column = torch.zeros(roma_h * 2, roma_w).to(roma_certainty_map.device)
         certainty_map_column[:roma_h, :roma_w] = roma_certainty_map[:roma_h, :roma_w]
         certainty_map_column[roma_h:, :roma_w] = roma_certainty_map[:roma_h, roma_w:]
@@ -130,7 +126,7 @@ class PoseEstimatorLogger:
         rerun_certainty_img = rr.Image(template_target_image_certainty_np)
         rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
 
-        template_image_size = ImageSize(template_image.shape[-2:])
+        template_image_size = ImageSize(*template_image.shape[-2:])
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
                                   RerunAnnotations.matches_high_certainty, template_image_size.height, 20)
