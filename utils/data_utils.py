@@ -94,28 +94,21 @@ def load_gt_data(config: TrackerConfig):
     return gt_texture, gt_mesh, gt_rotations, gt_translations
 
 
-def get_initial_image_and_segment(images_list, segmentations_list, dataset_delimeters=None, segmentation_channel=0) \
+def get_initial_image_and_segment(images_list, segmentations_list, segmentation_channel=0) \
         -> Tuple[torch.Tensor, torch.Tensor]:
 
-    if dataset_delimeters is None:
-        dataset_delimeters = [0]
+    first_segment = Image.open(segmentations_list[0])
+    first_image = Image.open(images_list[0])
 
-    images, segmentations = [], []
-    for delimeter in dataset_delimeters:
-        first_segment = Image.open(segmentations_list[delimeter])
-        first_image = Image.open(images_list[delimeter])
-        first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
-        transform = transforms.ToTensor()
-        first_segment_tensor = transform(first_segment_resized)[segmentation_channel].squeeze()
-        first_image_tensor = transform(first_image).squeeze()
+    if first_image.mode == 'RGBA':
+        first_image = first_image.convert('RGB')
 
-        images.append(first_image_tensor), segmentations.append(first_segment_tensor)
+    first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
+    transform = transforms.ToTensor()
+    first_segment_tensor = transform(first_segment_resized)[segmentation_channel].squeeze()
+    first_image_tensor = transform(first_image).squeeze()
 
-    if len(dataset_delimeters) == 1:
-        images = images[0]
-        segmentations = segmentations[0]
-
-    return images, segmentations
+    return first_image_tensor, first_segment_tensor
 
 
 def get_scales():
