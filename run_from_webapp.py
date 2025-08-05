@@ -48,7 +48,7 @@ def run_on_custom_data(images_paths: List[Path], segmentations_paths: List[Path]
 
 
 if __name__ == "__main__":
-    base_seq_path = Path('/mnt/personal/jelint19/data/bop/handal/onboarding_dynamic/obj_000005/')
+    base_seq_path = Path('/mnt/personal/jelint19/data/bop/handal/onboarding_static/obj_000005_down/')
     img_paths = sorted(Path(base_seq_path / 'rgb').iterdir())[::5]
     seg_paths = sorted(Path(base_seq_path / 'mask_visib').iterdir())[::5]
 
