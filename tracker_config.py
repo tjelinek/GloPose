@@ -37,7 +37,7 @@ class TrackerConfig:
     # Input data settings
     input_frames: int = None
     skip_indices: int = 1
-    frame_provider: str = 'synthetic'  # 'precomputed' or 'synthetic'
+    frame_provider: str = 'precomputed'  # 'precomputed' or 'synthetic'
     frame_provider_config: BaseFrameProviderConfig = field(default_factory=BaseFrameProviderConfig)
     segmentation_provider: str = 'SAM2'  # 'precomputed', 'SAM2', 'whites', or 'synthetic'
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
