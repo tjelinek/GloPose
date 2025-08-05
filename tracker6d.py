@@ -223,7 +223,10 @@ class Tracker6D:
         end_time = time.time()
         reconstruction_time = end_time - start_time
 
-        known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
+        if self.gt_Se3_world2cam is not None and len(self.gt_Se3_world2cam.keys()) > 0:
+            known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
+        else:
+            known_gt_poses = None
         if reconstruction is not None and alignment_success:
             colmap_db_path = self.glomap_wrapper.colmap_db_path
             colmap_output_path = self.glomap_wrapper.colmap_output_path
@@ -302,7 +305,7 @@ class Tracker6D:
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
                                                                         matching_pairs)
 
-        if reconstruction is None:
+        if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
         if self.config.similarity_transformation == 'depths':
 
