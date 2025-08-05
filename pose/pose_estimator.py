@@ -1,6 +1,6 @@
 import json
 import shutil
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
@@ -22,6 +22,9 @@ from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
 from utils.image_utils import decode_rle_list
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
+
+
+Detection = namedtuple('Detection', ['object_id', 'segmentation_mask', 'score'])
 
 
 class BOPChallengePosePredictor:
@@ -70,9 +73,11 @@ class BOPChallengePosePredictor:
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
 
+        self.pose_logger = PoseEstimatorLogger(base_dataset_folder.stem)
+
         test_dataset_path = base_dataset_folder / split
 
-        if split == 'test':
+        if split == 'test' and default_detections_file is not None:
             with open(default_detections_file, 'r') as f:
                 default_detections_data = json.load(f)
                 default_detections_data_img_idx = defaultdict(list)
@@ -117,8 +122,8 @@ class BOPChallengePosePredictor:
             self.predict_all_poses_in_image(image, camera_intrinsics)
 
     def get_default_detections_for_image(self, default_detections_data, default_detections_data_img_idx, scene_id,
-                                         im_id):
-        detections_for_image = []
+                                         im_id) -> List[Detection]:
+        detections_for_image = []  # Initialize as list, not dict
         for detections_data_idx in default_detections_data_img_idx[(im_id, scene_id)]:
             detections_data = default_detections_data[detections_data_idx]
             segmentation_rle_format = detections_data['segmentation']
@@ -128,6 +133,15 @@ class BOPChallengePosePredictor:
             detections_data['segmentation_tensor'] = mask_tensor
 
             detections_for_image.append(detections_data)
+
+        detections_for_image.sort(key=lambda x: (x['score'], x['category_id']), reverse=True)
+
+        sorted_detections = [Detection(object_id=detection['category_id'],
+                                       segmentation_mask=detection['segmentation_tensor'],
+                                       score=detection['score'])
+                             for detection in detections_for_image]
+
+        return sorted_detections
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
@@ -155,7 +169,6 @@ class BOPChallengePosePredictor:
                                match_min_certainty=min_match_certainty * 0.,
                                match_reliability_threshold=min_reliability * 0., query_img_segmentation=None,
                                device=self.config.device)
-
 
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                       flow_provider: FlowProviderDirect | SIFTMatchingProvider, match_sample_size,
@@ -213,11 +226,21 @@ class BOPChallengePosePredictor:
                                                            pose_graph_segmentation, query_seg_resized,
                                                            as_int=True, zero_certainty_outside_segmentation=True,
                                                            only_foreground_matches=True))
+
+                warp, certainty = flow_provider.compute_flow(pose_graph_image, query_img_resized,
+                                                             source_image_segmentation=pose_graph_segmentation,
+                                                             zero_certainty_outside_segmentation=True)
             else:
                 raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
             reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
                                                        match_min_certainty)
+
+            self.pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties,
+                                                           pose_graph_image, query_img_resized, reliability,
+                                                           match_reliability_threshold, match_min_certainty,
+                                                           certainty)
+
             print(f'Mean certainty: {certainties.mean().item()}, Reliability: {reliability}')
             if reliability >= match_reliability_threshold:
                 matching_edges[(new_image_id, db_img_id)] = (query_img_pts_xy, db_img_pts_xy)
@@ -257,7 +280,7 @@ class BOPChallengePosePredictor:
             keypoints_v = database.read_keypoints(colmap_image_v)
 
             valid_match_mask = (match_indices_np[:, 0] < len(keypoints_u)) & (
-                        match_indices_np[:, 1] < len(keypoints_v))
+                    match_indices_np[:, 1] < len(keypoints_v))
             filtered_match_indices = match_indices_np[valid_match_mask]
 
             database.write_matches(colmap_image_u, colmap_image_v, filtered_match_indices)
