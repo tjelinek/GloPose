@@ -12,7 +12,7 @@ import pycolmap
 import torch
 from kornia.geometry import Se3
 from kornia.image import ImageSize
-from pycolmap import TwoViewGeometryOptions, Sim3d
+from pycolmap import TwoViewGeometryOptions
 from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
@@ -22,6 +22,7 @@ from data_structures.data_graph import DataGraph
 from tracker_config import TrackerConfig
 from utils.conversions import Se3_to_Rigid3d
 from utils.general import colmap_K_params_vec
+from utils.image_utils import get_intrinsics_from_exif
 
 
 class GlomapWrapper:
@@ -136,11 +137,15 @@ class GlomapWrapper:
 
         first_frame_data = self.data_graph.get_frame_data(0)
         h, w = first_frame_data.image_shape.height, first_frame_data.image_shape.width
-        camera_K = first_frame_data.gt_pinhole_K
-        params_vec = colmap_K_params_vec(camera_K)
 
         new_cam_id = 1
         if single_camera:
+            camera_K = first_frame_data.gt_pinhole_K
+            if camera_K is None:
+                camera_K = get_intrinsics_from_exif(images[0])
+
+            params_vec = colmap_K_params_vec(camera_K)
+
             new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
                                          params=params_vec)
             database.write_camera(new_camera, use_camera_id=True)
