@@ -5,6 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
+import gradio
 import networkx as nx
 import numpy as np
 import pycolmap
@@ -21,10 +22,11 @@ from utils.general import colmap_K_params_vec
 from utils.image_utils import get_intrinsics_from_exif
 
 
-def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path],
-                                 matching_pairs: List[Tuple[int, int]], init_with_first_two_images: bool,
-                                 mapper: str, match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
-                                 colmap_working_dir, camera_K: Optional[torch.Tensor] = None, device: str = 'cpu') \
+def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], matching_pairs: List[Tuple[int, int]],
+                                 init_with_first_two_images: bool, mapper: str,
+                                 match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
+                                 colmap_working_dir, camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
+                                 progress: gradio.Progress = None) \
         -> Optional[pycolmap.Reconstruction]:
     if len(matching_pairs) == 0:
         raise ValueError("Needed at least 1 match.")
@@ -43,15 +45,18 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path],
 
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
     matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
-    for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
+    for pair_idx, (img1_pth, img2_pth), (seg1_pth, seg2_pth) in tqdm(enumerate(zip(image_pairs, segmentation_pairs))):
 
-        img1_path = Path(img1_path)
-        img2_path = Path(img2_path)
+        img1_pth = Path(img1_pth)
+        img2_pth = Path(img2_pth)
 
-        assert img1_path.parent == img2_path.parent
+        assert img1_pth.parent == img2_pth.parent
 
-        img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, 1., device).squeeze()
-        img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, 1., device).squeeze()
+        if progress is not None:
+            progress(0.5 * pair_idx / float(len(matching_pairs)), desc="Matching image pairs for reconstruction")
+
+        img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_pth, 1., device).squeeze()
+        img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_pth, 1., device).squeeze()
 
         h1, w1 = img1.shape[-2:]
         h2, w2 = img2.shape[-2:]
@@ -60,17 +65,17 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path],
 
         seg1_size = ImageSize(h1, w1)
         seg2_size = ImageSize(h2, w2)
-        img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_path, seg1_size, device)
-        img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
+        img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size, device)
+        img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size, device)
 
         src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
             match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
-                                                    img2_seg.squeeze(), Path(img1_path.name),
-                                                    Path(img2_path.name), as_int=True,
+                                                    img2_seg.squeeze(), Path(img1_pth.name),
+                                                    Path(img2_pth.name), as_int=True,
                                                     zero_certainty_outside_segmentation=True,
                                                     only_foreground_matches=True)
-        img1_id = images.index(img1_path) + 1
-        img2_id = images.index(img2_path) + 1
+        img1_id = images.index(img1_pth) + 1
+        img2_id = images.index(img2_pth) + 1
         edge = (img1_id, img2_id)
         matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
         matching_edges_certainties[edge] = certainty
@@ -118,8 +123,15 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path],
     if init_with_first_two_images:
         first_image_id = 1
         second_image_id = 2
+
+    if progress is not None:
+        progress(0.5, desc="Running reconstruction...")
+
     run_mapper(colmap_output_path, database_path, colmap_image_path, mapper,
                first_image_id, second_image_id)
+
+    if progress is not None:
+        progress(1.0, desc="Reconstruction finished.")
 
     path_to_rec = colmap_output_path / '0'
     try:
