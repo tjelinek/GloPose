@@ -5,7 +5,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
-import imageio
 import networkx as nx
 import numpy as np
 import pycolmap
@@ -27,14 +26,13 @@ from utils.image_utils import get_intrinsics_from_exif
 
 class GlomapWrapper:
 
-    def __init__(self, write_folder: Path, tracking_config: TrackerConfig, data_graph: DataGraph,
+    def __init__(self, write_folder: Path, tracking_config: TrackerConfig,
                  flow_provider: Optional[PrecomputedFlowProviderDirect] = None):
-        self.write_folder = write_folder
         self.config = tracking_config
 
         self.flow_provider: Optional[PrecomputedFlowProviderDirect] = flow_provider
 
-        self.colmap_base_path = (self.write_folder / f'glomap_{self.config.sequence}')
+        self.colmap_base_path = (write_folder / f'glomap_{self.config.sequence}')
 
         self.colmap_image_path = self.colmap_base_path / 'images'
         self.colmap_seg_path = self.colmap_base_path / 'segmentations'
@@ -44,41 +42,12 @@ class GlomapWrapper:
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
         self.feature_dir.mkdir(exist_ok=True, parents=True)
 
-        self.data_graph = data_graph
-
         self.colmap_db_path = self.colmap_base_path / 'database.db'
         self.colmap_output_path = self.colmap_base_path / 'output'
 
-    def dump_frame_node_for_glomap(self, frame_idx):
-
-        device = self.config.device
-
-        frame_data = self.data_graph.get_frame_data(frame_idx)
-
-        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
-        img_seg = frame_data.frame_observation.observed_segmentation.squeeze(0).permute(1, 2, 0).to(device)
-
-        if frame_data.image_filename is not None:
-            image_filename = frame_data.image_filename
-        else:
-            image_filename = f'node_{frame_idx}.png'
-
-        if frame_data.segmentation_filename is not None:
-            seg_filename = frame_data.segmentation_filename
-        else:
-            seg_filename = f'segment_{frame_idx}.png'
-
-        node_save_path = self.colmap_image_path / image_filename
-        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
-
-        segmentation_save_path = self.colmap_seg_path / seg_filename
-        imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
-
-        frame_data.image_save_path = copy.deepcopy(node_save_path)
-        frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
-
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]]) -> Optional[pycolmap.Reconstruction]:
+                                   matching_pairs: List[Tuple[int, int]],
+                                   camera_K: Optional[torch.Tensor] = None) -> Optional[pycolmap.Reconstruction]:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
 
@@ -135,19 +104,17 @@ class GlomapWrapper:
         keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
                                                                       eliminate_one_to_many_matches=True, device=device)
 
-        first_frame_data = self.data_graph.get_frame_data(0)
-        h, w = first_frame_data.image_shape.height, first_frame_data.image_shape.width
-
         new_cam_id = 1
         if single_camera:
-            camera_K = first_frame_data.gt_pinhole_K
             if camera_K is None:
                 camera_K = get_intrinsics_from_exif(images[0])
 
             params_vec = colmap_K_params_vec(camera_K)
 
-            new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE, width=w, height=h,
-                                         params=params_vec)
+            h, w = PrecomputedFrameProvider.load_and_downsample_image(images[0], 1.).shape[-2:]
+
+            new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE,
+                                         width=w, height=h, params=params_vec)
             database.write_camera(new_camera, use_camera_id=True)
 
         for i, img in enumerate(images):

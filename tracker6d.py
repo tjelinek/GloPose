@@ -1,9 +1,11 @@
+import copy
 import os
 import shutil
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
 
+import imageio
 import torch
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
@@ -130,7 +132,7 @@ class Tracker6D:
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
 
-        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.data_graph, self.flow_provider)
+        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.flow_provider)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
                                   initial_image: torch.Tensor | List[torch.Tensor],
@@ -184,6 +186,34 @@ class Tracker6D:
                                         segmentation_video_path=segmentation_video_path,
                                         sam2_cache_folder=cache_folder_SAM2)
 
+    def dump_frame_node_for_glomap(self, frame_idx: int):
+
+        device = self.config.device
+
+        frame_data = self.data_graph.get_frame_data(frame_idx)
+
+        img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
+        img_seg = frame_data.frame_observation.observed_segmentation.squeeze(0).permute(1, 2, 0).to(device)
+
+        if frame_data.image_filename is not None:
+            image_filename = frame_data.image_filename
+        else:
+            image_filename = f'node_{frame_idx}.png'
+
+        if frame_data.segmentation_filename is not None:
+            seg_filename = frame_data.segmentation_filename
+        else:
+            seg_filename = f'segment_{frame_idx}.png'
+
+        node_save_path = self.glomap_wrapper.colmap_image_path / image_filename
+        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
+
+        segmentation_save_path = self.glomap_wrapper.colmap_seg_path / seg_filename
+        imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
+
+        frame_data.image_save_path = copy.deepcopy(node_save_path)
+        frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
+
     def run_pipeline(self):
 
         if self.config.evaluate_sam2_only:
@@ -204,7 +234,7 @@ class Tracker6D:
         segmentation_paths = []
         matching_pairs = []
         for node_idx in keyframe_nodes_idxs:
-            self.glomap_wrapper.dump_frame_node_for_glomap(node_idx)
+            self.dump_frame_node_for_glomap(node_idx)
             frame_data = self.data_graph.get_frame_data(node_idx)
 
             images_paths.append(frame_data.image_save_path)
@@ -302,14 +332,16 @@ class Tracker6D:
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) -> \
             Tuple[Optional[Reconstruction], bool]:
 
+        first_frame_data = self.data_graph.get_frame_data(0)
+        camera_K = first_frame_data.gt_pinhole_K
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                        matching_pairs)
+                                                                        matching_pairs, camera_K)
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
         if self.config.similarity_transformation == 'depths':
 
-            first_image_filename = str(self.data_graph.get_frame_data(0).image_filename)
+            first_image_filename = str(first_frame_data.image_filename)
 
             gt_Se3_obj2cam = self.gt_Se3_world2cam[0]
 

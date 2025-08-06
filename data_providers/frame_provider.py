@@ -153,8 +153,8 @@ class PrecomputedFrameProvider(FrameProvider):
             return Path(f"{self.video_path.stem}_{frame_i * self.skip_indices}.png")
 
     @staticmethod
-    def load_and_downsample_image(image_path: Path, downsample_factor: float, device: str = 'cpu') -> torch.Tensor:
-        loaded_image = imageio.v3.imread(image_path)
+    def load_and_downsample_image(img_path: Path, downsample_factor: float = 1.0, device: str = 'cpu') -> torch.Tensor:
+        loaded_image = imageio.v3.imread(img_path)
         image_tensor = transforms.ToTensor()(loaded_image)[None, :3].to(device)  # RGBA -> RGB
 
         image_downsampled = PrecomputedFrameProvider.downsample_image(image_tensor, downsample_factor)
