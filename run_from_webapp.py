@@ -1,8 +1,9 @@
 import hashlib
 
-from typing import List
+from typing import List, Tuple
 from pathlib import Path
 
+from tracker_config import TrackerConfig
 from utils.data_utils import get_initial_image_and_segment
 from utils.runtime_utils import parse_args
 from tracker6d import Tracker6D
@@ -20,7 +21,7 @@ def run_on_custom_data(images_paths: List[Path], segmentations_paths: List[Path]
     tracker.run_pipeline()
 
 
-def prepare_config(images_paths):
+def prepare_config(images_paths) -> Tuple[TrackerConfig, Path]:
     dataset = 'custom_input'
     combined_paths = '\n'.join(str(p) for p in images_paths)
     hash_object = hashlib.sha256(combined_paths.encode('utf-8'))
@@ -34,13 +35,11 @@ def prepare_config(images_paths):
     config.sequence = sequence
     config.dataset = dataset
     config.frame_provider_config.erode_segmentation = True
-    if args.output_folder is not None:
-        write_folder = Path(args.output_folder) / dataset / sequence
-    else:
-        write_folder = config.default_results_folder / experiment_name / dataset / sequence
-    config.write_folder = write_folder
     config.input_frames = len(images_paths)
-    return config
+
+    write_folder = config.default_results_folder / experiment_name / dataset / sequence
+
+    return config, write_folder
 
 
 if __name__ == "__main__":
