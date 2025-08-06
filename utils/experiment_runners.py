@@ -100,8 +100,9 @@ def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=
         write_folder = Path(output_folder) / dataset / sequence
     else:
         write_folder = config.default_results_folder / experiment / dataset / sequence
+
     # Create and run tracker
-    tracker = Tracker6D(config, gt_texture=gt_texture, gt_mesh=gt_mesh, images_paths=images_paths,
+    tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, images_paths=images_paths,
                         gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
     tracker.run_pipeline()
@@ -205,9 +206,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     config.segmentation_provider = 'SAM2'
 
     # Initialize and run the tracker
-    tracker = Tracker6D(config, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
+    tracker = Tracker6D(config, write_folder, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
                         gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params, segmentation_paths=gt_segs,
-                        initial_image=first_image, initial_segmentation=first_segmentation,
-                        depth_paths=gt_depths)
+                        depth_paths=gt_depths, initial_image=first_image, initial_segmentation=first_segmentation)
 
     tracker.run_pipeline()

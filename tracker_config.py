@@ -18,7 +18,6 @@ class TrackerConfig:
     device: str = 'cuda'
     default_data_folder: Path = Path('/mnt/personal/jelint19/data/').expanduser()
     default_results_folder: Path = Path('/mnt/personal/jelint19/results/FlowTracker/').expanduser()
-    write_folder: Path = None
     purge_cache: bool = False
 
     dataset: str = None

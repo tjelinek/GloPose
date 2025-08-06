@@ -285,7 +285,7 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
-                 image_provider: FrameProvider,
+                 image_provider: FrameProvider, write_folder: Path,
                  sam2_images_paths: List[Path], sam2_cache_folder: Path, **kwargs):
         super().__init__(image_shape, config)
 
@@ -320,7 +320,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
             self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
 
-            sam2_tmp_path = config.write_folder / 'sam2_imgs'
+            sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
             image_provider.save_images(sam2_tmp_path, sam2_images_paths)

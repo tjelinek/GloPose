@@ -15,7 +15,7 @@ def run_on_custom_data(images_paths: List[Path], segmentations_paths: List[Path]
 
     first_image_tensor, first_segment_tensor = get_initial_image_and_segment(images_paths, segmentations_paths)
 
-    tracker = Tracker6D(config, images_paths=images_paths, segmentation_paths=segmentations_paths,
+    tracker = Tracker6D(config, write_folder, images_paths=images_paths, segmentation_paths=segmentations_paths,
                         initial_image=first_image_tensor, initial_segmentation=first_segment_tensor)
     tracker.run_pipeline()
 

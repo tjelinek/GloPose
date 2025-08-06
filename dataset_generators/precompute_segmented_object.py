@@ -17,9 +17,9 @@ def get_segmentation_provider(segmentation_type, initial_segmentation, initial_i
 
     config.segmentation_provider = segmentation_type
     config.frame_provider = 'precomputed'
-    config.write_folder = Path('/mnt/personal/jelint19/tmp/sam2_segs')
+    write_folder = Path('/mnt/personal/jelint19/tmp/sam2_segs')
 
-    tracker = FrameProviderAll(config,
+    tracker = FrameProviderAll(config, write_folder=write_folder,
                                initial_segmentation=initial_segmentation,
                                initial_image=initial_image, images_paths=images_paths,
                                segmentation_paths=segmentation_paths,

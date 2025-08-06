@@ -74,7 +74,6 @@ def main():
         else:
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
-        config.write_folder = write_folder
         sequence_folder = config.default_data_folder / 'SLAM' / 'tum_rgbd' / sequence
 
         image_paths = []

@@ -27,7 +27,7 @@ from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 class Tracker6D:
 
-    def __init__(self, config: TrackerConfig, gt_texture=None, gt_mesh=None,
+    def __init__(self, config: TrackerConfig, write_folder: Path, gt_texture=None, gt_mesh=None,
                  images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
                  gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
@@ -35,11 +35,13 @@ class Tracker6D:
                  depth_paths: Optional[List[Path]] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
 
-        assert config.write_folder is not None
-        if os.path.exists(config.write_folder):
-            shutil.rmtree(config.write_folder)
+        self.write_folder: Path = write_folder
+        self.config: TrackerConfig = config
 
-        config.write_folder.mkdir(exist_ok=True, parents=True)
+        if os.path.exists(self.write_folder):
+            shutil.rmtree(self.write_folder)
+
+        self.write_folder.mkdir(exist_ok=True, parents=True)
 
         skip = config.skip_indices
         if skip != 1:
@@ -78,9 +80,6 @@ class Tracker6D:
 
         # Other utilities and flags
         self.results_writer = None
-
-        self.write_folder = Path(config.write_folder)
-        self.config = config
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
@@ -184,7 +183,7 @@ class Tracker6D:
                                         initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                         segmentation_paths=segmentation_paths, depth_paths=depth_paths,
                                         segmentation_video_path=segmentation_video_path,
-                                        sam2_cache_folder=cache_folder_SAM2)
+                                        sam2_cache_folder=cache_folder_SAM2, write_folder=self.write_folder)
 
     def dump_frame_node_for_glomap(self, frame_idx: int):
 
