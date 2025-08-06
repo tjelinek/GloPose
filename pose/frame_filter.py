@@ -24,12 +24,21 @@ class BaseFrameFilter:
         self.n_frames = self.config.input_frames
 
     def get_keyframe_graph(self) -> nx.DiGraph:
-        if len(self.keyframe_graph.nodes) <= 2:
-            nodes_list = sorted(list(self.keyframe_graph.nodes))
-            middle_node = (nodes_list[-1] - nodes_list[0]) // 2
-            if nodes_list[0] < middle_node < nodes_list[-1]:
-                self.keyframe_graph.add_edge(nodes_list[0], middle_node)
-                self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
+        # if len(self.keyframe_graph.nodes) <= 2:
+        #     nodes_list = sorted(list(self.keyframe_graph.nodes))
+        #     middle_node = (nodes_list[-1] - nodes_list[0]) // 2
+        #     if nodes_list[0] < middle_node < nodes_list[-1]:
+        #         self.keyframe_graph.add_edge(nodes_list[0], middle_node)
+        #         self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
+
+        if self.config.frame_filter_view_graph == 'dense':
+            nodes_list = list(self.keyframe_graph.nodes)
+            for i in range(len(nodes_list)):
+                for j in range(len(nodes_list)):
+                    if i != j:  # Don't add self-loops
+                        self.keyframe_graph.add_edge(nodes_list[i], nodes_list[j])
+        else:
+            assert self.config.frame_filter_view_graph == 'from_matching'
 
         return self.keyframe_graph
 
