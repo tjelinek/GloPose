@@ -21,128 +21,115 @@ from utils.general import colmap_K_params_vec
 from utils.image_utils import get_intrinsics_from_exif
 
 
-class GlomapWrapper:
+def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path],
+                                 matching_pairs: List[Tuple[int, int]], init_with_first_two_images: bool,
+                                 mapper: str, match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
+                                 colmap_working_dir, camera_K: Optional[torch.Tensor] = None, device: str = 'cpu') \
+        -> Optional[pycolmap.Reconstruction]:
+    if len(matching_pairs) == 0:
+        raise ValueError("Needed at least 1 match.")
 
-    def __init__(self, colmap_working_dir: Path):
+    database_path = colmap_working_dir / 'database.db'
+    colmap_output_path = colmap_working_dir / 'output'
+    colmap_image_path = colmap_working_dir / 'images'
 
-        self.colmap_image_path = colmap_working_dir / 'images'
-        self.colmap_seg_path = colmap_working_dir / 'segmentations'
-        self.feature_dir = colmap_working_dir / 'features'
+    image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
+    segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
 
-        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
-        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
-        self.feature_dir.mkdir(exist_ok=True, parents=True)
+    assert not database_path.exists()
 
-        self.colmap_db_path = colmap_working_dir / 'database.db'
-        self.colmap_output_path = colmap_working_dir / 'output'
+    single_camera = True
+    assert len(images) > 0
 
-    def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]], init_with_first_two_images: bool, mapper: str,
-                                   match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
-                                   camera_K: Optional[torch.Tensor] = None, device: str = 'cpu') \
-            -> Optional[pycolmap.Reconstruction]:
-        if len(matching_pairs) == 0:
-            raise ValueError("Needed at least 1 match.")
+    matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
+    matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
+    for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
 
-        database_path = self.colmap_db_path
+        img1_path = Path(img1_path)
+        img2_path = Path(img2_path)
 
-        image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
-        segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
+        assert img1_path.parent == img2_path.parent
 
-        assert not database_path.exists()
+        img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, 1., device).squeeze()
+        img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, 1., device).squeeze()
 
-        single_camera = True
-        assert len(images) > 0
+        h1, w1 = img1.shape[-2:]
+        h2, w2 = img2.shape[-2:]
+        if h1 != h2 or w1 != w2:
+            single_camera = False
 
-        matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
-        matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
-        for (img1_path, img2_path), (seg1_path, seg2_path) in tqdm(zip(image_pairs, segmentation_pairs)):
+        seg1_size = ImageSize(h1, w1)
+        seg2_size = ImageSize(h2, w2)
+        img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_path, seg1_size, device)
+        img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
 
-            img1_path = Path(img1_path)
-            img2_path = Path(img2_path)
+        src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
+            match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
+                                                    img2_seg.squeeze(), Path(img1_path.name),
+                                                    Path(img2_path.name), as_int=True,
+                                                    zero_certainty_outside_segmentation=True,
+                                                    only_foreground_matches=True)
+        img1_id = images.index(img1_path) + 1
+        img2_id = images.index(img2_path) + 1
+        edge = (img1_id, img2_id)
+        matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+        matching_edges_certainties[edge] = certainty
 
-            assert img1_path.parent == img2_path.parent
+    database = pycolmap.Database(str(database_path))
 
-            img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_path, 1., device).squeeze()
-            img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_path, 1., device).squeeze()
+    keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
+                                                                  eliminate_one_to_many_matches=True, device=device)
 
-            h1, w1 = img1.shape[-2:]
-            h2, w2 = img2.shape[-2:]
-            if h1 != h2 or w1 != w2:
-                single_camera = False
+    new_cam_id = 1
+    if single_camera:
+        if camera_K is None:
+            camera_K = get_intrinsics_from_exif(images[0])
 
-            seg1_size = ImageSize(h1, w1)
-            seg2_size = ImageSize(h2, w2)
-            img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_path, seg1_size, device)
-            img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
+        params_vec = colmap_K_params_vec(camera_K)
 
-            src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
-                match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
-                                                        img2_seg.squeeze(), Path(img1_path.name),
-                                                        Path(img2_path.name), as_int=True,
-                                                        zero_certainty_outside_segmentation=True,
-                                                        only_foreground_matches=True)
-            img1_id = images.index(img1_path) + 1
-            img2_id = images.index(img2_path) + 1
-            edge = (img1_id, img2_id)
-            matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
-            matching_edges_certainties[edge] = certainty
+        h, w = PrecomputedFrameProvider.load_and_downsample_image(images[0], 1.).shape[-2:]
 
-        database = pycolmap.Database(str(database_path))
+        new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE,
+                                     width=w, height=h, params=params_vec)
+        database.write_camera(new_camera, use_camera_id=True)
 
-        keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
-                                                                      eliminate_one_to_many_matches=True, device=device)
+    for i, img in enumerate(images):
+        if not single_camera:
+            raise NotImplementedError("To be added")
 
-        new_cam_id = 1
-        if single_camera:
-            if camera_K is None:
-                camera_K = get_intrinsics_from_exif(images[0])
+        img_id = i + 1
+        image = pycolmap.Image(image_id=img_id, camera_id=new_cam_id, name=str(img.name))
+        database.write_image(image, use_image_id=True)
 
-            params_vec = colmap_K_params_vec(camera_K)
+    for colmap_image_id in sorted(keypoints.keys()):
+        keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
+        database.write_keypoints(colmap_image_id, keypoints_np)
 
-            h, w = PrecomputedFrameProvider.load_and_downsample_image(images[0], 1.).shape[-2:]
+    for colmap_image_u, colmap_image_v in edge_match_indices.keys():
+        match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
+        database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
-            new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE,
-                                         width=w, height=h, params=params_vec)
-            database.write_camera(new_camera, use_camera_id=True)
+    database.close()
 
-        for i, img in enumerate(images):
-            if not single_camera:
-                raise NotImplementedError("To be added")
+    two_view_geometry(database_path)
 
-            img_id = i + 1
-            image = pycolmap.Image(image_id=img_id, camera_id=new_cam_id, name=str(img.name))
-            database.write_image(image, use_image_id=True)
+    first_image_id = None
+    second_image_id = None
+    if init_with_first_two_images:
+        first_image_id = 1
+        second_image_id = 2
+    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper,
+               first_image_id, second_image_id)
 
-        for colmap_image_id in sorted(keypoints.keys()):
-            keypoints_np = keypoints[colmap_image_id].numpy(force=True).astype(np.float32)
-            database.write_keypoints(colmap_image_id, keypoints_np)
+    path_to_rec = colmap_output_path / '0'
+    try:
+        reconstruction = pycolmap.Reconstruction(path_to_rec)
+        print(reconstruction.summary())
+    except Exception as e:
+        print(e)
+        return None
 
-        for colmap_image_u, colmap_image_v in edge_match_indices.keys():
-            match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
-            database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
-
-        database.close()
-
-        two_view_geometry(self.colmap_db_path)
-
-        first_image_id = None
-        second_image_id = None
-        if init_with_first_two_images:
-            first_image_id = 1
-            second_image_id = 2
-        run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, mapper,
-                   first_image_id, second_image_id)
-
-        path_to_rec = self.colmap_output_path / '0'
-        try:
-            reconstruction = pycolmap.Reconstruction(path_to_rec)
-            print(reconstruction.summary())
-        except Exception as e:
-            print(e)
-            return None
-
-        return reconstruction
+    return reconstruction
 
 
 def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3])\

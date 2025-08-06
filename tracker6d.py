@@ -16,7 +16,7 @@ from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvide
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
-from pose.glomap import GlomapWrapper, align_reconstruction_with_pose, align_with_kabsch
+from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
 from tracker_config import TrackerConfig
 from utils.eval_reconstruction import evaluate_reconstruction, update_sequence_reconstructions_stats, \
     update_dataset_reconstruction_statistics
@@ -98,6 +98,11 @@ class Tracker6D:
                                               f'{config.sequence}_{config.special_hash}')
 
         self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
+        self.colmap_image_path = self.colmap_base_path / 'images'
+        self.colmap_seg_path = self.colmap_base_path / 'segmentations'
+
+        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
+        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
                                        segmentation_paths, segmentation_video_path, video_path, depth_paths, 0)
@@ -132,8 +137,6 @@ class Tracker6D:
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
-
-        self.glomap_wrapper = GlomapWrapper(self.colmap_base_path)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
                                   initial_image: torch.Tensor | List[torch.Tensor],
@@ -206,10 +209,10 @@ class Tracker6D:
         else:
             seg_filename = f'segment_{frame_idx}.png'
 
-        node_save_path = self.glomap_wrapper.colmap_image_path / image_filename
+        node_save_path = self.colmap_image_path / image_filename
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
 
-        segmentation_save_path = self.glomap_wrapper.colmap_seg_path / seg_filename
+        segmentation_save_path = self.colmap_seg_path / seg_filename
         imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
 
         frame_data.image_save_path = copy.deepcopy(node_save_path)
@@ -259,8 +262,8 @@ class Tracker6D:
         else:
             known_gt_poses = None
         if reconstruction is not None and alignment_success:
-            colmap_db_path = self.glomap_wrapper.colmap_db_path
-            colmap_output_path = self.glomap_wrapper.colmap_output_path
+            colmap_db_path = self.colmap_base_path / 'database.db'
+            colmap_output_path = self.colmap_base_path / 'output'
             view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
                                                    colmap_output_path, self.config.object_id)
             view_graph.save_viewgraph(self.cache_folder_view_graph, reconstruction, save_images=True,
@@ -335,12 +338,10 @@ class Tracker6D:
 
         first_frame_data = self.data_graph.get_frame_data(0)
         camera_K = first_frame_data.gt_pinhole_K
-        reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                        matching_pairs,
-                                                                        self.config.init_with_first_two_images,
-                                                                        self.config.mapper, self.flow_provider,
-                                                                        self.config.roma_sample_size, camera_K,
-                                                                        self.config.device)
+        reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
+                                                      self.config.init_with_first_two_images, self.config.mapper,
+                                                      self.flow_provider, self.config.roma_sample_size,
+                                                      self.colmap_base_path, camera_K, self.config.device)
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
