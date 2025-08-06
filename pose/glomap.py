@@ -14,11 +14,8 @@ from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions
 from tqdm import tqdm
 
-from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
-
 from data_providers.flow_provider import PrecomputedFlowProviderDirect
-from data_structures.data_graph import DataGraph
-from tracker_config import TrackerConfig
+from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from utils.conversions import Se3_to_Rigid3d
 from utils.general import colmap_K_params_vec
 from utils.image_utils import get_intrinsics_from_exif
@@ -26,39 +23,31 @@ from utils.image_utils import get_intrinsics_from_exif
 
 class GlomapWrapper:
 
-    def __init__(self, write_folder: Path, tracking_config: TrackerConfig,
-                 flow_provider: Optional[PrecomputedFlowProviderDirect] = None):
-        self.config = tracking_config
+    def __init__(self, colmap_working_dir: Path):
 
-        self.flow_provider: Optional[PrecomputedFlowProviderDirect] = flow_provider
-
-        self.colmap_base_path = (write_folder / f'glomap_{self.config.sequence}')
-
-        self.colmap_image_path = self.colmap_base_path / 'images'
-        self.colmap_seg_path = self.colmap_base_path / 'segmentations'
-        self.feature_dir = self.colmap_base_path / 'features'
+        self.colmap_image_path = colmap_working_dir / 'images'
+        self.colmap_seg_path = colmap_working_dir / 'segmentations'
+        self.feature_dir = colmap_working_dir / 'features'
 
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
         self.feature_dir.mkdir(exist_ok=True, parents=True)
 
-        self.colmap_db_path = self.colmap_base_path / 'database.db'
-        self.colmap_output_path = self.colmap_base_path / 'output'
+        self.colmap_db_path = colmap_working_dir / 'database.db'
+        self.colmap_output_path = colmap_working_dir / 'output'
 
     def run_glomap_from_image_list(self, images: List[Path], segmentations: List[Path],
-                                   matching_pairs: List[Tuple[int, int]],
-                                   camera_K: Optional[torch.Tensor] = None) -> Optional[pycolmap.Reconstruction]:
+                                   matching_pairs: List[Tuple[int, int]], init_with_first_two_images: bool, mapper: str,
+                                   match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
+                                   camera_K: Optional[torch.Tensor] = None, device: str = 'cpu') \
+            -> Optional[pycolmap.Reconstruction]:
         if len(matching_pairs) == 0:
             raise ValueError("Needed at least 1 match.")
-
-        device = self.config.device
 
         database_path = self.colmap_db_path
 
         image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
         segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
-
-        sample_size = self.config.roma_sample_size
 
         assert not database_path.exists()
 
@@ -88,11 +77,11 @@ class GlomapWrapper:
             img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_path, seg2_size, device)
 
             src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
-                self.flow_provider.get_source_target_points(img1, img2, sample_size, img1_seg.squeeze(),
-                                                            img2_seg.squeeze(), Path(img1_path.name),
-                                                            Path(img2_path.name), as_int=True,
-                                                            zero_certainty_outside_segmentation=True,
-                                                            only_foreground_matches=True)
+                match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
+                                                        img2_seg.squeeze(), Path(img1_path.name),
+                                                        Path(img2_path.name), as_int=True,
+                                                        zero_certainty_outside_segmentation=True,
+                                                        only_foreground_matches=True)
             img1_id = images.index(img1_path) + 1
             img2_id = images.index(img2_path) + 1
             edge = (img1_id, img2_id)
@@ -139,10 +128,10 @@ class GlomapWrapper:
 
         first_image_id = None
         second_image_id = None
-        if self.config.init_with_first_two_images:
+        if init_with_first_two_images:
             first_image_id = 1
             second_image_id = 2
-        run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, self.config.mapper,
+        run_mapper(self.colmap_output_path, self.colmap_db_path, self.colmap_image_path, mapper,
                    first_image_id, second_image_id)
 
         path_to_rec = self.colmap_output_path / '0'

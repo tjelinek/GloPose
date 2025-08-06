@@ -97,6 +97,8 @@ class Tracker6D:
                                               config.experiment_name / config.dataset /
                                               f'{config.sequence}_{config.special_hash}')
 
+        self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
+
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
                                        segmentation_paths, segmentation_video_path, video_path, depth_paths, 0)
 
@@ -131,7 +133,7 @@ class Tracker6D:
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
 
-        self.glomap_wrapper = GlomapWrapper(self.write_folder, self.config, self.flow_provider)
+        self.glomap_wrapper = GlomapWrapper(self.colmap_base_path)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
                                   initial_image: torch.Tensor | List[torch.Tensor],
@@ -334,7 +336,11 @@ class Tracker6D:
         first_frame_data = self.data_graph.get_frame_data(0)
         camera_K = first_frame_data.gt_pinhole_K
         reconstruction = self.glomap_wrapper.run_glomap_from_image_list(images_paths, segmentation_paths,
-                                                                        matching_pairs, camera_K)
+                                                                        matching_pairs,
+                                                                        self.config.init_with_first_two_images,
+                                                                        self.config.mapper, self.flow_provider,
+                                                                        self.config.roma_sample_size, camera_K,
+                                                                        self.config.device)
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
@@ -395,7 +401,8 @@ class Tracker6D:
 
         sam2_segmentation_provider = SAM2SegmentationProvider(self.config, self.tracker.image_shape,
                                                               self.initial_segmentation, self.tracker.frame_provider,
-                                                              self.images_paths, self.cache_folder_SAM2)
+                                                              self.write_folder, self.images_paths,
+                                                              self.cache_folder_SAM2)
 
         iou_list = []
         for frame_i in range(self.config.input_frames):
@@ -420,6 +427,6 @@ class Tracker6D:
         update_iou_frame_statistics(csv_per_frame_iou_stats, iou_np, self.config.dataset, self.config.sequence)
 
 
-def run_tracking_on_sequence(config: TrackerConfig, **kwargs):
-    sfb = Tracker6D(config, **kwargs)
+def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
+    sfb = Tracker6D(config, write_folder, **kwargs)
     sfb.run_pipeline()
