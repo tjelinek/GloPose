@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
 
 import imageio
+import networkx as nx
 import torch
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
@@ -225,32 +226,14 @@ class Tracker6D:
             return
 
         start_time = time.time()
-        self.filter_frames()
+        keyframe_graph = self.filter_frames()
+
+        keyframe_nodes_idxs = list(sorted(keyframe_graph.nodes()))
+        images_paths, segmentation_paths, matching_pairs = self.prepare_input_for_colmap(keyframe_graph)
+
         end_time = time.time()
 
         frame_filtering_time = end_time - start_time
-
-        keyframe_graph = self.frame_filter.get_keyframe_graph()
-
-        keyframe_nodes_idxs = list(sorted(keyframe_graph.nodes()))
-
-        images_paths = []
-        segmentation_paths = []
-        matching_pairs = []
-        for node_idx in keyframe_nodes_idxs:
-            self.dump_frame_node_for_glomap(node_idx)
-            frame_data = self.data_graph.get_frame_data(node_idx)
-
-            images_paths.append(frame_data.image_save_path)
-            segmentation_paths.append(frame_data.segmentation_save_path)
-
-        for frame1_idx, frame2_idx in keyframe_graph.edges:
-            u_index = keyframe_nodes_idxs.index(frame1_idx)
-            v_index = keyframe_nodes_idxs.index(frame2_idx)
-            matching_pairs.append((u_index, v_index))
-
-        assert len(keyframe_nodes_idxs) > 2
-        print(keyframe_graph.edges)
 
         start_time = time.time()
         reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
@@ -311,7 +294,29 @@ class Tracker6D:
 
         return
 
-    def filter_frames(self):
+    def prepare_input_for_colmap(self, keyframe_graph: nx.DiGraph) -> \
+            Tuple[List[Path], List[Path], List[Tuple[int, int]]]:
+        keyframe_nodes_idxs = list(sorted(keyframe_graph.nodes()))
+
+        images_paths = []
+        segmentation_paths = []
+        matching_pairs = []
+        for node_idx in keyframe_nodes_idxs:
+            self.dump_frame_node_for_glomap(node_idx)
+            frame_data = self.data_graph.get_frame_data(node_idx)
+
+            images_paths.append(frame_data.image_save_path)
+            segmentation_paths.append(frame_data.segmentation_save_path)
+        for frame1_idx, frame2_idx in keyframe_graph.edges:
+            u_index = keyframe_nodes_idxs.index(frame1_idx)
+            v_index = keyframe_nodes_idxs.index(frame2_idx)
+            matching_pairs.append((u_index, v_index))
+        assert len(keyframe_nodes_idxs) > 2
+        print(keyframe_graph.edges)
+
+        return images_paths, segmentation_paths, matching_pairs
+
+    def filter_frames(self) -> nx.DiGraph:
         for frame_i in range(0, self.config.input_frames):
             if self.sequence_starts is not None and frame_i in self.sequence_starts:
                 pass
@@ -332,6 +337,10 @@ class Tracker6D:
 
             print(f'Elapsed time in seconds: {time.time() - start:.3f}s, frame {frame_i} out of '
                   f'{self.config.input_frames - 1}')
+
+        keyframe_graph = self.frame_filter.get_keyframe_graph()
+
+        return keyframe_graph
 
     def run_reconstruction(self, images_paths, segmentation_paths, matching_pairs) -> \
             Tuple[Optional[Reconstruction], bool]:
