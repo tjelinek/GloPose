@@ -86,7 +86,7 @@ def main():
     first_segment_tensor = transform(first_segment_resized).squeeze()
     first_image_tensor = transform(first_image).squeeze()
 
-    run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
+    run_tracking_on_sequence(config, gt_texture=None, gt_mesh=None,
                              gt_Se3_cam2obj=gt_Se3_cam2obj, gt_Se3_world2cam=gt_Se3_world2cam,
                              video_path=video_path, segmentation_video_path=object_seg_video_path,
                              initial_segmentation=first_segment_tensor, initial_image=first_image_tensor)

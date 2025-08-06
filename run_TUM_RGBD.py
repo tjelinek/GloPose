@@ -122,7 +122,7 @@ def main():
         config.frame_provider = 'precomputed'
         config.large_images_results_write_frequency = 10
 
-        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
+        run_tracking_on_sequence(config, gt_texture=None, gt_mesh=None,
                                  gt_Se3_cam2obj=gt_Se3_cam_to_world, images_paths=image_paths)
 
         exit()

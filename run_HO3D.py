@@ -149,7 +149,7 @@ def main():
                 cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.device)
                 gt_pinhole_params[i] = PinholeCamera(cam_K_tensor, obj2cam, image_h, image_w)
 
-            tracker = Tracker6D(config, write_folder, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
+            tracker = Tracker6D(config, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
                                 gt_Se3_world2cam=Se3_obj2cam_dict, segmentation_paths=gt_segmentations_list,
                                 initial_image=first_image_tensor, initial_segmentation=first_segment_tensor,
                                 depth_paths=gt_depths_list, gt_pinhole_params=gt_pinhole_params)

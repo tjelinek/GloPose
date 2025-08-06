@@ -25,7 +25,7 @@ from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 class Tracker6D:
 
-    def __init__(self, config: TrackerConfig, write_folder, gt_texture=None, gt_mesh=None,
+    def __init__(self, config: TrackerConfig, gt_texture=None, gt_mesh=None,
                  images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
                  gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
@@ -33,10 +33,11 @@ class Tracker6D:
                  depth_paths: Optional[List[Path]] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
 
-        if os.path.exists(write_folder):
-            shutil.rmtree(write_folder)
+        assert config.write_folder is not None
+        if os.path.exists(config.write_folder):
+            shutil.rmtree(config.write_folder)
 
-        write_folder.mkdir(exist_ok=True, parents=True)
+        config.write_folder.mkdir(exist_ok=True, parents=True)
 
         skip = config.skip_indices
         if skip != 1:
@@ -50,7 +51,6 @@ class Tracker6D:
             if gt_Se3_world2cam is not None:
                 gt_Se3_world2cam = {i // skip: gt_Se3_world2cam[i] for i in used_indices if i in gt_Se3_world2cam}
 
-        config.write_folder = write_folder
         # Paths
         self.images_paths: Optional[List[Path]] = images_paths
         self.segmentation_paths: Optional[List[Path]] = segmentation_paths
@@ -77,7 +77,7 @@ class Tracker6D:
         # Other utilities and flags
         self.results_writer = None
 
-        self.write_folder = Path(write_folder)
+        self.write_folder = Path(config.write_folder)
         self.config = config
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
@@ -389,6 +389,6 @@ class Tracker6D:
         update_iou_frame_statistics(csv_per_frame_iou_stats, iou_np, self.config.dataset, self.config.sequence)
 
 
-def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
-    sfb = Tracker6D(config, write_folder, **kwargs)
+def run_tracking_on_sequence(config: TrackerConfig, **kwargs):
+    sfb = Tracker6D(config, **kwargs)
     sfb.run_pipeline()
