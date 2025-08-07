@@ -36,6 +36,7 @@ def main():
             config = load_config(args.config)
 
             experiment_name = args.experiment
+            output_folder = args.output_folder
 
             config.experiment_name = experiment_name
             config.sequence = sequence
@@ -47,8 +48,7 @@ def main():
 
             sequence_type = 'val'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0, True,
-                                 scene_obj_id=obj_id)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder, True, scene_obj_id=obj_id)
 
 
 if __name__ == "__main__":

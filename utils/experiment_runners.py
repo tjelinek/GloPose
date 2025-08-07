@@ -119,8 +119,8 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
     return frame_dict
 
 
-def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str, args,
-                         config: TrackerConfig, gt_cam_scale, only_frames_with_known_poses: bool = False,
+def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str, config: TrackerConfig, gt_cam_scale,
+                         output_folder: Path = None, only_frames_with_known_poses: bool = False,
                          scene_obj_id: int = None):
 
     onboarding_type = config.bop_config.onboarding_type
@@ -142,8 +142,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         raise ValueError("This should not happen")
 
     # Determine output folder
-    if args.output_folder is not None:
-        write_folder = Path(args.output_folder) / dataset / f'{sequence}_{config.special_hash}'
+    if output_folder is not None:
+        write_folder = Path(output_folder) / dataset / f'{sequence}_{config.special_hash}'
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / f'{sequence}_{config.special_hash}'
 

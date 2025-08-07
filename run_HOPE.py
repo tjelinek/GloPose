@@ -31,7 +31,7 @@ def main():
             'obj_000023_down', 'obj_000028_down', 'obj_000004_down', 'obj_000009_down',
             'obj_000014_down', 'obj_000019_down', 'obj_000024_down', 'obj_000005_down',
             'obj_000010_down', 'obj_000015_down', 'obj_000020_down', 'obj_000025_down',
-        ][:1]
+        ][0:1]
 
     for sequence in sequences:
 
@@ -51,6 +51,8 @@ def main():
             sequence_type = 'onboarding'
             run_only_on_frames_with_known_pose = True
 
+            write_folder = args.output_folder
+
             sequence_name_split = sequence.split('_')
             if len(sequence_name_split) == 3:
                 if sequence_name_split[2] == 'down':
@@ -66,10 +68,10 @@ def main():
                     config.similarity_transformation = 'depths'
                     config.frame_provider_config.erode_segmentation = True
                     run_only_on_frames_with_known_pose = False
-                    config.skip_indices *= 2
+                    config.skip_indices *= 4
                 config.sequence = '_'.join(sequence_name_split[:2])
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0,
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, write_folder,
                                  only_frames_with_known_poses=run_only_on_frames_with_known_pose)
 
 

@@ -45,6 +45,8 @@ def main():
 
             config.skip_indices *= 1
 
+            output_folder = args.output_folder
+
             sequence_name_split = sequence.split('_')
             if len(sequence_name_split) == 3:
                 if sequence_name_split[2] == 'down':
@@ -60,7 +62,7 @@ def main():
 
             sequence_type = 'onboarding'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, args, config, 1.0, True)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder, True)
 
 
 if __name__ == "__main__":
