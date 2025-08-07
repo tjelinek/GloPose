@@ -6,7 +6,6 @@ import torch
 from kornia.geometry import Se3, Quaternion
 
 from dataset_generators import scenarios
-from models.rendering import get_Se3_obj2cam_from_kaolin_params
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
@@ -15,8 +14,8 @@ from tracker6d import Tracker6D
 from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segment
 
 
-def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=None, output_folder=None,
-                 gt_mesh_path: Path = None, gt_texture_path: Path = None, rotation_generator=None):
+def run_on_synthetic_data(config: TrackerConfig, dataset: str, sequence: str, experiment=None, output_folder=None,
+                          gt_mesh_path: Path = None, gt_texture_path: Path = None, rotation_generator=None):
     """
     Common function to run 6D tracking across different datasets
 
@@ -41,6 +40,8 @@ def run_tracking(config: TrackerConfig, dataset: str, sequence: str, experiment=
     skip_frames : int, optional
         Number of frames to skip in the sequence (defaults to 1 - no skipping)
     """
+    from models.rendering import get_Se3_obj2cam_from_kaolin_params
+
     # Use provided experiment name or get from config if available
     if experiment is None and hasattr(config, 'experiment_name'):
         experiment = config.experiment_name

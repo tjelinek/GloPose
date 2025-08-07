@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataset_generators import scenarios
-from utils.experiment_runners import run_tracking
+from utils.experiment_runners import run_on_synthetic_data
 from utils.runtime_utils import parse_args, exception_logger
 from utils.general import load_config
 
@@ -39,7 +39,7 @@ def main():
             gt_mesh_path = gt_model_path / Path('meshes/model.obj')
 
             # Run tracking with z-axis rotations for GoogleScannedObjects
-            run_tracking(
+            run_on_synthetic_data(
                 config=config,
                 dataset=dataset,
                 sequence=sequence,
