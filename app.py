@@ -65,6 +65,8 @@ def process_images(input_images):
 def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='passthrough',
                                     skip_slider=1000, too_little_slider=0, matchability_slider=.5,
                                     min_certainty_slider=.95, device_radio='cpu', progress=gr.Progress()):
+    global matching_pairs_global
+
     input_images = [img for (img, _) in input_images]
     segmentations = [seg for (seg, _) in segmentations]
 
@@ -83,6 +85,7 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
                         initial_image=first_image_tensor, initial_segmentation=first_segment_tensor)
     keyframe_graph = tracker.filter_frames(progress)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
+    matching_pairs_global = matching_pairs
 
     return images_paths, segmentation_paths, matching_pairs
 
@@ -100,8 +103,10 @@ def ensure_same_dir(keyframes: List[Path]):
     return files_same_dir
 
 
-def on_glotrack_click(input_images, segmentations, matching_pairs, matcher_radio, num_features,
+def on_glotrack_click(input_images, segmentations, matcher_radio, num_features,
                       write_folder: Path, mapper='colmap', device_radio_='cpu', progress=gr.Progress()):
+    global matching_pairs_global
+
     keyframes = [Path(img) for (img, _) in input_images]
     segmentations = [Path(seg) for (seg, _) in segmentations]
 
@@ -121,7 +126,7 @@ def on_glotrack_click(input_images, segmentations, matching_pairs, matcher_radio
     colmap_base_path.mkdir(parents=True, exist_ok=True)
 
     with torch.inference_mode():
-        colmap_rec = reconstruct_images_using_sfm(keyframes, segmentations, matching_pairs,
+        colmap_rec = reconstruct_images_using_sfm(keyframes, segmentations, matching_pairs_global,
                                                   config.init_with_first_two_images, mapper, match_provider,
                                                   config.roma_sample_size, colmap_base_path, device=device_radio_,
                                                   progress=progress)
@@ -234,15 +239,15 @@ with gr.Blocks() as demo:
 
     _input_gallery.upload(process_images, inputs=_input_gallery, outputs=_segmentations_gallery)
 
-    _matching_pairs = []
+    matching_pairs_global = []
 
     _keyframes_button.click(get_keyframes_and_segmentations,
                             inputs=[_input_gallery, _segmentations_gallery, _frame_filter_radio, _skip_slider,
                                     _too_little_slider, _matchability_slider, _reliability_slider,
                                     _device_radio_filter],
-                            outputs=[_filtered_gallery, _filtered_segmentations, _matching_pairs])
+                            outputs=[_filtered_gallery, _filtered_segmentations])
 
-    _glotrack_button.click(on_glotrack_click, inputs=[_filtered_gallery, _filtered_segmentations, _matching_pairs,
+    _glotrack_button.click(on_glotrack_click, inputs=[_filtered_gallery, _filtered_segmentations,
                                                       _mapper_radio, _matcher_radio, _num_features,
                                                       _device_radio_matcher],
                            outputs=_vis_plot)
