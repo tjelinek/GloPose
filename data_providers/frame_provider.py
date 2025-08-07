@@ -82,12 +82,15 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
-    def save_images(self, output_path: Path, images_paths: Optional[List[Path]] = None) -> List[Path]:
+    def save_images(self, output_path: Path, images_paths: Optional[List[Path]] = None,
+                    progress: 'gradio.Progress' = None) -> List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
 
         saved_img_paths = []
         for frame_i in range(0, self.sequence_length):
+            if progress is not None:
+                progress(frame_i / float(self.sequence_length), desc="Caching SAM2 images...")
             img = self.next_image(frame_i).squeeze()
 
             img = transform_to_pil(img)
@@ -286,7 +289,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
                  image_provider: FrameProvider, write_folder: Path,
-                 sam2_images_paths: List[Path], sam2_cache_folder: Path, **kwargs):
+                 sam2_images_paths: List[Path], sam2_cache_folder: Path, progress: 'gradio.Progress' = None, **kwargs):
         super().__init__(image_shape, config)
 
         assert initial_segmentation is not None
@@ -323,7 +326,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
-            image_provider.save_images(sam2_tmp_path, sam2_images_paths)
+            image_provider.save_images(sam2_tmp_path, sam2_images_paths, progress)
 
             state = self.predictor.init_state(str(sam2_tmp_path),
                                               offload_video_to_cpu=True,
@@ -335,7 +338,12 @@ class SAM2SegmentationProvider(SegmentationProvider):
                                                                                       initial_mask_sam_format)
 
             self.past_predictions = {0: (0, out_obj_ids, out_mask_logits)}
+
             for i, (_, out_obj_ids, out_mask_logits) in enumerate(self.predictor.propagate_in_video(state)):
+
+                if progress is not None:
+                    progress(i / float(len(sam2_images_paths)), desc="SAM2 image tracking...")
+
                 out_frame_idx = i * self.skip_indices
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
                 if self.cache_folder is not None:
