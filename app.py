@@ -1,10 +1,8 @@
 import threading
-from typing import List
+from typing import Optional
 
 import gradio as gr
 from pathlib import Path
-import numpy as np
-import cv2
 import os
 from hloc.utils import viz_3d
 import pycolmap
@@ -18,8 +16,10 @@ from tracker6d import Tracker6D
 from tracker_config import TrackerConfig
 from utils.data_utils import get_initial_image_and_segment
 
-temp_dir = Path("temp")
-os.makedirs(temp_dir, exist_ok=True)
+images_for_reconstruction_global = []
+segmentation_for_reconstruction_global = []
+matching_pairs_global = []
+write_folder_global: Optional[Path] = None
 
 
 def visualize_reconstruction(path_to_rec):
@@ -42,35 +42,19 @@ def visualize_reconstruction(path_to_rec):
     return fig
 
 
-def create_fake_segmentations(images, out_dir=temp_dir):
-    os.makedirs(out_dir, exist_ok=True)
-    out_paths = []
-    for i, img in enumerate(images):
-        h, w = img.shape[:2]
-        seg = (np.ones((h, w)) * 255).astype(np.uint8)
-        fname = str(Path(out_dir) / f"segmentation_{i}.png")
-        cv2.imwrite(fname, seg)
-        out_paths.append(fname)
-    return out_paths
-
-
-# Function to handle input images and generate segmentations
-def process_images(input_images):
-    # Convert input images to numpy arrays
-    images = [cv2.imread(img_fname) for (img_fname, _) in input_images]
-    segmentation_paths = create_fake_segmentations(images)
-    return segmentation_paths
-
-
 def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='passthrough',
                                     matchability_slider=.5, min_certainty_slider=.95, device_radio='cpu',
                                     progress=gr.Progress()):
     global matching_pairs_global
+    global images_for_reconstruction_global
+    global segmentation_for_reconstruction_global
+    global write_folder_global
 
     input_images = [Path(img) for (img, _) in input_images]
     segmentations = [Path(seg) for (seg, _) in segmentations]
 
     config, write_folder = prepare_config(input_images)
+    write_folder_global = write_folder
 
     config.device = device_radio
     config.frame_filter = frame_filter
@@ -83,33 +67,36 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
                         initial_image=first_image_tensor, initial_segmentation=first_segment_tensor, progress=progress)
     keyframe_graph = tracker.filter_frames(progress)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
+
     matching_pairs_global = matching_pairs
+    images_for_reconstruction_global = images_paths
+    segmentation_for_reconstruction_global = segmentation_paths
 
-    return images_paths, segmentation_paths, matching_pairs
+    temp_dir = Path('/tmp')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    temp_images = []
+    temp_segmentations = []
+
+    for i, img_path in enumerate(images_paths):
+        temp_img_path = temp_dir / f"keyframe_{i}_{Path(img_path).name}"
+        shutil.copy(img_path, temp_img_path)
+        temp_images.append(str(temp_img_path))
+
+    for i, seg_path in enumerate(segmentation_paths):
+        temp_seg_path = temp_dir / f"keyseg_{i}_{Path(seg_path).name}"
+        shutil.copy(seg_path, temp_seg_path)
+        temp_segmentations.append(str(temp_seg_path))
+
+    return temp_images, temp_segmentations
 
 
-def ensure_same_dir(keyframes: List[Path]):
-    assert len(keyframes) > 0
-    base_image_path = keyframes[0].parent
-    files_same_dir = [keyframes[0]]
-    for img_path in keyframes[1:]:
-        new_img_path = base_image_path / img_path.name
-        if img_path != new_img_path:
-            shutil.copy(img_path, new_img_path)
-        files_same_dir.append(new_img_path)
-
-    return files_same_dir
-
-
-def on_glotrack_click(input_images, segmentations, matcher_radio, num_features,
-                      write_folder: Path, mapper='colmap', device_radio_='cpu', progress=gr.Progress()):
+def on_glotrack_click(input_images, segmentations, mapper, matcher_radio, num_features,
+                      device_radio_='cpu', progress=gr.Progress()):
     global matching_pairs_global
-
-    keyframes = [Path(img) for (img, _) in input_images]
-    segmentations = [Path(seg) for (seg, _) in segmentations]
-
-    keyframes = ensure_same_dir(keyframes)
-    segmentations = ensure_same_dir(segmentations)
+    global images_for_reconstruction_global
+    global segmentation_for_reconstruction_global
+    global write_folder_global
 
     config = TrackerConfig()
     if matcher_radio == 'UFM':
@@ -118,13 +105,14 @@ def on_glotrack_click(input_images, segmentations, matcher_radio, num_features,
         raise NotImplementedError("SIFT is not implemented yet.")
         # match_provider = SIFTMatchingProvider(None, num_features, device_radio_)
     else:
-        raise ValueError("Unknown Matching Provider")
+        raise ValueError(f"Unknown matching provider {matcher_radio}")
 
-    colmap_base_path = write_folder / f"glomap_'{write_folder.stem}"
+    colmap_base_path = write_folder_global / f"glomap_'{write_folder_global.stem}"
     colmap_base_path.mkdir(parents=True, exist_ok=True)
 
     with torch.inference_mode():
-        colmap_rec = reconstruct_images_using_sfm(keyframes, segmentations, matching_pairs_global,
+        colmap_rec = reconstruct_images_using_sfm(images_for_reconstruction_global,
+                                                  segmentation_for_reconstruction_global, matching_pairs_global,
                                                   config.init_with_first_two_images, mapper, match_provider,
                                                   config.roma_sample_size, colmap_base_path, device=device_radio_,
                                                   progress=progress)
@@ -232,8 +220,6 @@ with gr.Blocks() as demo:
         _vis_plot = gr.Plot(visible=True)
 
     # _input_gallery.upload(process_images, inputs=_input_gallery, outputs=_segmentations_gallery)
-
-    matching_pairs_global = []
 
     _keyframes_button.click(get_keyframes_and_segmentations,
                             inputs=[_input_gallery, _segmentations_gallery, _frame_filter_radio,
