@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
 
+import gradio
 import imageio
 import networkx as nx
 import torch
@@ -316,8 +317,12 @@ class Tracker6D:
 
         return images_paths, segmentation_paths, matching_pairs
 
-    def filter_frames(self) -> nx.DiGraph:
+    def filter_frames(self, progress: gradio.Progress = None) -> nx.DiGraph:
         for frame_i in range(0, self.config.input_frames):
+
+            if progress is not None:
+                progress(frame_i / float(self.config.input_frames), desc="Filtering frames...")
+
             if self.sequence_starts is not None and frame_i in self.sequence_starts:
                 pass
 
