@@ -3,7 +3,6 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from kaolin.rep import SurfaceMesh
 from kornia.geometry import normalize_quaternion, So3, Se3
 from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
@@ -173,9 +172,10 @@ class Encoder(nn.Module):
         return encoder_result, encoder_result_flow_frames
 
 
-def init_gt_encoder(gt_mesh: SurfaceMesh, gt_texture: torch.Tensor, gt_Se3_obj1_to_obj_i: Se3, image_shape: ImageSize,
-                    tracker_config: TrackerConfig, device: str) -> Encoder:
-
+def init_gt_encoder(gt_mesh: 'kaolin.rep.SurfaceMesh', gt_texture: torch.Tensor, gt_Se3_obj1_to_obj_i: Se3,
+                    image_shape: ImageSize, tracker_config: TrackerConfig, device: str) -> Encoder:
+    from kaolin.rep import SurfaceMesh
+    assert type(gt_mesh) is SurfaceMesh
     gt_rotations = gt_Se3_obj1_to_obj_i.quaternion.to_axis_angle()
     gt_translations = gt_Se3_obj1_to_obj_i.translation
 

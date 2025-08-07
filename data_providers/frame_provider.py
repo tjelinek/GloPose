@@ -14,7 +14,6 @@ from torchvision import transforms
 from torchvision.io import decode_image, ImageReadMode
 
 from data_structures.keyframe_buffer import FrameObservation
-from models.encoder import init_gt_encoder
 from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter
 from utils.general import erode_segment_mask2
@@ -25,6 +24,7 @@ class SyntheticDataProvider:
 
     def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
         from models.rendering import RenderingKaolin
+        from models.encoder import init_gt_encoder
 
         self.image_shape: ImageSize = config.rendered_image_shape
         self.device = config.device
