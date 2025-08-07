@@ -35,10 +35,12 @@ class Tracker6D:
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
                  segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
                  depth_paths: Optional[List[Path]] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
-                 initial_segmentation: torch.Tensor | List[torch.Tensor] = None, sequence_starts: List[int] = None):
+                 initial_segmentation: torch.Tensor | List[torch.Tensor] = None, progress: gradio.Progress = None):
 
         self.write_folder: Path = write_folder
         self.config: TrackerConfig = config
+
+        self.progress: gradio.Progress = progress
 
         if os.path.exists(self.write_folder):
             shutil.rmtree(self.write_folder)
@@ -63,7 +65,6 @@ class Tracker6D:
         self.depth_paths: Optional[List[Path]] = depth_paths
         self.video_path: Optional[Path] = video_path
         self.segmentation_video_path: Optional[Path] = segmentation_video_path
-        self.sequence_starts: Optional[List[int]] = sequence_starts
 
         # Ground truth related
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
@@ -146,31 +147,6 @@ class Tracker6D:
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
                                   depth_paths: List[Path], frame_i: int):
 
-        cache_folder_SAM2 = self.cache_folder_SAM2
-
-        if self.sequence_starts is not None:
-            assert type(initial_segmentation) is list
-            assert type(initial_image) is list
-            assert len(initial_image) == len(self.sequence_starts)
-            assert len(initial_segmentation) == len(self.sequence_starts)
-            assert frame_i in self.sequence_starts
-
-            sequence_starts_idx = self.sequence_starts.index(frame_i)
-
-            initial_image = initial_image[sequence_starts_idx]
-            initial_segmentation = initial_segmentation[sequence_starts_idx]
-
-            first_image_frame = self.sequence_starts[sequence_starts_idx]
-            if sequence_starts_idx >= len(self.sequence_starts) - 1:
-                last_image_frame = len(self.sequence_starts)
-            else:
-                last_image_frame = self.sequence_starts[sequence_starts_idx + 1]
-
-            images_paths = [images_paths[i] for i in range(len(images_paths))]
-            segmentation_paths = [segmentation_paths[i] for i in range(len(images_paths))]
-
-            cache_folder_SAM2: Path = cache_folder_SAM2 / f'{first_image_frame}_to_{last_image_frame}'
-
         if self.gt_Se3_cam2obj is not None:
 
             if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
@@ -190,7 +166,8 @@ class Tracker6D:
                                         initial_image=initial_image, images_paths=images_paths, video_path=video_path,
                                         segmentation_paths=segmentation_paths, depth_paths=depth_paths,
                                         segmentation_video_path=segmentation_video_path,
-                                        sam2_cache_folder=cache_folder_SAM2, write_folder=self.write_folder)
+                                        sam2_cache_folder=self.cache_folder_SAM2, write_folder=self.write_folder,
+                                        progress=self.progress)
 
     def dump_frame_node_for_glomap(self, frame_idx: int):
 
@@ -322,9 +299,6 @@ class Tracker6D:
 
             if progress is not None:
                 progress(frame_i / float(self.config.input_frames), desc="Filtering frames...")
-
-            if self.sequence_starts is not None and frame_i in self.sequence_starts:
-                pass
 
             self.init_datagraph_frame(frame_i)
 
