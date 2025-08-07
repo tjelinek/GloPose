@@ -80,7 +80,7 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
     first_image_tensor, first_segment_tensor = get_initial_image_and_segment(input_images, segmentations)
 
     tracker = Tracker6D(config, write_folder, images_paths=input_images, segmentation_paths=segmentations,
-                        initial_image=first_image_tensor, initial_segmentation=first_segment_tensor)
+                        initial_image=first_image_tensor, initial_segmentation=first_segment_tensor, progress=progress)
     keyframe_graph = tracker.filter_frames(progress)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
     matching_pairs_global = matching_pairs
