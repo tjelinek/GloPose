@@ -63,19 +63,17 @@ def process_images(input_images):
 
 
 def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='passthrough',
-                                    skip_slider=1000, too_little_slider=0, matchability_slider=.5,
-                                    min_certainty_slider=.95, device_radio='cpu', progress=gr.Progress()):
+                                    matchability_slider=.5, min_certainty_slider=.95, device_radio='cpu',
+                                    progress=gr.Progress()):
     global matching_pairs_global
 
-    input_images = [img for (img, _) in input_images]
-    segmentations = [seg for (seg, _) in segmentations]
+    input_images = [Path(img) for (img, _) in input_images]
+    segmentations = [Path(seg) for (seg, _) in segmentations]
 
     config, write_folder = prepare_config(input_images)
 
     config.device = device_radio
     config.frame_filter = frame_filter
-    config.sift_filter_min_matches = too_little_slider
-    config.sift_filter_good_to_add_matches = skip_slider
     config.min_roma_certainty_threshold = min_certainty_slider
     config.flow_reliability_threshold = matchability_slider
 
@@ -199,22 +197,18 @@ with gr.Blocks() as demo:
 
     with gr.Row():
         _input_gallery = gr.Gallery(label="Input Images")
-        _segmentations_gallery = gr.Gallery(label="White Masks (Segmentations)")
+        _segmentations_gallery = gr.Gallery(label="Masks")
 
     with gr.Row():
         with gr.Column():
             _frame_filter_radio = gr.Radio(["passthrough", "dense_matching"],
                                            label='Frame filter algorithm', value="dense_matching")
         with gr.Column():
-            _skip_slider = gr.Slider(minimum=50, maximum=10000, step=256, label="Skip frame if more than X matches",
-                                     value=500)
-            _too_little_slider = gr.Slider(minimum=0, maximum=1000, step=10, label="Go back if less than X matches",
-                                           value=100)
-        with gr.Column():
             _matchability_slider = gr.Slider(minimum=0., maximum=1., step=0.05,
-                                             label="New match if less than X reliable",
+                                             label="New kf if less than X % mathes reliable",
                                              value=0.5)
-            _reliability_slider = gr.Slider(minimum=0., maximum=1., step=0.05, label="Reliable >= X RoMa certainty",
+        with gr.Column():
+            _reliability_slider = gr.Slider(minimum=0., maximum=1., step=0.05, label="Reliable match certainty",
                                             value=0.95)
         with gr.Column():
             _device_radio_filter = gr.Radio(["cpu", "cuda"], label='Device', value="cuda")
@@ -237,13 +231,13 @@ with gr.Blocks() as demo:
     with gr.Row():
         _vis_plot = gr.Plot(visible=True)
 
-    _input_gallery.upload(process_images, inputs=_input_gallery, outputs=_segmentations_gallery)
+    # _input_gallery.upload(process_images, inputs=_input_gallery, outputs=_segmentations_gallery)
 
     matching_pairs_global = []
 
     _keyframes_button.click(get_keyframes_and_segmentations,
-                            inputs=[_input_gallery, _segmentations_gallery, _frame_filter_radio, _skip_slider,
-                                    _too_little_slider, _matchability_slider, _reliability_slider,
+                            inputs=[_input_gallery, _segmentations_gallery, _frame_filter_radio,
+                                    _matchability_slider, _reliability_slider,
                                     _device_radio_filter],
                             outputs=[_filtered_gallery, _filtered_segmentations])
 
