@@ -108,7 +108,7 @@ class Tracker6D:
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
-                                       segmentation_paths, segmentation_video_path, video_path, depth_paths, 0)
+                                       segmentation_paths, segmentation_video_path, video_path, depth_paths)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -145,7 +145,7 @@ class Tracker6D:
                                   initial_image: torch.Tensor | List[torch.Tensor],
                                   initial_segmentation: torch.Tensor | List[torch.Tensor],
                                   segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
-                                  depth_paths: List[Path], frame_i: int):
+                                  depth_paths: List[Path]):
 
         if self.gt_Se3_cam2obj is not None:
 
