@@ -267,7 +267,7 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
         super().__init__(image_shape, device)
 
         self.image_shape: ImageSize = image_shape
-        if type(input_segmentations) is list:
+        if type(input_segmentations) is not list:
             raise NotImplementedError("Can't work with segmentation video yet")
         self.input_segmentations: List[Path] = input_segmentations
         self.segmentation_channel = segmentation_channel
