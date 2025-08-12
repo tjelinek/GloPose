@@ -16,16 +16,16 @@ def main():
     split = 'train'  # 'evaluation' or 'train'
 
     train_sequences = [
-                'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
-                'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
-                'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
-                'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
-                'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
-            ]
+        'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
+        'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
+        'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
+        'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
+        'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
+    ]
     test_sequences = [
-                'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
-                'AP11', 'AP13', 'MPM10', 'MPM12', 'MPM14', 'SB13',
-            ]
+        'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
+        'AP11', 'AP13', 'MPM10', 'MPM12', 'MPM14', 'SB13',
+    ]
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -136,11 +136,12 @@ def main():
             config.segmentation_provider = 'SAM2'
             config.frame_provider = 'precomputed'
 
-            first_image_tensor, first_segment_tensor = get_initial_image_and_segment(gt_images_list, gt_segmentations_list,
-                                                                                     segmentation_channel=1)
+            first_segment_tensor =\
+                PrecomputedSegmentationProvider.get_initial_segmentation(gt_images_list, gt_segmentations_list,
+                                                                         segmentation_channel=1)
 
             image_h, image_w = (torch.tensor(int(s * config.image_downsample))[None].to(config.device)
-                                for s in first_image_tensor.shape[-2:])
+                                for s in first_segment_tensor.shape[-2:])
 
             gt_pinhole_params = {}
             for i in range(config.input_frames):
@@ -148,10 +149,10 @@ def main():
                 cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.device)
                 gt_pinhole_params[i] = PinholeCamera(cam_K_tensor, obj2cam, image_h, image_w)
 
-            tracker = Tracker6D(config, write_folder, images_paths=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
+            tracker = Tracker6D(config, write_folder, input_images=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
                                 gt_Se3_world2cam=Se3_obj2cam_dict, gt_pinhole_params=gt_pinhole_params,
-                                segmentation_paths=gt_segmentations_list, depth_paths=gt_depths_list,
-                                initial_image=first_image_tensor, initial_segmentation=first_segment_tensor)
+                                input_segmentations=gt_segmentations_list, depth_paths=gt_depths_list,
+                                initial_segmentation=first_segment_tensor)
             tracker.run_pipeline()
 
 

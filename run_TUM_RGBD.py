@@ -5,8 +5,8 @@ from pathlib import Path
 
 from kornia.geometry import Quaternion, Se3
 
+from tracker6d import Tracker6D
 from utils.runtime_utils import parse_args
-from tracker6d import run_tracking_on_sequence
 from utils.general import load_config
 
 
@@ -121,8 +121,8 @@ def main():
         config.frame_provider = 'precomputed'
         config.large_images_results_write_frequency = 10
 
-        run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None,
-                                 gt_Se3_cam2obj=gt_Se3_cam_to_world, images_paths=image_paths)
+        tracker = Tracker6D(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
+        tracker.run_pipeline()
 
         exit()
 
