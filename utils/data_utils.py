@@ -1,12 +1,11 @@
 import csv
 import math
 from pathlib import Path
-from typing import Iterable, Dict, Tuple, cast
+from typing import Iterable, Dict, Tuple, cast, List
 
 import torch
 import trimesh
 import imageio
-from PIL import Image
 from torchvision import transforms
 
 from tracker_config import TrackerConfig
@@ -94,21 +93,9 @@ def load_gt_data(config: TrackerConfig):
     return gt_texture, gt_mesh, gt_rotations, gt_translations
 
 
-def get_initial_image_and_segment(images_list, segmentations_list, segmentation_channel=0) \
-        -> Tuple[torch.Tensor, torch.Tensor]:
-
-    first_segment = Image.open(segmentations_list[0])
-    first_image = Image.open(images_list[0])
-
-    if first_image.mode == 'RGBA':
-        first_image = first_image.convert('RGB')
-
-    first_segment_resized = first_segment.resize(first_image.size, Image.NEAREST)
-    transform = transforms.ToTensor()
-    first_segment_tensor = transform(first_segment_resized)[segmentation_channel].squeeze()
-    first_image_tensor = transform(first_image).squeeze()
-
-    return first_image_tensor, first_segment_tensor
+def is_video_input(input_paths: List[Path]) -> bool:
+    video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
+    return len(input_paths) == 1 and input_paths[0].suffix.lower() in video_extensions
 
 
 def get_scales():

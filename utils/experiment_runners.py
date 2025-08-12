@@ -11,7 +11,8 @@ from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_ca
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 from tracker6d import Tracker6D
-from utils.data_utils import load_texture, load_mesh, get_initial_image_and_segment
+from utils.data_utils import load_texture, load_mesh
+from data_providers.frame_provider import PrecomputedSegmentationProvider
 
 
 def run_on_synthetic_data(config: TrackerConfig, dataset: str, sequence: str, experiment=None, output_folder=None,
@@ -103,7 +104,7 @@ def run_on_synthetic_data(config: TrackerConfig, dataset: str, sequence: str, ex
         write_folder = config.default_results_folder / experiment / dataset / sequence
 
     # Create and run tracker
-    tracker = Tracker6D(config, write_folder, gt_texture=gt_texture, gt_mesh=gt_mesh, images_paths=images_paths,
+    tracker = Tracker6D(config, write_folder, input_images=images_paths, gt_texture=gt_texture, gt_mesh=gt_mesh,
                         gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
     tracker.run_pipeline()
@@ -175,11 +176,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
 
     # Get initial image and segmentation
-    first_image, first_segmentation = get_initial_image_and_segment(
-        gt_images,
-        gt_segs,
-        segmentation_channel=0
-    )
+    first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
+                                                                                  segmentation_channel=0)
 
     # Get camera parameters
     pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.image_downsample,
@@ -207,8 +205,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     config.segmentation_provider = 'SAM2'
 
     # Initialize and run the tracker
-    tracker = Tracker6D(config, write_folder, images_paths=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params, segmentation_paths=gt_segs,
-                        depth_paths=gt_depths, initial_image=first_image, initial_segmentation=first_segmentation)
+    tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
+                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
+                        input_segmentations=gt_segs, depth_paths=gt_depths, initial_segmentation=first_segmentation)
 
     tracker.run_pipeline()

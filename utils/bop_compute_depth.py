@@ -38,7 +38,8 @@ def compute_missing_depths_metric3d(base_bop_folder: Path, relevant_datasets: Li
                 new_depth_folder.mkdir(exist_ok=True)
 
                 all_images = sorted(rgb_folder.iterdir())
-                frame_provider = PrecomputedFrameProvider(config, all_images)
+                frame_provider = PrecomputedFrameProvider(all_images, config.input_frames,
+                                                          config.image_downsample, config.skip_indices, config.device)
 
                 batch_imgs = []
                 batch_K = []

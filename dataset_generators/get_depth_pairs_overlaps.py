@@ -279,7 +279,8 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, input_scale=extrinsics_input_scale,
                                                output_scale=extrinsics_output_scale, device=config.device)
 
-        image_provider = PrecomputedFrameProvider(config, images_paths)
+        image_provider = PrecomputedFrameProvider(images_paths, config.input_frames, config.image_downsample,
+                                                  config.skip_indices, config.device)
         image_shape = image_provider.image_shape
 
         depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths,
@@ -357,10 +358,12 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
 
         N = len(images_paths)
 
-        image_provider = PrecomputedFrameProvider(config, images_paths)
+        image_provider = PrecomputedFrameProvider(images_paths, config.input_frames, config.image_downsample,
+                                                  config.skip_indices, config.device)
         image_shape = image_provider.image_shape
         depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depths_paths)
-        segmentation_provider = PrecomputedSegmentationProvider(config, image_shape, segmentation_paths)
+        segmentation_provider = PrecomputedSegmentationProvider(image_shape, segmentation_paths,
+                                                                skip_indices=config.skip_indices, device=config.device)
 
         valid_ids = []
         depths = []

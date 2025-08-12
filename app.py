@@ -10,11 +10,13 @@ import shutil
 import torch
 
 from data_providers.flow_provider import UFMFlowProviderDirect
+from data_providers.frame_provider import PrecomputedSegmentationProvider
 from pose.glomap import reconstruct_images_using_sfm
 from run_from_webapp import prepare_config
 from tracker6d import Tracker6D
 from tracker_config import TrackerConfig
-from utils.data_utils import get_initial_image_and_segment
+from utils.data_utils import is_video_input
+from utils.image_utils import get_video_length_in_frames
 
 images_for_reconstruction_global = []
 segmentation_for_reconstruction_global = []
@@ -51,7 +53,7 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
     global write_folder_global
 
     input_images = [Path(img) for (img, _) in input_images]
-    segmentations = [Path(seg) for (seg, _) in segmentations]
+    segmentations = [Path(seg) for (seg, _) in segmentations] if segmentations is not None else None
 
     config, write_folder = prepare_config(input_images)
     write_folder_global = write_folder
@@ -61,10 +63,22 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
     config.min_roma_certainty_threshold = min_certainty_slider
     config.flow_reliability_threshold = matchability_slider
 
-    first_image_tensor, first_segment_tensor = get_initial_image_and_segment(input_images, segmentations)
+    if segmentations is not None:
+        first_segment_tensor = PrecomputedSegmentationProvider.get_initial_segmentation(input_images, segmentations,
+                                                                                        device=device_radio)
+    else:
+        first_segment_tensor = None
+        config.segmentation_provider = 'whites'
 
-    tracker = Tracker6D(config, write_folder, images_paths=input_images, segmentation_paths=segmentations,
-                        initial_image=first_image_tensor, initial_segmentation=first_segment_tensor, progress=progress)
+    if is_video_input(input_images):
+        input_images = input_images[0]
+    if segmentations is not None and is_video_input(segmentations):
+        segmentations = segmentations[0]
+
+    config.input_frames = len(input_images) if type(input_images) is list else get_video_length_in_frames(input_images)
+
+    tracker = Tracker6D(config, write_folder, input_images=input_images, input_segmentations=segmentations,
+                        initial_segmentation=first_segment_tensor, progress=progress)
     keyframe_graph = tracker.filter_frames(progress)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
 

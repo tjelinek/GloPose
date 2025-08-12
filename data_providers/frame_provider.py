@@ -1,7 +1,7 @@
 import shutil
 from abc import abstractmethod, ABC
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import cv2
 import imageio
@@ -15,7 +15,7 @@ from torchvision.io import decode_image, ImageReadMode
 
 from data_structures.keyframe_buffer import FrameObservation
 from tracker_config import TrackerConfig
-from utils.data_utils import get_scale_from_meter
+from utils.data_utils import get_scale_from_meter, is_video_input
 from utils.general import erode_segment_mask2
 from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length
 
@@ -28,6 +28,7 @@ class SyntheticDataProvider:
 
         self.image_shape: ImageSize = config.rendered_image_shape
         self.device = config.device
+        self.num_frames = config.input_frames
 
         faces = gt_mesh.faces
         self.gt_texture = gt_texture
@@ -63,12 +64,16 @@ class SyntheticDataProvider:
 
 
 class FrameProvider(ABC):
-    def __init__(self, downsample_factor, config: TrackerConfig):
+    def __init__(self, downsample_factor, sequence_length: int = None, skip_indices: int = 1, device: str = 'cpu'):
         self.downsample_factor = downsample_factor
         self.image_shape: Optional[ImageSize] = None
-        self.device = config.device
-        self.sequence_length: int = config.input_frames
-        self.skip_indices: int = config.skip_indices
+        self.device = device
+        self.sequence_length: int = sequence_length if sequence_length is not None else self.get_input_length()
+        self.skip_indices: int = skip_indices
+
+    @abstractmethod
+    def get_input_length(self):
+        pass
 
     @abstractmethod
     def next_image(self, frame) -> torch.Tensor:
@@ -82,8 +87,7 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
-    def save_images(self, output_path: Path, images_paths: Optional[List[Path]] = None,
-                    progress: 'gradio.Progress' = None) -> List[Path]:
+    def save_images(self, output_path: Path, progress: 'gradio.Progress' = None) -> List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
 
@@ -97,11 +101,8 @@ class FrameProvider(ABC):
             img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
 
             # Define the output file name
-            if images_paths is not None:
-                output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
-                                             f"{Path(images_paths[frame_i * self.skip_indices]).stem}.jpg")
-            else:
-                output_file = output_path / f"{frame_i * self.skip_indices:05d}.jpg"
+            output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
+                                         f"{self.get_n_th_image_name(frame_i * self.skip_indices).stem}.jpg")
 
             print(f'Cached SAM2 file {output_file}')
 
@@ -115,7 +116,7 @@ class FrameProvider(ABC):
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
     def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
-        FrameProvider.__init__(self, config.image_downsample, config)
+        FrameProvider.__init__(self, config.image_downsample, config.input_frames, config.skip_indices, config.device)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_image(self, frame_id):
@@ -129,31 +130,36 @@ class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         return Path(f"{frame_i * self.skip_indices}.png")
 
+    def get_input_length(self):
+        assert super(SyntheticDataProvider).num_frames
+
 
 class PrecomputedFrameProvider(FrameProvider):
 
-    def __init__(self, config: TrackerConfig, images_paths: Optional[List[Path]], video_path: Optional[Path] = None,
-                 **kwargs):
-        super().__init__(config.image_downsample, config)
+    def __init__(self, input_images: Union[List[Path], Path], num_frames: Optional[int] = None,
+                 image_downsample: float = 1.0, skip_indices: int = 1, device: str = 'cpu', **kwargs):
+        super().__init__(image_downsample, num_frames, skip_indices, device)
 
-        assert images_paths is not None or video_path is not None
+        assert type(input_images) is list or isinstance(input_images, Path)
+
+        self.input_are_images: bool = type(input_images) is list
         if self.sequence_length is None:
-            if images_paths is not None:
-                self.sequence_length = len(images_paths)
-            elif video_path is not None:
-                self.sequence_length = get_video_length(video_path)
+            if self.input_are_images:
+                self.sequence_length = len(input_images)
+            else:
+                assert is_video_input(input_images)
+                self.sequence_length = get_video_length(input_images)
 
-        ref_path = images_paths[0] if images_paths is not None else video_path
+        ref_path = input_images[0] if self.input_are_images else input_images
         self.image_shape = get_target_shape(ref_path, self.downsample_factor)
 
-        self.images_paths: Optional[List[Path]] = images_paths
-        self.video_path: Optional[Path] = video_path
+        self.input_images: Union[List[Path], Path] = input_images
 
     def get_n_th_image_name(self, frame_i: int) -> Path:
-        if self.images_paths is not None:
-            return Path(self.images_paths[frame_i * self.skip_indices].name)
+        if self.input_are_images:
+            return Path(self.input_images[frame_i * self.skip_indices].name)
         else:
-            return Path(f"{self.video_path.stem}_{frame_i * self.skip_indices}.png")
+            return Path(f"{self.input_images.stem}_{frame_i * self.skip_indices}.png")
 
     @staticmethod
     def load_and_downsample_image(img_path: Path, downsample_factor: float = 1.0, device: str = 'cpu') -> torch.Tensor:
@@ -170,11 +176,19 @@ class PrecomputedFrameProvider(FrameProvider):
                                           align_corners=False)
         return image_downsampled
 
-    def next_image(self, frame_i) -> torch.Tensor:
-        if self.images_paths is not None:
-            frame = imageio.v3.imread(self.images_paths[frame_i * self.skip_indices])
+    def get_input_length(self):
+        if self.input_are_images:
+            # For image list, return the number of images
+            return len(self.input_images) // self.skip_indices
         else:
-            frame = get_nth_video_frame(self.video_path, frame_i * self.skip_indices)
+            # For video, return the total frame count
+            return get_video_length(self.input_images) // self.skip_indices
+
+    def next_image(self, frame_i) -> torch.Tensor:
+        if self.input_are_images:
+            frame = imageio.v3.imread(self.input_images[frame_i * self.skip_indices])
+        else:
+            frame = get_nth_video_frame(self.input_images, frame_i * self.skip_indices)
 
         image_tensor = transforms.ToTensor()(frame)[None, :3].to(self.device)  # RGBA -> RGB
         image_downsampled = self.downsample_image(image_tensor, self.downsample_factor)
@@ -182,8 +196,8 @@ class PrecomputedFrameProvider(FrameProvider):
         return image_downsampled
 
     def next_image_255(self, frame_i) -> torch.Tensor:
-        if self.images_paths is not None:
-            frame = decode_image(str(self.images_paths[frame_i * self.skip_indices]), mode=ImageReadMode.UNCHANGED)
+        if self.input_are_images is not None:
+            frame = decode_image(str(self.input_images[frame_i * self.skip_indices]), mode=ImageReadMode.UNCHANGED)
         else:
             raise NotImplementedError()
 
@@ -194,25 +208,21 @@ class PrecomputedFrameProvider(FrameProvider):
         return image_downsampled
 
     def get_intrinsics_for_frame(self, frame_i):
-        if self.images_paths is not None:
-            return get_intrinsics_from_exif(self.images_paths[frame_i]).to(self.device)
+        if self.input_are_images is not None:
+            return get_intrinsics_from_exif(self.input_images[frame_i]).to(self.device)
         else:  # We can not read it from a video
             raise ValueError("Can not gen cam intrinsics from a video")
 
 
 ##############################
 class SegmentationProvider(ABC):
-    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
+    def __init__(self, image_shape: ImageSize, device: str = 'cpu'):
         self.image_shape: ImageSize = image_shape
-        self.device = config.device
-        self.config = config
+        self.device = device
 
     @abstractmethod
     def next_segmentation(self, frame: int, input_image: torch.Tensor) -> torch.Tensor:
         pass
-
-    def get_sequence_length(self):
-        return self.config.input_frames
 
     @abstractmethod
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
@@ -221,12 +231,12 @@ class SegmentationProvider(ABC):
 
 class WhiteSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape: ImageSize, **kwargs):
-        super().__init__(image_shape, config)
-        self.skip_indices = config.skip_indices
+    def __init__(self, image_shape: ImageSize, skip_indices: int = 1, device: str = 'cpu', **kwargs):
+        super().__init__(image_shape, device)
+        self.skip_indices = skip_indices
 
     def next_segmentation(self, frame_i, **kwargs) -> torch.Tensor:
-        return torch.ones((1, 1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float).to(self.device)
+        return torch.ones((1, 1, self.image_shape.height, self.image_shape.width), dtype=torch.float).to(self.device)
 
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
         return Path(f"{frame_i * self.skip_indices}.png")
@@ -235,7 +245,7 @@ class WhiteSegmentationProvider(SegmentationProvider):
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i):
-        SegmentationProvider.__init__(self, image_shape, config)
+        SegmentationProvider.__init__(self, image_shape, config.device)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
         self.skip_indices = config.skip_indices
 
@@ -244,7 +254,7 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
         return segmentation
 
     def get_sequence_length(self) -> int:
-        return self.config.input_frames
+        return super(SyntheticDataProvider).num_frames
 
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
         return Path(f"{frame_i * self.skip_indices}.png")
@@ -252,25 +262,44 @@ class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider)
 
 class PrecomputedSegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape: ImageSize, segmentation_paths: List[Path], **kwargs):
-        super().__init__(image_shape, config)
+    def __init__(self, image_shape: ImageSize, input_segmentations: List[Path] | Path, segmentation_channel: int = 0,
+                 skip_indices: int = 1, device: str = 'cpu', **kwargs):
+        super().__init__(image_shape, device)
 
         self.image_shape: ImageSize = image_shape
-        self.segmentations_paths: List[Path] = segmentation_paths
-        self.skip_indices = config.skip_indices
+        if type(input_segmentations) is list:
+            raise NotImplementedError("Can't work with segmentation video yet")
+        self.input_segmentations: List[Path] = input_segmentations
+        self.segmentation_channel = segmentation_channel
+        self.skip_indices = skip_indices
 
     def get_sequence_length(self):
-        return len(self.segmentations_paths)
+        return len(self.input_segmentations)
 
     def next_segmentation(self, frame_i, **kwargs):
-        return self.load_and_downsample_segmentation(self.segmentations_paths[frame_i * self.skip_indices],
-                                                     self.image_shape, self.device)
+        return self.load_and_downsample_segmentation(self.input_segmentations[frame_i * self.skip_indices],
+                                                     self.image_shape, self.segmentation_channel, device=self.device)
 
     def get_n_th_segmentation_name(self, frame_i: int) -> Path:
-        return self.segmentations_paths[frame_i * self.skip_indices]
+        return self.input_segmentations[frame_i * self.skip_indices]
 
     @staticmethod
-    def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize, device: str = 'cpu') \
+    def get_initial_segmentation(input_images: List[Path] | Path = None, input_segmentations: List[Path] | Path = None,
+                                 segmentation_channel=0, image_downsample: float = 1.,
+                                 device: str = 'cpu') -> torch.Tensor:
+
+        image_shape = get_target_shape(input_images[0], image_downsample)
+
+        segmentation_provider = PrecomputedSegmentationProvider(image_shape, input_segmentations, device=device,
+                                                                segmentation_channel=segmentation_channel)
+
+        first_segment_tensor = segmentation_provider.next_segmentation(0).squeeze()
+
+        return first_segment_tensor
+
+    @staticmethod
+    def load_and_downsample_segmentation(segmentation_path: Path, image_size: ImageSize, segmentation_channel: int = 0,
+                                         device: str = 'cpu') \
             -> torch.Tensor:
         # Load segmentation
         segmentation = imageio.v3.imread(segmentation_path)
@@ -280,7 +309,7 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
         segmentation_p = torch.from_numpy(segmentation).to(device).permute(2, 0, 1)[None]
         segmentation_resized = F.interpolate(segmentation_p, size=[image_size.height, image_size.width], mode='nearest')
-        segmentation_mask = segmentation_resized[:, [1]].to(torch.bool).to(torch.float32)
+        segmentation_mask = segmentation_resized[:, [segmentation_channel]].to(torch.bool).to(torch.float32)
 
         return segmentation_mask
 
@@ -289,8 +318,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
                  image_provider: FrameProvider, write_folder: Path,
-                 sam2_images_paths: List[Path], sam2_cache_folder: Path, progress: 'gradio.Progress' = None, **kwargs):
-        super().__init__(image_shape, config)
+                 sam2_cache_folder: Path, progress: 'gradio.Progress' = None, **kwargs):
+        super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None
 
@@ -326,7 +355,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
-            image_provider.save_images(sam2_tmp_path, sam2_images_paths, progress)
+            image_provider.save_images(sam2_tmp_path, progress)
 
             state = self.predictor.init_state(str(sam2_tmp_path),
                                               offload_video_to_cpu=True,
@@ -342,7 +371,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             for i, (_, out_obj_ids, out_mask_logits) in enumerate(self.predictor.propagate_in_video(state)):
 
                 if progress is not None:
-                    progress(i / float(len(sam2_images_paths)), desc="SAM2 image tracking...")
+                    progress(i / float(image_provider.sequence_length), desc="SAM2 image tracking...")
 
                 out_frame_idx = i * self.skip_indices
                 self.past_predictions[out_frame_idx] = (out_frame_idx, out_obj_ids, out_mask_logits)
@@ -402,7 +431,10 @@ class FrameProviderAll:
         if config.frame_provider == 'synthetic':
             self.frame_provider = SyntheticFrameProvider(config, **kwargs)
         elif config.frame_provider == 'precomputed':
-            self.frame_provider = PrecomputedFrameProvider(config, **kwargs)
+            self.frame_provider = PrecomputedFrameProvider(num_frames=config.input_frames,
+                                                           image_downsample=config.image_downsample,
+                                                           skip_indices=config.skip_indices,
+                                                           device=config.device, **kwargs)
         else:
             raise ValueError(f"Unknown value of 'frame_provider': {config.frame_provider}")
 
@@ -421,12 +453,12 @@ class FrameProviderAll:
         if config.segmentation_provider == 'synthetic':
             self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.segmentation_provider == 'precomputed':
-            self.segmentation_provider = PrecomputedSegmentationProvider(config, self.image_shape, **kwargs)
+            self.segmentation_provider = PrecomputedSegmentationProvider(device=config.device,
+                                                                         image_shpape=self.image_shape, **kwargs)
         elif config.segmentation_provider == 'whites':
-            self.segmentation_provider = WhiteSegmentationProvider(config, self.image_shape, **kwargs)
+            self.segmentation_provider = WhiteSegmentationProvider(self.image_shape, config.skip_indices, config.device,
+                                                                   **kwargs)
         elif config.segmentation_provider == 'SAM2':
-
-            images_paths = kwargs.get('images_paths')
 
             if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
@@ -439,7 +471,7 @@ class FrameProviderAll:
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   self.frame_provider,
-                                                                  sam2_images_paths=images_paths, **kwargs)
+                                                                  **kwargs)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
 

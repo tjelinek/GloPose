@@ -15,7 +15,7 @@ from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions
 from tqdm import tqdm
 
-from data_providers.flow_provider import PrecomputedFlowProviderDirect
+from data_providers.flow_provider import FlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from utils.conversions import Se3_to_Rigid3d
 from utils.general import colmap_K_params_vec
@@ -24,7 +24,7 @@ from utils.image_utils import get_intrinsics_from_exif
 
 def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], matching_pairs: List[Tuple[int, int]],
                                  init_with_first_two_images: bool, mapper: str,
-                                 match_provider: PrecomputedFlowProviderDirect, match_sample_size: int,
+                                 match_provider: FlowProviderDirect, match_sample_size: int,
                                  colmap_working_dir, camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
                                  progress: gradio.Progress = None) \
         -> Optional[pycolmap.Reconstruction]:
@@ -45,7 +45,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
 
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
     matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
-    for pair_idx, (img1_pth, img2_pth), (seg1_pth, seg2_pth) in tqdm(enumerate(zip(image_pairs, segmentation_pairs))):
+    for pair_idx, ((img1_pth, img2_pth), (seg1_pth, seg2_pth)) in tqdm(enumerate(zip(image_pairs, segmentation_pairs))):
 
         img1_pth = Path(img1_pth)
         img2_pth = Path(img2_pth)
@@ -65,8 +65,8 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
 
         seg1_size = ImageSize(h1, w1)
         seg2_size = ImageSize(h2, w2)
-        img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size, device)
-        img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size, device)
+        img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size, device=device)
+        img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size, device=device)
 
         src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
             match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),

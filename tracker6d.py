@@ -29,12 +29,11 @@ from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 
 class Tracker6D:
 
-    def __init__(self, config: TrackerConfig, write_folder: Path, gt_texture=None, gt_mesh=None,
-                 images_paths: Optional[List[Path]] = None, video_path: Optional[Path] = None,
-                 gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None, gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
+    def __init__(self, config: TrackerConfig, write_folder: Path, input_images: Union[List[Path], Path],
+                 gt_texture=None, gt_mesh=None, gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None,
+                 gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
-                 segmentation_video_path: Optional[Path] = None, segmentation_paths: List[Path] = None,
-                 depth_paths: Optional[List[Path]] = None, initial_image: torch.Tensor | List[torch.Tensor] = None,
+                 input_segmentations: Union[List[Path], Path] = None, depth_paths: Optional[List[Path]] = None,
                  initial_segmentation: torch.Tensor | List[torch.Tensor] = None, progress: gradio.Progress = None):
 
         self.write_folder: Path = write_folder
@@ -60,11 +59,9 @@ class Tracker6D:
                 gt_Se3_world2cam = {i // skip: gt_Se3_world2cam[i] for i in used_indices if i in gt_Se3_world2cam}
 
         # Paths
-        self.images_paths: Optional[List[Path]] = images_paths
-        self.segmentation_paths: Optional[List[Path]] = segmentation_paths
+        self.input_images: Union[List[Path], Path] = input_images
+        self.input_segmentations: Optional[Union[List[Path], Path]] = input_segmentations
         self.depth_paths: Optional[List[Path]] = depth_paths
-        self.video_path: Optional[Path] = video_path
-        self.segmentation_video_path: Optional[Path] = segmentation_video_path
 
         # Ground truth related
         self.gt_Se3_cam2obj: Optional[Dict[int, Se3]] = gt_Se3_cam2obj
@@ -72,7 +69,6 @@ class Tracker6D:
         self.gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = gt_pinhole_params
 
         # Initialization stuff
-        self.initial_image: torch.Tensor = initial_image
         self.initial_segmentation: torch.Tensor = initial_segmentation
 
         # Cameras
@@ -107,8 +103,8 @@ class Tracker6D:
         self.colmap_image_path.mkdir(exist_ok=True, parents=True)
         self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
-        self.initialize_frame_provider(gt_mesh, gt_texture, images_paths, initial_image, initial_segmentation,
-                                       segmentation_paths, segmentation_video_path, video_path, depth_paths)
+        self.initialize_frame_provider(gt_mesh, gt_texture, input_images, initial_segmentation,
+                                       input_segmentations, depth_paths)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -141,11 +137,9 @@ class Tracker6D:
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
 
-    def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor, images_paths: List[Path],
-                                  initial_image: torch.Tensor | List[torch.Tensor],
-                                  initial_segmentation: torch.Tensor | List[torch.Tensor],
-                                  segmentation_paths: List[Path], segmentation_video_path: Path, video_path: Path,
-                                  depth_paths: List[Path]):
+    def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor,
+                                  images_paths: List[Path] | Path, initial_segmentation: torch.Tensor,
+                                  input_segmentations: List[Path] | Path, depth_paths: List[Path]):
 
         if self.gt_Se3_cam2obj is not None:
 
@@ -162,10 +156,8 @@ class Tracker6D:
 
         self.tracker = FrameProviderAll(self.config, gt_mesh=gt_mesh, gt_texture=gt_texture,
                                         gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
-                                        initial_segmentation=initial_segmentation,
-                                        initial_image=initial_image, images_paths=images_paths, video_path=video_path,
-                                        segmentation_paths=segmentation_paths, depth_paths=depth_paths,
-                                        segmentation_video_path=segmentation_video_path,
+                                        initial_segmentation=initial_segmentation, input_images=images_paths,
+                                        input_segmentations=input_segmentations, depth_paths=depth_paths,
                                         sam2_cache_folder=self.cache_folder_SAM2, write_folder=self.write_folder,
                                         progress=self.progress)
 
@@ -295,10 +287,11 @@ class Tracker6D:
         return images_paths, segmentation_paths, matching_pairs
 
     def filter_frames(self, progress: gradio.Progress = None) -> nx.DiGraph:
-        for frame_i in range(0, self.config.input_frames):
+
+        for frame_i in range(0, self.tracker.frame_provider.get_input_length()):
 
             if progress is not None:
-                progress(frame_i / float(self.config.input_frames), desc="Filtering frames...")
+                progress(frame_i / float(self.tracker.frame_provider.get_input_length()), desc="Filtering frames...")
 
             self.init_datagraph_frame(frame_i)
 
@@ -374,24 +367,22 @@ class Tracker6D:
 
         frame_node.image_filename = Path(self.tracker.get_n_th_image_name(frame_i))
 
-        if self.segmentation_paths is not None:
-            frame_node.segmentation_filename = Path(self.segmentation_paths[frame_i * self.config.skip_indices].name)
-        elif self.segmentation_video_path is not None:
-            frame_node.segmentation_filename = Path(f'{self.segmentation_video_path.stem}_'
-                                                    f'{frame_i * self.config.skip_indices}.png')
+        if type(self.input_segmentations) is list:
+            frame_node.segmentation_filename = Path(self.input_segmentations[frame_i * self.config.skip_indices].name)
 
     def evaluate_sam(self):
 
         from data_providers.frame_provider import PrecomputedSegmentationProvider
         import numpy as np
 
-        precomputed_segmentation_provider = PrecomputedSegmentationProvider(self.config, self.tracker.image_shape,
-                                                                            self.segmentation_paths)
+        precomputed_segmentation_provider = PrecomputedSegmentationProvider(self.tracker.image_shape,
+                                                                            self.input_segmentations,
+                                                                            skip_indices=self.config.skip_indices,
+                                                                            device=self.config.device)
 
         sam2_segmentation_provider = SAM2SegmentationProvider(self.config, self.tracker.image_shape,
                                                               self.initial_segmentation, self.tracker.frame_provider,
-                                                              self.write_folder, self.images_paths,
-                                                              self.cache_folder_SAM2)
+                                                              self.write_folder, self.cache_folder_SAM2)
 
         iou_list = []
         for frame_i in range(self.config.input_frames):
@@ -415,7 +406,3 @@ class Tracker6D:
 
         update_iou_frame_statistics(csv_per_frame_iou_stats, iou_np, self.config.dataset, self.config.sequence)
 
-
-def run_tracking_on_sequence(config: TrackerConfig, write_folder: Path, **kwargs):
-    sfb = Tracker6D(config, write_folder, **kwargs)
-    sfb.run_pipeline()

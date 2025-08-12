@@ -4,10 +4,9 @@ from pathlib import Path
 from torchvision.utils import save_image
 from tqdm import tqdm
 
-from data_providers.frame_provider import FrameProviderAll
+from data_providers.frame_provider import FrameProviderAll, PrecomputedSegmentationProvider
 from tracker_config import TrackerConfig
 from utils.bop_challenge import load_gt_images, load_gt_segmentations
-from utils.data_utils import get_initial_image_and_segment
 from utils.image_utils import overlay_mask_torch
 
 
@@ -43,11 +42,8 @@ def process_bop_sequences(dataset, splits):
             images = load_gt_images(sequence / 'rgb')
             segs = load_gt_segmentations(sequence / 'mask_visib')
 
-            first_image, first_segmentation = get_initial_image_and_segment(
-                images,
-                segs,
-                segmentation_channel=0
-            )
+            first_image, first_segmentation = \
+                PrecomputedSegmentationProvider.get_initial_segmentation(images, segs, segmentation_channel=0)
 
             process_sequence(first_image, first_segmentation, images, segs, sequence, True)
 
@@ -70,11 +66,7 @@ def process_ho3d_sequences(splits):
             images = [file for file in sorted(image_folder.iterdir()) if file.is_file()]
             segs = [file for file in sorted(segmentation_folder.iterdir()) if file.is_file()]
 
-            first_image, first_segmentation = get_initial_image_and_segment(
-                images,
-                segs,
-                segmentation_channel=1
-            )
+            first_image, first_segmentation = get_initial_segmentation(images, segs, segmentation_channel=1)
 
             process_sequence(first_image, first_segmentation, images, segs, sequence)
 

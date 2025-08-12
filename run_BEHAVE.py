@@ -7,9 +7,9 @@ from pathlib import Path
 from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
+from tracker6d import Tracker6D
 from utils.image_utils import get_nth_video_frame
 from utils.runtime_utils import parse_args
-from tracker6d import run_tracking_on_sequence
 from utils.general import load_config
 
 
@@ -85,11 +85,9 @@ def main():
     first_segment_tensor = transform(first_segment_resized).squeeze()
     first_image_tensor = transform(first_image).squeeze()
 
-    run_tracking_on_sequence(config, write_folder, gt_texture=None, gt_mesh=None, gt_Se3_cam2obj=gt_Se3_cam2obj,
-                             gt_Se3_world2cam=gt_Se3_world2cam, video_path=video_path,
-                             segmentation_video_path=object_seg_video_path, initial_segmentation=first_segment_tensor,
-                             initial_image=first_image_tensor)
-
+    tracker = Tracker6D(config, write_folder, video_path, gt_Se3_cam2obj=gt_Se3_cam2obj, gt_Se3_world2cam=gt_Se3_world2cam,
+                        initial_segmentation=first_segment_tensor)
+    tracker.run_pipeline()
 
 
 if __name__ == "__main__":
