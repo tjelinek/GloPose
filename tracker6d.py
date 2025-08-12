@@ -1,6 +1,7 @@
 import copy
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
@@ -286,12 +287,16 @@ class Tracker6D:
 
         return images_paths, segmentation_paths, matching_pairs
 
-    def filter_frames(self, progress: gradio.Progress = None) -> nx.DiGraph:
+    def filter_frames(self, progress: gradio.Progress = None, stop_event: threading.Event = None) -> nx.DiGraph:
 
         for frame_i in range(0, self.tracker.frame_provider.get_input_length()):
 
             if progress is not None:
                 progress(frame_i / float(self.tracker.frame_provider.get_input_length()), desc="Filtering frames...")
+
+            if stop_event is not None and stop_event.is_set():
+                print('Computation stopped by the user.')
+                return self.frame_filter.get_keyframe_graph()
 
             self.init_datagraph_frame(frame_i)
 

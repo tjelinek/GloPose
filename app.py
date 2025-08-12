@@ -79,7 +79,7 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
 
     tracker = Tracker6D(config, write_folder, input_images=input_images, input_segmentations=segmentations,
                         initial_segmentation=first_segment_tensor, progress=progress)
-    keyframe_graph = tracker.filter_frames(progress)
+    keyframe_graph = tracker.filter_frames(progress, _stop_event)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
 
     matching_pairs_global = matching_pairs
@@ -228,7 +228,8 @@ with gr.Blocks() as demo:
         _device_radio_matcher = gr.Radio(["cpu", "cuda"], label='Device', value="cuda")
         _num_features = gr.Slider(minimum=1024, maximum=1024 * 10, step=256, label="Number of SIFT Features",
                                   value=8192)
-        _glotrack_button = gr.Button("GloTrack")
+        _reconstruction_button = gr.Button("Run Reconstruction")
+        # _reconstruction_stop_button = gr.Button("Stop Reconstruction")
 
     with gr.Row():
         _vis_plot = gr.Plot(visible=True)
@@ -241,9 +242,13 @@ with gr.Blocks() as demo:
                                     _device_radio_filter],
                             outputs=[_filtered_gallery, _filtered_segmentations])
 
-    _glotrack_button.click(on_glotrack_click, inputs=[_filtered_gallery, _filtered_segmentations,
-                                                      _mapper_radio, _matcher_radio, _num_features,
-                                                      _device_radio_matcher],
-                           outputs=_vis_plot)
+    _reconstruction_button.click(on_glotrack_click, inputs=[_filtered_gallery, _filtered_segmentations,
+                                                            _mapper_radio, _matcher_radio, _num_features,
+                                                            _device_radio_matcher],
+                                 outputs=_vis_plot)
+
+    _stop_button.click(
+        fn=stop_computation,
+    )
 
 demo.launch(share=True)
