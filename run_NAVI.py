@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, List
+from typing import List
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from tracker6d import Tracker6D
@@ -11,34 +11,27 @@ from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-def get_handal_sequences() -> Tuple[List[Path], List[Path]]:
-    dataset_path = Path("/mnt/personal/jelint19/data/HANDAL")
+def get_navi_sequences() -> List[Path]:
 
-    train_sequences = []
-    test_sequences = []
+    dataset_path = Path('/mnt/personal/jelint19/data/NAVI/navi_v1.5')
+    video_sequences = []
 
-    for category_dir in dataset_path.iterdir():
-        if not category_dir.is_dir():
-            continue
+    # Iterate through all object directories
+    for object_dir in dataset_path.iterdir():
+        if object_dir.is_dir():
+            object_id = object_dir.name
 
-        category_name = category_dir.name
+            # Look for video folders within each object directory
+            for item in object_dir.iterdir():
+                if item.is_dir() and item.name.startswith('video-'):
+                    video_folder_name = item.name
+                    video_path = f"{object_id}/{video_folder_name}"
+                    video_sequences.append(video_path)
 
-        train_dir = category_dir / "train"
-        if train_dir.exists():
-            for sequence_dir in train_dir.iterdir():
-                if sequence_dir.is_dir():
-                    train_sequences.append(f"{category_name}/{sequence_dir.name}")
-
-        test_dir = category_dir / "test"
-        if test_dir.exists():
-            for sequence_dir in test_dir.iterdir():
-                if sequence_dir.is_dir():
-                    test_sequences.append(f"{category_name}/{sequence_dir.name}")
-
-    return train_sequences, test_sequences
+    return sorted(video_sequences)
 
 
-HANDAL_TRAIN_SEQUENCES, HANDAL_TEST_SEQUENCES = get_handal_sequences()
+NAVI_SEQUENCES = get_navi_sequences()
 
 
 def main():
