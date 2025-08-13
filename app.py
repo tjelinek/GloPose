@@ -1,3 +1,4 @@
+import math
 import threading
 from typing import Optional
 
@@ -76,6 +77,7 @@ def get_keyframes_and_segmentations(input_images, segmentations, frame_filter='p
         segmentations = segmentations[0]
 
     config.input_frames = len(input_images) if type(input_images) is list else get_video_length_in_frames(input_images)
+    config.skip_indices = math.ceil(config.input_frames / 200)
 
     tracker = Tracker6D(config, write_folder, input_images=input_images, input_segmentations=segmentations,
                         initial_segmentation=first_segment_tensor, progress=progress)
