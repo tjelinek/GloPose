@@ -87,7 +87,8 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
-    def save_images(self, output_path: Path, progress: 'gradio.Progress' = None) -> List[Path]:
+    def save_images(self, output_path: Path, only_frame_index: bool = False, progress: 'gradio.Progress' = None) ->\
+                    List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
 
@@ -100,9 +101,18 @@ class FrameProvider(ABC):
             img = transform_to_pil(img)
             img = img.resize((self.image_shape.width, self.image_shape.height), Image.NEAREST)
 
+            # if images_paths is not None:
+            #     output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
+            #                                  f"{Path(images_paths[frame_i * self.skip_indices]).stem}.jpg")
+            # else:
+            #     output_file = output_path / f"{frame_i * self.skip_indices:05d}.jpg"
+
             # Define the output file name
-            output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
-                                         f"{self.get_n_th_image_name(frame_i * self.skip_indices).stem}.jpg")
+            if only_frame_index:
+                output_file = output_path / f"{frame_i * self.skip_indices:05d}.jpg"
+            else:
+                output_file = output_path / (f"{frame_i * self.skip_indices:05d}_"
+                                             f"{self.get_n_th_image_name(frame_i * self.skip_indices).stem}.jpg")
 
             print(f'Cached SAM2 file {output_file}')
 
@@ -355,7 +365,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
 
-            image_provider.save_images(sam2_tmp_path, progress)
+            image_provider.save_images(sam2_tmp_path, True, progress)
 
             state = self.predictor.init_state(str(sam2_tmp_path),
                                               offload_video_to_cpu=True,
