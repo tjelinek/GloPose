@@ -3,6 +3,8 @@ import subprocess
 from enum import Enum
 from pathlib import Path
 
+from run_NAVI import get_navi_sequences
+
 
 class Datasets(Enum):
     SyntheticObjects = "SyntheticObjects"
