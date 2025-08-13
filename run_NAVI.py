@@ -1,17 +1,19 @@
+import json
 from pathlib import Path
-from typing import List
+from typing import List, Dict
+
+import torch
+from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from tracker6d import Tracker6D
-from utils.bop_challenge import add_extrinsics_to_pinhole_params, load_gt_images, load_gt_segmentations, \
-                                 extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
 
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-def get_navi_sequences() -> List[Path]:
+def get_navi_sequences() -> List[str]:
 
     dataset_path = Path('/mnt/personal/jelint19/data/NAVI/navi_v1.5')
     video_sequences = []
@@ -35,21 +37,17 @@ NAVI_SEQUENCES = get_navi_sequences()
 
 
 def main():
-    dataset = 'handal_native'
+    dataset = 'navi'
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = HANDAL_TEST_SEQUENCES[4:5]
+        sequences = NAVI_SEQUENCES[4:5]
 
     for obj_type_sequence in sequences:
         with (exception_logger()):
 
-            if obj_type_sequence in HANDAL_TRAIN_SEQUENCES:
-                sequence_type = 'train'
-            elif obj_type_sequence in HANDAL_TEST_SEQUENCES:
-                sequence_type = 'test'
-            else:
+            if obj_type_sequence not in NAVI_SEQUENCES:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")
 
             obj_name, sequence = obj_type_sequence.split('/')
@@ -59,59 +57,99 @@ def main():
             output_folder = args.output_folder
 
             config.experiment_name = experiment_name
-            config.sequence = sequence
+            config.sequence = f'{obj_name}_{sequence}'
             config.dataset = dataset
-            config.image_downsample = 0.5
+            config.image_downsample = 1.0
             config.large_images_results_write_frequency = 5
-
             config.skip_indices *= 1
-
-            config.special_hash = obj_name.replace('handal_dataset_', '')
+            config.object_id = obj_name
 
             # Determine output folder
             if output_folder is not None:
-                write_folder = Path(output_folder) / dataset / f'{config.special_hash}_{sequence}'
+                write_folder = Path(output_folder) / dataset / f'{sequence}'
             else:
-                write_folder = config.default_results_folder / experiment_name / dataset / \
-                               f'{config.special_hash}_{sequence}'
+                write_folder = config.default_results_folder / experiment_name / dataset / f'{sequence}'
 
-            base_folder = config.default_data_folder / 'HANDAL' / obj_name / sequence_type / sequence
-            image_folder = base_folder / 'rgb'
-            segmentation_folder = base_folder / 'mask_visib'
-            scene_gt_path = base_folder / 'scene_gt.json'
-            scene_cam_path = base_folder / 'scene_camera.json'
+            base_folder = config.default_data_folder / 'NAVI' / 'navi_v1.5' / obj_name / sequence
+            image_folder = base_folder / 'images'
+            segmentation_folder = base_folder / 'masks'
+            depths_folder = base_folder / 'depth'
 
-            gt_images = load_gt_images(image_folder)
-            gt_segs = load_gt_segmentations(segmentation_folder)
+            gt_path = base_folder / 'annotations.json'
 
-            cam_scale = 1.0
-            dict_gt_Se3_cam2obj = extract_gt_Se3_cam2obj(scene_gt_path, cam_scale, device=config.device)
-            object_id = extract_object_id(scene_gt_path)[1]
-            config.object_id = object_id
+            gt_images = load_images_navi(image_folder)
+            gt_segs = load_images_navi(segmentation_folder)
+            gt_depths = load_images_navi(depths_folder)
 
-            valid_frames = sorted(set(gt_images.keys()) & set(gt_segs.keys()) & set(dict_gt_Se3_cam2obj.keys()))
+            gt_pinhole_params = extract_cam_data_navi(gt_path, config.image_downsample, config.device)
+
+            valid_frames = sorted(set(gt_images.keys()) & set(gt_segs.keys()) & set(gt_pinhole_params.keys()))
 
             gt_images = [gt_images[i] for i in valid_frames]
             gt_segs = [gt_segs[i] for i in valid_frames]
+            gt_depths = [gt_depths[i] for i in valid_frames]
 
-            dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
-            gt_Se3_world2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
+            gt_pinhole_params = reindex_frame_dict(gt_pinhole_params, valid_frames)
+            gt_Se3_world2cam = {i: Se3.from_matrix(pinhole.extrinsics) for i, pinhole in gt_pinhole_params.items()}
 
-            pinhole_params = get_pinhole_params(scene_cam_path, config.image_downsample, device=config.device)
-            pinhole_params = reindex_frame_dict(pinhole_params, valid_frames)
-            pinhole_params = add_extrinsics_to_pinhole_params(pinhole_params, gt_Se3_world2cam)
-
-            first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
-                                                                                          segmentation_channel=0)
+            first_segmentation = \
+                PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs, segmentation_channel=0,
+                                                                         image_downsample=config.image_downsample,
+                                                                         device=config.device)
 
             config.input_frames = len(gt_images)
             config.frame_provider = 'precomputed'
             config.segmentation_provider = 'SAM2'
 
-            tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                                gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
+            tracker = Tracker6D(config, write_folder, input_images=gt_images, depth_paths=gt_depths,
+                                gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,
                                 input_segmentations=gt_segs, initial_segmentation=first_segmentation)
             tracker.run_pipeline()
+
+
+def extract_cam_data_navi(gt_path, image_downsample: float = 1.0, device: str = 'cpu') -> Dict[int, PinholeCamera]:
+    pinhole_params_per_frame = {}
+
+    image_downsample_tensor = torch.tensor([image_downsample]).to(device)
+    with open(gt_path, 'r') as file:
+        pose_json = json.load(file)
+        for frame_data in pose_json:
+
+            frame_filename = frame_data['filename']
+            frame_id = int(Path(frame_filename).stem.split('_')[1])
+
+            camera_data = frame_data['camera']
+            gt_q_world2cam = Quaternion(torch.tensor(camera_data['q']).to(device)[None])
+            gt_t_world2cam = torch.tensor(camera_data['t']).to(device)[None]
+            gt_Se3_world2cam = Se3(gt_q_world2cam, gt_t_world2cam)
+            gt_f = camera_data['focal_length']
+
+            img_h, img_w = frame_data['image_size']
+            img_h_tensor = torch.tensor([img_h]).to(device).to(torch.float)
+            img_w_tensor = torch.tensor([img_w]).to(device).to(torch.float)
+
+            intrinsics = torch.tensor([[gt_f, 0, 0, img_w / 2.0],
+                                       [0, gt_f, 0, img_h / 2.0],
+                                       [0, 0, 1., 0.],
+                                       [0, 0, 0, 1.]]).to(device)[None]
+
+            pinhole_params = PinholeCamera(intrinsics, gt_Se3_world2cam.matrix().squeeze(), img_h_tensor, img_w_tensor)
+            pinhole_params.scale_(image_downsample_tensor)
+
+            pinhole_params_per_frame[frame_id] = pinhole_params
+
+    return pinhole_params_per_frame
+
+
+def load_images_navi(image_folder: Path):
+    """Load ground truth images."""
+    gt_images = {
+        int(file.stem.replace(f'frame_', '')): file
+        for file in sorted(image_folder.iterdir())
+        if file.is_file()
+    }
+
+    return gt_images
 
 
 if __name__ == "__main__":
