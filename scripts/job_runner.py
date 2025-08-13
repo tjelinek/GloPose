@@ -116,6 +116,11 @@ def main():
         'matchability_thresholds/ufm_c09r099',
         'matchability_thresholds/ufm_c095r01',
         'matchability_thresholds/ufm_c095r025',
+        'passthroughs/every_2nd_frame',
+        'passthroughs/every_4th_frame',
+        'passthroughs/every_8th_frame',
+        'passthroughs/every_16th_frame',
+        'passthroughs/every_32th_frame',
         'matchability_thresholds/ufm_c095r05',
         'matchability_thresholds/ufm_c095r075',
         'matchability_thresholds/ufm_c095r09',
@@ -123,6 +128,7 @@ def main():
         'matchability_thresholds/ufm_c095r099',
         'matchability_thresholds/ufm_c0975r01',
         'matchability_thresholds/ufm_c0975r025',
+        'matchability_thresholds/ufm_c095r05_viewgraph_from_matching',
         'matchability_thresholds/ufm_c0975r05',
         'matchability_thresholds/ufm_c0975r075',
         'matchability_thresholds/ufm_c0975r09',
@@ -135,6 +141,7 @@ def main():
         'matchability_thresholds/ufm_c099r09',
         'matchability_thresholds/ufm_c099r095',
         'matchability_thresholds/ufm_c099r099',
+        'matchability_thresholds/ufm_c0975r05_viewgraph_from_matching',
     ]
 
     sequences = {
