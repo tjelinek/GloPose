@@ -5,7 +5,7 @@ from pathlib import Path
 
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
-from utils.data_utils import get_initial_image_and_segment
+from data_providers.frame_provider import PrecomputedSegmentationProvider
 from utils.runtime_utils import parse_args, exception_logger
 from tracker6d import Tracker6D
 from utils.general import load_config
