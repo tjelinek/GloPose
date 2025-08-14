@@ -15,7 +15,7 @@ from pycolmap import Reconstruction
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect
 from data_providers.frame_provider import FrameProviderAll, SAM2SegmentationProvider
-from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
+from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
@@ -132,9 +132,8 @@ class Tracker6D:
         elif self.config.frame_filter == 'RoMaRANSAC':
             self.frame_filter = RoMaFrameFilterRANSAC(self.config, self.data_graph, self.flow_provider)
         elif self.config.frame_filter == 'SIFT':
-            sift_matcher = PrecomputedSIFTMatchingProvider(self.data_graph,
-                                                           self.config.sift_matcher_config.sift_filter_num_feats,
-                                                           self.cache_folder_SIFT, device=self.config.device)
+            sift_matcher = SIFTMatchingProviderDirect(self.config.sift_matcher_config.sift_filter_num_feats,
+                                                      self.cache_folder_SIFT, self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')

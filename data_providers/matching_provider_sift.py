@@ -1,4 +1,5 @@
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -7,11 +8,28 @@ from kornia.feature import get_laf_center, match_adalam
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
+from data_providers.flow_provider import FlowProviderDirect
 from data_structures.data_graph import DataGraph
 from utils.sift import sift_to_rootsift
 
 
-class SIFTMatchingProvider:
+
+class SIFTMatchingProviderDirect(FlowProviderDirect):
+
+    def __init__(self, num_sift_features: int, cache_folder: Path, device: str):
+        super().__init__(device)
+
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None, zero_certainty_outside_segmentation: bool = False):
+        pass
+
+    def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+
+class SIFTMatchingProvider():
 
     def __init__(self, data_graph: DataGraph, num_sift_features: int, device: str):
         self.device = device
