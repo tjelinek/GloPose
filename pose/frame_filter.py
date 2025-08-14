@@ -8,7 +8,7 @@ import pycolmap
 import torch
 
 from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
-from data_providers.matching_provider_sift import SIFTMatchingProvider
+from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
 from utils.general import colmap_K_params_vec
@@ -321,11 +321,11 @@ class FrameFilterPassThrough(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, sift_matcher: SIFTMatchingProvider):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, sift_matcher: SIFTMatchingProviderDirect):
 
         super().__init__(config, data_graph)
 
-        self.sift_matcher: SIFTMatchingProvider = sift_matcher
+        self.sift_matcher: SIFTMatchingProviderDirect = sift_matcher
 
     @torch.no_grad()
     def filter_frames(self, current_frame_idx: int):
