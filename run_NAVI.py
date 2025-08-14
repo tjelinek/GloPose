@@ -27,7 +27,7 @@ def get_navi_sequences() -> List[str]:
             for item in object_dir.iterdir():
                 if item.is_dir() and item.name.startswith('video-'):
                     video_folder_name = item.name
-                    video_path = f"{object_id}/{video_folder_name}"
+                    video_path = f"{object_id}@{video_folder_name}"
                     video_sequences.append(video_path)
 
     return sorted(video_sequences)
@@ -50,7 +50,7 @@ def main():
             if obj_type_sequence not in NAVI_SEQUENCES:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")
 
-            obj_name, sequence = obj_type_sequence.split('/')
+            obj_name, sequence = obj_type_sequence.split('@')
             config = load_config(args.config)
 
             experiment_name = args.experiment

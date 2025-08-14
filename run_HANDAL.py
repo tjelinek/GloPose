@@ -27,13 +27,13 @@ def get_handal_sequences() -> Tuple[List[Path], List[Path]]:
         if train_dir.exists():
             for sequence_dir in train_dir.iterdir():
                 if sequence_dir.is_dir():
-                    train_sequences.append(f"{category_name}/{sequence_dir.name}")
+                    train_sequences.append(f"{category_name}@{sequence_dir.name}")
 
         test_dir = category_dir / "test"
         if test_dir.exists():
             for sequence_dir in test_dir.iterdir():
                 if sequence_dir.is_dir():
-                    test_sequences.append(f"{category_name}/{sequence_dir.name}")
+                    test_sequences.append(f"{category_name}@{sequence_dir.name}")
 
     return train_sequences, test_sequences
 
@@ -59,7 +59,7 @@ def main():
             else:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")
 
-            obj_name, sequence = obj_type_sequence.split('/')
+            obj_name, sequence = obj_type_sequence.split('@')
             config = load_config(args.config)
 
             experiment_name = args.experiment
