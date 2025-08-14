@@ -54,7 +54,17 @@ echo "Experiment: ${experiment}"
 runner_stem=$(basename "$dataset_runner" .py)
 
 # Concatenate all sequences with a delimiter (e.g., underscore)
-sequences_concatenated=$(IFS=_; echo "${sequences[*]}")
+if [ ${#sequences[@]} -gt 0 ]; then
+    if [ ${#sequences[@]} -eq 1 ]; then
+        sequences_short="${sequences[0]}"
+    else
+        first_seq="${sequences[0]}"
+        last_seq="${sequences[-1]}"
+        sequences_short="${first_seq}_to_${last_seq}"
+    fi
+else
+    sequences_short="no_sequences"
+fi
 
 modules_file=~/modules_glotracker.txt
 # shellcheck disable=SC2046
@@ -64,4 +74,4 @@ mkdir -p "${output_folder}/logs"
 
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}"\
         --config="$config_file_path" --sequences \
-        "${sequences[@]}" > "${output_folder}/logs/${runner_stem}_${sequences_concatenated}.log" 2>&1
+        "${sequences[@]}" > "${output_folder}/logs/${runner_stem}_${sequences_short}.log" 2>&1
