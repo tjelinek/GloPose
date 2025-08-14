@@ -35,7 +35,8 @@ class Tracker6D:
                  gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
                  input_segmentations: Union[List[Path], Path] = None, depth_paths: Optional[List[Path]] = None,
-                 initial_segmentation: torch.Tensor | List[torch.Tensor] = None, progress: gradio.Progress = None):
+                 initial_segmentation: Union[torch.Tensor, List[torch.Tensor]] = None,
+                 progress: gradio.Progress = None):
 
         self.write_folder: Path = write_folder
         self.config: TrackerConfig = config
