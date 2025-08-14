@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional
 
 import cv2
@@ -6,8 +5,6 @@ import numpy as np
 import torch
 from kornia.feature import get_laf_center, match_adalam
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
-from romatch import roma_outdoor
-from romatch.models.model_zoo import roma_model
 from torchvision.transforms.functional import to_pil_image
 
 from data_structures.data_graph import DataGraph
@@ -67,62 +64,6 @@ class SIFTMatchingProvider:
             edge_data.sift_dists = dists
 
         return dists, idxs
-
-
-class PrecomputedSIFTMatchingProvider(SIFTMatchingProvider):
-
-    def __init__(self, data_graph: DataGraph, num_sift_features: int, cache_dir: Path, allow_missing: bool = True,
-                 device: Optional[str] = 'cpu'):
-        super().__init__(data_graph, num_sift_features, device)
-        self.flow_model: roma_model = roma_outdoor(device=device)
-
-        self.saved_flow_paths = cache_dir
-
-        # Features
-        self.lafs_path = cache_dir / 'sift_lafs'
-        self.keypoints_path = cache_dir / 'sift_keypoints'
-        self.descriptors_path = cache_dir / 'sift_descriptors'
-
-        self.lafs_path.mkdir(exist_ok=True, parents=True)
-        self.keypoints_path.mkdir(exist_ok=True, parents=True)
-        self.descriptors_path.mkdir(exist_ok=True, parents=True)
-
-        # Matching
-        self.matching_dists_paths = cache_dir / 'sift_matching_dists'
-        self.matching_indices_paths = cache_dir / 'sift_matching_indices'
-
-        self.matching_dists_paths.mkdir(exist_ok=True, parents=True)
-        self.matching_indices_paths.mkdir(exist_ok=True, parents=True)
-
-        self.allow_missing: bool = allow_missing
-
-    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu',
-                             save_to_datagraph: bool = False):
-
-        image_name = self.data_graph.get_frame_data(source_image_idx).image_filename
-
-        lafs_path = self.lafs_path / f'{image_name.stem}.pt'
-        keypoints_path = self.keypoints_path / f'{image_name.stem}.pt'
-        descriptors_path = self.descriptors_path / f'{image_name.stem}.pt'
-
-        if lafs_path.exists() and keypoints_path.exists() and descriptors_path.exists():
-            lafs = torch.load(lafs_path).to(device)
-            keypoints = torch.load(keypoints_path)
-            descriptors = torch.load(descriptors_path)
-        else:
-            lafs, keypoints, descriptors = super().detect_sift_features(source_image_idx, device)
-
-            torch.save(lafs, lafs_path)
-            torch.save(keypoints, keypoints_path)
-            torch.save(descriptors, descriptors_path)
-
-        if save_to_datagraph:
-            frame_data = self.data_graph.get_frame_data(source_image_idx)
-            frame_data.sift_lafs = lafs
-            frame_data.sift_keypoints = keypoints
-            frame_data.sift_descriptors = descriptors
-
-        return lafs, keypoints, descriptors
 
 
 def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: Optional[torch.Tensor] = None,
