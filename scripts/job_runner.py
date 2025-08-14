@@ -62,9 +62,6 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def create_unused_folder(output_folder: Path):
-    # if not os.path.exists(output_folder) or True:
-    #     os.makedirs(output_folder, exist_ok=True)
-    #     return output_folder
     os.makedirs(output_folder, exist_ok=True)
     return output_folder
 
