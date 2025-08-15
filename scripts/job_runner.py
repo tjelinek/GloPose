@@ -609,6 +609,15 @@ def main():
             'obj_000031_up', 'obj_000032_up', 'obj_000033_up', 'obj_000034_up', 'obj_000035_up',
             'obj_000036_up', 'obj_000037_up', 'obj_000038_up', 'obj_000039_up', 'obj_000040_up',
         ],
+        Datasets.HOPE_ONBOARDING_DYNAMIC: [
+            'obj_000001_dynamic', 'obj_000006_dynamic', 'obj_000011_dynamic', 'obj_000016_dynamic',
+            'obj_000021_dynamic', 'obj_000026_dynamic', 'obj_000002_dynamic', 'obj_000007_dynamic',
+            'obj_000012_dynamic', 'obj_000017_dynamic', 'obj_000022_dynamic', 'obj_000027_dynamic',
+            'obj_000003_dynamic', 'obj_000008_dynamic', 'obj_000013_dynamic', 'obj_000018_dynamic',
+            'obj_000023_dynamic', 'obj_000028_dynamic', 'obj_000004_dynamic', 'obj_000009_dynamic',
+            'obj_000014_dynamic', 'obj_000019_dynamic', 'obj_000024_dynamic', 'obj_000005_dynamic',
+            'obj_000010_dynamic', 'obj_000015_dynamic', 'obj_000020_dynamic', 'obj_000025_dynamic',
+        ],
         Datasets.HOPE_ONBOARDING_STATIC: [
             'obj_000001_up', 'obj_000006_up', 'obj_000011_up', 'obj_000016_up',
             'obj_000021_up', 'obj_000026_up', 'obj_000002_up', 'obj_000007_up',
