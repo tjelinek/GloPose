@@ -127,8 +127,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     if progress is not None:
         progress(0.5, desc="Running reconstruction...")
 
-    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper,
-               first_image_id, second_image_id)
+    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper, first_image_id, second_image_id)
 
     if progress is not None:
         progress(1.0, desc="Reconstruction finished.")
