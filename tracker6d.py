@@ -283,7 +283,7 @@ class Tracker6D:
             v_index = keyframe_nodes_idxs.index(frame2_idx)
             matching_pairs.append((u_index, v_index))
         assert len(keyframe_nodes_idxs) > 2
-        print(keyframe_graph.edges)
+        print(sorted(keyframe_graph.edges))
 
         return images_paths, segmentation_paths, matching_pairs
 
