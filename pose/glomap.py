@@ -23,9 +23,9 @@ from utils.image_utils import get_intrinsics_from_exif
 
 
 def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], matching_pairs: List[Tuple[int, int]],
-                                 init_with_first_two_images: bool, mapper: str,
-                                 match_provider: FlowProviderDirect, match_sample_size: int,
-                                 colmap_working_dir, camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
+                                 init_with_first_two_images: bool, mapper: str, match_provider: FlowProviderDirect,
+                                 match_sample_size: int, colmap_working_dir, add_track_merging_matches: bool,
+                                 camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
                                  progress: gradio.Progress = None) \
         -> Optional[pycolmap.Reconstruction]:
     if len(matching_pairs) == 0:
@@ -35,6 +35,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     colmap_output_path = colmap_working_dir / 'output'
     colmap_image_path = colmap_working_dir / 'images'
 
+    matching_pairs = sorted(matching_pairs)
     image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
     segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
 
@@ -45,12 +46,17 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
 
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
     matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
+
+    view_graph = nx.DiGraph()
+
     for pair_idx, ((img1_pth, img2_pth), (seg1_pth, seg2_pth)) in tqdm(enumerate(zip(image_pairs, segmentation_pairs))):
 
         img1_pth = Path(img1_pth)
         img2_pth = Path(img2_pth)
         img1_id = images.index(img1_pth) + 1
         img2_id = images.index(img2_pth) + 1
+
+        view_graph.add_edge(img1_id, img2_id)
 
         assert img1_pth.parent == img2_pth.parent
 
@@ -79,6 +85,66 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         edge = (img1_id, img2_id)
         matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
         matching_edges_certainties[edge] = certainty
+
+    if add_track_merging_matches:
+        for pair_idx, ((img1_pth, img2_pth), (seg1_pth, seg2_pth)) in \
+                tqdm(enumerate(zip(image_pairs, segmentation_pairs))):
+
+            img1_pth = Path(img1_pth)
+            img2_pth = Path(img2_pth)
+            img1_id = images.index(img1_pth) + 1
+            img2_id = images.index(img2_pth) + 1
+
+            if progress is not None:
+                progress(0.5 * pair_idx / float(len(matching_pairs)), desc="Densifying matching...")
+
+            img1 = PrecomputedFrameProvider.load_and_downsample_image(img1_pth, 1., device).squeeze()
+            img2 = PrecomputedFrameProvider.load_and_downsample_image(img2_pth, 1., device).squeeze()
+            h1, w1 = img1.shape[-2:]
+            h2, w2 = img2.shape[-2:]
+            seg1_size = ImageSize(h1, w1)
+            seg2_size = ImageSize(h2, w2)
+            img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size,
+                                                                                        device=device)
+            img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size,
+                                                                                        device=device)
+
+            previous_matching_pairs = view_graph.in_edges(img1_id)
+            src_pts_xy_roma_int_can_be_added = []
+            dst_pts_xy_roma_int_can_be_added = []
+            certainties_can_be_added = []
+            for (edge_u, edge_v) in previous_matching_pairs:
+
+                src_pts_xy_roma_int_nonsampled, dst_pts_xy_roma_int_nonsampled, certainty_nonsampled =\
+                    match_provider.get_source_target_points(img1, img2, None, img1_seg.squeeze(),
+                                                            img2_seg.squeeze(), Path(img1_pth.name),
+                                                            Path(img2_pth.name), as_int=True,
+                                                            zero_certainty_outside_segmentation=True,
+                                                            only_foreground_matches=True)
+
+                prev_match_certain_dst_pts = matching_edges[edge_u, edge_v][1]
+
+                A_set = set(map(tuple, prev_match_certain_dst_pts.cpu().numpy()))
+                B_tuples = [tuple(row) for row in src_pts_xy_roma_int_nonsampled.cpu().numpy()]
+
+                mask = torch.tensor([tuple_b in A_set for tuple_b in B_tuples], dtype=torch.bool, device=device)
+
+                src_pts_xy_roma_int_can_be_added_u = src_pts_xy_roma_int_nonsampled[mask]
+                dst_pts_xy_roma_int_can_be_added_v = dst_pts_xy_roma_int_nonsampled[mask]
+                certainties_can_be_added_this_match = certainty_nonsampled[mask]
+
+                src_pts_xy_roma_int_can_be_added.append(src_pts_xy_roma_int_can_be_added_u)
+                dst_pts_xy_roma_int_can_be_added.append(dst_pts_xy_roma_int_can_be_added_v)
+                certainties_can_be_added.append(certainties_can_be_added_this_match)
+
+            edge = (img1_id, img2_id)
+
+            src_pts_xy_roma_int = torch.cat([matching_edges[edge][0]] + src_pts_xy_roma_int_can_be_added)
+            dst_pts_xy_roma_int = torch.cat([matching_edges[edge][1]] + dst_pts_xy_roma_int_can_be_added)
+            certainty = torch.cat([matching_edges_certainties[edge]] + certainties_can_be_added)
+
+            matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+            matching_edges_certainties[edge] = certainty
 
     database = pycolmap.Database(str(database_path))
 

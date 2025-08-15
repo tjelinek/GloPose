@@ -327,7 +327,8 @@ class Tracker6D:
         reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
                                                       self.config.init_with_first_two_images, self.config.mapper,
                                                       self.flow_provider, self.config.roma_sample_size,
-                                                      self.colmap_base_path, camera_K, self.config.device)
+                                                      self.colmap_base_path, self.config.add_track_merging_matches,
+                                                      camera_K, self.config.device)
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
