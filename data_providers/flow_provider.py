@@ -60,10 +60,12 @@ class FlowProviderDirect(ABC):
         w2 = target_image.shape[-1]
         src_pts_xy, dst_pts_xy = roma_warp_to_pixel_coordinates(warp, h1, w1, h2, w2)
 
-        if len(src_pts_xy.shape) == 3:
+        if len(src_pts_xy.shape) == 3 or len(dst_pts_xy.shape) == 3 or len(certainty.shape) == 2:
+            assert len(src_pts_xy.shape) == 3 and len(dst_pts_xy.shape) == 3 and len(certainty.shape) == 2
+
             src_pts_xy = src_pts_xy.flatten(0, 1)
-        if len(dst_pts_xy.shape) == 3:
             dst_pts_xy = dst_pts_xy.flatten(0, 1)
+            certainty = certainty.flatten(0, 1)
 
         src_pts_xy_int, dst_pts_xy_int = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
         if as_int:
