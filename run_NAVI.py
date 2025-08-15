@@ -68,9 +68,9 @@ def main():
             if output_folder is not None:
                 write_folder = Path(output_folder) / dataset / f'{sequence}'
             else:
-                write_folder = config.default_results_folder / experiment_name / dataset / f'{sequence}'
+                write_folder = config.default_results_folder / experiment_name / dataset / config.sequence
 
-            base_folder = config.default_data_folder / 'NAVI' / 'navi_v1.5' / obj_name / sequence
+            base_folder = config.default_data_folder / 'NAVI' / 'navi_v1.5' / obj_name / config.sequence
             image_folder = base_folder / 'images'
             segmentation_folder = base_folder / 'masks'
             depths_folder = base_folder / 'depth'
