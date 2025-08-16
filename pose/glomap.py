@@ -5,7 +5,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
-import gradio
 import networkx as nx
 import numpy as np
 import pycolmap
@@ -26,7 +25,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
                                  init_with_first_two_images: bool, mapper: str, match_provider: FlowProviderDirect,
                                  match_sample_size: int, colmap_working_dir, add_track_merging_matches: bool,
                                  camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
-                                 progress: gradio.Progress = None) \
+                                 progress=None) \
         -> Optional[pycolmap.Reconstruction]:
     if len(matching_pairs) == 0:
         raise ValueError("Needed at least 1 match.")

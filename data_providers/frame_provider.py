@@ -87,7 +87,7 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
-    def save_images(self, output_path: Path, only_frame_index: bool = False, progress: 'gradio.Progress' = None) ->\
+    def save_images(self, output_path: Path, only_frame_index: bool = False, progress = None) ->\
                     List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
@@ -328,7 +328,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
                  image_provider: FrameProvider, write_folder: Path,
-                 sam2_cache_folder: Path, progress: 'gradio.Progress' = None, **kwargs):
+                 sam2_cache_folder: Path, progress=None, **kwargs):
         super().__init__(image_shape, config.device)
 
         assert initial_segmentation is not None

@@ -36,12 +36,12 @@ class Tracker6D:
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
                  input_segmentations: Union[List[Path], Path] = None, depth_paths: Optional[List[Path]] = None,
                  initial_segmentation: Union[torch.Tensor, List[torch.Tensor]] = None,
-                 progress: gradio.Progress = None):
+                 progress=None):
 
         self.write_folder: Path = write_folder
         self.config: TrackerConfig = config
 
-        self.progress: gradio.Progress = progress
+        self.progress = progress
 
         if os.path.exists(self.write_folder):
             shutil.rmtree(self.write_folder)
@@ -287,7 +287,7 @@ class Tracker6D:
 
         return images_paths, segmentation_paths, matching_pairs
 
-    def filter_frames(self, progress: gradio.Progress = None, stop_event: threading.Event = None) -> nx.DiGraph:
+    def filter_frames(self, progress=None, stop_event: threading.Event = None) -> nx.DiGraph:
 
         for frame_i in range(0, self.tracker.frame_provider.get_input_length()):
 
