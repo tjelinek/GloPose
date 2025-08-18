@@ -67,7 +67,7 @@ class TrackerConfig:
 
     # Frame Filter configurations
     roma_sample_size: int = 10000
-    min_roma_certainty_threshold: float = 0.5
+    min_roma_certainty_threshold: float = 0.975
     flow_reliability_threshold: float = 0.5
     min_number_of_reliable_matches: int = 0
     matchability_based_reliability: bool = False
@@ -76,7 +76,7 @@ class TrackerConfig:
     passthrough_frame_filter_skip: int = 1
 
     # Dense matching config
-    dense_matching: str = 'UFM'  # 'UFM' or 'RoMa'
+    frame_filter_matcher: str = 'UFM'  # 'UFM' or 'RoMa'
     dense_matching_allow_disk_cache: bool = True
     roma_config: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     ufm_config: BaseUFMConfig = field(default_factory=BaseUFMConfig)
@@ -85,6 +85,7 @@ class TrackerConfig:
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
     init_with_first_two_images: bool = False
     add_track_merging_matches: bool = False
+    reconstruction_matcher: str = 'SIFT'  # Either SIFT, UFM, or RoMa
     similarity_transformation = 'kabsch'  # Either 'depths' or 'kabsch'
 
     # SIFT options

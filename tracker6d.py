@@ -6,14 +6,14 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Union
 
-import gradio
 import imageio
 import networkx as nx
 import torch
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect, \
+    RoMaFlowProviderDirect, UFMFlowProviderDirect
 from data_providers.frame_provider import FrameProviderAll, SAM2SegmentationProvider
 from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph
@@ -84,7 +84,7 @@ class Tracker6D:
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
 
-        self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.dense_matching}_cache') /
+        self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.frame_filter_matcher}_cache') /
                                             config.roma_config.config_name / config.dataset /
                                             f'{config.sequence}_{config.special_hash}')
         self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /

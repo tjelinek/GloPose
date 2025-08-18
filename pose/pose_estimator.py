@@ -42,12 +42,12 @@ class BOPChallengePosePredictor:
 
     def _initialize_flow_provider(self) -> None:
 
-        if self.config.dense_matching == 'RoMa':
+        if self.config.frame_filter_matcher == 'RoMa':
             self.flow_provider = RoMaFlowProviderDirect(self.config.device, self.config.roma_config)
-        elif self.config.dense_matching == 'UFM':
+        elif self.config.frame_filter_matcher == 'UFM':
             self.flow_provider = UFMFlowProviderDirect(self.config.device, self.config.ufm_config)
         else:
-            raise ValueError(f'Unknown dense matching option {self.config.dense_matching}')
+            raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
     def _load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
 

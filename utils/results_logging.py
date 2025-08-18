@@ -170,11 +170,11 @@ class WriteResults:
                                 contents=[
                                     rrb.Horizontal(
                                         contents=[
-                                            rrb.Spatial2DView(name=f"{self.config.dense_matching} Matches High Certainty",
+                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches High Certainty",
                                                               origin=RerunAnnotations.matches_high_certainty),
-                                            rrb.Spatial2DView(name=f"{self.config.dense_matching} Matches Low Certainty",
+                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches Low Certainty",
                                                               origin=RerunAnnotations.matches_low_certainty),
-                                            *([rrb.Spatial2DView(name=f"{self.config.dense_matching} Matching Certainty",
+                                            *([rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matching Certainty",
                                                                  origin=RerunAnnotations.matching_certainty)]
                                               if self.config.frame_filter == 'dense_matching' else [])
                                         ],
@@ -189,9 +189,9 @@ class WriteResults:
                                 contents=[
                                     rrb.Horizontal(
                                         contents=[
-                                            rrb.Spatial2DView(name=f"{self.config.dense_matching} Matches High Certainty",
+                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches High Certainty",
                                                               origin=RerunAnnotations.matches_high_certainty_matchable),
-                                            rrb.Spatial2DView(name=f"{self.config.dense_matching} Matches Low Certainty",
+                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches Low Certainty",
                                                               origin=RerunAnnotations.matches_low_certainty_matchable),
                                             rrb.Spatial2DView(name="Template",
                                                               origin=RerunAnnotations.matchability)
@@ -204,7 +204,7 @@ class WriteResults:
                                                        axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                              zoom_lock=True),
                                                        plot_legend=rrb.PlotLegend(visible=True)),
-                                    rrb.TimeSeriesView(name=f"{self.config.dense_matching} Min Certainty",
+                                    rrb.TimeSeriesView(name=f"{self.config.frame_filter_matcher} Min Certainty",
                                                        origin=RerunAnnotations.matching_min_roma_certainty_plot,
                                                        axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                              zoom_lock=True),
@@ -280,7 +280,7 @@ class WriteResults:
             rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
                    rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
             rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
-                   rr.SeriesLine(color=[0, 0, 255], name=f"min {self.config.dense_matching} certainty"),
+                   rr.SeriesLine(color=[0, 0, 255], name=f"min {self.config.frame_filter_matcher} certainty"),
                    static=True)
         elif self.config.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
