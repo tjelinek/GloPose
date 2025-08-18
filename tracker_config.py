@@ -94,7 +94,6 @@ class TrackerConfig:
     sift_cache: Path = None
     sift_mapping_num_feats: int = 8192
     sift_mapping_min_matches: int = 15
-    sift_mapping_single_camera: bool = True
 
     # BOP Config
     bop_config: BaseBOPConfig = field(default_factory=BaseBOPConfig)
