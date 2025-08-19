@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Tuple, Union
 import imageio
 import networkx as nx
 import torch
+from PIL import Image
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
@@ -194,10 +195,15 @@ class Tracker6D:
             seg_filename = f'segment_{frame_idx}.png'
 
         node_save_path = self.colmap_image_path / image_filename
+        img_np = (img * 255).to(torch.uint8).numpy(force=True)
+        img_pil = Image.fromarray(img_np, mode='RGB')
         imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
+        img_pil.save(node_save_path)
 
         segmentation_save_path = self.colmap_seg_path / seg_filename
-        imageio.v3.imwrite(segmentation_save_path, (img_seg * 255).to(torch.uint8).repeat(1, 1, 3).numpy(force=True))
+        img_seg_np = (img_seg * 255).squeeze().to(torch.uint8).numpy(force=True)
+        img_seg_pil = Image.fromarray(img_seg_np, mode='L')
+        img_seg_pil.save(segmentation_save_path)
 
         frame_data.image_save_path = copy.deepcopy(node_save_path)
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
