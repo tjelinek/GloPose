@@ -8,80 +8,80 @@ from kornia.feature import get_laf_center, match_adalam
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
+from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
 from data_providers.flow_provider import FlowProviderDirect
 from data_structures.data_graph import DataGraph
 from utils.sift import sift_to_rootsift
 
 
-
 class SIFTMatchingProviderDirect(FlowProviderDirect):
 
-    def __init__(self, num_sift_features: int, cache_folder: Path, device: str):
+    def __init__(self, sift_config: BaseSiftConfig, device: str):
         super().__init__(device)
+        self.num_sift_features: int = sift_config.sift_filter_num_feats
+        self.device: str = device
 
     def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
                      source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
                      source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
                      target_image_index: int = None, zero_certainty_outside_segmentation: bool = False):
-        pass
+
+        raise NotImplementedError("This awaits implementation.\n"
+                                  "The source target points muse be converted to RoMa format.")
+
+    def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
+                                 sample=None, source_image_segmentation: torch.Tensor = None,
+                                 target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
+                                 target_image_name: Path = None, source_image_index: int = None,
+                                 target_image_index: int = None, as_int: bool = False,
+                                 zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False):
+        lafs1, src_pts_xy, descriptors1 = detect_sift_features(source_image, self.num_sift_features,
+                                                               source_image_segmentation, self.device)
+        lafs2, dst_pts_xy, descriptors2 = detect_sift_features(target_image, self.num_sift_features,
+                                                               source_image_segmentation, self.device)
+
+        src_pts_xy_int = src_pts_xy.to(torch.long)  # XY format
+        dst_pts_xy_int = dst_pts_xy.to(torch.long)  # XY format
+
+        in_segment_mask1 = source_image_segmentation[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].to(torch.bool)
+        in_segment_mask2 = source_image_segmentation[dst_pts_xy_int[:, 1], dst_pts_xy_int[:, 0]].to(torch.bool)
+
+        src_pts_xy = src_pts_xy[in_segment_mask1]
+        dst_pts_xy = dst_pts_xy[in_segment_mask2]
+
+        hw1 = tuple(source_image.shape[-2:])
+        hw2 = tuple(target_image.shape[-2:])
+
+        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
+
+        src_pts_xy_matched = src_pts_xy[idxs]
+        dst_pts_xy_matched = dst_pts_xy[idxs]
+        certainty = torch.ones(src_pts_xy_matched.shape[0], dtype=torch.float, device=self.device)
+
+        if as_int:
+            src_pts_xy_matched, dst_pts_xy_matched = self.keypoints_to_int(src_pts_xy_matched, dst_pts_xy_matched,
+                                                                           source_image, target_image)
+
+        return src_pts_xy_matched, dst_pts_xy_matched, certainty
 
     def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
         pass
 
 
-class SIFTMatchingProvider():
+class PrecomputedUFMFlowProviderDirect(SIFTMatchingProviderDirect):
 
-    def __init__(self, data_graph: DataGraph, num_sift_features: int, device: str):
-        self.device = device
-        self.data_graph = data_graph
+    def __init__(self, num_sift_features: int, data_graph: DataGraph, device: str):
 
-        self.num_sift_features: int = num_sift_features
+        SIFTMatchingProviderDirect.__init__(self, num_sift_features, device)
+        self.data_graph: DataGraph = data_graph
 
-    def detect_sift_features(self, source_image_idx: int, device: Optional[str] = 'cpu',
-                             save_to_datagraph: bool = False):
+    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
+                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
+                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
+                     target_image_index: int = None,
+                     zero_certainty_outside_segmentation=False) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        frame_data = self.data_graph.get_frame_data(source_image_idx)
-
-        frame1_image = frame_data.frame_observation.observed_image.squeeze()
-        frame1_segmentation = frame_data.frame_observation.observed_segmentation.squeeze()
-
-        lafs, keypoints, descriptors = detect_sift_features(frame1_image, self.num_sift_features,
-                                                            frame1_segmentation, device)
-
-        if save_to_datagraph:
-            frame_data = self.data_graph.get_frame_data(source_image_idx)
-            frame_data.sift_lafs = lafs
-            frame_data.sift_keypoints = keypoints
-            frame_data.sift_descriptors = descriptors
-
-        return lafs, keypoints, descriptors
-
-    def match_images_sift(self, source_image_idx: int, target_image_idx: int, device: Optional[str] = 'cpu',
-                          save_to_datagraph: bool = False):
-
-        frame1_data = self.data_graph.get_frame_data(source_image_idx)
-        frame2_data = self.data_graph.get_frame_data(target_image_idx)
-
-        image1 = frame1_data.frame_observation.observed_image.squeeze()
-
-        image2 = frame2_data.frame_observation.observed_image.squeeze()
-
-        lafs1, keypoints1, descriptors1 = self.detect_sift_features(source_image_idx, device, save_to_datagraph)
-        lafs2, keypoints2, descriptors2 = self.detect_sift_features(target_image_idx, device, save_to_datagraph)
-
-        hw1 = tuple(image1.shape[-2:])
-        hw2 = tuple(image2.shape[-2:])
-
-        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
-
-        if save_to_datagraph:
-            if not self.data_graph.G.has_edge(source_image_idx, target_image_idx):
-                self.data_graph.add_new_arc(source_image_idx, target_image_idx)
-            edge_data = self.data_graph.get_edge_observations(source_image_idx, target_image_idx)
-            edge_data.sift_keypoint_indices = idxs
-            edge_data.sift_dists = dists
-
-        return dists, idxs
+        pass
 
 
 def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: Optional[torch.Tensor] = None,
@@ -104,20 +104,6 @@ def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: O
     descriptors = descriptors.reshape(-1, desc_dim).to(device)
 
     return lafs, keypoints, descriptors
-
-
-def match_images_sift(image1: torch.Tensor, image2, num_features: int, segmentation1: Optional[torch.Tensor] = None,
-                      segmentation2=None, device: str = 'cpu'):
-
-    lafs1, keypoints1, descriptors1 = detect_sift_features(image1, num_features, segmentation1, device)
-    lafs2, keypoints2, descriptors2 = detect_sift_features(image2, num_features, segmentation2, device)
-
-    hw1 = tuple(image1.shape[-2:])
-    hw2 = tuple(image2.shape[-2:])
-
-    dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
-
-    return dists, idxs
 
 
 def match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2):
