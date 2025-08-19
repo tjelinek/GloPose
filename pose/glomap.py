@@ -75,14 +75,14 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size, device=device)
         img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size, device=device)
 
-        src_pts_xy_roma_int, dst_pts_xy_roma_int, certainty =\
+        src_pts_xy_int, dst_pts_xy_int, certainty =\
             match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
                                                     img2_seg.squeeze(), Path(img1_pth.name),
                                                     Path(img2_pth.name), as_int=True,
                                                     zero_certainty_outside_segmentation=True,
                                                     only_foreground_matches=True)
         edge = (img1_id, img2_id)
-        matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+        matching_edges[edge] = (src_pts_xy_int, dst_pts_xy_int)
         matching_edges_certainties[edge] = certainty
 
     if add_track_merging_matches:
@@ -114,7 +114,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
             certainties_can_be_added = []
             for (edge_u, edge_v) in previous_matching_pairs:
 
-                src_pts_xy_roma_int_nonsampled, dst_pts_xy_roma_int_nonsampled, certainty_nonsampled =\
+                src_pts_xy_int_nonsampled, dst_pts_xy_int_nonsampled, certainty_nonsampled =\
                     match_provider.get_source_target_points(img1, img2, None, img1_seg.squeeze(),
                                                             img2_seg.squeeze(), Path(img1_pth.name),
                                                             Path(img2_pth.name), as_int=True,
@@ -124,12 +124,12 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
                 prev_match_certain_dst_pts = matching_edges[edge_u, edge_v][1]
 
                 A_set = set(map(tuple, prev_match_certain_dst_pts.cpu().numpy()))
-                B_tuples = [tuple(row) for row in src_pts_xy_roma_int_nonsampled.cpu().numpy()]
+                B_tuples = [tuple(row) for row in src_pts_xy_int_nonsampled.cpu().numpy()]
 
                 mask = torch.tensor([tuple_b in A_set for tuple_b in B_tuples], dtype=torch.bool, device=device)
 
-                src_pts_xy_roma_int_can_be_added_u = src_pts_xy_roma_int_nonsampled[mask]
-                dst_pts_xy_roma_int_can_be_added_v = dst_pts_xy_roma_int_nonsampled[mask]
+                src_pts_xy_roma_int_can_be_added_u = src_pts_xy_int_nonsampled[mask]
+                dst_pts_xy_roma_int_can_be_added_v = dst_pts_xy_int_nonsampled[mask]
                 certainties_can_be_added_this_match = certainty_nonsampled[mask]
 
                 src_pts_xy_roma_int_can_be_added.append(src_pts_xy_roma_int_can_be_added_u)
@@ -138,11 +138,11 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
 
             edge = (img1_id, img2_id)
 
-            src_pts_xy_roma_int = torch.cat([matching_edges[edge][0]] + src_pts_xy_roma_int_can_be_added)
-            dst_pts_xy_roma_int = torch.cat([matching_edges[edge][1]] + dst_pts_xy_roma_int_can_be_added)
+            src_pts_xy_int = torch.cat([matching_edges[edge][0]] + src_pts_xy_roma_int_can_be_added)
+            dst_pts_xy_int = torch.cat([matching_edges[edge][1]] + dst_pts_xy_roma_int_can_be_added)
             certainty = torch.cat([matching_edges_certainties[edge]] + certainties_can_be_added)
 
-            matching_edges[edge] = (src_pts_xy_roma_int, dst_pts_xy_roma_int)
+            matching_edges[edge] = (src_pts_xy_int, dst_pts_xy_int)
             matching_edges_certainties[edge] = certainty
 
     database = pycolmap.Database(str(database_path))
