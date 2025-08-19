@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 import torch
-from kornia.feature import get_laf_center, match_adalam
+from kornia.feature import get_laf_center, match_adalam, LightGlueMatcher
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
@@ -97,7 +97,7 @@ def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: O
     image_cv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
     keypoints, descriptors = sift.detectAndCompute(image_cv, segmentation_np)
-    lafs = laf_from_opencv_SIFT_kpts(keypoints)
+    lafs = laf_from_opencv_SIFT_kpts(keypoints).to(device)
     descriptors = sift_to_rootsift(torch.from_numpy(descriptors)).to(device)
     desc_dim = descriptors.shape[-1]
     keypoints = get_laf_center(lafs).reshape(-1, 2).to(device)
@@ -106,9 +106,16 @@ def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: O
     return lafs, keypoints, descriptors
 
 
-def match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2):
+def match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2, alg='lightglue'):
+    if alg == 'lightglue':
+        matcher = LightGlueMatcher('sift').eval().to(descriptors1.device)
+    elif alg == 'adalam':
+        matcher = match_adalam
+    else:
+        raise ValueError('unknown algorithm')
+
     with torch.inference_mode():
-        dists, idxs = match_adalam(descriptors1, descriptors2,
-                                   lafs1, lafs2,  # Adalam takes into account also geometric information
-                                   hw1=hw1, hw2=hw2)
+        dists, idxs = matcher(descriptors1, descriptors2, lafs1, lafs2, hw1=hw1, hw2=hw2)
+        # Adalam takes into account also geometric information and image sizes
+
     return dists, idxs
