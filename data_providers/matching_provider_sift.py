@@ -54,8 +54,8 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
 
         dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
 
-        src_pts_xy_matched = src_pts_xy[idxs]
-        dst_pts_xy_matched = dst_pts_xy[idxs]
+        src_pts_xy_matched = src_pts_xy[idxs[:, 0]]
+        dst_pts_xy_matched = dst_pts_xy[idxs[:, 1]]
         certainty = torch.ones(src_pts_xy_matched.shape[0], dtype=torch.float, device=self.device)
 
         if as_int:
