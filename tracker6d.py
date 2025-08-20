@@ -341,7 +341,7 @@ class Tracker6D:
             Tuple[Optional[Reconstruction], bool]:
 
         first_frame_data = self.data_graph.get_frame_data(0)
-        camera_K = first_frame_data.gt_pinhole_K
+        camera_K = first_frame_data.gt_pinhole_K if not self.config.use_default_colmap_K else None
         reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
                                                       self.config.init_with_first_two_images, self.config.mapper,
                                                       self.match_provider_reconstruction, self.config.roma_sample_size,

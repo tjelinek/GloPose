@@ -85,6 +85,7 @@ class TrackerConfig:
     mapper: str = 'pycolmap'  # Either 'colmap', 'pycolmap', or 'glomap'
     init_with_first_two_images: bool = False
     add_track_merging_matches: bool = False
+    use_default_colmap_K: bool = True
     reconstruction_matcher: str = 'UFM'  # Either SIFT, UFM, or RoMa
     similarity_transformation = 'kabsch'  # Either 'depths' or 'kabsch'
 

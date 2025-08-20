@@ -154,12 +154,12 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         if camera_K is None:
             camera_K = get_intrinsics_from_exif(images[0])
 
-        params_vec = colmap_K_params_vec(camera_K)
+        camera_model = pycolmap.CameraModelId.SIMPLE_PINHOLE
+        params_vec = colmap_K_params_vec(camera_K, camera_model)
 
         h, w = PrecomputedFrameProvider.load_and_downsample_image(images[0], 1.).shape[-2:]
 
-        new_camera = pycolmap.Camera(camera_id=new_cam_id, model=pycolmap.CameraModelId.PINHOLE,
-                                     width=w, height=h, params=params_vec)
+        new_camera = pycolmap.Camera(camera_id=new_cam_id, model=camera_model, width=w, height=h, params=params_vec)
         database.write_camera(new_camera, use_camera_id=True)
 
     for i, img in enumerate(images):
