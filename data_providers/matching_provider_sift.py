@@ -35,10 +35,18 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
                                  target_image_name: Path = None, source_image_index: int = None,
                                  target_image_index: int = None, as_int: bool = False,
                                  zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False):
-        lafs1, src_pts_xy, descriptors1 = detect_sift_features(source_image, self.num_sift_features,
+        lafs1, kpts1_xy, descriptors1 = detect_sift_features(source_image, self.num_sift_features,
                                                                source_image_segmentation, self.device)
-        lafs2, dst_pts_xy, descriptors2 = detect_sift_features(target_image, self.num_sift_features,
+        lafs2, kpts2_xy, descriptors2 = detect_sift_features(target_image, self.num_sift_features,
                                                                source_image_segmentation, self.device)
+
+        hw1 = tuple(source_image.shape[-2:])
+        hw2 = tuple(target_image.shape[-2:])
+
+        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
+
+        src_pts_xy = kpts1_xy[idxs[:, 0]]
+        dst_pts_xy = kpts2_xy[idxs[:, 1]]
 
         src_pts_xy_int = src_pts_xy.to(torch.long)  # XY format
         dst_pts_xy_int = dst_pts_xy.to(torch.long)  # XY format
@@ -49,20 +57,12 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
         src_pts_xy = src_pts_xy[in_segment_mask1]
         dst_pts_xy = dst_pts_xy[in_segment_mask2]
 
-        hw1 = tuple(source_image.shape[-2:])
-        hw2 = tuple(target_image.shape[-2:])
-
-        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
-
-        src_pts_xy_matched = src_pts_xy[idxs[:, 0]]
-        dst_pts_xy_matched = dst_pts_xy[idxs[:, 1]]
-        certainty = torch.ones(src_pts_xy_matched.shape[0], dtype=torch.float, device=self.device)
+        certainty = torch.ones(src_pts_xy.shape[0], dtype=torch.float, device=self.device)
 
         if as_int:
-            src_pts_xy_matched, dst_pts_xy_matched = self.keypoints_to_int(src_pts_xy_matched, dst_pts_xy_matched,
-                                                                           source_image, target_image)
+            src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
 
-        return src_pts_xy_matched, dst_pts_xy_matched, certainty
+        return src_pts_xy, dst_pts_xy, certainty
 
     def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
         pass
