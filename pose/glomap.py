@@ -55,8 +55,6 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         img1_id = images.index(img1_pth) + 1
         img2_id = images.index(img2_pth) + 1
 
-        view_graph.add_edge(img1_id, img2_id)
-
         assert img1_pth.parent == img2_pth.parent
 
         if progress is not None:
@@ -81,6 +79,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
                                                     Path(img2_pth.name), as_int=True,
                                                     zero_certainty_outside_segmentation=True,
                                                     only_foreground_matches=True)
+        view_graph.add_edge(img1_id, img2_id)
         edge = (img1_id, img2_id)
         matching_edges[edge] = (src_pts_xy_int, dst_pts_xy_int)
         matching_edges_certainties[edge] = certainty
