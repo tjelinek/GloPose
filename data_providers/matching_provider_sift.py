@@ -36,9 +36,23 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
                                  target_image_index: int = None, as_int: bool = False,
                                  zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False):
         lafs1, kpts1_xy, descriptors1 = detect_sift_features(source_image, self.num_sift_features,
-                                                               source_image_segmentation, self.device)
+                                                             source_image_segmentation, self.device)
         lafs2, kpts2_xy, descriptors2 = detect_sift_features(target_image, self.num_sift_features,
-                                                               source_image_segmentation, self.device)
+                                                             source_image_segmentation, self.device)
+
+        kpts1_xy_int = kpts1_xy.to(torch.long)  # XY format
+        kpts2_xy_int = kpts2_xy.to(torch.long)  # XY format
+
+        in_segment_mask1 = source_image_segmentation[kpts1_xy_int[:, 1], kpts1_xy_int[:, 0]].to(torch.bool)
+        in_segment_mask2 = source_image_segmentation[kpts2_xy_int[:, 1], kpts2_xy_int[:, 0]].to(torch.bool)
+
+        kpts1_xy = kpts1_xy[in_segment_mask1]
+        lafs1 = lafs1[:, in_segment_mask1]
+        descriptors1 = descriptors1[in_segment_mask1]
+
+        kpts2_xy = kpts2_xy[in_segment_mask2]
+        lafs2 = lafs2[:, in_segment_mask2]
+        descriptors2 = descriptors2[in_segment_mask2]
 
         hw1 = tuple(source_image.shape[-2:])
         hw2 = tuple(target_image.shape[-2:])
@@ -47,15 +61,6 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
 
         src_pts_xy = kpts1_xy[idxs[:, 0]]
         dst_pts_xy = kpts2_xy[idxs[:, 1]]
-
-        src_pts_xy_int = src_pts_xy.to(torch.long)  # XY format
-        dst_pts_xy_int = dst_pts_xy.to(torch.long)  # XY format
-
-        in_segment_mask1 = source_image_segmentation[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].to(torch.bool)
-        in_segment_mask2 = source_image_segmentation[dst_pts_xy_int[:, 1], dst_pts_xy_int[:, 0]].to(torch.bool)
-
-        src_pts_xy = src_pts_xy[in_segment_mask1]
-        dst_pts_xy = dst_pts_xy[in_segment_mask2]
 
         certainty = torch.ones(src_pts_xy.shape[0], dtype=torch.float, device=self.device)
 
