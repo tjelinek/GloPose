@@ -13,7 +13,6 @@ from kornia.geometry import Se3
 
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
-from data_providers.matching_provider_sift import SIFTMatchingProvider
 
 from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.frame_filter import compute_matching_reliability
@@ -171,7 +170,7 @@ class BOPChallengePosePredictor:
                                device=self.config.device)
 
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
-                      flow_provider: FlowProviderDirect | SIFTMatchingProvider, match_sample_size,
+                      flow_provider: FlowProviderDirect, match_sample_size,
                       match_min_certainty=0., match_reliability_threshold=0.,
                       query_img_segmentation: Optional[torch.Tensor] = None, device: str = 'cuda') -> Se3 | None:
 
