@@ -1,3 +1,5 @@
+import random
+
 import torch
 import shutil
 import numpy as np
@@ -18,7 +20,14 @@ print(f"Using device: {DEVICE}")
 # Load images from directory
 image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
 
-image_paths = sorted(Path(ONBOARD_DIR).iterdir()) + sorted(Path(TEST_DIR).iterdir())
+test_imgs = sorted(Path(TEST_DIR).iterdir())
+test_imgs = random.sample(test_imgs, len(test_imgs))
+
+image_paths = sorted(Path(ONBOARD_DIR).iterdir()) + test_imgs[:1]
+
+if Path(OUTPUT_DIR).exists():
+    shutil.rmtree(OUTPUT_DIR)
+Path(OUTPUT_DIR).mkdir(exist_ok=True, parents=True)
 
 print(f"Found {len(image_paths)} images")
 
@@ -69,22 +78,26 @@ out_frame_idx, out_obj_ids, out_mask_logits = predictor.add_new_mask(
     state, 0, 0, initial_mask_sam_format
 )
 
-# Save initial result
-torch.save((out_frame_idx, out_obj_ids, out_mask_logits),
-           out_path / f'{0:06d}.pt')
-print(f"Saved frame 0 segmentation")
+
+def overlay_mask(image, mask, color=(255, 0, 0), alpha=0.5):
+    overlay = image.copy()
+    mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+    color_img = Image.new("RGB", image.size, color)
+    overlay.paste(color_img, mask=mask_img)
+    return Image.blend(image, overlay, alpha)
+
 
 # Propagate through video
 print("Propagating segmentation through video...")
 for i, (_, out_obj_ids, out_mask_logits) in enumerate(predictor.propagate_in_video(state)):
-    frame_idx = i + 1  # Start from 1 since we already saved frame 0
+    frame_idx = i
     if frame_idx < len(images):
-        torch.save((frame_idx, out_obj_ids, out_mask_logits),
-                   out_path / f'{frame_idx:06d}.pt')
-        print(f"Saved frame {frame_idx} segmentation")
+        for proposal_idx in range(out_mask_logits.shape[0]):
+            mask = (out_mask_logits[proposal_idx] > 0).cpu().numpy().astype(bool).squeeze()
+            seg_img = overlay_mask(images[frame_idx], mask)
+            seg_img.save(out_path / f"{frame_idx:06d}_proposal_{proposal_idx}.png")
+            print(f"Saved frame {frame_idx} segmentation")
 
-# Cleanup temporary directory
+# Cleanup
 shutil.rmtree(tmp_path)
-
 print(f"Segmentation complete! Results saved to {OUTPUT_DIR}")
-print(f"Generated {len(images)} segmentation mask files")
