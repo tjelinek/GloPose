@@ -1,6 +1,5 @@
 import json
 import shutil
-from collections import defaultdict, namedtuple
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
@@ -18,12 +17,9 @@ from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
-from utils.bop_challenge import get_gop_camera_intrinsics
-from utils.image_utils import decode_rle_list
+from utils.bop_challenge import get_gop_camera_intrinsics, get_default_detections_per_scene_and_image, \
+    get_default_detections_for_image
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
-
-
-Detection = namedtuple('Detection', ['object_id', 'segmentation_mask', 'score'])
 
 
 class BOPChallengePosePredictor:
@@ -77,15 +73,9 @@ class BOPChallengePosePredictor:
         test_dataset_path = base_dataset_folder / split
 
         if split == 'test' and default_detections_file is not None:
-            with open(default_detections_file, 'r') as f:
-                default_detections_data = json.load(f)
-                default_detections_data_img_idx = defaultdict(list)
-                for i, item in enumerate(default_detections_data):
-                    im_id = item['image_id']
-                    scene_id = item['scene_id']
-                    default_detections_data_img_idx[(im_id, scene_id)].append(i)
+            default_detections_scene_im_dict = get_default_detections_per_scene_and_image(default_detections_file)
         else:
-            default_detections_data = None
+            default_detections_scene_im_dict = None
 
         for i, item in enumerate(test_annotations):
             im_id = item['im_id']
@@ -101,9 +91,8 @@ class BOPChallengePosePredictor:
 
             # Get segmentation files and camera intrinsics
 
-            if default_detections_data is not None:
-                self.get_default_detections_for_image(default_detections_data, default_detections_data_img_idx,
-                                                      scene_id, im_id)
+            if default_detections_scene_im_dict is not None:
+                get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id, self.config.device)
 
             segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
             camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
@@ -119,28 +108,6 @@ class BOPChallengePosePredictor:
             #     )
 
             self.predict_all_poses_in_image(image, camera_intrinsics)
-
-    def get_default_detections_for_image(self, default_detections_data, default_detections_data_img_idx, scene_id,
-                                         im_id) -> List[Detection]:
-        detections_for_image = []  # Initialize as list, not dict
-        for detections_data_idx in default_detections_data_img_idx[(im_id, scene_id)]:
-            detections_data = default_detections_data[detections_data_idx]
-            segmentation_rle_format = detections_data['segmentation']
-
-            mask = decode_rle_list(segmentation_rle_format)
-            mask_tensor = torch.tensor(mask, device=self.config.device)
-            detections_data['segmentation_tensor'] = mask_tensor
-
-            detections_for_image.append(detections_data)
-
-        detections_for_image.sort(key=lambda x: (x['score'], x['category_id']), reverse=True)
-
-        sorted_detections = [Detection(object_id=detection['category_id'],
-                                       segmentation_mask=detection['segmentation_tensor'],
-                                       score=detection['score'])
-                             for detection in detections_for_image]
-
-        return sorted_detections
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
