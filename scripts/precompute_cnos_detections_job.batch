@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --time=03:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G
+#SBATCH --partition=amdgpufast
+#SBATCH --job-name=PrecomputeCNOSDetections
+#SBATCH --err=/mnt/personal/jelint19/results/logs/PrecomputeCNOSDetections.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/PrecomputeCNOSDetections.out
+
+modules_file=~/modules_glotracker_login4.txt
+# shellcheck disable=SC2046
+ml $(<$modules_file)
+
+dataset=""
+
+# Parse args to this SLURM script (supports --dataset=val and --dataset val)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dataset)
+      dataset="${2:-}"; shift 2 ;;
+    --dataset=*)
+      dataset="${1#*=}"; shift ;;
+    *)
+      echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+cmd=(python -m repositories.cnos.infer_masks)
+
+# Forward to Python (expects --dataset optional)
+if [[ -n "${dataset}" ]]; then
+  cmd+=(--dataset "${dataset}")
+fi
+
+export HYDRA_FULL_ERROR=1
+"${cmd[@]}"
