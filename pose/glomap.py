@@ -1,5 +1,6 @@
 import copy
 import select
+import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -23,7 +24,7 @@ from utils.image_utils import get_intrinsics_from_exif
 
 def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], matching_pairs: List[Tuple[int, int]],
                                  init_with_first_two_images: bool, mapper: str, match_provider: FlowProviderDirect,
-                                 match_sample_size: int, colmap_working_dir, add_track_merging_matches: bool,
+                                 match_sample_size: int, colmap_working_dir: Path, add_track_merging_matches: bool,
                                  camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
                                  progress=None) \
         -> Optional[pycolmap.Reconstruction]:
@@ -179,8 +180,11 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
     database.close()
+    shutil.copy(database_path, database_path.parent / 'database_before_ransac.db')
 
     two_view_geometry(database_path)
+
+    shutil.copy(database_path, database_path.parent / 'database_after_ransac_before_rec.db')
 
     first_image_id = None
     second_image_id = None
