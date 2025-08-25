@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List
 
+from data_structures.view_graph import merge_two_view_graphs
+
 
 def merge_reconstructions_for_experiment(experiment_name: str, datasets: List[str] = None):
     base_folder = Path('/mnt/personal/jelint19/cache/view_graph_cache') / experiment_name
@@ -25,7 +27,14 @@ def merge_reconstructions_for_experiment(experiment_name: str, datasets: List[st
                 if x == y:
                     pairs.append((i, j))
 
+        for pair_down_i, pair_up_j in pairs:
 
+            down_sequence_folder = down_sequences[pair_down_i]
+            up_sequences_folder = up_sequences[pair_up_j]
+
+            output_path = down_sequence_folder.parent / f'{down_sequences_names}_merged'
+
+            merge_two_view_graphs(down_sequence_folder, up_sequences_folder, output_path)
 
 
 if __name__ == '__main__':
