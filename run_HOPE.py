@@ -42,7 +42,7 @@ def main():
 
             config.experiment_name = experiment_name
             config.dataset = dataset
-            config.image_downsample = 0.25
+            config.image_downsample = .5
             config.large_images_results_write_frequency = 5
             config.depth_scale_to_meter = 0.001
 

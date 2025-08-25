@@ -37,7 +37,7 @@ def main():
             config.experiment_name = experiment_name
             config.sequence = sequence
             config.dataset = dataset
-            config.image_downsample = 0.25
+            config.image_downsample = .5
             config.large_images_results_write_frequency = 4
             config.bop_config.onboarding_type = 'static'
             config.bop_config.static_onboarding_sequence = 'down'
