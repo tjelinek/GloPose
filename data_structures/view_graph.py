@@ -1,6 +1,7 @@
 import pickle
 import shutil
 from pathlib import Path
+from typing import Dict
 
 import networkx as nx
 import pycolmap
@@ -143,13 +144,40 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
 def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):
 
-    colmap_db1_path = viewgraph1_folder / "database.db"
-    colmap_db2_path = viewgraph2_folder / "database.db"
-
     view_graph1 = load_view_graph(viewgraph1_folder, device='cpu')
     view_graph2 = load_view_graph(viewgraph2_folder, device='cpu')
 
+    colmap_db1_path = view_graph1.colmap_db_path
+    colmap_db2_path = view_graph2.colmap_db_path
+
     merged_db_path: Path = merged_folder / "database.db"
-    merge_two_databases(colmap_db1_path, colmap_db1_path, merged_db_path)
+    db1_image_rename_dict, db2_image_rename_dict = merge_two_databases(colmap_db1_path, colmap_db2_path, merged_db_path)
+
+    merged_db = pycolmap.Database(str(merged_db_path))
+
+    relabel_viewgraph_nodes(merged_db, view_graph2, db2_image_rename_dict)
+    relabel_viewgraph_nodes(merged_db, view_graph1, db1_image_rename_dict)
 
     pass
+
+
+def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
+                            db_image_rename_dict: Dict[str, str] = None):
+    all_merged_images = {image.name: image for image in merged_db.read_all_images()}
+    viewgraph_node_relabel_mapping = {}
+    image_rename_mapping = {}
+    for node_id in view_graph.view_graph.nodes:
+        node = view_graph.get_node_data(node_id)
+        old_image_name = node.colmap_db_image_name
+        new_image_name = db_image_rename_dict[old_image_name]
+
+        merged_db_image = all_merged_images[new_image_name]
+        new_image_colmap_id = merged_db_image.image_id
+
+        node.colmap_db_image_id = new_image_colmap_id
+        node.colmap_db_image_name = new_image_name
+
+        viewgraph_node_relabel_mapping[node_id] = new_image_colmap_id
+        image_rename_mapping[old_image_name] = new_image_name
+
+    view_graph.view_graph = nx.relabel_nodes(view_graph.view_graph, viewgraph_node_relabel_mapping)

@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 
 import pycolmap
 import torch
@@ -24,34 +24,44 @@ def world2cam_from_reconstruction(reconstruction: pycolmap.Reconstruction) -> Di
     return poses
 
 
-def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_path: Path, db2_imgs_prefix="db2_") \
-        -> Dict[str, str]:
-    # Ensure output directory exists
-
-    print("Analyzing databases...")
+def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_path: Path, db1_imgs_prefix="db1_",
+                        db2_imgs_prefix="db2_") \
+        -> Tuple[Dict[str, str], Dict[str, str]]:
 
     db1 = pycolmap.Database(str(colmap_db1_path))
 
+    tmp_db1_path = merged_db_path.parent / 'tmp_db1.db'
     tmp_db2_path = merged_db_path.parent / 'tmp_db2.db'
+
+    shutil.copy(colmap_db1_path, tmp_db1_path)
     shutil.copy(colmap_db2_path, tmp_db2_path)
+
+    tmp_db1 = pycolmap.Database(str(tmp_db1_path))
     tmp_db2 = pycolmap.Database(str(tmp_db2_path))
 
-    db2_rename_dict = {}
-    for image in tmp_db2.read_all_images():
+    def rename_db_imgs(tmp_db: pycolmap.Database, db_imgs_prefix: str):
+        db_rename_dict = {}
+        for image in tmp_db.read_all_images():
 
-        old_name = image.name
-        new_name = db2_imgs_prefix + image.name
-        image.name = new_name
-        tmp_db2.update_image(image)
+            old_name = image.name
+            new_name = db_imgs_prefix + image.name
+            image.name = new_name
+            tmp_db.update_image(image)
 
-        db2_rename_dict[old_name] = new_name
+            db_rename_dict[old_name] = new_name
+
+        return db_rename_dict
+
+    db1_rename_dict = rename_db_imgs(tmp_db1, db1_imgs_prefix)
+    db2_rename_dict = rename_db_imgs(tmp_db2, db2_imgs_prefix)
 
     merged_db = pycolmap.Database(str(merged_db_path))
-    pycolmap.Database.merge(db1, tmp_db2, merged_db)
+    pycolmap.Database.merge(tmp_db1, tmp_db2, merged_db)
 
+    tmp_db1_path.unlink()
     tmp_db2_path.unlink()
 
     db1.close()
     merged_db.close()
 
-    return db2_rename_dict
+    return db1_rename_dict, db2_rename_dict
