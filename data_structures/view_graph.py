@@ -11,6 +11,7 @@ from kornia.geometry import Se3, Quaternion
 
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
+from pose.colmap_utils import merge_two_databases
 
 
 @dataclass
@@ -138,3 +139,17 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
     #         view_graph.view_graph.add_edge(u, v)
 
     return view_graph
+
+
+def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):
+
+    colmap_db1_path = viewgraph1_folder / "database.db"
+    colmap_db2_path = viewgraph2_folder / "database.db"
+
+    view_graph1 = load_view_graph(viewgraph1_folder, device='cpu')
+    view_graph2 = load_view_graph(viewgraph2_folder, device='cpu')
+
+    merged_db_path: Path = merged_folder / "database.db"
+    merge_two_databases(colmap_db1_path, colmap_db1_path, merged_db_path)
+
+    pass
