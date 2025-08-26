@@ -12,7 +12,7 @@ from kornia.geometry import Se3, Quaternion
 
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
-from pose.colmap_utils import merge_two_databases
+from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
 
 
 @dataclass
@@ -60,7 +60,8 @@ class ViewGraph:
         self.colmap_reconstruction_path = reconstruction_path
 
         new_db_path = save_dir / self.colmap_db_path.name
-        shutil.copy(self.colmap_db_path, new_db_path)
+        if self.colmap_db_path != new_db_path:
+            shutil.copy(self.colmap_db_path, new_db_path)
         self.colmap_db_path = new_db_path
 
         graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,6 +145,10 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
 def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):
 
+    if merged_folder.exists():
+        shutil.rmtree(merged_folder)
+    merged_folder.mkdir(parents=True, exist_ok=True)
+
     view_graph1 = load_view_graph(viewgraph1_folder, device='cpu')
     view_graph2 = load_view_graph(viewgraph2_folder, device='cpu')
 
@@ -161,7 +166,19 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     copy_relabeled_images(viewgraph1_folder, viewgraph1_node_relabel_mapping, merged_folder)
     copy_relabeled_images(viewgraph2_folder, viewgraph2_node_relabel_mapping, merged_folder)
 
-    pass
+    merged_reconstruction_path = merged_folder / 'reconstruction'
+
+    reconstruction1 = pycolmap.Reconstruction(str(view_graph1.colmap_reconstruction_path))
+    reconstruction2 = pycolmap.Reconstruction(str(view_graph2.colmap_reconstruction_path))
+
+    merged_reconstruction = merge_colmap_reconstructions(reconstruction1, reconstruction2)
+
+    merged_viewgraph = ViewGraph(view_graph1.object_id, merged_db_path, merged_reconstruction_path, view_graph1.device)
+
+    merged_viewgraph_G = nx.compose(view_graph1.view_graph, view_graph2.view_graph)
+    merged_viewgraph.view_graph = merged_viewgraph_G
+    merged_viewgraph.save_viewgraph(merged_folder, merged_reconstruction, save_images=True, overwrite=False,
+                                    to_cpu=True)
 
 
 def copy_relabeled_images(source_viewgraph_folder, viewgraph_node_relabel_mapping, target_viewgraph_folder):
