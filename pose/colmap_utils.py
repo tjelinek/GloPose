@@ -51,4 +51,7 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
 
     tmp_db2_path.unlink()
 
+    db1.close()
+    merged_db.close()
+
     return db2_rename_dict
