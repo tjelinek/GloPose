@@ -65,3 +65,60 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     merged_db.close()
 
     return db1_rename_dict, db2_rename_dict
+
+
+def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.Reconstruction)\
+        -> pycolmap.Reconstruction:
+    max_camera_id = max(rec1.cameras.keys()) if rec1.cameras else 0
+
+    # Find the max image ID in rec1 to avoid conflicts
+    max_image_id = max(rec1.images.keys()) if rec1.images else 0
+
+    # Map old camera IDs to new camera IDs
+    camera_id_mapping = {}
+
+    # Map old image IDs to new image IDs
+    image_id_mapping = {}
+
+    # Add all cameras from rec2, assigning new IDs
+    for old_camera_id, camera in rec2.cameras.items():
+        max_camera_id += 1
+        camera.camera_id = max_camera_id
+        rec1.add_camera(camera)
+        camera_id_mapping[old_camera_id] = max_camera_id
+
+    # Add all images from rec2, creating new images with updated camera and image IDs
+    for old_image_id, image in rec2.images.items():
+        max_image_id += 1
+
+        # Create clean points2D without 3D point associations
+        clean_points2D = pycolmap.ListPoint2D()
+        for point2D in image.points2D:
+            # Create new Point2D without the 3D point association
+            clean_point2D = pycolmap.Point2D(xy=point2D.xy)
+            clean_points2D.append(clean_point2D)
+
+        # Create new image with cleaned points2D
+        new_image = pycolmap.Image(
+            name=image.name,
+            points2D=clean_points2D,
+            cam_from_world=image.cam_from_world,
+            camera_id=camera_id_mapping[image.camera_id],
+            id=max_image_id
+        )
+        rec1.add_image(new_image)
+        image_id_mapping[old_image_id] = max_image_id
+
+    # Add all 3D points from rec2, updating track image IDs
+    for point3D in rec2.points3D.values():
+        # Create new track with updated image IDs
+        new_track = pycolmap.Track()
+        for track_element in point3D.track.elements:
+            new_track.add_element(
+                image_id_mapping[track_element.image_id],
+                track_element.point2D_idx
+            )
+
+        rec1.add_point3D(point3D.xyz, new_track, point3D.color)
+
+    return rec1
