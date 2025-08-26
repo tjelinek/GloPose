@@ -121,8 +121,7 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str, config: TrackerConfig, gt_cam_scale,
-                         output_folder: Path = None, only_frames_with_known_poses: bool = False,
-                         scene_obj_id: int = None):
+                         output_folder: Path = None, scene_obj_id: int = None):
 
     onboarding_type = config.bop_config.onboarding_type
     sequence = config.sequence
@@ -164,7 +163,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     config.object_id = object_id
 
     # Apply frame skipping
-    if only_frames_with_known_poses:
+    if config.run_only_on_frames_with_known_pose:
         valid_frames = sorted(dict_gt_Se3_cam2obj.keys())
     else:
         valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))

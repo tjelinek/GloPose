@@ -42,6 +42,7 @@ class TrackerConfig:
     gt_flow_source: str = 'FlowNetwork'  # One of 'FlowNetwork', 'GenerateSynthetic'
     image_downsample: float = 1.0
     depth_scale_to_meter: float = 1.0  # depth * depth_scale_to_meter = <depth_in_meters>
+    run_only_on_frames_with_known_pose: bool = True
 
     # Renderer settings
     camera_position: Tuple[float, float, float] = (0, 0, 5.0)

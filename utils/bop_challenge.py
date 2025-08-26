@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
+from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.image_utils import decode_rle_list
 from utils.math_utils import scale_Se3
@@ -416,3 +417,23 @@ def get_default_detections_for_image(default_detections_data_scene_im_dict: Dict
                          for detection in detections_for_image]
 
     return sorted_detections
+
+
+def set_config_for_bop_onboarding(config: TrackerConfig, sequence: str):
+    sequence_name_split = sequence.split('_')
+    if len(sequence_name_split) == 3:
+        if sequence_name_split[2] == 'down':
+            config.bop_config.onboarding_type = 'static'
+            config.bop_config.static_onboarding_sequence = 'down'
+            config.similarity_transformation = 'kabsch'
+        elif sequence_name_split[2] == 'up':
+            config.bop_config.onboarding_type = 'static'
+            config.bop_config.static_onboarding_sequence = 'up'
+            config.similarity_transformation = 'kabsch'
+        elif sequence_name_split[2] == 'dynamic':
+            config.bop_config.onboarding_type = 'dynamic'
+            config.similarity_transformation = 'depths'
+            config.frame_provider_config.erode_segmentation = True
+            config.run_only_on_frames_with_known_pose = False
+            config.skip_indices *= 4
+        config.sequence = '_'.join(sequence_name_split[:2])

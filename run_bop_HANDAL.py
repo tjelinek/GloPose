@@ -43,12 +43,13 @@ def main():
             config.dataset = dataset
             config.image_downsample = .5
             config.large_images_results_write_frequency = 5
-
+            config.run_only_on_frames_with_known_pose = True
             config.skip_indices *= 1
 
             sequence_type = 'val'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder, True, scene_obj_id=obj_id)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder,
+                                 scene_obj_id=obj_id)
 
 
 if __name__ == "__main__":
