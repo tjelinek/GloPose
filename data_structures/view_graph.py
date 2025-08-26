@@ -1,7 +1,7 @@
 import pickle
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 
 import networkx as nx
 import pycolmap
@@ -155,14 +155,37 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
 
     merged_db = pycolmap.Database(str(merged_db_path))
 
-    relabel_viewgraph_nodes(merged_db, view_graph2, db2_image_rename_dict)
-    relabel_viewgraph_nodes(merged_db, view_graph1, db1_image_rename_dict)
+    viewgraph1_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph1, db1_image_rename_dict)
+    viewgraph2_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph2, db2_image_rename_dict)
+
+    copy_relabeled_images(viewgraph1_folder, viewgraph1_node_relabel_mapping, merged_folder)
+    copy_relabeled_images(viewgraph2_folder, viewgraph2_node_relabel_mapping, merged_folder)
 
     pass
 
 
+def copy_relabeled_images(source_viewgraph_folder, viewgraph_node_relabel_mapping, target_viewgraph_folder):
+    viewgraph_img_folder = source_viewgraph_folder / 'images'
+    viewgraph_seg_folder = source_viewgraph_folder / 'segmentations'
+    merged_img_folder = target_viewgraph_folder / 'images'
+    merged_seg_folder = target_viewgraph_folder / 'segmentations'
+
+    merged_img_folder.mkdir(parents=True, exist_ok=True)
+    merged_seg_folder.mkdir(parents=True, exist_ok=True)
+
+    for old_img_id, new_img_id in viewgraph_node_relabel_mapping.items():
+        old_image_path = viewgraph_img_folder / f'{old_img_id}_image.png'
+        old_seg_path = viewgraph_seg_folder / f'{old_img_id}_seg.png'
+
+        new_image_path = merged_img_folder / f'{new_img_id}_image.png'
+        new_seg_path = merged_seg_folder / f'{new_img_id}_seg.png'
+
+        shutil.copy(old_image_path, new_image_path)
+        shutil.copy(old_seg_path, new_seg_path)
+
+
 def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
-                            db_image_rename_dict: Dict[str, str] = None):
+                            db_image_rename_dict: Dict[str, str] = None) -> Dict[Any, Any]:
     all_merged_images = {image.name: image for image in merged_db.read_all_images()}
     viewgraph_node_relabel_mapping = {}
     image_rename_mapping = {}
@@ -181,3 +204,5 @@ def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
         image_rename_mapping[old_image_name] = new_image_name
 
     view_graph.view_graph = nx.relabel_nodes(view_graph.view_graph, viewgraph_node_relabel_mapping)
+
+    return viewgraph_node_relabel_mapping
