@@ -156,8 +156,8 @@ def load_static_onboarding_parts(
     folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
     folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
 
-    data_down = loader_fn(folder_down) if folder_down.exists() else None
-    data_up = loader_fn(folder_up) if folder_up.exists() else None
+    data_down = loader_fn(folder_down) if folder_down.exists() else {}
+    data_up = loader_fn(folder_up) if folder_up.exists() else {}
 
     if static_onboarding_sequence == 'both':
         assert data_down is not None and data_up is not None and sequence_starts is not None
@@ -190,10 +190,10 @@ def get_bop_images_and_segmentations(
         down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
         up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
 
-        images_down = load_gt_images(down_folder / 'rgb')
-        images_up = load_gt_images(up_folder / 'rgb')
-        segs_down = load_gt_segmentations(down_folder / 'mask_visib')
-        segs_up = load_gt_segmentations(up_folder / 'mask_visib')
+        images_down = load_gt_images(down_folder / 'rgb') if down_folder.exists() else {}
+        images_up = load_gt_images(up_folder / 'rgb') if up_folder.exists() else {}
+        segs_down = load_gt_segmentations(down_folder / 'mask_visib') if down_folder.exists() else {}
+        segs_up = load_gt_segmentations(up_folder / 'mask_visib') if up_folder.exists() else {}
 
         depth_down_folder = down_folder / 'depth'
         depth_up_folder = up_folder / 'depth'
@@ -205,12 +205,12 @@ def get_bop_images_and_segmentations(
             depths_up = load_gt_images(depth_up_folder)
 
         if static_onboarding_sequence == 'both':
-            assert images_down is not None and images_up is not None
-            assert segs_down is not None and segs_up is not None
+            assert images_down is not None or images_up is not None
+            assert segs_down is not None or segs_up is not None
             sequence_starts.append(len(images_down))
 
             merged_images = images_down
-            merged_segmentations = images_down
+            merged_segmentations = segs_down
             merged_depths = depths_down
 
             offset = sequence_starts[1]
@@ -268,7 +268,7 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
 
 def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
                    onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
-                   scene_obj_id: int = None) -> int:
+                   scene_obj_id: int = None, sequence_starts: List[int] = None) -> int:
     if sequence_type == 'onboarding' and onboarding_type == 'static':
         return load_static_onboarding_parts(
             bop_folder,
@@ -278,7 +278,7 @@ def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type:
             onboarding_type,
             static_onboarding_sequence,
             loader_fn=lambda p: extract_object_id(p / 'scene_gt.json'),
-            sequence_starts=None
+            sequence_starts=sequence_starts
         )[1]
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
@@ -436,4 +436,8 @@ def set_config_for_bop_onboarding(config: TrackerConfig, sequence: str):
             config.frame_provider_config.erode_segmentation = True
             config.run_only_on_frames_with_known_pose = False
             config.skip_indices *= 4
+        elif sequence_name_split[2] == 'both':
+            config.bop_config.onboarding_type = 'static'
+            config.bop_config.static_onboarding_sequence = 'both'
+            config.similarity_transformation = 'kabsch'
         config.sequence = '_'.join(sequence_name_split[:2])

@@ -159,7 +159,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
                                                               device=config.device)
 
     object_id = read_object_id(bop_folder, dataset, sequence, sequence_type, onboarding_type,
-                               static_onboarding_sequence, scene_obj_id)
+                               static_onboarding_sequence, scene_obj_id, sequence_starts)
     config.object_id = object_id
 
     # Apply frame skipping
@@ -194,7 +194,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     if gt_Se3_world2cam is not None:
         gt_Se3_world2cam = reindex_frame_dict(gt_Se3_world2cam, valid_frames)
 
-    if gt_Se3_world2cam is None and dict_gt_Se3_cam2obj is not None:
+    if dict_gt_Se3_cam2obj is not None:
         gt_Se3_world2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
         dict_gt_Se3_cam2obj = None
 
@@ -204,8 +204,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     config.segmentation_provider = 'SAM2'
 
     # Initialize and run the tracker
-    tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                        gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
-                        input_segmentations=gt_segs, depth_paths=gt_depths, initial_segmentation=first_segmentation)
+    tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_world2cam,
+                        gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
+                        initial_segmentation=first_segmentation)
 
     tracker.run_pipeline()
