@@ -184,8 +184,8 @@ class Tracker6D:
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze(0).permute(1, 2, 0).to(device)
 
-        image_filename = f'node_{frame_idx}.png'
-        seg_filename = f'node_{frame_idx}.png.png'
+        image_filename = f'{frame_idx}.png'
+        seg_filename = f'{frame_idx}.png.png'
 
         node_save_path = self.colmap_image_path / image_filename
         img_np = (img * 255).to(torch.uint8).numpy(force=True)
@@ -382,10 +382,10 @@ class Tracker6D:
         if self.gt_Se3_world2cam is not None and (gt_Se3_world2cam := self.gt_Se3_world2cam.get(frame_i)):
             frame_node.gt_Se3_world2cam = gt_Se3_world2cam
 
-        frame_node.image_filename = Path(self.tracker.get_n_th_image_name(frame_i))
+        frame_node.image_filename = Path(f'{frame_i * self.config.skip_indices}.png')
 
         if type(self.input_segmentations) is list:
-            frame_node.segmentation_filename = Path(self.input_segmentations[frame_i * self.config.skip_indices].name)
+            frame_node.segmentation_filename = Path(f'{frame_i * self.config.skip_indices}.png')
 
     def evaluate_sam(self):
 
