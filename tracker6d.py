@@ -184,15 +184,8 @@ class Tracker6D:
         img = frame_data.frame_observation.observed_image.squeeze().permute(1, 2, 0).to(device)
         img_seg = frame_data.frame_observation.observed_segmentation.squeeze(0).permute(1, 2, 0).to(device)
 
-        if frame_data.image_filename is not None:
-            image_filename = frame_data.image_filename
-        else:
-            image_filename = f'node_{frame_idx}.png'
-
-        if frame_data.segmentation_filename is not None:
-            seg_filename = frame_data.segmentation_filename
-        else:
-            seg_filename = f'segment_{frame_idx}.png'
+        image_filename = f'node_{frame_idx}.png'
+        seg_filename = f'node_{frame_idx}.png.png'
 
         node_save_path = self.colmap_image_path / image_filename
         img_np = (img * 255).to(torch.uint8).numpy(force=True)
