@@ -382,10 +382,10 @@ class Tracker6D:
         if self.gt_Se3_world2cam is not None and (gt_Se3_world2cam := self.gt_Se3_world2cam.get(frame_i)):
             frame_node.gt_Se3_world2cam = gt_Se3_world2cam
 
-        frame_node.image_filename = Path(f'{frame_i * self.config.skip_indices}.png')
+        frame_node.image_filename = Path(f'{frame_i}.png')
 
         if type(self.input_segmentations) is list:
-            frame_node.segmentation_filename = Path(f'{frame_i * self.config.skip_indices}.png')
+            frame_node.segmentation_filename = Path(f'{frame_i}.png')
 
     def evaluate_sam(self):
 
