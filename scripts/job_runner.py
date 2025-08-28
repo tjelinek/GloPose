@@ -151,7 +151,7 @@ def main():
 
     sequences = {
         Datasets.SyntheticObjects: [
-            'Textured_Sphere_5_y',
+            # 'Textured_Sphere_5_y',
             # 'Textured_Sphere_5_x',
             # 'Textured_Sphere_5_z',
             # 'Textured_Cube_5_y',
@@ -170,14 +170,14 @@ def main():
         Datasets.GoogleScannedObjects: [
             # 'INTERNATIONAL_PAPER_Willamette_4_Brown_Bag_500Count',
             # 'Twinlab_Nitric_Fuel',
-            'Squirrel',
+            # 'Squirrel',
             # 'STACKING_BEAR',
             # 'Schleich_Allosaurus',
-            'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
+            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
             # 'SCHOOL_BUS',
             # 'Sootheze_Cold_Therapy_Elephant',
             # 'TOP_TEN_HI',
-            'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
+            # 'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
         ],
         Datasets.HO3D_eval: [
             'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
@@ -597,7 +597,7 @@ def main():
             "handal_dataset_ladles@008004", "handal_dataset_ladles@003004",
             "handal_dataset_ladles@010009", "handal_dataset_ladles@008009", "handal_dataset_ladles@003008",
             "handal_dataset_ladles@010005", "handal_dataset_ladles@010003"
-        ],
+        ][::5],
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: [
             # 'obj_000001_down', 'obj_000002_down', 'obj_000003_down', 'obj_000004_down', 'obj_000005_down',
             # 'obj_000006_down', 'obj_000007_down', 'obj_000008_down', 'obj_000009_down', 'obj_000010_down',
