@@ -1,5 +1,7 @@
 import pickle
 import shutil
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any
 
@@ -7,12 +9,20 @@ import networkx as nx
 import pycolmap
 import torch
 import torchvision.utils as vutils
-from dataclasses import dataclass
+from einops import rearrange
+from hydra import initialize_config_dir, compose
+from hydra.core.global_hydra import GlobalHydra
+from hydra.utils import instantiate
 from kornia.geometry import Se3, Quaternion
+from torchvision.ops import masks_to_boxes
 
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
+
+sys.path.append('./repositories/cnos')
+from src.model.dinov2 import CustomDINOv2
+from src.model.utils import Detections
 
 
 @dataclass
@@ -21,6 +31,7 @@ class ViewGraphNode:
     observation: FrameObservation
     colmap_db_image_id: int
     colmap_db_image_name: str
+    dino_descriptor: torch.Tensor
 
 
 class ViewGraph:
@@ -32,10 +43,26 @@ class ViewGraph:
         self.colmap_reconstruction_path: Path = colmap_output_path
         self.device: str = device
 
+        if GlobalHydra.instance().is_initialized():
+            GlobalHydra.instance().clear()
+        cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
+        with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
+            cnos_cfg = compose(config_name="run_inference")
+
+        self.dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(self.device)
+        self.dino_descriptor.model = self.dino_descriptor.model.to(self.device)
+        self.dino_descriptor.model.device = self.device
+
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
+        image_tensor = observation.observed_image
+        segmentation_mask = observation.observed_segmentation.squeeze(1).to(self.device)
+        segmentation_bbox = masks_to_boxes(segmentation_mask)
+        image_np = rearrange((image_tensor * 255).to(torch.uint8), '1 c h w -> h w c').numpy(force=True)
+        detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
+        dino_descriptor = self.dino_descriptor(image_np, detections).squeeze()
         self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
-                                                             colmap_db_image_name))
+                                                             colmap_db_image_name, dino_descriptor))
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
         """Returns the ViewGraphNode data for a given node ID."""
@@ -101,6 +128,7 @@ class ViewGraph:
             node_data: ViewGraphNode = data["data"]
             node_data.observation = node_data.observation.send_to_device(device)
             node_data.Se3_obj2cam = node_data.Se3_obj2cam.to(device)
+            node_data.dino_descriptor = node_data.dino_descriptor.to(device)
 
 
 def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
