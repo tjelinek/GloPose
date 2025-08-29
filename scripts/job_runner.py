@@ -599,7 +599,7 @@ def main():
             "handal_dataset_ladles@008004", "handal_dataset_ladles@003004",
             "handal_dataset_ladles@010009", "handal_dataset_ladles@008009", "handal_dataset_ladles@003008",
             "handal_dataset_ladles@010005", "handal_dataset_ladles@010003"
-        ][::5],
+        ],
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: [
             # 'obj_000001_down', 'obj_000002_down', 'obj_000003_down', 'obj_000004_down', 'obj_000005_down',
             # 'obj_000006_down', 'obj_000007_down', 'obj_000008_down', 'obj_000009_down', 'obj_000010_down',
