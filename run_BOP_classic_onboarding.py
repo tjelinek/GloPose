@@ -4,46 +4,28 @@ from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-HOPE_ONBOARDING_DYNAMIC_SEQUENCES = [
-    'obj_000001_dynamic', 'obj_000006_dynamic', 'obj_000011_dynamic', 'obj_000016_dynamic',
-    'obj_000021_dynamic', 'obj_000026_dynamic', 'obj_000002_dynamic', 'obj_000007_dynamic',
-    'obj_000012_dynamic', 'obj_000017_dynamic', 'obj_000022_dynamic', 'obj_000027_dynamic',
-    'obj_000003_dynamic', 'obj_000008_dynamic', 'obj_000013_dynamic', 'obj_000018_dynamic',
-    'obj_000023_dynamic', 'obj_000028_dynamic', 'obj_000004_dynamic', 'obj_000009_dynamic',
-    'obj_000014_dynamic', 'obj_000019_dynamic', 'obj_000024_dynamic', 'obj_000005_dynamic',
-    'obj_000010_dynamic', 'obj_000015_dynamic', 'obj_000020_dynamic', 'obj_000025_dynamic',
+BOP_TLESS_ONBOARDING_SEQUENCES = [
+    "tless@train_primesense@000001", "tless@train_primesense@000002", "tless@train_primesense@000003",
+    "tless@train_primesense@000004", "tless@train_primesense@000005", "tless@train_primesense@000006",
+    "tless@train_primesense@000007", "tless@train_primesense@000008", "tless@train_primesense@000009",
+    "tless@train_primesense@000010", "tless@train_primesense@000011", "tless@train_primesense@000012",
+    "tless@train_primesense@000013", "tless@train_primesense@000014", "tless@train_primesense@000015",
+    "tless@train_primesense@000016", "tless@train_primesense@000017", "tless@train_primesense@000018",
+    "tless@train_primesense@000019", "tless@train_primesense@000020", "tless@train_primesense@000021",
+    "tless@train_primesense@000022", "tless@train_primesense@000023", "tless@train_primesense@000024",
+    "tless@train_primesense@000025", "tless@train_primesense@000026", "tless@train_primesense@000027",
+    "tless@train_primesense@000028", "tless@train_primesense@000029", "tless@train_primesense@000030",
 ]
 
-HOPE_ONBOARDING_STATIC_UP_SEQUENCES = [
-    'obj_000001_up', 'obj_000006_up', 'obj_000011_up', 'obj_000016_up',
-    'obj_000021_up', 'obj_000026_up', 'obj_000002_up', 'obj_000007_up',
-    'obj_000012_up', 'obj_000017_up', 'obj_000022_up', 'obj_000027_up',
-    'obj_000003_up', 'obj_000008_up', 'obj_000013_up', 'obj_000018_up',
-    'obj_000023_up', 'obj_000028_up', 'obj_000004_up', 'obj_000009_up',
-    'obj_000014_up', 'obj_000019_up', 'obj_000024_up', 'obj_000005_up',
-    'obj_000010_up', 'obj_000015_up', 'obj_000020_up', 'obj_000025_up',
+BOP_LMO_ONBOARDING_SEQUENCES = [
+    "lmo@train@000001", "lmo@train@000005", "lmo@train@000006",
+    "lmo@train@000008", "lmo@train@000009", "lmo@train@000010",
+    "lmo@train@000011", "lmo@train@000012",
 ]
 
-HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES = [
-    'obj_000001_down', 'obj_000006_down', 'obj_000011_down', 'obj_000016_down',
-    'obj_000021_down', 'obj_000026_down', 'obj_000002_down', 'obj_000007_down',
-    'obj_000012_down', 'obj_000017_down', 'obj_000022_down', 'obj_000027_down',
-    'obj_000003_down', 'obj_000008_down', 'obj_000013_down', 'obj_000018_down',
-    'obj_000023_down', 'obj_000028_down', 'obj_000004_down', 'obj_000009_down',
-    'obj_000014_down', 'obj_000019_down', 'obj_000024_down', 'obj_000005_down',
-    'obj_000010_down', 'obj_000015_down', 'obj_000020_down', 'obj_000025_down',
+BOP_ICBIN_ONBOARDING_SEQUENCES = [
+    "icbin@train@000001", "icbin@train@000002"
 ]
-
-HOPE_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES = [
-    'obj_000001_both', 'obj_000006_both', 'obj_000011_both', 'obj_000016_both',
-    'obj_000021_both', 'obj_000026_both', 'obj_000002_both', 'obj_000007_both',
-    'obj_000012_both', 'obj_000017_both', 'obj_000022_both', 'obj_000027_both',
-    'obj_000003_both', 'obj_000008_both', 'obj_000013_both', 'obj_000018_both',
-    'obj_000023_both', 'obj_000028_both', 'obj_000004_both', 'obj_000009_both',
-    'obj_000014_both', 'obj_000019_both', 'obj_000024_both', 'obj_000005_both',
-    'obj_000010_both', 'obj_000015_both', 'obj_000020_both', 'obj_000025_both',
-]
-
 
 def main():
     dataset = 'hope'
@@ -51,8 +33,8 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = (HOPE_ONBOARDING_DYNAMIC_SEQUENCES + HOPE_ONBOARDING_STATIC_UP_SEQUENCES +
-                     HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES + HOPE_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES)[0:1]
+        sequences = (BOP_TLESS_ONBOARDING_SEQUENCES + BOP_LMO_ONBOARDING_SEQUENCES +
+                     BOP_ICBIN_ONBOARDING_SEQUENCES)[0:1]
 
     for sequence in sequences:
 
