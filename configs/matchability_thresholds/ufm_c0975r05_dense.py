@@ -8,6 +8,6 @@ def get_config() -> TrackerConfig:
     cfg.flow_reliability_threshold = 0.5
     cfg.frame_filter = 'dense_matching'
     cfg.frame_filter_matcher = 'UFM'
-    cfg.frame_filter_view_graph = 'from_matching'
+    cfg.frame_filter_view_graph = 'dense'
 
     return cfg
