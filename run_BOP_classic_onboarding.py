@@ -58,7 +58,6 @@ def main():
             config.large_images_results_write_frequency = 4
             config.depth_scale_to_meter = 0.001
             config.skip_indices *= 4
-            config.device = 'cpu'
 
             # Path to BOP dataset
             bop_folder = config.default_data_folder / 'bop'
