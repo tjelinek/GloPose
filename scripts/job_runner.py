@@ -135,7 +135,7 @@ def main():
         # 'matchability_thresholds/ufm_c0975r05',
         # 'matchability_thresholds/ufm_c0975r05_bbg',
         # 'matchability_thresholds/ufm_c0975r05_bbg_dense',
-        # 'matchability_thresholds/ufm_c0975r05_viewgraph_from_matching',
+        # 'matchability_thresholds/ufm_c0975r05_dense',
         # 'matchability_thresholds/ufm_c0975r075',
         # 'matchability_thresholds/ufm_c0975r075_viewgraph_from_matching',
         # 'matchability_thresholds/ufm_c095r075_new',
