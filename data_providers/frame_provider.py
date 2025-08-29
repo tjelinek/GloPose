@@ -347,7 +347,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
                 shutil.rmtree(self.cache_folder)
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
-            self.cache_paths: List[Path] = [self.cache_folder / (image_provider.get_n_th_image_name(i).stem + '.pt')
+            self.cache_paths: List[Path] = [self.cache_folder / f'{i * self.skip_indices:05d}.pt'
                                             for i in range(self.sequence_length)]
 
             self.cache_exists: bool = all(x.exists() for x in self.cache_paths)
