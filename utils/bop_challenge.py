@@ -101,7 +101,7 @@ def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_
         else:
             raise ValueError(f'Unknown onboarding type {onboarding_type} or direction {direction}')
 
-    elif sequence_type in ['test', 'val', 'train']:
+    elif sequence_type in ['test', 'val', 'train', 'train_primesense', 'train_pbr']:
         return bop_folder / dataset / sequence_type / sequence
     else:
         raise ValueError(f'Unknown sequence type: {sequence_type}')
