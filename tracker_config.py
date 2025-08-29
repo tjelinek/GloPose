@@ -73,7 +73,7 @@ class TrackerConfig:
     min_number_of_reliable_matches: int = 0
     matchability_based_reliability: bool = False
     frame_filter: str = 'dense_matching'  # Either 'dense_matching', 'SIFT', or 'passthrough'
-    frame_filter_view_graph: str = 'dense'  # Either 'dense' or 'from_matching'
+    frame_filter_view_graph: str = 'from_matching'  # Either 'dense' or 'from_matching'
     passthrough_frame_filter_skip: int = 1
 
     # Dense matching config
