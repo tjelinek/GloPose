@@ -16,6 +16,7 @@ class Datasets(Enum):
     BOP_HANDAL_ONBOARDING_DYNAMIC = "BOP_HANDAL_ONBOARDING_DYNAMIC"
     HOPE_ONBOARDING_STATIC = "HOPE_ONBOARDING_STATIC"
     HOPE_ONBOARDING_DYNAMIC = "HOPE_ONBOARDING_DYNAMIC"
+    BOP_CLASSIC_ONBOARDING_SEQUENCES = "BOP_CLASSIC_ONBOARDING_SEQUENCES"
     BEHAVE = "BEHAVE"
     TUM_RGBD = "TUM_RGBD"
 
@@ -32,6 +33,7 @@ runners = {
     Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: "run_bop_HANDAL_onboarding.py",
     Datasets.HOPE_ONBOARDING_STATIC: "run_HOPE.py",
     Datasets.HOPE_ONBOARDING_DYNAMIC: "run_HOPE.py",
+    Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: "run_BOP_classic_onboarding.py",
     Datasets.BEHAVE: "run_BEHAVE.py",
     Datasets.TUM_RGBD: "run_TUM_RGBD.py",
 }
@@ -666,6 +668,22 @@ def main():
             'obj_000023_both', 'obj_000028_both', 'obj_000004_both', 'obj_000009_both',
             'obj_000014_both', 'obj_000019_both', 'obj_000024_both', 'obj_000005_both',
             'obj_000010_both', 'obj_000015_both', 'obj_000020_both', 'obj_000025_both',
+        ],
+        Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES : [
+            "tless@train_primesense@000001", "tless@train_primesense@000002", "tless@train_primesense@000003",
+            "tless@train_primesense@000004", "tless@train_primesense@000005", "tless@train_primesense@000006",
+            "tless@train_primesense@000007", "tless@train_primesense@000008", "tless@train_primesense@000009",
+            "tless@train_primesense@000010", "tless@train_primesense@000011", "tless@train_primesense@000012",
+            "tless@train_primesense@000013", "tless@train_primesense@000014", "tless@train_primesense@000015",
+            "tless@train_primesense@000016", "tless@train_primesense@000017", "tless@train_primesense@000018",
+            "tless@train_primesense@000019", "tless@train_primesense@000020", "tless@train_primesense@000021",
+            "tless@train_primesense@000022", "tless@train_primesense@000023", "tless@train_primesense@000024",
+            "tless@train_primesense@000025", "tless@train_primesense@000026", "tless@train_primesense@000027",
+            "tless@train_primesense@000028", "tless@train_primesense@000029", "tless@train_primesense@000030",
+            "lmo@train@000001", "lmo@train@000005", "lmo@train@000006",
+            "lmo@train@000008", "lmo@train@000009", "lmo@train@000010",
+            "lmo@train@000011", "lmo@train@000012",
+            "icbin@train@000001", "icbin@train@000002"
         ],
         Datasets.BEHAVE: [
             # '225z4rz6dtrsezi34lsrcnukni',

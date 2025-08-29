@@ -57,7 +57,8 @@ def main():
             config.image_downsample = 1.
             config.large_images_results_write_frequency = 4
             config.depth_scale_to_meter = 0.001
-            config.skip_indices *= 1
+            config.skip_indices *= 4
+            config.device = 'cpu'
 
             # Path to BOP dataset
             bop_folder = config.default_data_folder / 'bop'
@@ -67,10 +68,46 @@ def main():
             else:
                 folder = config.default_results_folder / experiment_name / dataset / f'{sequence_name}'
 
-            set_config_for_bop_onboarding(config, sequence)
+            # Load images and segmentations
+            gt_images, gt_segs, gt_depths, sequence_starts = \
+                get_bop_images_and_segmentations(bop_folder, dataset, sequence_name, onboarding_folder)
+            # Get camera-to-object transformations
+            dict_gt_Se3_cam2obj = \
+                read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence_name, onboarding_folder, 1.0,
+                                                    device=config.device)
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, write_folder)
+            object_id = read_object_id(bop_folder, dataset, sequence_name, onboarding_folder)
+            config.object_id = object_id
+            # Apply frame skipping
+            if config.run_only_on_frames_with_known_pose:
+                valid_frames = sorted(dict_gt_Se3_cam2obj.keys())
+            else:
+                valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
+            gt_images = [gt_images[i] for i in valid_frames]
+            gt_segs = [gt_segs[i] for i in valid_frames]
+            if gt_depths is not None:
+                gt_depths = [gt_depths[i] for i in valid_frames]
+            dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
+            # Get initial image and segmentation
+            first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
+                                                                                          segmentation_channel=0)
+            # Get camera parameters
+            pinhole_params = read_pinhole_params(bop_folder, dataset, sequence_name, onboarding_folder,
+                                                 config.image_downsample, device=config.device)
 
+            pinhole_params = reindex_frame_dict(pinhole_params, valid_frames)
+
+            gt_Se3_obj2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
+
+            # Update config with frame information
+            config.input_frames = len(gt_images)
+            config.frame_provider = 'precomputed'
+            config.segmentation_provider = 'SAM2'
+            # Initialize and run the tracker
+            tracker = Tracker6D(config, folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_obj2cam,
+                                gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
+                                initial_segmentation=first_segmentation)
+            tracker.run_pipeline()
 
 
 if __name__ == "__main__":
