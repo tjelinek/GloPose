@@ -44,7 +44,7 @@ def main():
 
     for sequence_code in sequences:
         sequence_code_split = sequence_code.split('@')
-        dataset, onboarding_folder, sequence_name = sequence_code_split[0]
+        dataset, onboarding_folder, sequence_name = sequence_code_split
 
         with exception_logger():
             config = load_config(args.config)
@@ -54,12 +54,10 @@ def main():
             config.experiment_name = experiment_name
             config.dataset = dataset
             config.sequence = sequence_name
-            config.image_downsample = .5
-            config.large_images_results_write_frequency = 5
+            config.image_downsample = 1.
+            config.large_images_results_write_frequency = 4
             config.depth_scale_to_meter = 0.001
             config.skip_indices *= 1
-
-            sequence_type = 'onboarding'
 
             # Path to BOP dataset
             bop_folder = config.default_data_folder / 'bop'
