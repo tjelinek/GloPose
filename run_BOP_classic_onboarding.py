@@ -27,8 +27,8 @@ BOP_ICBIN_ONBOARDING_SEQUENCES = [
     "icbin@train@000001", "icbin@train@000002"
 ]
 
+
 def main():
-    dataset = 'hope'
     args = parse_args()
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -36,7 +36,9 @@ def main():
         sequences = (BOP_TLESS_ONBOARDING_SEQUENCES + BOP_LMO_ONBOARDING_SEQUENCES +
                      BOP_ICBIN_ONBOARDING_SEQUENCES)[0:1]
 
-    for sequence in sequences:
+    for sequence_code in sequences:
+        sequence_code_split = sequence_code.split('@')
+        dataset, onboarding_folder, sequence_name = sequence_code_split[0]
 
         with exception_logger():
             config = load_config(args.config)
@@ -45,15 +47,21 @@ def main():
 
             config.experiment_name = experiment_name
             config.dataset = dataset
+            config.sequence = sequence_name
             config.image_downsample = .5
             config.large_images_results_write_frequency = 5
             config.depth_scale_to_meter = 0.001
-
             config.skip_indices *= 1
 
             sequence_type = 'onboarding'
 
-            write_folder = args.output_folder
+            # Path to BOP dataset
+            bop_folder = config.default_data_folder / 'bop'
+            # Determine output folder
+            if args.output_folder is not None:
+                folder = Path(args.output_folder) / dataset / f'{sequence_name}'
+            else:
+                folder = config.default_results_folder / experiment_name / dataset / f'{sequence_name}'
 
             set_config_for_bop_onboarding(config, sequence)
 
