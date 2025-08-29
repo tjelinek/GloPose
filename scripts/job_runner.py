@@ -66,16 +66,16 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def create_unused_folder(output_folder: Path):
+    # i = 1
+    # while os.path.exists(f"{output_folder}_{i}"):
+    #     i += 1
+    # final_output_folder = f"{output_folder}_{i}"
+    # os.makedirs(final_output_folder, exist_ok=True)
+    #
+    # return final_output_folder
+
     os.makedirs(output_folder, exist_ok=True)
     return output_folder
-
-    i = 1
-    while os.path.exists(f"{output_folder}_{i}"):
-        i += 1
-    final_output_folder = f"{output_folder}_{i}"
-    os.makedirs(final_output_folder, exist_ok=True)
-
-    return final_output_folder
 
 
 def main():
@@ -132,10 +132,10 @@ def main():
         # 'matchability_thresholds/ufm_c095r099',
         # 'matchability_thresholds/ufm_c0975r01',
         # 'matchability_thresholds/ufm_c0975r025',
-        # 'matchability_thresholds/ufm_c0975r05',
-        # 'matchability_thresholds/ufm_c0975r05_bbg',
-        # 'matchability_thresholds/ufm_c0975r05_bbg_dense',
-        # 'matchability_thresholds/ufm_c0975r05_dense',
+        'matchability_thresholds/ufm_c0975r05',
+        'matchability_thresholds/ufm_c0975r05_bbg',
+        'matchability_thresholds/ufm_c0975r05_bbg_dense',
+        'matchability_thresholds/ufm_c0975r05_dense',
         # 'matchability_thresholds/ufm_c0975r075',
         # 'matchability_thresholds/ufm_c0975r075_viewgraph_from_matching',
         # 'matchability_thresholds/ufm_c095r075_new',
