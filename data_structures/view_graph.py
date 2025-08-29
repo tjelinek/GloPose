@@ -20,10 +20,6 @@ from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
 
-sys.path.append('./repositories/cnos')
-from src.model.dinov2 import CustomDINOv2
-from src.model.utils import Detections
-
 
 @dataclass
 class ViewGraphNode:
@@ -49,12 +45,15 @@ class ViewGraph:
         with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
             cnos_cfg = compose(config_name="run_inference")
 
+        sys.path.append('./repositories/cnos')
+        from src.model.dinov2 import CustomDINOv2
         self.dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(self.device)
         self.dino_descriptor.model = self.dino_descriptor.model.to(self.device)
         self.dino_descriptor.model.device = self.device
 
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
+        from src.model.utils import Detections
         image_tensor = observation.observed_image
         segmentation_mask = observation.observed_segmentation.squeeze(1).to(self.device)
         segmentation_bbox = masks_to_boxes(segmentation_mask)
