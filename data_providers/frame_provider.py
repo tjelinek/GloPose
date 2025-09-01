@@ -365,11 +365,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
             cfg_dir = Path(sam2.__file__).parent / "configs"
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
-            try:
-                with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
-                    self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint, device=self.device)
-            except:
-                breakpoint()
+            with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
+                self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint, device=self.device)
 
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
