@@ -133,6 +133,9 @@ class ViewGraph:
 def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
     """Loads the graph structure and associated images/segmentations from disk."""
     graph_path = load_dir / "graph.pkl"
+
+    sys.path.append('./repositories/cnos')
+
     with open(graph_path, "rb") as f:
         view_graph: ViewGraph = pickle.load(f)
         view_graph.send_to_device(device)
