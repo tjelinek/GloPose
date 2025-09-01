@@ -9,6 +9,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from hydra import initialize_config_module, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 from kornia.image import ImageSize
 from torchvision import transforms
 from torchvision.io import decode_image, ImageReadMode
@@ -337,6 +339,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
         self.skip_indices = config.skip_indices
 
         from sam2.build_sam import build_sam2, build_sam2_video_predictor
+        import sam2
 
         self.predictor: Optional[SamPredictor] = None
         self.cache_folder: Optional[Path] = sam2_cache_folder
@@ -359,8 +362,14 @@ class SAM2SegmentationProvider(SegmentationProvider):
         if not self.cache_exists:
 
             checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
-            model_cfg = 'configs/sam2.1/sam2.1_hiera_l.yaml'
-            self.predictor = build_sam2_video_predictor(model_cfg, str(checkpoint), device=self.device)
+            cfg_dir = Path(sam2.__file__).parent / "configs"
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+            try:
+                with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
+                    self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint, device=self.device)
+            except:
+                breakpoint()
 
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
