@@ -148,19 +148,6 @@ class BOPChallengePosePredictor:
 
         return path_to_image
 
-    def predict_all_poses_in_image(self, query_image: torch.Tensor, camera_K: np.ndarray) -> None:
-
-        match_sample_size = self.config.roma_sample_size
-        min_match_certainty = self.config.min_roma_certainty_threshold
-        min_reliability = self.config.flow_reliability_threshold
-
-        for view_graph in self.view_graphs:
-            print(f'Testing view graph for object {view_graph.object_id}')
-            self.predict_poses(query_image, camera_K, view_graph, self.flow_provider, match_sample_size,
-                               match_min_certainty=min_match_certainty * 0.,
-                               match_reliability_threshold=min_reliability * 0., query_img_segmentation=None,
-                               device=self.config.device)
-
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                       flow_provider: FlowProviderDirect, match_sample_size,
                       match_min_certainty=0., match_reliability_threshold=0.,
