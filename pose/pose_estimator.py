@@ -9,6 +9,7 @@ import torch
 
 import numpy as np
 from kornia.geometry import Se3
+from tqdm import tqdm
 
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
@@ -46,10 +47,12 @@ class BOPChallengePosePredictor:
 
     def _load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
 
-        for view_graph_dir in view_graph_save_paths.iterdir():
+        total_dirs = sum(1 for d in view_graph_save_paths.iterdir() if d.is_dir())
+        for i, view_graph_dir in tqdm(enumerate(view_graph_save_paths.iterdir()), total=total_dirs,
+                                      desc="Loading view graphs"):
             if view_graph_dir.is_dir():
                 if onboarding_type == 'static':
-                    if not view_graph_dir.stem.endswith('_up') and not view_graph_dir.stem.endswith('_up'):
+                    if not view_graph_dir.stem.endswith('_both'):
                         continue
                 elif onboarding_type == 'dynamic':
                     if not view_graph_dir.stem.endswith('_dynamic'):
