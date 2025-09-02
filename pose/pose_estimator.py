@@ -1,6 +1,7 @@
 import json
 import pickle
 import shutil
+import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
@@ -9,6 +10,9 @@ import torchvision.transforms.functional as TF
 import torch
 
 import numpy as np
+from hydra import initialize_config_dir, compose
+from hydra.core.global_hydra import GlobalHydra
+from hydra.utils import instantiate
 from kornia.geometry import Se3
 from tqdm import tqdm
 
@@ -36,6 +40,18 @@ class BOPChallengePosePredictor:
         self._load_view_graphs(view_graph_save_paths, onboarding_type)
         self.onboarding_type: str = onboarding_type
         self.pose_logger = None
+
+        if GlobalHydra.instance().is_initialized():
+            GlobalHydra.instance().clear()
+        cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
+        with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
+            cnos_cfg = compose(config_name="run_inference")
+
+        sys.path.append('./repositories/cnos')
+        from src.model.loss import PairwiseSimilarity
+
+        self.cnos_matching_config = cnos_cfg.model.matching_config
+        self.cnos_similarity: PairwiseSimilarity = instantiate(self.cnos_matching_config.metric)
 
     def _initialize_flow_provider(self) -> None:
 
