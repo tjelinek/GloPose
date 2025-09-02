@@ -1,4 +1,5 @@
 import json
+import pickle
 import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
@@ -18,9 +19,9 @@ from data_structures.view_graph import ViewGraph, load_view_graph
 from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
-from utils.bop_challenge import get_gop_camera_intrinsics, get_default_detections_per_scene_and_image, \
-    get_default_detections_for_image
+from utils.bop_challenge import get_gop_camera_intrinsics
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
+from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 
 class BOPChallengePosePredictor:
@@ -65,8 +66,7 @@ class BOPChallengePosePredictor:
 
         self.view_graphs.sort(key=lambda vg: vg.object_id)
 
-    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str,
-                                        default_detections_file: Path = None) -> None:
+    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str) -> None:
 
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
@@ -74,11 +74,6 @@ class BOPChallengePosePredictor:
         self.pose_logger = PoseEstimatorLogger(base_dataset_folder.stem)
 
         test_dataset_path = base_dataset_folder / split
-
-        if split == 'test' and default_detections_file is not None:
-            default_detections_scene_im_dict = get_default_detections_per_scene_and_image(default_detections_file)
-        else:
-            default_detections_scene_im_dict = None
 
         for i, item in enumerate(test_annotations):
             im_id = item['im_id']
@@ -90,7 +85,11 @@ class BOPChallengePosePredictor:
             path_to_scene = test_dataset_path / scene_folder_name
             path_to_image = self._get_image_path(path_to_scene, image_id_str)
             path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
-            segmentation_paths = path_to_scene / 'mask_visib'
+            path_to_cnos_detections = path_to_scene / 'cnos_sam_detections'
+            path_to_detections_file = path_to_cnos_detections / f'{scene_id:06d}.pkl'
+
+            with open(path_to_detections_file, "rb") as detections_file:
+                cnos_detections = pickle.load(detections_file)
 
             # Get segmentation files and camera intrinsics
 
@@ -289,28 +288,20 @@ class BOPChallengePosePredictor:
 
 
 def main():
-    """Example usage of the BOPChallengePosePredictor class."""
 
-    dataset = 'hope'
+    dataset = 'handal'
     onboarding_type = 'static'
+    config = 'ufm_c0975r05'
 
     base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
     bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
-    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/base_config/{dataset}')
-
-    if dataset == 'hope':
-        default_detections_dir = (base_dataset_folder / 'h3_bop24_model_free_unseen' / 'cnos-sam' /
-                                  f'onboarding_{onboarding_type}')
-        default_detections_file = list(default_detections_dir.glob(f"*{dataset}*.json"))[0]
-    else:
-        default_detections_file = None
+    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
 
     config = TrackerConfig()
     config.device = 'cuda'
     predictor = BOPChallengePosePredictor(config, view_graph_location, onboarding_type)
 
-    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test',
-                                              default_detections_file)
+    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test')
 
 
 if __name__ == '__main__':
