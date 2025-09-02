@@ -3,7 +3,7 @@ import pickle
 import shutil
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Any
 
 import pycolmap
 import torchvision.transforms.functional as TF
@@ -34,7 +34,7 @@ class BOPChallengePosePredictor:
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
-        self.view_graphs: List[ViewGraph] = []
+        self.view_graphs: Dict[Any, ViewGraph] = {}
 
         self._initialize_flow_provider()
         self._load_view_graphs(view_graph_save_paths, onboarding_type)
@@ -78,9 +78,7 @@ class BOPChallengePosePredictor:
                     raise ValueError(f"Unknown onboarding type {onboarding_type}")
 
                 view_graph: ViewGraph = load_view_graph(view_graph_dir, device=self.config.device)
-                self.view_graphs.append(view_graph)
-
-        self.view_graphs.sort(key=lambda vg: vg.object_id)
+                self.view_graphs[view_graph.object_id] = view_graph
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str) -> None:
 
@@ -90,6 +88,10 @@ class BOPChallengePosePredictor:
         self.pose_logger = PoseEstimatorLogger(base_dataset_folder.stem)
 
         test_dataset_path = base_dataset_folder / split
+
+        view_graph_descriptors: Dict[Any, torch.Tensor] = {
+            obj_id: view_graph.get_concatenated_descriptors() for obj_id, view_graph in self.view_graphs.items()
+        }
 
         for i, item in enumerate(test_annotations):
             im_id = item['im_id']
