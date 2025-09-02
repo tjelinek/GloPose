@@ -104,16 +104,18 @@ class BOPChallengePosePredictor:
             path_to_cnos_detections = path_to_scene / 'cnos_sam_detections'
             path_to_detections_file = path_to_cnos_detections / f'{scene_id:06d}.pkl'
 
+            camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
 
-            # Get segmentation files and camera intrinsics
-
-            if default_detections_scene_im_dict is not None:
-                get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id, self.config.device)
-
-            segmentation_files = sorted(segmentation_paths.glob(f"{image_id_str}_*.png"))
-            camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+            default_detections_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+            default_detections_masks = []
+            for detection in cnos_detections['masks']:
+                detection_mask = rle_to_mask(detection)
+                detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.device)
+                default_detections_masks.append(detection_mask_tensor)
+            default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
             image = PrecomputedFrameProvider.load_and_downsample_image(
                 path_to_image, self.config.image_downsample, self.config.device
