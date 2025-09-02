@@ -104,12 +104,15 @@ class BOPChallengePosePredictor:
             )
             image = image.squeeze()
 
-            # for segmentation_path in segmentation_paths:
-            #     segmentation = PrecomputedSegmentationProvider.load_and_downsample_segmentation(
-            #         segmentation_path, target_shape, self.config.device
-            #     )
-
-            self.predict_all_poses_in_image(image, camera_intrinsics)
+            match_sample_size = self.config.roma_sample_size
+            min_match_certainty = self.config.min_roma_certainty_threshold
+            min_reliability = self.config.flow_reliability_threshold
+            for view_graph in self.view_graphs:
+                print(f'Testing view graph for object {view_graph.object_id}')
+                self.predict_poses(image, camera_intrinsics, view_graph, self.flow_provider, match_sample_size,
+                                   match_min_certainty=min_match_certainty * 0.,
+                                   match_reliability_threshold=min_reliability * 0., query_img_segmentation=None,
+                                   device=self.config.device)
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
