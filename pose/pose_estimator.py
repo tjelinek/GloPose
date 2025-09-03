@@ -50,8 +50,8 @@ class BOPChallengePosePredictor:
         sys.path.append('./repositories/cnos')
         from src.model.loss import PairwiseSimilarity
 
-        self.cnos_matching_config = cnos_cfg.model.matching_config
-        self.cnos_similarity: PairwiseSimilarity = instantiate(self.cnos_matching_config.metric)
+        self.cnos_matching_config = instantiate(cnos_cfg.model.matching_config)
+        self.cnos_similarity: PairwiseSimilarity = self.cnos_matching_config['metric']
 
     def _initialize_flow_provider(self) -> None:
 
