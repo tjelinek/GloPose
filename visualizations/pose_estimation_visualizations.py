@@ -76,12 +76,19 @@ class PoseEstimatorLogger:
                rr.SeriesLine(color=[0, 0, 255], name=f"min match certainty"),
                static=True)
 
+        rr.log(RerunAnnotations.matches_high_certainty_segmentation,
+               rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+        rr.log(RerunAnnotations.matches_low_certainty_segmentation,
+               rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+
         rr.send_blueprint(blueprint)
 
-    def visualize_pose_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor,
-                                      certainty: torch.Tensor, viewgraph_image: torch.Tensor, query_image: torch.Tensor,
-                                      reliability: float, reliability_threshold: float, certainty_threshold,
-                                      match_certainty_map: torch.Tensor = None, ):
+    def visualize_pose_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, certainty: torch.Tensor,
+                                      viewgraph_image: torch.Tensor, query_image: torch.Tensor, reliability: float,
+                                      reliability_threshold: float, certainty_threshold,
+                                      match_certainty_map: torch.Tensor = None,
+                                      viewgraph_image_segment: torch.Tensor = None,
+                                      query_image_segment: torch.Tensor = None):
         template_image = viewgraph_image
         target_image = query_image
 
@@ -94,9 +101,16 @@ class PoseEstimatorLogger:
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
         template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True) * 255.
+
+        template_target_image_segment = torch.cat([viewgraph_image_segment, query_image_segment], dim=-2)
+        template_target_image_segment_np = template_target_image_segment.squeeze().numpy(force=True)
+
         rerun_image = rr.Image(template_target_image_np)
+        rerun_segment = rr.SegmentationImage(template_target_image_segment_np)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
+        rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
+        rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
 
         certainties = certainty.numpy(force=True)
         threshold = certainty_threshold

@@ -232,8 +232,9 @@ class BOPChallengePosePredictor:
 
             self.pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties,
                                                            pose_graph_image, query_img_resized, reliability,
-                                                           match_reliability_threshold, match_min_certainty,
-                                                           certainty)
+                                                           match_reliability_threshold, match_min_certainty, certainty,
+                                                           viewgraph_image_segment=pose_graph_segmentation,
+                                                           query_image_segment=query_seg_resized)
 
             print(f'Mean certainty: {certainties.mean().item()}, Reliability: {reliability}')
             if reliability >= match_reliability_threshold:
