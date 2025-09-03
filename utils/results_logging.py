@@ -334,6 +334,11 @@ class WriteResults:
                    ),
                    static=True)
 
+        rr.log(RerunAnnotations.observed_image_segmentation,
+               rr.AnnotationContext([(1, "blue", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+        rr.log(RerunAnnotations.template_image_segmentation,
+               rr.AnnotationContext([(1, "blue", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+
         rr.send_blueprint(blueprint)
 
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
