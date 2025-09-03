@@ -63,9 +63,6 @@ class TrackerConfig:
     tran_init: Tuple[float] = (0., 0., 0.)  # (0., 0., 0.)
     rot_init: Tuple[float] = (0., 0., 0.)   # (0., 0., 0.)
 
-    # Optical flow and segmentation settings
-    occlusion_coef_threshold: float = 0.95
-
     # Frame Filter configurations
     roma_sample_size: int = 10000
     min_roma_certainty_threshold: float = 0.975
