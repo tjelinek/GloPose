@@ -70,6 +70,17 @@ class ViewGraph:
         else:
             raise KeyError(f"Node {frame_idx} not found in the graph.")
 
+    def get_concatenated_descriptors(self) -> torch.Tensor:
+        view_graph_descriptors = []
+        for node_idx in sorted(self.view_graph.nodes):
+            node = self.get_node_data(node_idx)
+            node_descriptors = node.dino_descriptor
+            view_graph_descriptors.append(node_descriptors)
+
+        view_graph_descriptors = torch.stack(view_graph_descriptors)
+
+        return view_graph_descriptors
+
     def save_viewgraph(self, save_dir: Path, colmap_reconstruction: pycolmap.Reconstruction,
                        save_images: bool = False, overwrite: bool = True, to_cpu: bool = False):
         """Saves the graph structure and associated images/segmentations to disk."""
