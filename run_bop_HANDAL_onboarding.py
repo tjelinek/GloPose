@@ -52,8 +52,8 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = (HANDAL_ONBOARDING_DYNAMIC_SEQUENCES + HANDAL_ONBOARDING_STATIC_UP_SEQUENCES +
-                     HANDAL_ONBOARDING_STATIC_DOWN_SEQUENCES + HANDAL_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES)[:1]
+        sequences = (HANDAL_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES + HANDAL_ONBOARDING_STATIC_UP_SEQUENCES +
+                     HANDAL_ONBOARDING_STATIC_DOWN_SEQUENCES + HANDAL_ONBOARDING_DYNAMIC_SEQUENCES)[:1]
 
     for sequence in sequences:
 
