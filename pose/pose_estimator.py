@@ -119,6 +119,14 @@ class BOPChallengePosePredictor:
                 default_detections_masks.append(detection_mask_tensor)
             default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
+            from src.model.detector import compute_templates_similarity_scores
+            idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution = \
+                compute_templates_similarity_scores(view_graph_descriptors, default_detections_descriptors,
+                                                    self.cnos_similarity,
+                                                    self.cnos_matching_config['aggregation_function'],
+                                                    self.cnos_matching_config['confidence_thresh'],
+                                                    self.cnos_matching_config['max_num_instances'])
+
             image = PrecomputedFrameProvider.load_and_downsample_image(
                 path_to_image, self.config.image_downsample, self.config.device
             )
@@ -127,11 +135,17 @@ class BOPChallengePosePredictor:
             match_sample_size = self.config.roma_sample_size
             min_match_certainty = self.config.min_roma_certainty_threshold
             min_reliability = self.config.flow_reliability_threshold
-            for view_graph in self.view_graphs:
-                print(f'Testing view graph for object {view_graph.object_id}')
-                self.predict_poses(image, camera_intrinsics, view_graph, self.flow_provider, match_sample_size,
-                                   match_min_certainty=min_match_certainty * 0.,
-                                   match_reliability_threshold=min_reliability * 0., query_img_segmentation=None,
+
+            for detection_mask_idx in range(len(selected_objects)):
+                corresponding_obj_id = selected_objects[detection_mask_idx]
+                corresponding_view_graph = self.view_graphs[corresponding_obj_id]
+                proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
+
+                print(f'Testing view graph for object {corresponding_view_graph.object_id}')
+                self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
+                                   match_sample_size, match_min_certainty=min_match_certainty * 0.,
+                                   match_reliability_threshold=min_reliability * 0.,
+                                   query_img_segmentation=proposal_mask,
                                    device=self.config.device)
 
     @staticmethod
@@ -152,6 +166,7 @@ class BOPChallengePosePredictor:
                       flow_provider: FlowProviderDirect, match_sample_size,
                       match_min_certainty=0., match_reliability_threshold=0.,
                       query_img_segmentation: Optional[torch.Tensor] = None, device: str = 'cuda') -> Se3 | None:
+        # query_img_segmentation shape (H, W)
 
         path_to_colmap_db = view_graph.colmap_db_path
         path_to_reconstruction = view_graph.colmap_reconstruction_path
@@ -196,7 +211,8 @@ class BOPChallengePosePredictor:
             if type(flow_provider) is FlowProviderDirect or True:
                 query_img_resized = TF.resize(query_img, list(pose_graph_image.shape[-2:]))
                 if query_img_segmentation is not None:
-                    query_seg_resized = TF.resize(query_img_segmentation, list(pose_graph_segmentation.shape[-2:]))
+                    query_seg_resized = TF.resize(query_img_segmentation[None],
+                                                  list(pose_graph_segmentation.shape[-2:])).squeeze()
                 else:
                     query_seg_resized = None
                 db_img_pts_xy, query_img_pts_xy, certainties = (
