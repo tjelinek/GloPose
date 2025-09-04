@@ -163,9 +163,9 @@ class BOPChallengePosePredictor:
         return path_to_image
 
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
-                      flow_provider: FlowProviderDirect, match_sample_size,
-                      match_min_certainty=0., match_reliability_threshold=0.,
-                      query_img_segmentation: Optional[torch.Tensor] = None, device: str = 'cuda') -> Se3 | None:
+                      flow_provider: FlowProviderDirect, match_sample_size, match_min_certainty=0.,
+                      match_reliability_threshold=0., query_img_segmentation: Optional[torch.Tensor] = None,
+                      black_background: bool = True, device: str = 'cuda') -> Se3 | None:
         # query_img_segmentation shape (H, W)
 
         path_to_colmap_db = view_graph.colmap_db_path
@@ -207,12 +207,17 @@ class BOPChallengePosePredictor:
 
             pose_graph_image = view_graph_node.observation.observed_image.to(device).squeeze()
             pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
+            if black_background:
+                pose_graph_image = pose_graph_image * pose_graph_segmentation
 
             if type(flow_provider) is FlowProviderDirect or True:
                 query_img_resized = TF.resize(query_img, list(pose_graph_image.shape[-2:]))
                 if query_img_segmentation is not None:
                     query_seg_resized = TF.resize(query_img_segmentation[None],
                                                   list(pose_graph_segmentation.shape[-2:])).squeeze()
+
+                    if black_background:
+                        query_img_resized = query_img_resized * query_seg_resized.to(torch.float)
                 else:
                     query_seg_resized = None
                 db_img_pts_xy, query_img_pts_xy, certainties = (
