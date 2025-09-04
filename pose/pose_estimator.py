@@ -99,7 +99,9 @@ class BOPChallengePosePredictor:
 
         json_2d_detection_results = []
 
-        for i, item in enumerate(test_annotations):
+        total_items = len(test_annotations)
+        for i, item in tqdm(enumerate(test_annotations), desc="Processing test annotations", total=total_items,
+                            unit="items"):
             im_id = item['im_id']
             scene_id = item['scene_id']
 
@@ -145,14 +147,15 @@ class BOPChallengePosePredictor:
             min_match_certainty = self.config.min_roma_certainty_threshold
             min_reliability = self.config.flow_reliability_threshold
 
-            for detection_mask_idx in range(len(selected_objects)):
+            for detection_mask_idx in tqdm(range(len(selected_objects)), desc="Processing SAM mask proposals",
+                                           total=len(selected_objects), unit="items"):
                 corresponding_obj_id = selected_objects[detection_mask_idx]
                 corresponding_view_graph = self.view_graphs[corresponding_obj_id]
                 proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
                 x0, y0, x1, y1 = torchvision_bbox.tolist()
-                coco_bbox = [x0, y0, x1-x0, y1-y0]
+                coco_bbox = [x0, y0, x1 - x0, y1 - y0]
 
                 detection_result = {
                     'scene_id': scene_id,
