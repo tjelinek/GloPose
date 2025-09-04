@@ -2,10 +2,12 @@ import json
 import pickle
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 
 import pycolmap
+import torchvision.ops as ops
 import torchvision.transforms.functional as TF
 import torch
 
@@ -93,6 +95,8 @@ class BOPChallengePosePredictor:
             obj_id: view_graph.get_concatenated_descriptors() for obj_id, view_graph in self.view_graphs.items()
         }
 
+        json_2d_detection_results = []
+
         for i, item in enumerate(test_annotations):
             im_id = item['im_id']
             scene_id = item['scene_id']
@@ -111,6 +115,7 @@ class BOPChallengePosePredictor:
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
 
+            detections_start_time = time.time()
             default_detections_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
             default_detections_masks = []
             for detection in cnos_detections['masks']:
@@ -127,6 +132,8 @@ class BOPChallengePosePredictor:
                                                     self.cnos_matching_config['confidence_thresh'],
                                                     self.cnos_matching_config['max_num_instances'])
 
+            detections_duration = time.time() - detections_start_time
+
             image = PrecomputedFrameProvider.load_and_downsample_image(
                 path_to_image, self.config.image_downsample, self.config.device
             )
@@ -141,11 +148,28 @@ class BOPChallengePosePredictor:
                 corresponding_view_graph = self.view_graphs[corresponding_obj_id]
                 proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
 
+                torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
+                x0, y0, x1, y1 = torchvision_bbox.tolist()
+                coco_bbox = [x0, y0, x1-x0, y1-y0]
+
+                detection_result = {
+                    'scene_id': scene_id,
+                    'image_id': im_id,
+                    'category_id': corresponding_obj_id,
+                    'bbox': coco_bbox,
+                    'time': detections_duration,
+                }
+                json_2d_detection_results.append(detection_result)
+
                 print(f'Testing view graph for object {corresponding_view_graph.object_id}')
                 self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
                                    match_sample_size, match_min_certainty=min_match_certainty,
                                    match_reliability_threshold=min_reliability,
                                    query_img_segmentation=proposal_mask, device=self.config.device)
+
+        json_file_path = self.write_folder / f'{base_dataset_folder.stem}_2d_detections.json'
+        with open(json_file_path, 'w') as f:
+            json.dump(json_2d_detection_results, f)
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
