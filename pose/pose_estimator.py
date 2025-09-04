@@ -38,6 +38,8 @@ class BOPChallengePosePredictor:
         self.flow_provider: Optional[FlowProviderDirect] = None
         self.view_graphs: Dict[Any, ViewGraph] = {}
 
+        self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
+
         self._initialize_flow_provider()
         self._load_view_graphs(view_graph_save_paths, onboarding_type)
         self.onboarding_type: str = onboarding_type
