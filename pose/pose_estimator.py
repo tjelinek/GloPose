@@ -143,10 +143,9 @@ class BOPChallengePosePredictor:
 
                 print(f'Testing view graph for object {corresponding_view_graph.object_id}')
                 self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
-                                   match_sample_size, match_min_certainty=min_match_certainty * 0.,
-                                   match_reliability_threshold=min_reliability * 0.,
-                                   query_img_segmentation=proposal_mask,
-                                   device=self.config.device)
+                                   match_sample_size, match_min_certainty=min_match_certainty,
+                                   match_reliability_threshold=min_reliability,
+                                   query_img_segmentation=proposal_mask, device=self.config.device)
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
