@@ -15,6 +15,7 @@ from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import instantiate
 from kornia.geometry import Se3, Quaternion
 from torchvision.ops import masks_to_boxes
+from tqdm import tqdm
 
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
@@ -264,3 +265,25 @@ def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
     view_graph.view_graph = nx.relabel_nodes(view_graph.view_graph, viewgraph_node_relabel_mapping)
 
     return viewgraph_node_relabel_mapping
+
+
+def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: str, device) -> Dict[Any, ViewGraph]:
+
+    view_graphs: Dict[Any, ViewGraph] = {}
+    total_dirs = sum(1 for d in view_graph_save_paths.iterdir() if d.is_dir())
+    for i, view_graph_dir in tqdm(enumerate(view_graph_save_paths.iterdir()), total=total_dirs,
+                                  desc="Loading view graphs"):
+        if view_graph_dir.is_dir():
+            if onboarding_type == 'static':
+                if not view_graph_dir.stem.endswith('_both'):
+                    continue
+            elif onboarding_type == 'dynamic':
+                if not view_graph_dir.stem.endswith('_dynamic'):
+                    continue
+            else:
+                raise ValueError(f"Unknown onboarding type {onboarding_type}")
+
+            view_graph: ViewGraph = load_view_graph(view_graph_dir, device=device)
+            view_graphs[view_graph.object_id] = view_graph
+
+    return view_graphs

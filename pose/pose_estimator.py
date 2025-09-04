@@ -21,7 +21,7 @@ from tqdm import tqdm
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
 
-from data_structures.view_graph import ViewGraph, load_view_graph
+from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
 from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
@@ -32,17 +32,14 @@ from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, view_graph_save_paths: Path, onboarding_type: str):
+    def __init__(self, config: TrackerConfig):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
-        self.view_graphs: Dict[Any, ViewGraph] = {}
 
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
 
         self._initialize_flow_provider()
-        self._load_view_graphs(view_graph_save_paths, onboarding_type)
-        self.onboarding_type: str = onboarding_type
         self.pose_logger = None
 
         if GlobalHydra.instance().is_initialized():
@@ -66,25 +63,12 @@ class BOPChallengePosePredictor:
         else:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
-    def _load_view_graphs(self, view_graph_save_paths: Path, onboarding_type: str) -> None:
+    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
+                                        view_graph_save_paths: Path, onboarding_type: str, split: str,
+                                        method_name: str) -> None:
 
-        total_dirs = sum(1 for d in view_graph_save_paths.iterdir() if d.is_dir())
-        for i, view_graph_dir in tqdm(enumerate(view_graph_save_paths.iterdir()), total=total_dirs,
-                                      desc="Loading view graphs"):
-            if view_graph_dir.is_dir():
-                if onboarding_type == 'static':
-                    if not view_graph_dir.stem.endswith('_both'):
-                        continue
-                elif onboarding_type == 'dynamic':
-                    if not view_graph_dir.stem.endswith('_dynamic'):
-                        continue
-                else:
-                    raise ValueError(f"Unknown onboarding type {onboarding_type}")
-
-                view_graph: ViewGraph = load_view_graph(view_graph_dir, device=self.config.device)
-                self.view_graphs[view_graph.object_id] = view_graph
-
-    def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path, split: str) -> None:
+        view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
+                                                                          self.config.device)
 
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
@@ -94,7 +78,7 @@ class BOPChallengePosePredictor:
         test_dataset_path = base_dataset_folder / split
 
         view_graph_descriptors: Dict[Any, torch.Tensor] = {
-            obj_id: view_graph.get_concatenated_descriptors() for obj_id, view_graph in self.view_graphs.items()
+            obj_id: view_graph.get_concatenated_descriptors() for obj_id, view_graph in view_graphs.items()
         }
 
         json_2d_detection_results = []
@@ -359,9 +343,10 @@ def main():
 
     config = TrackerConfig()
     config.device = 'cuda'
-    predictor = BOPChallengePosePredictor(config, view_graph_location, onboarding_type)
+    predictor = BOPChallengePosePredictor(config)
 
-    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, 'test')
+    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
+                                              onboarding_type, 'test', method_name)
 
 
 if __name__ == '__main__':
