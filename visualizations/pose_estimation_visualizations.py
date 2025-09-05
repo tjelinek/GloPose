@@ -14,13 +14,11 @@ from utils.results_logging import log_correspondences_rerun
 
 
 class RerunAnnotationsPose:
-    # Input
     template_image: Final[str] = '/observations/template_image'
     template_image_segmentation: Final[str] = '/observations/template_image/segment'
     observed_image: Final[str] = '/observations/observed_image'
     observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
 
-    # Matching
     matches_high_certainty: Final[str] = '/matching/high_certainty'
     matches_low_certainty: Final[str] = '/matching/low_certainty'
     matching_certainty: Final[str] = '/matching/certainty'
@@ -44,9 +42,10 @@ class RerunAnnotationsPose:
 
 class PoseEstimatorLogger:
 
-    def __init__(self, output_path: Path):
+    def __init__(self, output_path: Path, image_downsample: float = 0.5):
         self.init_rerun(output_path)
         self.rerun_sequence_id: int = 0
+        self.image_downsample = image_downsample
 
     @staticmethod
     def init_rerun(output_path: Path):
@@ -63,7 +62,6 @@ class PoseEstimatorLogger:
                 contents=[
                     rrb.Vertical(
                         contents=[
-                            # rrb.TextDocumentView()
                             rrb.Horizontal(
                                 contents=[
                                     rrb.Spatial2DView(
@@ -86,14 +84,11 @@ class PoseEstimatorLogger:
                     ),
                     rrb.Horizontal(
                         contents=[
-                            # rrb.Spatial2DView(
-                            #     name=f"Template",
-                            #     origin=RerunAnnotationsPose.template_image),
                             rrb.Spatial2DView(
                                 name=f"Scene",
                                 origin=RerunAnnotationsPose.observed_image),
                         ],
-                        name='Matching'
+                        name='Detections'
                     ),
                 ],
                 name=f'Results'
@@ -120,14 +115,19 @@ class PoseEstimatorLogger:
         rr.send_blueprint(blueprint)
 
     def visualize_detections(self, detection_segmentation: torch.Tensor):
+        h, w = detection_segmentation.shape[-2:]
 
-        query_segment_np = detection_segmentation.squeeze().to(torch.float).numpy(force=True)
+        seg = TF.resize(detection_segmentation.float().unsqueeze(0),
+                        [int(h * self.image_downsample), int(w * self.image_downsample)],
+                        interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
+        query_segment_np = seg.squeeze().to(torch.float).numpy(force=True)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
         rr.log(RerunAnnotationsPose.observed_image_segmentation, rr.SegmentationImage(query_segment_np))
 
     def visualize_image(self, query_image: torch.Tensor):
-
-        query_image_np = query_image.permute(1, 2, 0).numpy(force=True) * 255.
+        h, w = query_image.shape[-2:]
+        img = TF.resize(query_image, [int(h * self.image_downsample), int(w * self.image_downsample)])
+        query_image_np = img.permute(1, 2, 0).numpy(force=True) * 255.
         rr.set_time_sequence('frame', self.rerun_sequence_id)
         rr.log(RerunAnnotationsPose.observed_image, rr.Image(query_image_np))
 
@@ -147,9 +147,16 @@ class PoseEstimatorLogger:
                rr.Scalar(reliability_threshold))
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
-        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True) * 255.
-
         template_target_image_segment = torch.cat([viewgraph_image_segment, query_image_segment], dim=-2)
+
+        th, tw = template_target_image.shape[-2:]
+        template_target_image = TF.resize(template_target_image,
+                                          [int(th * self.image_downsample), int(tw * self.image_downsample)])
+        template_target_image_segment = TF.resize(template_target_image_segment.float().unsqueeze(0),
+                                                  [int(th * self.image_downsample), int(tw * self.image_downsample)],
+                                                  interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
+
+        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True) * 255.
         template_target_image_segment_np = template_target_image_segment.squeeze().numpy(force=True)
 
         rerun_image = rr.Image(template_target_image_np)
@@ -163,8 +170,8 @@ class PoseEstimatorLogger:
         threshold = certainty_threshold
 
         above_threshold_mask = certainties >= threshold
-        src_pts_xy_roma = src_pts_xy[:, [1, 0]].numpy(force=True)
-        dst_pts_xy_roma = dst_pts_xy[:, [1, 0]].numpy(force=True)
+        src_pts_xy_roma = src_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
+        dst_pts_xy_roma = dst_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
 
         inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
         inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
@@ -178,7 +185,7 @@ class PoseEstimatorLogger:
         certainty_map_column[:roma_h, :roma_w] = roma_certainty_map[:roma_h, :roma_w]
         certainty_map_column[roma_h:, :roma_w] = roma_certainty_map[:roma_h, roma_w:]
         certainty_map_column = certainty_map_column[None]
-        roma_certainty_map_image_size = TF.resize(certainty_map_column, size=template_target_image.shape[1:])
+        roma_certainty_map_image_size = TF.resize(certainty_map_column, size=list(template_target_image.shape[1:]))
 
         roma_certainty_map_im_size_np = roma_certainty_map_image_size.numpy(force=True)
         template_target_blacks = np.ones_like(template_target_image_np)
@@ -190,7 +197,9 @@ class PoseEstimatorLogger:
         template_image_size = ImageSize(*template_image.shape[-2:])
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotationsPose.matches_high_certainty, template_image_size.height, 20)
+                                  RerunAnnotationsPose.matches_high_certainty,
+                                  int(template_image_size.height * self.image_downsample), 20)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotationsPose.matches_low_certainty, template_image_size.height, 20)
+                                  RerunAnnotationsPose.matches_low_certainty,
+                                  int(template_image_size.height * self.image_downsample), 20)
