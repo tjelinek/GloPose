@@ -167,6 +167,8 @@ class BOPChallengePosePredictor:
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
 
+        print(f'Results saved to {str(json_file_path)}')
+
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
 
