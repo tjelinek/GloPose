@@ -26,7 +26,7 @@ from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
-from utils.cnos_utils import get_default_detections_per_scene_and_image, get_default_detections_for_image
+from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
@@ -126,7 +126,8 @@ class BOPChallengePosePredictor:
 
             pose_logger.visualize_image(image)
 
-            default_detections = get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id)
+            default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
+                                                            self.config.device)
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items"):
