@@ -96,11 +96,8 @@ class BOPChallengePosePredictor:
             image_id_str = f'{im_id:06d}'
             path_to_scene = test_dataset_path / scene_folder_name
             path_to_image = self._get_image_path(path_to_scene, image_id_str)
-            path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
             path_to_cnos_detections = path_to_scene / 'cnos_sam_detections'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
-
-            camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
