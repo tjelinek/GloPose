@@ -159,7 +159,6 @@ class BOPChallengePosePredictor:
                 }
                 json_2d_detection_results.append(detection_result)
 
-                print(f'Testing view graph for object {corresponding_view_graph.object_id}')
                 self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
                                    match_sample_size, match_min_certainty=min_match_certainty,
                                    match_reliability_threshold=min_reliability, query_img_segmentation=proposal_mask,
