@@ -147,6 +147,7 @@ class BOPChallengePosePredictor:
                     'category_id': corresponding_obj_id,
                     'bbox': coco_bbox,
                     'time': detections_duration,
+                    'score': pred_scores[detection_mask_idx].item(),
                 }
                 json_2d_detection_results.append(detection_result)
 
