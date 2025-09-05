@@ -1,6 +1,6 @@
 import json
 import warnings
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional, Callable, Tuple
 
@@ -10,7 +10,6 @@ from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
-from utils.image_utils import decode_rle_list
 from utils.math_utils import scale_Se3
 
 
@@ -381,42 +380,6 @@ def read_dynamic_onboarding_depth_scales(
     sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
     pose_json_path = sequence_folder / 'scene_camera.json'
     return read_depth_scales(pose_json_path)
-
-
-def get_default_detections_per_scene_and_image(default_detections_file: Path) -> Dict[Tuple[int, int], List]:
-    with open(default_detections_file, 'r') as f:
-        default_detections_data = json.load(f)
-        default_detections_scene_im_dict = defaultdict(list)
-        for i, item in enumerate(default_detections_data):
-            im_id: int = item['image_id']
-            scene_id: int = item['scene_id']
-            default_detections_scene_im_dict[(im_id, scene_id)].append(item)
-    return default_detections_scene_im_dict
-
-
-Detection = namedtuple('Detection', ['object_id', 'segmentation_mask', 'score'])
-
-
-def get_default_detections_for_image(default_detections_data_scene_im_dict: Dict[Tuple[int, int], List], scene_id: int,
-                                     im_id: int, device: str = 'cpu') -> List[Detection]:
-    detections_for_image = []  # Initialize as list, not dict
-    for detections_data in default_detections_data_scene_im_dict[(im_id, scene_id)]:
-        segmentation_rle_format = detections_data['segmentation']
-
-        mask = decode_rle_list(segmentation_rle_format)
-        mask_tensor = torch.tensor(mask, device=device)
-        detections_data['segmentation_tensor'] = mask_tensor
-
-        detections_for_image.append(detections_data)
-
-    detections_for_image.sort(key=lambda x: (x['score'], x['category_id']), reverse=True)
-
-    sorted_detections = [Detection(object_id=detection['category_id'],
-                                   segmentation_mask=detection['segmentation_tensor'],
-                                   score=detection['score'])
-                         for detection in detections_for_image]
-
-    return sorted_detections
 
 
 def set_config_for_bop_onboarding(config: TrackerConfig, sequence: str):

@@ -26,6 +26,7 @@ from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics
+from utils.cnos_utils import get_default_detections_per_scene_and_image, get_default_detections_for_image
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
@@ -85,6 +86,13 @@ class BOPChallengePosePredictor:
         json_2d_detection_results = []
 
         total_items = len(test_annotations)
+
+        default_detections_file = Path('/mnt/personal/jelint19/data/bop/default_detections/h3_bop24_model_free_unseen/'
+                                       'cnos-sam/onboarding_static/'
+                                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
+
+        default_detections_scene_im_dict = get_default_detections_per_scene_and_image(default_detections_file)
+
         for i, item in tqdm(enumerate(test_annotations), desc="Processing test annotations", total=total_items,
                             unit="items"):
             im_id = item['im_id']
@@ -118,7 +126,7 @@ class BOPChallengePosePredictor:
 
             pose_logger.visualize_image(image)
 
-            # default_detections = get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id)
+            default_detections = get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id)
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items"):
@@ -126,9 +134,9 @@ class BOPChallengePosePredictor:
                 corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = detections.masks[detection_mask_idx]
 
-                if pose_logger is not None:
-                    pose_logger.visualize_detections(proposal_mask)
-                    pose_logger.rerun_sequence_id += 1
+                # if pose_logger is not None:
+                #     pose_logger.visualize_detections(proposal_mask)
+                #     pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
                 x0, y0, x1, y1 = torchvision_bbox.tolist()
@@ -144,12 +152,12 @@ class BOPChallengePosePredictor:
                 }
                 json_2d_detection_results.append(detection_result)
 
-                self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
-                                   self.config.roma_sample_size,
-                                   match_min_certainty=self.config.min_roma_certainty_threshold,
-                                   match_reliability_threshold=self.config.flow_reliability_threshold,
-                                   query_img_segmentation=proposal_mask,
-                                   device=self.config.device, pose_logger=pose_logger)
+                # self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
+                #                    self.config.roma_sample_size,
+                #                    match_min_certainty=self.config.min_roma_certainty_threshold,
+                #                    match_reliability_threshold=self.config.flow_reliability_threshold,
+                #                    query_img_segmentation=proposal_mask,
+                #                    device=self.config.device, pose_logger=pose_logger)
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
@@ -245,7 +253,14 @@ class BOPChallengePosePredictor:
         matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
         matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
 
-        for frame_idx in view_graph.view_graph.nodes():
+        n = len(view_graph.view_graph.nodes())
+        if n > 10:
+            k = max(1, n // 10)
+            while n // k < 10:
+                k -= 1
+        else:
+            k = 1
+        for frame_idx in list(view_graph.view_graph.nodes())[::k]:
             view_graph_node = view_graph.get_node_data(frame_idx)
             db_img_id = view_graph_node.colmap_db_image_id
 
@@ -275,6 +290,9 @@ class BOPChallengePosePredictor:
                                                              zero_certainty_outside_segmentation=True)
             else:
                 raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
+
+            if db_img_pts_xy.shape[0] == 0:  # No good matches found within the segmentation
+                continue
 
             reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
                                                        match_min_certainty)
@@ -365,10 +383,10 @@ class BOPChallengePosePredictor:
 
 
 def main():
-
-    dataset = 'handal'
+    dataset = 'hope'
     onboarding_type = 'static'
     config = 'ufm_c0975r05'
+    method_name = 'FlowTemplates'
 
     base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
     bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
