@@ -157,7 +157,9 @@ class BOPChallengePosePredictor:
                                    match_reliability_threshold=min_reliability,
                                    query_img_segmentation=proposal_mask, device=self.config.device)
 
-        json_file_path = self.write_folder / f'{base_dataset_folder.stem}_2d_detections.json'
+        # {method}_{dataset}-{split}_{optional_id}.{ext}
+        json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
+                                              f'{view_graph_save_paths.parent.stem}@{onboarding_type}.json')
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
 
