@@ -96,8 +96,11 @@ class BOPChallengePosePredictor:
             image_id_str = f'{im_id:06d}'
             path_to_scene = test_dataset_path / scene_folder_name
             path_to_image = self._get_image_path(path_to_scene, image_id_str)
+            path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
             path_to_cnos_detections = path_to_scene / 'cnos_sam_detections'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
+
+            camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
@@ -155,12 +158,11 @@ class BOPChallengePosePredictor:
                 json_2d_detection_results.append(detection_result)
 
                 self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
-                                   match_sample_size, match_min_certainty=min_match_certainty,
-                                   match_reliability_threshold=min_reliability, query_img_segmentation=proposal_mask,
+                                   self.config.roma_sample_size,
+                                   match_min_certainty=self.config.min_roma_certainty_threshold,
+                                   match_reliability_threshold=self.config.flow_reliability_threshold,
+                                   query_img_segmentation=proposal_mask,
                                    device=self.config.device, pose_logger=pose_logger)
-                match_sample_size = self.config.roma_sample_size
-                min_match_certainty = self.config.min_roma_certainty_threshold
-                min_reliability = self.config.flow_reliability_threshold
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
