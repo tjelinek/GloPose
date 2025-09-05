@@ -134,7 +134,7 @@ class BOPChallengePosePredictor:
             for detection_mask_idx in tqdm(range(len(selected_objects)), desc="Processing SAM mask proposals",
                                            total=len(selected_objects), unit="items"):
                 corresponding_obj_id = selected_objects[detection_mask_idx]
-                corresponding_view_graph = self.view_graphs[corresponding_obj_id]
+                corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
