@@ -40,7 +40,6 @@ class BOPChallengePosePredictor:
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
 
         self._initialize_flow_provider()
-        self.pose_logger = None
 
         if GlobalHydra.instance().is_initialized():
             GlobalHydra.instance().clear()
@@ -70,10 +69,11 @@ class BOPChallengePosePredictor:
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
 
+        rerun_folder = self.write_folder / 'rerun' / base_dataset_folder.stem
+        rerun_folder.mkdir(exist_ok=True, parents=True)
+
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
-
-        self.pose_logger = PoseEstimatorLogger(base_dataset_folder.stem)
 
         test_dataset_path = base_dataset_folder / split
 
@@ -88,6 +88,8 @@ class BOPChallengePosePredictor:
                             unit="items"):
             im_id = item['im_id']
             scene_id = item['scene_id']
+
+            pose_logger = PoseEstimatorLogger(rerun_folder / f'scene-{scene_id}_im-{im_id}.rrd')
 
             # Construct paths
             scene_folder_name = f'{scene_id:06d}'
@@ -154,8 +156,8 @@ class BOPChallengePosePredictor:
                 print(f'Testing view graph for object {corresponding_view_graph.object_id}')
                 self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
                                    match_sample_size, match_min_certainty=min_match_certainty,
-                                   match_reliability_threshold=min_reliability,
-                                   query_img_segmentation=proposal_mask, device=self.config.device)
+                                   match_reliability_threshold=min_reliability, query_img_segmentation=proposal_mask,
+                                   device=self.config.device, pose_logger=pose_logger)
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
@@ -250,11 +252,11 @@ class BOPChallengePosePredictor:
             reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
                                                        match_min_certainty)
 
-            self.pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties,
-                                                           pose_graph_image, query_img_resized, reliability,
-                                                           match_reliability_threshold, match_min_certainty, certainty,
-                                                           viewgraph_image_segment=pose_graph_segmentation,
-                                                           query_image_segment=query_seg_resized)
+            pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties, pose_graph_image,
+                                                      query_img_resized, reliability, match_reliability_threshold,
+                                                      match_min_certainty, certainty,
+                                                      viewgraph_image_segment=pose_graph_segmentation,
+                                                      query_image_segment=query_seg_resized)
 
             print(f'Mean certainty: {certainties.mean().item()}, Reliability: {reliability}')
             if reliability >= match_reliability_threshold:
