@@ -15,15 +15,14 @@ from utils.results_logging import log_correspondences_rerun
 
 class PoseEstimatorLogger:
 
-    def __init__(self, dataset: str):
-        self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
-        self.init_rerun(dataset)
+    def __init__(self, output_path: Path):
+        self.init_rerun(output_path)
         self.rerun_frame_id: int = 0
 
-    def init_rerun(self, dataset: str):
+    @staticmethod
+    def init_rerun(output_path: Path):
         rr.init(f'{0}')
-        rerun_file = self.write_folder / f'rerun_pose_estimation_{dataset}.rrd'
-        rr.save(rerun_file)
+        rr.save(output_path)
 
         match_reliability_statistics = rrb.TimeSeriesView(name=f"Matching Reliability",
                                                           origin=RerunAnnotations.matching_reliability_plot,
