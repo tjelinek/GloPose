@@ -128,9 +128,7 @@ class BOPChallengePosePredictor:
 
             pose_logger.visualize_image(image)
 
-            match_sample_size = self.config.roma_sample_size
-            min_match_certainty = self.config.min_roma_certainty_threshold
-            min_reliability = self.config.flow_reliability_threshold
+            # default_detections = get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id)
 
             for detection_mask_idx in tqdm(range(len(selected_objects)), desc="Processing SAM mask proposals",
                                            total=len(selected_objects), unit="items"):
@@ -160,6 +158,9 @@ class BOPChallengePosePredictor:
                                    match_sample_size, match_min_certainty=min_match_certainty,
                                    match_reliability_threshold=min_reliability, query_img_segmentation=proposal_mask,
                                    device=self.config.device, pose_logger=pose_logger)
+                match_sample_size = self.config.roma_sample_size
+                min_match_certainty = self.config.min_roma_certainty_threshold
+                min_reliability = self.config.flow_reliability_threshold
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
