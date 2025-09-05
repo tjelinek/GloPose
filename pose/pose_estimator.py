@@ -129,6 +129,8 @@ class BOPChallengePosePredictor:
             )
             image = image.squeeze()
 
+            pose_logger.visualize_image(image)
+
             match_sample_size = self.config.roma_sample_size
             min_match_certainty = self.config.min_roma_certainty_threshold
             min_reliability = self.config.flow_reliability_threshold
@@ -138,6 +140,10 @@ class BOPChallengePosePredictor:
                 corresponding_obj_id = selected_objects[detection_mask_idx]
                 corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
+
+                if pose_logger is not None:
+                    pose_logger.visualize_detections(proposal_mask)
+                    pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
                 x0, y0, x1, y1 = torchvision_bbox.tolist()
@@ -182,7 +188,8 @@ class BOPChallengePosePredictor:
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                       flow_provider: FlowProviderDirect, match_sample_size, match_min_certainty=0.,
                       match_reliability_threshold=0., query_img_segmentation: Optional[torch.Tensor] = None,
-                      black_background: bool = True, device: str = 'cuda') -> Se3 | None:
+                      black_background: bool = True, pose_logger: PoseEstimatorLogger = None, device: str = 'cuda')\
+            -> Se3 | None:
         # query_img_segmentation shape (H, W)
 
         path_to_colmap_db = view_graph.colmap_db_path
@@ -252,11 +259,13 @@ class BOPChallengePosePredictor:
             reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
                                                        match_min_certainty)
 
-            pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties, pose_graph_image,
-                                                      query_img_resized, reliability, match_reliability_threshold,
-                                                      match_min_certainty, certainty,
-                                                      viewgraph_image_segment=pose_graph_segmentation,
-                                                      query_image_segment=query_seg_resized)
+            if pose_logger is not None:
+                pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties,
+                                                          pose_graph_image, query_img_resized, reliability,
+                                                          match_reliability_threshold, match_min_certainty, certainty,
+                                                          viewgraph_image_segment=pose_graph_segmentation,
+                                                          query_image_segment=query_seg_resized)
+                pose_logger.rerun_sequence_id += 1
 
             print(f'Mean certainty: {certainties.mean().item()}, Reliability: {reliability}')
             if reliability >= match_reliability_threshold:
