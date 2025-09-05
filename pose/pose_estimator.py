@@ -107,35 +107,7 @@ class BOPChallengePosePredictor:
                 cnos_detections = pickle.load(detections_file)
 
             detections_start_time = time.time()
-            default_detections_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
-            default_detections_masks = []
-            for detection in cnos_detections['masks']:
-                detection_mask = rle_to_mask(detection)
-                detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.device)
-                default_detections_masks.append(detection_mask_tensor)
-            default_detections_masks = torch.stack(default_detections_masks, dim=0)
-
-            from src.model.detector import compute_templates_similarity_scores
-            idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution = \
-                compute_templates_similarity_scores(view_graph_descriptors, default_detections_descriptors,
-                                                    self.cnos_similarity,
-                                                    self.cnos_matching_config['aggregation_function'],
-                                                    self.cnos_matching_config['confidence_thresh'],
-                                                    self.cnos_matching_config['max_num_instances'])
-
-            selected_detections_masks = default_detections_masks[idx_selected_proposals]
-            detections_dict = {
-                'masks': selected_detections_masks,
-                'scores': pred_scores,
-                'score_distribution': pred_score_distribution,
-                'object_ids': selected_objects,
-                'boxes':  ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long)
-            }
-
-            detections = Detections(detections_dict)
-            detections.apply_nms_per_object_id(
-                nms_thresh=self.cnos_postprocessing_config['nms_thresh'],
-            )
+            detections = self.proces_custom_sam_detections(cnos_detections, view_graph_descriptors)
 
             detections_duration = time.time() - detections_start_time
 
@@ -148,11 +120,11 @@ class BOPChallengePosePredictor:
 
             # default_detections = get_default_detections_for_image(default_detections_scene_im_dict, scene_id, im_id)
 
-            for detection_mask_idx in tqdm(range(len(selected_objects)), desc="Processing SAM mask proposals",
-                                           total=len(selected_objects), unit="items"):
-                corresponding_obj_id = selected_objects[detection_mask_idx]
+            for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
+                                           total=detections.masks.shape[0], unit="items"):
+                corresponding_obj_id: int = detections.object_ids[detection_mask_idx].item()
                 corresponding_view_graph = view_graphs[corresponding_obj_id]
-                proposal_mask = default_detections_masks[idx_selected_proposals[detection_mask_idx]]
+                proposal_mask = detections.masks[detection_mask_idx]
 
                 if pose_logger is not None:
                     pose_logger.visualize_detections(proposal_mask)
@@ -168,7 +140,7 @@ class BOPChallengePosePredictor:
                     'category_id': corresponding_obj_id,
                     'bbox': coco_bbox,
                     'time': detections_duration,
-                    'score': pred_scores[detection_mask_idx].item(),
+                    'score': detections.scores[detection_mask_idx].item(),
                 }
                 json_2d_detection_results.append(detection_result)
 
@@ -186,6 +158,38 @@ class BOPChallengePosePredictor:
             json.dump(json_2d_detection_results, f)
 
         print(f'Results saved to {str(json_file_path)}')
+
+    def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
+        from src.model.utils import Detections
+        from src.model.detector import compute_templates_similarity_scores
+
+        default_detections_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+        default_detections_masks = []
+        for detection in cnos_detections['masks']:
+            detection_mask = rle_to_mask(detection)
+            detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.device)
+            default_detections_masks.append(detection_mask_tensor)
+        default_detections_masks = torch.stack(default_detections_masks, dim=0)
+
+        idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution = \
+            compute_templates_similarity_scores(view_graph_descriptors, default_detections_descriptors,
+                                                self.cnos_similarity,
+                                                self.cnos_matching_config['aggregation_function'],
+                                                self.cnos_matching_config['confidence_thresh'],
+                                                self.cnos_matching_config['max_num_instances'])
+        selected_detections_masks = default_detections_masks[idx_selected_proposals]
+        detections_dict = {
+            'masks': selected_detections_masks,
+            'scores': pred_scores,
+            'score_distribution': pred_score_distribution,
+            'object_ids': selected_objects,
+            'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long)
+        }
+        detections = Detections(detections_dict)
+        detections.apply_nms_per_object_id(
+            nms_thresh=self.cnos_postprocessing_config['nms_thresh'],
+        )
+        return detections
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
