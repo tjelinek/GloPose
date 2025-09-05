@@ -51,6 +51,7 @@ class BOPChallengePosePredictor:
         from src.model.loss import PairwiseSimilarity
 
         self.cnos_matching_config = instantiate(cnos_cfg.model.matching_config)
+        self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
         self.cnos_similarity: PairwiseSimilarity = self.cnos_matching_config['metric']
 
     def _initialize_flow_provider(self) -> None:
@@ -121,6 +122,20 @@ class BOPChallengePosePredictor:
                                                     self.cnos_matching_config['aggregation_function'],
                                                     self.cnos_matching_config['confidence_thresh'],
                                                     self.cnos_matching_config['max_num_instances'])
+
+            selected_detections_masks = default_detections_masks[idx_selected_proposals]
+            detections_dict = {
+                'masks': selected_detections_masks,
+                'scores': pred_scores,
+                'score_distribution': pred_score_distribution,
+                'object_ids': selected_objects,
+                'boxes':  ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long)
+            }
+
+            detections = Detections(detections_dict)
+            detections.apply_nms_per_object_id(
+                nms_thresh=self.cnos_postprocessing_config['nms_thresh'],
+            )
 
             detections_duration = time.time() - detections_start_time
 
