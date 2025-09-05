@@ -266,10 +266,9 @@ class BOPChallengePosePredictor:
         if len(matching_edges) == 0:
             return None
 
-        keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, database,
-                                                                      eliminate_one_to_many_matches=True,
-                                                                      matching_edges_certainties=matching_edges_certainties,
-                                                                      device=device)
+        keypoints, edge_match_indices = \
+            unique_keypoints_from_matches(matching_edges, database, eliminate_one_to_many_matches=True,
+                                          matching_edges_certainties=matching_edges_certainties, device=device)
 
         all_image_ids = {img.image_id for img in database.read_all_images()}
         matched_images_ids = {node for edge in edge_match_indices.keys() for node in edge}
