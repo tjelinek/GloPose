@@ -286,9 +286,6 @@ class BOPChallengePosePredictor:
                                                            as_int=True, zero_certainty_outside_segmentation=True,
                                                            only_foreground_matches=True))
 
-                warp, certainty = flow_provider.compute_flow(pose_graph_image, query_img_resized,
-                                                             source_image_segmentation=pose_graph_segmentation,
-                                                             zero_certainty_outside_segmentation=True)
             else:
                 raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
 
@@ -299,6 +296,10 @@ class BOPChallengePosePredictor:
                                                        match_min_certainty)
 
             if pose_logger is not None:
+                warp, certainty = flow_provider.compute_flow(pose_graph_image, query_img_resized,
+                                                             source_image_segmentation=pose_graph_segmentation,
+                                                             zero_certainty_outside_segmentation=True)
+
                 pose_logger.visualize_pose_matching_rerun(db_img_pts_xy, query_img_pts_xy, certainties,
                                                           pose_graph_image, query_img_resized, reliability,
                                                           match_reliability_threshold, match_min_certainty, certainty,
