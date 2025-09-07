@@ -267,6 +267,14 @@ class BOPChallengePosePredictor:
 
             pose_graph_image = view_graph_node.observation.observed_image.to(device).squeeze()
             pose_graph_segmentation = view_graph_node.observation.observed_segmentation.to(device).squeeze()
+
+            template_keypoints_xy_np = database.read_keypoints(db_img_id).astype(np.int32)
+            template_keypoints_yx = torch.tensor(template_keypoints_xy_np, device=self.config.device)[:, [1, 0]]
+
+            template_keypoints_mask = torch.zeros_like(pose_graph_segmentation)
+            template_keypoints_mask[template_keypoints_yx[:, 0], template_keypoints_yx[:, 1]] = 1.
+            pose_graph_segmentation_template_points = pose_graph_segmentation * template_keypoints_mask
+
             if black_background:
                 pose_graph_image = pose_graph_image * pose_graph_segmentation
 
@@ -281,10 +289,9 @@ class BOPChallengePosePredictor:
                 else:
                     query_seg_resized = None
                 db_img_pts_xy, query_img_pts_xy, certainties = (
-                    flow_provider.get_source_target_points(pose_graph_image, query_img_resized, match_sample_size,
-                                                           pose_graph_segmentation, query_seg_resized,
-                                                           as_int=True, zero_certainty_outside_segmentation=True,
-                                                           only_foreground_matches=True))
+                    flow_provider.get_source_target_points(pose_graph_image, query_img_resized, None,
+                                                           pose_graph_segmentation_template_points, query_seg_resized,
+                                                           as_int=True, only_foreground_matches=True))
 
             else:
                 raise NotImplementedError('So far we can only work with RoMaFlowProviderDirect')
@@ -292,8 +299,8 @@ class BOPChallengePosePredictor:
             if db_img_pts_xy.shape[0] == 0:  # No good matches found within the segmentation
                 continue
 
-            reliability = compute_matching_reliability(db_img_pts_xy, certainties, pose_graph_segmentation,
-                                                       match_min_certainty)
+            reliability = compute_matching_reliability(db_img_pts_xy, certainties,
+                                                       pose_graph_segmentation_template_points, match_min_certainty)
 
             if pose_logger is not None:
                 warp, certainty = flow_provider.compute_flow(pose_graph_image, query_img_resized,
