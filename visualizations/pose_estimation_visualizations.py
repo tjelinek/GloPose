@@ -198,8 +198,8 @@ class PoseEstimatorLogger:
         cmap_inliers = plt.get_cmap('Greens')
         log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
                                   RerunAnnotationsPose.matches_high_certainty,
-                                  int(template_image_size.height * self.image_downsample), 20)
+                                  int(template_image_size.height * self.image_downsample), 2000)
         cmap_outliers = plt.get_cmap('Reds')
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                                   RerunAnnotationsPose.matches_low_certainty,
-                                  int(template_image_size.height * self.image_downsample), 20)
+                                  int(template_image_size.height * self.image_downsample), 2000)
