@@ -392,13 +392,28 @@ class BOPChallengePosePredictor:
 
 
 def main():
-    dataset = 'hope'
+    dataset = 'tless'  # hope, handal, tless, lmo, or icbin
     onboarding_type = 'static'
     config = 'ufm_c0975r05'
     method_name = 'FlowTemplates'
+    split = 'test'
+    data_type = ''
+
+    if dataset in ['hope', 'handal']:
+        targets_year = 'bop24'
+    elif dataset in ['tless', 'lmo', 'icbin']:
+        targets_year = 'bop19'
+        onboarding_type = None
+        if dataset == 'tless':
+            data_type = '_primesense'
+        assert split != 'val'
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+    split_folder = f'{split}{data_type}'
 
     base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
-    bop_targets_path = base_dataset_folder / 'test_targets_bop24.json'
+    bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
     view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
 
     config = TrackerConfig()
@@ -406,7 +421,7 @@ def main():
     predictor = BOPChallengePosePredictor(config)
 
     predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                              onboarding_type, 'test', method_name)
+                                              onboarding_type, split_folder, method_name)
 
 
 if __name__ == '__main__':
