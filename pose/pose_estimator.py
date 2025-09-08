@@ -427,7 +427,7 @@ def main():
     predictor = BOPChallengePosePredictor(config)
 
     predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                              onboarding_type, split_folder, method_name)
+                                              onboarding_type, split_folder, method_name, default_detections_file)
 
 
 if __name__ == '__main__':
