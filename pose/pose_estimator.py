@@ -65,8 +65,8 @@ class BOPChallengePosePredictor:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
-                                        view_graph_save_paths: Path, onboarding_type: str, split: str,
-                                        method_name: str) -> None:
+                                        view_graph_save_paths: Path, onboarding_type: str, split: str, method_name: str,
+                                        default_detections_file: Path = None) -> None:
 
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
@@ -87,11 +87,10 @@ class BOPChallengePosePredictor:
 
         total_items = len(test_annotations)
 
-        default_detections_file = Path('/mnt/personal/jelint19/data/bop/default_detections/h3_bop24_model_free_unseen/'
-                                       'cnos-sam/onboarding_static/'
-                                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
-
-        default_detections_scene_im_dict = get_default_detections_per_scene_and_image(default_detections_file)
+        if default_detections_file is not None:
+            default_detections_scene_im_dict = get_default_detections_per_scene_and_image(default_detections_file)
+        else:
+            default_detections_scene_im_dict = None
 
         for i, item in tqdm(enumerate(test_annotations), desc="Processing test annotations", total=total_items,
                             unit="items"):
@@ -126,8 +125,9 @@ class BOPChallengePosePredictor:
 
             pose_logger.visualize_image(image)
 
-            default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
-                                                            self.config.device)
+            if default_detections_scene_im_dict is not None:
+                default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
+                                                                self.config.device)
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items"):
@@ -398,9 +398,15 @@ def main():
     method_name = 'FlowTemplates'
     split = 'test'
     data_type = ''
+    default_detections_file = None
 
+    bop_base = Path('/mnt/personal/jelint19/data/bop')
     if dataset in ['hope', 'handal']:
         targets_year = 'bop24'
+        if dataset == 'hope':
+            default_detections_file = bop_base / ('default_detections/h3_bop24_model_free_unseen/cnos-sam/'
+                                                  'onboarding_static/'
+                                                  'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
     elif dataset in ['tless', 'lmo', 'icbin']:
         targets_year = 'bop19'
         onboarding_type = None
@@ -412,7 +418,7 @@ def main():
 
     split_folder = f'{split}{data_type}'
 
-    base_dataset_folder = Path(f'/mnt/personal/jelint19/data/bop/{dataset}')
+    base_dataset_folder = bop_base / f'{dataset}'
     bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
     view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
 
