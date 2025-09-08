@@ -277,9 +277,14 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
             if onboarding_type == 'static':
                 if not view_graph_dir.stem.endswith('_both'):
                     continue
+            if onboarding_type == 'static_merged':
+                if not view_graph_dir.stem.endswith('_merged'):
+                    continue
             elif onboarding_type == 'dynamic':
                 if not view_graph_dir.stem.endswith('_dynamic'):
                     continue
+            elif onboarding_type is None:
+                pass
             else:
                 raise ValueError(f"Unknown onboarding type {onboarding_type}")
 
