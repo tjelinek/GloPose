@@ -130,7 +130,8 @@ def on_glotrack_click(input_images, segmentations, mapper, matcher_radio, num_fe
         colmap_rec = reconstruct_images_using_sfm(images_for_reconstruction_global,
                                                   segmentation_for_reconstruction_global, matching_pairs_global,
                                                   config.init_with_first_two_images, mapper, match_provider,
-                                                  config.roma_sample_size, colmap_base_path, device=device_radio_,
+                                                  config.roma_sample_size, colmap_base_path,
+                                                  config.add_track_merging_matches, device=device_radio_,
                                                   progress=progress)
 
     fig = visualize_reconstruction(colmap_rec)
