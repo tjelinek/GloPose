@@ -11,6 +11,7 @@ datasets=(
   hb_primesense
   ycbv
   handal
+  hope
 )
 
 # Decide which sbatch path to use
