@@ -78,6 +78,5 @@ def main():
             run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, write_folder)
 
 
-
 if __name__ == "__main__":
     main()
