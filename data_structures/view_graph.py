@@ -3,7 +3,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 import networkx as nx
 import pycolmap
@@ -54,15 +54,42 @@ class ViewGraph:
 
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
         """Adds a node with ViewGraphNode attributes."""
+        dino_cls_descriptor, dino_dense_descriptor = self._get_descriptor_from_observation(observation, True)
+        dino_cls_descriptor = dino_dense_descriptor.squeeze()
+        self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
+                                                             colmap_db_image_name, dino_cls_descriptor))
+
+    def get_dino_descriptors_for_nodes(self, black_background: bool) -> Tuple[torch.Tensor, torch.Tensor]:
+        sorted_node_idxs = sorted(self.view_graph.nodes)
+        cls_descriptors = []
+        dense_descriptors = []
+        for node_idx in sorted_node_idxs:
+            dino_cls_descriptor, dino_dense_descriptor = self.get_dino_descriptor_for_node(node_idx, black_background)
+            cls_descriptors.append(dino_cls_descriptor)
+            dense_descriptors.append(dino_dense_descriptor)
+        cls_descriptors = torch.cat(cls_descriptors)
+        dense_descriptors = torch.cat(dense_descriptors)
+
+        return cls_descriptors, dense_descriptors
+
+    def get_dino_descriptor_for_node(self, node_idx, black_background: bool):
+        node_data = self.get_node_data(node_idx)
+        observation = node_data.observation
+        return self._get_descriptor_from_observation(observation, black_background)
+
+    def _get_descriptor_from_observation(self, observation: FrameObservation, black_background: bool):
         from src.model.utils import Detections
-        image_tensor = observation.observed_image
+
+        image_tensor = observation.observed_image.clone().to(self.device)
         segmentation_mask = observation.observed_segmentation.squeeze(1).to(self.device)
+        if black_background:
+            image_tensor *= segmentation_mask
         segmentation_bbox = masks_to_boxes(segmentation_mask)
         image_np = rearrange((image_tensor * 255).to(torch.uint8), '1 c h w -> h w c').numpy(force=True)
         detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
-        dino_descriptor = self.dino_descriptor(image_np, detections).squeeze()
-        self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
-                                                             colmap_db_image_name, dino_descriptor))
+        dino_cls_descriptor, dino_dense_descriptor = self.dino_descriptor(image_np, detections)
+
+        return dino_cls_descriptor, dino_dense_descriptor
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
         """Returns the ViewGraphNode data for a given node ID."""
