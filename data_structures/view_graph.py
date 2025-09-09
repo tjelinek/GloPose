@@ -59,7 +59,7 @@ class ViewGraph:
         self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
                                                              colmap_db_image_name, dino_cls_descriptor))
 
-    def get_dino_descriptors_for_nodes(self, black_background: bool) -> Tuple[torch.Tensor, torch.Tensor]:
+    def compute_dino_descriptors_for_nodes(self, black_background: bool) -> Tuple[torch.Tensor, torch.Tensor]:
         sorted_node_idxs = sorted(self.view_graph.nodes)
         cls_descriptors = []
         dense_descriptors = []
