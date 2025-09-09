@@ -51,8 +51,8 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = (HOPE_ONBOARDING_DYNAMIC_SEQUENCES + HOPE_ONBOARDING_STATIC_UP_SEQUENCES +
-                     HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES + HOPE_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES)[0:1]
+        sequences = (HOPE_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES + HOPE_ONBOARDING_STATIC_UP_SEQUENCES +
+                     HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES + HOPE_ONBOARDING_DYNAMIC_SEQUENCES)[0:1]
 
     for sequence in sequences:
 
