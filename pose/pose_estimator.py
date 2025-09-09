@@ -114,17 +114,16 @@ class BOPChallengePosePredictor:
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
 
-            detections_start_time = time.time()
-            detections = self.proces_custom_sam_detections(cnos_detections, view_graph_descriptors)
-
-            detections_duration = time.time() - detections_start_time
-
             image = PrecomputedFrameProvider.load_and_downsample_image(
                 path_to_image, self.config.image_downsample, self.config.device
             )
             image = image.squeeze()
-
             pose_logger.visualize_image(image)
+
+            detections_start_time = time.time()
+            detections = self.proces_custom_sam_detections(cnos_detections, view_graph_descriptors)
+
+            detections_duration = time.time() - detections_start_time
 
             if default_detections_scene_im_dict is not None:
                 default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
