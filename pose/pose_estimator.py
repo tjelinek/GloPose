@@ -80,7 +80,8 @@ class BOPChallengePosePredictor:
         test_dataset_path = base_dataset_folder / split
 
         view_graph_descriptors: Dict[Any, torch.Tensor] = {
-            obj_id: view_graph.get_concatenated_descriptors() for obj_id, view_graph in view_graphs.items()
+            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=True)[0]
+            for obj_id, view_graph in view_graphs.items()
         }
 
         json_2d_detection_results = []
