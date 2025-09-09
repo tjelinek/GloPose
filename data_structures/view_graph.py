@@ -162,6 +162,8 @@ class ViewGraph:
     def send_to_device(self, device):
         """Sends the graph to a given device."""
         self.device = device
+        self.dino_descriptor.model = self.dino_descriptor.model.to(self.device)
+        self.dino_descriptor.model.device = self.device
         for node_id, data in self.view_graph.nodes(data=True):
             node_data: ViewGraphNode = data["data"]
             node_data.observation = node_data.observation.send_to_device(device)
