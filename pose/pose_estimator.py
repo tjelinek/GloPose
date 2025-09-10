@@ -71,7 +71,8 @@ class BOPChallengePosePredictor:
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
 
-        rerun_folder = self.write_folder / 'rerun' / base_dataset_folder.stem
+        dataset_name = base_dataset_folder.stem
+        rerun_folder = self.write_folder / 'rerun' / dataset_name
         rerun_folder.mkdir(exist_ok=True, parents=True)
 
         with bop_targets_path.open('r') as file:
@@ -98,7 +99,8 @@ class BOPChallengePosePredictor:
             im_id = item['im_id']
             scene_id = item['scene_id']
 
-            pose_logger = PoseEstimatorLogger(rerun_folder / f'scene-{scene_id}_im-{im_id}.rrd')
+            downsample_factor = 0.5 if dataset_name in ['hope', 'handal'] else 1.0
+            pose_logger = PoseEstimatorLogger(rerun_folder / f'scene-{scene_id}_im-{im_id}.rrd', downsample_factor)
 
             # Construct paths
             scene_folder_name = f'{scene_id:06d}'
