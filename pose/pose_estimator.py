@@ -180,7 +180,7 @@ class BOPChallengePosePredictor:
             default_detections_masks.append(detection_mask_tensor)
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
-        idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution = \
+        idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, topk_templates = \
             compute_templates_similarity_scores(view_graph_descriptors, default_detections_descriptors,
                                                 self.cnos_similarity,
                                                 self.cnos_matching_config['aggregation_function'],
