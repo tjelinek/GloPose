@@ -49,7 +49,7 @@ class PoseEstimatorLogger:
 
     @staticmethod
     def init_rerun(output_path: Path):
-        rr.init(f'{0}')
+        rr.init(str(output_path))
         rr.save(output_path)
 
         match_reliability_statistics = rrb.TimeSeriesView(name=f"Matching Reliability",
