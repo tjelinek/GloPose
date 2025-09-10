@@ -120,7 +120,8 @@ class BOPChallengePosePredictor:
                 path_to_image, self.config.image_downsample, self.config.device
             )
             image = image.squeeze()
-            pose_logger.visualize_image(image)
+            if pose_logger is not None:
+                pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
             detections = self.proces_custom_sam_detections(cnos_detections, view_graph_descriptors)
