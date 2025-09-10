@@ -200,7 +200,9 @@ class BOPChallengePosePredictor:
             'scores': pred_scores,
             'score_distribution': pred_score_distribution,
             'object_ids': selected_objects,
-            'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long)
+            'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
+            'topk_template_scores': topk_templates[0],
+            'topk_template_indices': topk_templates[1],
         }
         detections = Detections(detections_dict)
         detections.apply_nms_per_object_id(
