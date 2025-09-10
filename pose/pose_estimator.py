@@ -205,9 +205,7 @@ class BOPChallengePosePredictor:
             'topk_template_indices': topk_templates[1],
         }
         detections = Detections(detections_dict)
-        detections.apply_nms_per_object_id(
-            nms_thresh=self.cnos_postprocessing_config['nms_thresh'],
-        )
+        detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
         return detections
 
     @staticmethod
