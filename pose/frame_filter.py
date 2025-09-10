@@ -334,6 +334,7 @@ class FrameFilterSift(BaseFrameFilter):
 
         if current_frame_idx == 0:
             self.keyframe_graph.add_node(current_frame_idx)
+            self.data_graph.get_frame_data(current_frame_idx).matching_source_keyframe = current_frame_idx
             return
 
         preceding_frame_idx = current_frame_idx - 1
@@ -410,9 +411,16 @@ class FrameFilterSift(BaseFrameFilter):
 
     def compute_sift_reliability(self, frame_idx1: int, frame_idx2: int):
 
-        device = self.config.device
+        source_frame_observation = self.data_graph.get_frame_data(frame_idx1)
+        target_frame_observation = self.data_graph.get_frame_data(frame_idx2)
 
-        dists, idxs = self.sift_matcher.match_images_sift(frame_idx1, frame_idx2, device, save_to_datagraph=True)
+        source_img = source_frame_observation.frame_observation.observed_image.squeeze()
+        target_img = target_frame_observation.frame_observation.observed_image.squeeze()
+
+        source_seg = source_frame_observation.frame_observation.observed_segmentation
+        target_seg = target_frame_observation.frame_observation.observed_segmentation
+
+        dists, idxs = self.sift_matcher.compute_flow(source_img, target_img, None, source_seg, target_seg)
 
         num_matches = len(idxs)
 
