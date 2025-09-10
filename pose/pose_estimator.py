@@ -100,7 +100,12 @@ class BOPChallengePosePredictor:
             scene_id = item['scene_id']
 
             downsample_factor = 0.5 if dataset_name in ['hope', 'handal'] else 1.0
-            pose_logger = PoseEstimatorLogger(rerun_folder / f'scene-{scene_id}_im-{im_id}.rrd', downsample_factor)
+
+            step = len(test_annotations) / 10
+            if i == int(step * (i // int(step))) and i // int(step) < 10:
+                pose_logger = PoseEstimatorLogger(rerun_folder / f'scene-{scene_id}_im-{im_id}.rrd', downsample_factor)
+            else:
+                pose_logger = None
 
             # Construct paths
             scene_folder_name = f'{scene_id:06d}'
