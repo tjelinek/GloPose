@@ -135,9 +135,9 @@ class BOPChallengePosePredictor:
                 corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = detections.masks[detection_mask_idx]
 
-                # if pose_logger is not None:
-                #     pose_logger.visualize_detections(proposal_mask)
-                #     pose_logger.rerun_sequence_id += 1
+                if pose_logger is not None:
+                    pose_logger.visualize_detections(proposal_mask)
+                    pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
                 x0, y0, x1, y1 = torchvision_bbox.tolist()
