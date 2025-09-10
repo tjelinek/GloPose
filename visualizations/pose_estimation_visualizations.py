@@ -14,10 +14,10 @@ from utils.results_logging import log_correspondences_rerun
 
 
 class RerunAnnotationsPose:
-    template_image: Final[str] = '/observations/template_image'
-    template_image_segmentation: Final[str] = '/observations/template_image/segment'
     observed_image: Final[str] = '/observations/observed_image'
     observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
+    observed_image_all: Final[str] = '/observations/observed_image_all'
+    observed_image_segmentation_all: Final[str] = '/observations/observed_image_all/segment'
 
     matches_high_certainty: Final[str] = '/matching/high_certainty'
     matches_low_certainty: Final[str] = '/matching/low_certainty'
@@ -87,6 +87,9 @@ class PoseEstimatorLogger:
                             rrb.Spatial2DView(
                                 name=f"Scene",
                                 origin=RerunAnnotationsPose.observed_image),
+                            rrb.Spatial2DView(
+                                name=f"Scene - all detections",
+                                origin=RerunAnnotationsPose.observed_image_all),
                         ],
                         name='Detections'
                     ),
@@ -111,25 +114,37 @@ class PoseEstimatorLogger:
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
         rr.log(RerunAnnotationsPose.observed_image_segmentation,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+        rr.log(RerunAnnotationsPose.observed_image_segmentation_all,
+               rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
+
 
         rr.send_blueprint(blueprint)
 
-    def visualize_detections(self, detection_segmentation: torch.Tensor):
-        h, w = detection_segmentation.shape[-2:]
+    def visualize_detections(self, all_detections_segmentations, detection_idx):
+        h, w = all_detections_segmentations.shape[-2:]
 
-        seg = TF.resize(detection_segmentation.float().unsqueeze(0),
+        seg_all = TF.resize(all_detections_segmentations.float().unsqueeze(0),
                         [int(h * self.image_downsample), int(w * self.image_downsample)],
                         interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
-        query_segment_np = seg.squeeze().to(torch.float).numpy(force=True)
+        query_segment_np = seg_all.squeeze().to(torch.float).numpy(force=True)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
-        rr.log(RerunAnnotationsPose.observed_image_segmentation, rr.SegmentationImage(query_segment_np))
+
+        rr_segment = rr.SegmentationImage(query_segment_np[detection_idx])
+
+        segment_cumulative = query_segment_np[:detection_idx].sum(axis=0)
+        rr_segment_cumulative = rr.SegmentationImage(segment_cumulative)
+
+        rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
+        rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
 
     def visualize_image(self, query_image: torch.Tensor):
         h, w = query_image.shape[-2:]
         img = TF.resize(query_image, [int(h * self.image_downsample), int(w * self.image_downsample)])
         query_image_np = img.permute(1, 2, 0).numpy(force=True) * 255.
         rr.set_time_sequence('frame', self.rerun_sequence_id)
-        rr.log(RerunAnnotationsPose.observed_image, rr.Image(query_image_np))
+        rr_image = rr.Image(query_image_np)
+        rr.log(RerunAnnotationsPose.observed_image, rr_image)
+        rr.log(RerunAnnotationsPose.observed_image_all, rr_image)
 
     def visualize_pose_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, certainty: torch.Tensor,
                                       viewgraph_image: torch.Tensor, query_image: torch.Tensor, reliability: float,
@@ -163,8 +178,8 @@ class PoseEstimatorLogger:
         rerun_segment = rr.SegmentationImage(template_target_image_segment_np)
         rr.log(RerunAnnotationsPose.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotationsPose.matches_low_certainty, rerun_image)
-        rr.log(RerunAnnotationsPose.matches_high_certainty_segmentation, rerun_segment)
-        rr.log(RerunAnnotationsPose.matches_low_certainty_segmentation, rerun_segment)
+        # rr.log(RerunAnnotationsPose.matches_high_certainty_segmentation, rerun_segment)
+        # rr.log(RerunAnnotationsPose.matches_low_certainty_segmentation, rerun_segment)
 
         certainties = certainty.numpy(force=True)
         threshold = certainty_threshold
