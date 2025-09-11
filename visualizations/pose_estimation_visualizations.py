@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Final
+from typing import Final, Dict
 
 import numpy as np
 import rerun as rr
@@ -9,6 +9,7 @@ import torchvision.transforms.functional as TF
 from matplotlib import pyplot as plt
 from kornia.image import ImageSize
 
+from repositories.cnos.src.model.utils import Detections
 from utils.image_utils import overlay_mask
 from utils.results_logging import log_correspondences_rerun
 
@@ -18,6 +19,9 @@ class RerunAnnotationsPose:
     observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
     observed_image_all: Final[str] = '/observations/observed_image_all'
     observed_image_segmentation_all: Final[str] = '/observations/observed_image_all/segment'
+
+    detection_image: Final[str] = '/observations/template_image'
+    detection_nearest_neighbors: Final[str] = '/observations/template_image_neighbors'
 
     matches_high_certainty: Final[str] = '/matching/high_certainty'
     matches_low_certainty: Final[str] = '/matching/low_certainty'
@@ -38,6 +42,14 @@ class RerunAnnotationsPose:
     matches_sift: Final[str] = '/matching/reliability_plot/sift_num_matches/'
     min_matches_sift: Final[str] = '/matching/reliability_plot/min_matches_sift'
     good_to_add_number_of_matches_sift: Final[str] = '/matching/reliability_plot/good_to_add_matches_sift'
+
+
+def tensor2numpy(image, downsample_factor=1.0):
+    _, h, w = image.shape
+    image = TF.resize(image.float().unsqueeze(0),
+                      [int(h * downsample_factor), int(w * downsample_factor)],
+                      interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
+    return image.permute(1, 2, 0).numpy(force=True) * 255.
 
 
 class PoseEstimatorLogger:
@@ -93,6 +105,31 @@ class PoseEstimatorLogger:
                         ],
                         name='Detections'
                     ),
+                    rrb.Horizontal(
+                        contents=[
+                            rrb.Spatial2DView(
+                                name=f"Template",
+                                origin=RerunAnnotationsPose.detection_image),
+                            rrb.Grid(
+                                name=f"Scene - all detections",
+                                grid_columns=2,
+                                contents=[
+                                    rrb.Spatial2DView(
+                                        name=f"Nearest neighbor {i}",
+                                        origin=f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}',
+                                        # contents=[
+                                        #     rrb.TextDocumentView(
+                                        #         name="score",
+                                        #         origin=f"{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/score"
+                                        #     )
+                                        # ]
+                                    )
+                                    for i in range(5)
+                                ]
+                            ),
+                        ],
+                        name='Detections - Closest Neighbors'
+                    ),
                 ],
                 name=f'Results'
             )
@@ -137,10 +174,41 @@ class PoseEstimatorLogger:
         rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
         rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
 
+    def visualize_nearest_neighbors(self, query_image: torch.Tensor, view_graph_images: Dict[int, torch.Tensor],
+                                    detection_idx: int, detections: Detections):
+
+        rr.set_time_sequence('frame', self.rerun_sequence_id)
+
+        detection_bbox = detections.boxes[detection_idx]
+        viewgraph_id = detections.object_ids[detection_idx]
+        detection_topk_scores = detections.topk_template_scores[detection_idx]
+        detection_topk_template_indices = detections.topk_template_indices[detection_idx]
+
+        x1, y1, x2, y2 = detection_bbox.int()
+        cropped_detection = query_image[..., y1:y2, x1:x2]
+
+        rr_detection = rr.Image(tensor2numpy(cropped_detection))
+        rr.log(RerunAnnotationsPose.detection_image, rr_detection)
+
+        template_images = view_graph_images[viewgraph_id.item()]
+        for i in range(detection_topk_template_indices.shape[0]):
+
+            template_image_idx = detection_topk_template_indices[i].item()
+
+            if template_image_idx < 0:  # -1 signals more templates do not exist
+                template_image = torch.zeros_like(cropped_detection)
+            else:
+                template_image = template_images[template_image_idx]
+            template_score = detection_topk_scores[i].item()
+            rr_template = rr.Image(tensor2numpy(template_image, self.image_downsample))
+            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
+            # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
+            #        rr.TextDocument(f"score: {template_score:.3f}"))
+
     def visualize_image(self, query_image: torch.Tensor):
         h, w = query_image.shape[-2:]
         img = TF.resize(query_image, [int(h * self.image_downsample), int(w * self.image_downsample)])
-        query_image_np = img.permute(1, 2, 0).numpy(force=True) * 255.
+        query_image_np = tensor2numpy(img)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
         rr_image = rr.Image(query_image_np)
         rr.log(RerunAnnotationsPose.observed_image, rr_image)
@@ -171,7 +239,7 @@ class PoseEstimatorLogger:
                                                   [int(th * self.image_downsample), int(tw * self.image_downsample)],
                                                   interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
 
-        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True) * 255.
+        template_target_image_np = tensor2numpy(template_target_image)
         template_target_image_segment_np = template_target_image_segment.squeeze().numpy(force=True)
 
         rerun_image = rr.Image(template_target_image_np)

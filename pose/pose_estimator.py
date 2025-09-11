@@ -84,6 +84,9 @@ class BOPChallengePosePredictor:
             obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=True)[0]
             for obj_id, view_graph in view_graphs.items()
         }
+        viewgraph_images: Dict[Any, torch.Tensor] = {
+            obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
+        }
 
         json_2d_detection_results = []
 
@@ -145,6 +148,7 @@ class BOPChallengePosePredictor:
 
                 if pose_logger is not None:
                     pose_logger.visualize_detections(detections.masks, detection_mask_idx)
+                    pose_logger.visualize_nearest_neighbors(image, viewgraph_images, detection_mask_idx, detections)
                     pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
