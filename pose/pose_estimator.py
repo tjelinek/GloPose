@@ -404,42 +404,53 @@ class BOPChallengePosePredictor:
 
 
 def main():
-    dataset = 'tless'  # hope, handal, tless, lmo, or icbin
-    onboarding_type = 'static'
-    config = 'ufm_c0975r05'
-    method_name = 'FlowTemplates'
-    split = 'test'
-    data_type = ''
-    default_detections_file = None
 
-    bop_base = Path('/mnt/personal/jelint19/data/bop')
-    if dataset in ['hope', 'handal']:
-        targets_year = 'bop24'
-        if dataset == 'hope':
-            default_detections_file = bop_base / ('default_detections/h3_bop24_model_free_unseen/cnos-sam/'
-                                                  'onboarding_static/'
-                                                  'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
-    elif dataset in ['tless', 'lmo', 'icbin']:
-        targets_year = 'bop19'
-        onboarding_type = None
-        if dataset == 'tless':
-            data_type = '_primesense'
-        assert split != 'val'
-    else:
-        raise ValueError(f"Unknown dataset: {dataset}")
+    sequences_to_run = [
+        ('hope', 'test'),
+        ('tless', 'test'),
+        ('lmo', 'test'),
+        ('icbin', 'test'),
+        ('handal', 'test'),
+    ]
 
-    split_folder = f'{split}{data_type}'
+    for dataset, split in sequences_to_run:
 
-    base_dataset_folder = bop_base / f'{dataset}'
-    bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
-    view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
+        print(f'Running on dataset {dataset}, split {split}')
 
-    config = TrackerConfig()
-    config.device = 'cuda'
-    predictor = BOPChallengePosePredictor(config)
+        onboarding_type = 'static'
+        config = 'ufm_c0975r05'
+        method_name = 'FlowTemplates'
+        data_type = ''
+        default_detections_file = None
 
-    predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                              onboarding_type, split_folder, method_name, default_detections_file)
+        bop_base = Path('/mnt/personal/jelint19/data/bop')
+        if dataset in ['hope', 'handal']:
+            targets_year = 'bop24'
+            if dataset == 'hope':
+                default_detections_file = bop_base / ('default_detections/h3_bop24_model_free_unseen/cnos-sam/'
+                                                      'onboarding_static/'
+                                                      'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
+        elif dataset in ['tless', 'lmo', 'icbin']:
+            targets_year = 'bop19'
+            onboarding_type = None
+            if dataset == 'tless':
+                data_type = '_primesense'
+            assert split != 'val'
+        else:
+            raise ValueError(f"Unknown dataset: {dataset}")
+
+        split_folder = f'{split}{data_type}'
+
+        base_dataset_folder = bop_base / f'{dataset}'
+        bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
+        view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
+
+        config = TrackerConfig()
+        config.device = 'cuda'
+        predictor = BOPChallengePosePredictor(config)
+
+        predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
+                                                  onboarding_type, split_folder, method_name, default_detections_file)
 
 
 if __name__ == '__main__':
