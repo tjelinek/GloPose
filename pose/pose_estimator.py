@@ -66,13 +66,13 @@ class BOPChallengePosePredictor:
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         view_graph_save_paths: Path, onboarding_type: str, split: str, method_name: str,
-                                        default_detections_file: Path = None) -> None:
+                                        experiment_name: str, default_detections_file: Path = None) -> None:
 
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
 
         dataset_name = base_dataset_folder.stem
-        rerun_folder = self.write_folder / 'rerun' / dataset_name
+        rerun_folder = self.write_folder / f'rerun_{experiment_name}' / dataset_name
         rerun_folder.mkdir(exist_ok=True, parents=True)
 
         with bop_targets_path.open('r') as file:
@@ -174,7 +174,8 @@ class BOPChallengePosePredictor:
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
-                                              f'{view_graph_save_paths.parent.stem}@{onboarding_type}.json')
+                                              f'{view_graph_save_paths.parent.stem}@{onboarding_type}@'
+                                              f'{experiment_name}.json')
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
 
@@ -413,6 +414,8 @@ def main():
         ('handal', 'test'),
     ]
 
+    experiment = '5_nearest_neighbors'
+
     for dataset, split in sequences_to_run:
 
         print(f'Running on dataset {dataset}, split {split}')
@@ -450,7 +453,8 @@ def main():
         predictor = BOPChallengePosePredictor(config)
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                                  onboarding_type, split_folder, method_name, default_detections_file)
+                                                  onboarding_type, split_folder, method_name, experiment,
+                                                  default_detections_file)
 
 
 if __name__ == '__main__':
