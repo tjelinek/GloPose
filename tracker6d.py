@@ -48,6 +48,20 @@ class Tracker6D:
 
         self.progress = progress
 
+        self.matching_cache_folder: Path = \
+            (Path(f'/mnt/personal/jelint19/cache/{self.config.frame_filter_matcher}_cache') /
+             config.roma_config.config_name / config.dataset / f'{config.sequence}_{config.special_hash}')
+        self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
+                                        config.sift_matcher_config.config_name / config.dataset /
+                                        f'{config.sequence}_{config.special_hash}')
+        self.cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+                                         f'{self.config.sequence}_{self.config.special_hash}') /
+                                        str(self.config.image_downsample))
+
+        self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
+                                              config.experiment_name / config.dataset /
+                                              f'{config.sequence}_{config.special_hash}')
+
         if os.path.exists(self.write_folder):
             shutil.rmtree(self.write_folder)
 
@@ -88,20 +102,6 @@ class Tracker6D:
         self.results_writer = None
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
-
-        self.matching_cache_folder: Path = (Path(f'/mnt/personal/jelint19/cache/{self.config.frame_filter_matcher}_cache') /
-                                            config.roma_config.config_name / config.dataset /
-                                            f'{config.sequence}_{config.special_hash}')
-        self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
-                                        config.sift_matcher_config.config_name / config.dataset /
-                                        f'{config.sequence}_{config.special_hash}')
-        self.cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
-                                         f'{self.config.sequence}_{self.config.special_hash}') /
-                                        str(self.config.image_downsample))
-
-        self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
-                                              config.experiment_name / config.dataset /
-                                              f'{config.sequence}_{config.special_hash}')
 
         self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
         self.colmap_image_path = self.colmap_base_path / 'images'
@@ -426,4 +426,3 @@ class Tracker6D:
         csv_per_frame_iou_stats = csv_per_frame_iou_folder / f'{self.config.dataset}_{self.config.sequence}.csv'
 
         update_iou_frame_statistics(csv_per_frame_iou_stats, iou_np, self.config.dataset, self.config.sequence)
-
