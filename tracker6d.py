@@ -42,6 +42,10 @@ class Tracker6D:
         self.write_folder: Path = write_folder
         self.config: TrackerConfig = config
 
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        print(f'Processing sequence written into {write_folder}')
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
         self.progress = progress
 
         if os.path.exists(self.write_folder):
