@@ -80,12 +80,15 @@ class BOPChallengePosePredictor:
 
         test_dataset_path = base_dataset_folder / split
 
-        view_graph_descriptors: Dict[Any, torch.Tensor] = {
-            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=True)[0]
+        view_graph_descriptors: Dict[Any, Tuple[torch.Tensor, torch.Tensor]] = {
+            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=True)
             for obj_id, view_graph in view_graphs.items()
         }
         viewgraph_images: Dict[Any, torch.Tensor] = {
             obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
+        }
+        viewgraph_segmentations: Dict[Any, torch.Tensor] = {
+            obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
         }
 
         json_2d_detection_results = []
@@ -132,7 +135,8 @@ class BOPChallengePosePredictor:
                 pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
-            detections = self.proces_custom_sam_detections(cnos_detections, view_graph_descriptors)
+            detections = self.proces_custom_sam_detections(cnos_detections, viewgraph_segmentations,
+                                                           view_graph_descriptors)
 
             detections_duration = time.time() - detections_start_time
 
@@ -185,7 +189,11 @@ class BOPChallengePosePredictor:
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
 
-        default_detections_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+        default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+        default_detections_patch_descriptors =\
+            torch.from_numpy(cnos_detections['patch_descriptors']).to(self.config.device)
+        # default_detections_patch_descriptors =
+
         default_detections_masks = []
         for detection in cnos_detections['masks']:
             detection_mask = rle_to_mask(detection)
@@ -194,9 +202,10 @@ class BOPChallengePosePredictor:
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, topk_templates = \
-            compute_templates_similarity_scores(view_graph_descriptors, default_detections_descriptors,
-                                                self.cnos_similarity,
-                                                self.cnos_matching_config['aggregation_function'],
+            compute_templates_similarity_scores(view_graph_descriptors, view_graph_segmentations,
+                                                default_detections_cls_descriptors,
+                                                default_detections_patch_descriptors, default_detections_masks,
+                                                self.cnos_similarity, self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['confidence_thresh'],
                                                 self.cnos_matching_config['max_num_instances'])
         selected_detections_masks = default_detections_masks[idx_selected_proposals]
