@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --time=23:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=128G
+#SBATCH --partition=h200
+#SBATCH --job-name=RunCNOS
+#SBATCH --err=/mnt/personal/jelint19/results/logs/RunCNOS.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/RunCNOS.out
+
+modules_file=~/modules_glotracker_login4.txt
+# shellcheck disable=SC2046
+ml $(<$modules_file)
+
+cd ~/projects/GloPose/repositories/cnos || {
+    echo "Error: Could not change to cnos directory"
+    exit 1
+}
+
+python run_inference.py dataset_name=handal model.onboarding_config.rendering_type='onboarding_static'
