@@ -109,16 +109,18 @@ class ViewGraph:
 
         return view_graph_descriptors
 
-    def get_concatenated_images(self) -> torch.Tensor:
-        view_graph_images = []
+    def _get_concatenated_attribute(self, attr_name: str) -> torch.Tensor:
+        tensors = []
         for node_idx in sorted(self.view_graph.nodes):
             node = self.get_node_data(node_idx)
-            node_descriptors = node.observation.observed_image
-            view_graph_images.append(node_descriptors)
+            tensors.append(getattr(node.observation, attr_name))
+        return torch.cat(tensors)
 
-        view_graph_images = torch.cat(view_graph_images)
+    def get_concatenated_images(self) -> torch.Tensor:
+        return self._get_concatenated_attribute('observed_image')
 
-        return view_graph_images
+    def get_concatenated_segmentations(self) -> torch.Tensor:
+        return self._get_concatenated_attribute('observed_segmentation')
 
     def save_viewgraph(self, save_dir: Path, colmap_reconstruction: pycolmap.Reconstruction,
                        save_images: bool = False, overwrite: bool = True, to_cpu: bool = False):
