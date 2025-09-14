@@ -349,17 +349,20 @@ if __name__ == '__main__':
         for view_graph_path in tqdm(list(dataset_path.iterdir()), desc="Sequences", leave=False):
 
             dataset = dataset_path.name
-            view_graph = view_graph_path.name.replace('_', '')
 
-            if dataset in ['hope', 'handal'] and view_graph.split('_')[-1] != split:
+            if dataset in ['hope', 'handal'] and view_graph_path.name.split('_')[-1] != split:
                 continue
+
+            sequence_name = view_graph_path.name.split('_')[0]
 
             # view_graph = load_view_graph(sequence_path, 'cpu')
 
             view_graph_img_path = view_graph_path / 'images'
             view_graph_seg_path = view_graph_path / 'segmentations'
 
-            destination_sequence = bop_home / dataset / f'matchability_images_{split}'
+            destination_folder = bop_home / dataset / f'matchability_images_{split}'
+            shutil.rmtree(str(destination_folder), ignore_errors=True)
+            destination_sequence = destination_folder / sequence_name
             destination_images = destination_sequence / 'rgb'
             destination_segmentations = destination_sequence / 'mask_visib'
 
