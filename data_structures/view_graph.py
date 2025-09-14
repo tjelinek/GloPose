@@ -346,23 +346,23 @@ if __name__ == '__main__':
     path_to_experiment = viewgraphs_home / experiment
 
     for dataset_path in tqdm(list(path_to_experiment.iterdir()), desc="Datasets"):
-        for view_graph_path in tqdm(list(dataset_path.iterdir()), desc="Sequences", leave=False):
 
-            dataset = dataset_path.name
+        dataset = dataset_path.name
+        destination_folder = bop_home / dataset / f'matchability_images_{split}'
+        shutil.rmtree(str(destination_folder), ignore_errors=True)
+
+        for view_graph_path in tqdm(list(dataset_path.iterdir()), desc=f"Sequences in {dataset}", leave=False):
 
             if dataset in ['hope', 'handal'] and view_graph_path.name.split('_')[-1] != split:
                 continue
 
-            sequence_name = view_graph_path.name.split('_')[0]
-
+            sequence_name = '_'.join(view_graph_path.name.split('_', )[:-1])
             # view_graph = load_view_graph(sequence_path, 'cpu')
 
             view_graph_img_path = view_graph_path / 'images'
             view_graph_seg_path = view_graph_path / 'segmentations'
 
-            destination_folder = bop_home / dataset / f'matchability_images_{split}'
-            shutil.rmtree(str(destination_folder), ignore_errors=True)
-            destination_sequence = destination_folder / sequence_name
+            destination_sequence = destination_folder / f'{sequence_name}'
             destination_images = destination_sequence / 'rgb'
             destination_segmentations = destination_sequence / 'mask_visib'
 
