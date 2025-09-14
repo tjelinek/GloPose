@@ -2,7 +2,7 @@
 #SBATCH --time=23:59:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128G
 #SBATCH --partition=h200
@@ -19,4 +19,4 @@ cd ~/projects/GloPose/repositories/cnos || {
     exit 1
 }
 
-python run_inference.py dataset_name=handal model.onboarding_config.rendering_type='onboarding_static'
+python run_inference.py dataset_name=hope model.onboarding_config.rendering_type='onboarding_static'
