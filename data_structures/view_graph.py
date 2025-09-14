@@ -334,3 +334,42 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
             view_graphs[view_graph.object_id] = view_graph
 
     return view_graphs
+
+
+if __name__ == '__main__':
+
+    viewgraphs_home = Path('/mnt/personal/jelint19/cache/view_graph_cache/')
+    bop_home = Path('/mnt/personal/jelint19/data/bop/')
+    experiment = 'ufm_c0975r05'
+    split = 'both'
+
+    path_to_experiment = viewgraphs_home / experiment
+
+    for dataset_path in path_to_experiment.iterdir():
+        for view_graph_path in dataset_path.iterdir():
+
+            dataset = dataset_path.name
+            view_graph = view_graph_path.name.replace('_', '')
+
+            if dataset in ['hope', 'handal'] and view_graph.split('_')[-1] != split:
+                continue
+
+            # view_graph = load_view_graph(sequence_path, 'cpu')
+
+            view_graph_img_path = view_graph_path / 'images'
+            view_graph_seg_path = view_graph_path / 'segmentations'
+
+            destination_sequence = bop_home / dataset / f'matchability_images_{split}'
+            destination_images = destination_sequence / 'rgb'
+            destination_segmentations = destination_sequence / 'mask_visib'
+
+            destination_images.mkdir(parents=True, exist_ok=True)
+            destination_segmentations.mkdir(parents=True, exist_ok=True)
+
+            for file_path in view_graph_img_path.iterdir():
+                if file_path.is_file():
+                    shutil.copy2(file_path, destination_images)
+
+            for file_path in view_graph_seg_path.iterdir():
+                if file_path.is_file():
+                    shutil.copy2(file_path, destination_segmentations)
