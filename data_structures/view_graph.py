@@ -345,8 +345,8 @@ if __name__ == '__main__':
 
     path_to_experiment = viewgraphs_home / experiment
 
-    for dataset_path in path_to_experiment.iterdir():
-        for view_graph_path in dataset_path.iterdir():
+    for dataset_path in tqdm(list(path_to_experiment.iterdir()), desc="Datasets"):
+        for view_graph_path in tqdm(list(dataset_path.iterdir()), desc="Sequences", leave=False):
 
             dataset = dataset_path.name
             view_graph = view_graph_path.name.replace('_', '')
