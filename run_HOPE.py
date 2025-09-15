@@ -52,7 +52,7 @@ def main():
         sequences = args.sequences
     else:
         sequences = (HOPE_ONBOARDING_STATIC_BOTH_SIDES_SEQUENCES + HOPE_ONBOARDING_STATIC_UP_SEQUENCES +
-                     HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES + HOPE_ONBOARDING_DYNAMIC_SEQUENCES)[0:1]
+                     HOPE_ONBOARDING_STATIC_DOWN_SEQUENCES + HOPE_ONBOARDING_DYNAMIC_SEQUENCES)[4:5]
 
     for sequence in sequences:
 
