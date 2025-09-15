@@ -420,7 +420,7 @@ def main():
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
-        ('hope', 'test', bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-samonboarding_static/cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'),
+        ('hope', 'test', bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'),
         ('tless', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'),
         ('lmo', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json'),
         ('icbin', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'),
