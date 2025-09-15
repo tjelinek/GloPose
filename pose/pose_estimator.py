@@ -185,7 +185,7 @@ class BOPChallengePosePredictor:
 
         print(f'Results saved to {str(json_file_path)}')
 
-    def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
+    def proces_custom_sam_detections(self, cnos_detections, view_graph_segmentations, view_graph_descriptors):
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
 
