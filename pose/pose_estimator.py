@@ -416,17 +416,19 @@ class BOPChallengePosePredictor:
 
 def main():
 
+    bop_base = Path('/mnt/personal/jelint19/data/bop')
+
     sequences_to_run = [
-        ('hope', 'test'),
-        ('tless', 'test'),
-        ('lmo', 'test'),
-        ('icbin', 'test'),
-        ('handal', 'test'),
+        ('hope', 'test', bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-samonboarding_static/cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'),
+        ('tless', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'),
+        ('lmo', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json'),
+        ('icbin', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'),
+        ('handal', 'test', None),
     ]
 
-    experiment = '5_nearest_neighbors'
+    experiment = 'fromDefaultDetections'
 
-    for dataset, split in sequences_to_run:
+    for dataset, split, default_detections_file in sequences_to_run:
 
         print(f'Running on dataset {dataset}, split {split}')
 
@@ -434,15 +436,9 @@ def main():
         config = 'ufm_c0975r05'
         method_name = 'FlowTemplates'
         data_type = ''
-        default_detections_file = None
 
-        bop_base = Path('/mnt/personal/jelint19/data/bop')
         if dataset in ['hope', 'handal']:
             targets_year = 'bop24'
-            if dataset == 'hope':
-                default_detections_file = bop_base / ('default_detections/h3_bop24_model_free_unseen/cnos-sam/'
-                                                      'onboarding_static/'
-                                                      'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json')
         elif dataset in ['tless', 'lmo', 'icbin']:
             targets_year = 'bop19'
             onboarding_type = None
