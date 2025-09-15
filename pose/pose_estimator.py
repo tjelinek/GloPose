@@ -191,7 +191,8 @@ class BOPChallengePosePredictor:
 
         default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
         default_detections_patch_descriptors =\
-            torch.from_numpy(cnos_detections['patch_descriptors']).to(self.config.device)
+            torch.from_numpy(cnos_detections['patch_descriptors']).to(self.config.device) \
+                if 'patch_descriptors' in cnos_detections else None
         # default_detections_patch_descriptors =
 
         default_detections_masks = []
