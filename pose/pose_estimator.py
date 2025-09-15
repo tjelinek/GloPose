@@ -143,6 +143,7 @@ class BOPChallengePosePredictor:
             if default_detections_scene_im_dict is not None:
                 default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
                                                                 self.config.device)
+                # detections = default_detections
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items"):
