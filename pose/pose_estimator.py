@@ -81,7 +81,7 @@ class BOPChallengePosePredictor:
         test_dataset_path = base_dataset_folder / split
 
         view_graph_descriptors: Dict[Any, Tuple[torch.Tensor, torch.Tensor]] = {
-            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=True)
+            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=False)
             for obj_id, view_graph in view_graphs.items()
         }
         viewgraph_images: Dict[Any, torch.Tensor] = {
