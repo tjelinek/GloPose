@@ -6,9 +6,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128G
 #SBATCH --partition=h200
-#SBATCH --job-name=RunCNOS
-#SBATCH --err=/mnt/personal/jelint19/results/logs/RunCNOS.err
-#SBATCH --out=/mnt/personal/jelint19/results/logs/RunCNOS.out
+#SBATCH --job-name=RunCNOShope
+#SBATCH --err=/mnt/personal/jelint19/results/logs/RunCNOShope.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/RunCNOShope.out
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
@@ -19,4 +19,4 @@ cd ~/projects/GloPose/repositories/cnos || {
     exit 1
 }
 
-python run_inference.py dataset_name=hope model.onboarding_config.rendering_type='onboarding_static'
+python run_inference.py dataset_name=hope model.onboarding_config.rendering_type='matchability_images_both'
