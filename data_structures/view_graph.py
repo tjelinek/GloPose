@@ -60,11 +60,16 @@ class ViewGraph:
                                                              colmap_db_image_name, dino_cls_descriptor))
 
     def compute_dino_descriptors_for_nodes(self, black_background: bool) -> Tuple[torch.Tensor, torch.Tensor]:
-        sorted_node_idxs = sorted(self.view_graph.nodes)
         cls_descriptors = []
         dense_descriptors = []
-        for node_idx in sorted_node_idxs:
-            dino_cls_descriptor, dino_dense_descriptor = self.get_dino_descriptor_for_node(node_idx, black_background)
+
+        images = self.get_concatenated_images()
+        segmentations = self.get_concatenated_segmentations()
+        for node_idx in range(segmentations.shape[0]):
+            img = images[[node_idx]]
+            seg = segmentations[[node_idx]]
+            dino_cls_descriptor, dino_dense_descriptor = self._get_descriptor_from_observation(img, seg,
+                                                                                               black_background)
             cls_descriptors.append(dino_cls_descriptor)
             dense_descriptors.append(dino_dense_descriptor)
         cls_descriptors = torch.cat(cls_descriptors)
@@ -72,16 +77,10 @@ class ViewGraph:
 
         return cls_descriptors, dense_descriptors
 
-    def get_dino_descriptor_for_node(self, node_idx, black_background: bool):
-        node_data = self.get_node_data(node_idx)
-        observation = node_data.observation
-        return self._get_descriptor_from_observation(observation, black_background)
-
-    def _get_descriptor_from_observation(self, observation: FrameObservation, black_background: bool):
+    def _get_descriptor_from_observation(self, image_tensor, segmentation_mask, black_background: bool):
         from src.model.utils import Detections
 
-        image_tensor = observation.observed_image.clone().to(self.device)
-        segmentation_mask = observation.observed_segmentation.squeeze(1).to(self.device)
+        segmentation_mask = segmentation_mask.squeeze(0)
         if black_background:
             image_tensor *= segmentation_mask
         segmentation_bbox = masks_to_boxes(segmentation_mask)
