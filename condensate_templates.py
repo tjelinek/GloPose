@@ -29,6 +29,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     dino_descriptor = descriptor_from_hydra(device)
 
     sequences = sorted(path_to_split.iterdir())
+    cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
+
     for sequence in tqdm(sequences, desc=f"Processing sequences in {dataset}", total=len(sequences)):
 
         if not sequence.is_dir():
@@ -63,7 +65,6 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = object_classes[permutation]
     dino_cls_descriptors = dino_cls_descriptors[permutation]
 
-    cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
     cnn.fit_resample(dino_cls_descriptors, object_classes)
     sample_indices = cnn.sample_indices_
 
