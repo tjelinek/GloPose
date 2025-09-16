@@ -77,8 +77,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         image_path = all_images[index]
         segmentation_path = all_segmentations[index]
 
-        shutil.copy2(image_path, images_save_dir)
-        shutil.copy2(segmentation_path, segmentation_save_dir)
+        shutil.copy2(image_path, images_save_dir / f'{image_path.stem}_{index}{image_path.suffix}')
+        shutil.copy2(segmentation_path, segmentation_save_dir / f'{segmentation_path.stem}_{index}'
+                                                                f'{segmentation_path.suffix}')
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, device='cuda'):
