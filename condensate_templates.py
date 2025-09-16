@@ -87,7 +87,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                                                                 f'{segmentation_path.suffix}')
 
 
-def load_condensed_data(cache_root: Path, dataset: str, split: str) -> Tuple[Dict[int, torch.Tensor], ...]:
+def load_condensed_templates(cache_root: Path, dataset: str, split: str) -> \
+        Tuple[Dict[int, torch.Tensor], ..., Dict[int, Tuple[torch.Tensor, torch.Tensor]]]:
 
     dataset_path = cache_root / dataset / split
     descriptor = descriptor_from_hydra()
@@ -95,6 +96,8 @@ def load_condensed_data(cache_root: Path, dataset: str, split: str) -> Tuple[Dic
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)
     cls_descriptors_dict: Dict[int, Any] = defaultdict(list)
+    patch_descriptors_dict: Dict[int, Any] = defaultdict(list)
+    descriptors_dict: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
 
     obj_dirs = sorted([d for d in dataset_path.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
@@ -121,14 +124,16 @@ def load_condensed_data(cache_root: Path, dataset: str, split: str) -> Tuple[Dic
             mask_tensor = torch.from_numpy(mask_array)
             segmentations_dict[obj_id].append(mask_tensor)
 
-            cls_descriptor, _ = descriptor.get_detections_from_files(rgb_file, mask_file)
+            cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
             cls_descriptors_dict[obj_id].append(cls_descriptor)
+            patch_descriptors_dict[obj_id].append(patch_descriptor)
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
-        cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
+        descriptors_dict[obj_id] = (torch.stack(cls_descriptors_dict[obj_id]),
+                                    torch.stack(cls_descriptors_dict[obj_id]))
 
-    return images_dict, segmentations_dict, cls_descriptors_dict
+    return images_dict, segmentations_dict, descriptors_dict
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, device='cuda'):
