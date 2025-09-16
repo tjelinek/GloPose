@@ -13,7 +13,7 @@ from romatch.utils.kde import kde
 from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 from data_structures.data_graph import DataGraph
-from flow import roma_warp_to_pixel_coordinates, convert_to_roma_warp, convert_certainty_to_roma_format
+from utils.flow import roma_warp_to_pixel_coordinates, convert_to_roma_warp, convert_certainty_to_roma_format
 
 
 class FlowProviderDirect(ABC):

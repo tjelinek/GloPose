@@ -16,7 +16,7 @@ from dataset_generators.scenarios import MovementScenario
 from models.encoder import EncoderResult
 from models.rendering import RenderingKaolin
 from utils.general import normalize_vertices
-from flow import visualize_flow_with_images
+from utils.flow import visualize_flow_with_images
 
 
 def save_renderings(image_idx, ren_features, ren_mask, rendering_destination, segmentation_destination,

@@ -9,7 +9,7 @@ import networkx as nx
 
 from dataclasses import dataclass, field, replace, is_dataclass
 
-from flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
+from utils.flow import flow_unit_coords_to_image_coords, flow_image_coords_to_unit_coords
 
 ObservationType = TypeVar('ObservationType', bound='Observation')
 FlowObservationType = TypeVar('FlowObservationType', bound='BaseFlowObservation')
