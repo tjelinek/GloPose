@@ -71,6 +71,7 @@ class BOPChallengePosePredictor:
                                         default_detections_file: Path = None,
                                         templates_source: str = 'condensed_nn') -> None:
 
+        black_background = False
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
 
@@ -89,7 +90,7 @@ class BOPChallengePosePredictor:
 
         if templates_source == 'viewgraph':
             template_cls_descriptors = {
-                obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=False)[0]
+                obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background)[0]
                 for obj_id, view_graph in view_graphs.items()
             }
             template_images = {
@@ -100,7 +101,7 @@ class BOPChallengePosePredictor:
             }
         elif templates_source == 'condensed_nn':
             template_images, template_segmentations, template_cls_descriptors, _ = \
-                get_descriptors_for_condensed_templates(detection_templates_save_folder)
+                get_descriptors_for_condensed_templates(detection_templates_save_folder, black_background)
         else:
             raise ValueError(f'Unknown templates_source {templates_source}')
 

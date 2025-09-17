@@ -88,7 +88,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                                                                 f'{segmentation_path.suffix}')
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = True) -> \
+def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = False) -> \
         Tuple[Dict[int, torch.Tensor], ...]:
 
     descriptor = descriptor_from_hydra()
