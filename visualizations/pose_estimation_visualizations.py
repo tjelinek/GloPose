@@ -93,7 +93,7 @@ class PoseEstimatorLogger:
                                 grid_columns=2,
                                 contents=[
                                     rrb.Spatial2DView(
-                                        name=f"Nearest neighbor {i}",
+                                        name=f"Nearest best object template {i+1}",
                                         origin=f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}',
                                         # contents=[
                                         #     rrb.TextDocumentView(
