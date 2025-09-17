@@ -124,7 +124,7 @@ class PoseEstimatorLogger:
                                         #     )
                                         # ]
                                     )
-                                    for i in range(5)
+                                    for i in range(6)
                                 ]
                             ),
                         ],
@@ -183,7 +183,7 @@ class PoseEstimatorLogger:
         viewgraph_id = detections.object_ids[detection_idx].item()
 
         detections_scores_per_viewgraph = detections_scores[viewgraph_id]
-        k = min(5, detections_scores_per_viewgraph.shape[1])
+        k = min(6, detections_scores_per_viewgraph.shape[1])
         topk_scores, topk_template_indices = torch.topk(detections_scores_per_viewgraph, k=k, dim=-1)
 
         detection_topk_scores = topk_scores[detection_idx]
@@ -196,11 +196,15 @@ class PoseEstimatorLogger:
         rr.log(RerunAnnotationsPose.detection_image, rr_detection)
 
         template_images = view_graph_images[viewgraph_id]
-        for i in range(detection_topk_template_ids.shape[0]):
+        for i in range(6):
+            if i < detection_topk_template_ids.shape[0]:
+                template_image_idx = detection_topk_template_ids[i].item()
+                template_image = template_images[template_image_idx]
+                template_score = detection_topk_scores[i].item()
+            else:
+                template_image = torch.zeros_like(cropped_detection)
+                template_score = 0.
 
-            template_image_idx = detection_topk_template_ids[i].item()
-            template_image = template_images[template_image_idx]
-            template_score = detection_topk_scores[i].item()
             rr_template = rr.Image(tensor2numpy(template_image, self.image_downsample))
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
             # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
