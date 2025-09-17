@@ -72,28 +72,6 @@ class PoseEstimatorLogger:
         blueprint = rrb.Blueprint(
             rrb.Tabs(
                 contents=[
-                    rrb.Vertical(
-                        contents=[
-                            rrb.Horizontal(
-                                contents=[
-                                    rrb.Spatial2DView(
-                                        name=f"Matches High Certainty",
-                                        origin=RerunAnnotationsPose.matches_high_certainty),
-                                    rrb.Spatial2DView(
-                                        name=f"Matches Low Certainty",
-                                        origin=RerunAnnotationsPose.matches_low_certainty),
-                                    rrb.Spatial2DView(
-                                        name=f"Matching Certainty",
-                                        origin=RerunAnnotationsPose.matching_certainty),
-
-                                ],
-                                name='Matching'
-                            ),
-                            match_reliability_statistics,
-                        ],
-                        row_shares=[0.8, 0.2],
-                        name='Matching'
-                    ),
                     rrb.Horizontal(
                         contents=[
                             rrb.Spatial2DView(
@@ -129,6 +107,28 @@ class PoseEstimatorLogger:
                             ),
                         ],
                         name='Detections - Closest Neighbors'
+                    ),
+                    rrb.Vertical(
+                        contents=[
+                            rrb.Horizontal(
+                                contents=[
+                                    rrb.Spatial2DView(
+                                        name=f"Matches High Certainty",
+                                        origin=RerunAnnotationsPose.matches_high_certainty),
+                                    rrb.Spatial2DView(
+                                        name=f"Matches Low Certainty",
+                                        origin=RerunAnnotationsPose.matches_low_certainty),
+                                    rrb.Spatial2DView(
+                                        name=f"Matching Certainty",
+                                        origin=RerunAnnotationsPose.matching_certainty),
+
+                                ],
+                                name='Matching'
+                            ),
+                            match_reliability_statistics,
+                        ],
+                        row_shares=[0.8, 0.2],
+                        name='Matching'
                     ),
                 ],
                 name=f'Results'
