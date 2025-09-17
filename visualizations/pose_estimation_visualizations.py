@@ -175,14 +175,19 @@ class PoseEstimatorLogger:
         rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
 
     def visualize_nearest_neighbors(self, query_image: torch.Tensor, view_graph_images: Dict[int, torch.Tensor],
-                                    detection_idx: int, detections: Detections):
+                                    detection_idx: int, detections: Detections, detections_scores):
 
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
         detection_bbox = detections.boxes[detection_idx]
-        viewgraph_id = detections.object_ids[detection_idx]
-        detection_topk_scores = detections.topk_template_scores[detection_idx]
-        detection_topk_template_indices = detections.topk_template_indices[detection_idx]
+        viewgraph_id = detections.object_ids[detection_idx].item()
+
+        detections_scores_per_viewgraph = detections_scores[viewgraph_id]
+        k = min(5, detections_scores_per_viewgraph.shape[1])
+        topk_scores, topk_template_indices = torch.topk(detections_scores_per_viewgraph, k=k, dim=-1)
+
+        detection_topk_scores = topk_scores[detection_idx]
+        detection_topk_template_ids = topk_template_indices[detection_idx]
 
         x1, y1, x2, y2 = detection_bbox.int()
         cropped_detection = query_image[..., y1:y2, x1:x2]
@@ -190,15 +195,11 @@ class PoseEstimatorLogger:
         rr_detection = rr.Image(tensor2numpy(cropped_detection))
         rr.log(RerunAnnotationsPose.detection_image, rr_detection)
 
-        template_images = view_graph_images[viewgraph_id.item()]
-        for i in range(detection_topk_template_indices.shape[0]):
+        template_images = view_graph_images[viewgraph_id]
+        for i in range(detection_topk_template_ids.shape[0]):
 
-            template_image_idx = detection_topk_template_indices[i].item()
-
-            if template_image_idx < 0:  # -1 signals more templates do not exist
-                template_image = torch.zeros_like(cropped_detection)
-            else:
-                template_image = template_images[template_image_idx]
+            template_image_idx = detection_topk_template_ids[i].item()
+            template_image = template_images[template_image_idx]
             template_score = detection_topk_scores[i].item()
             rr_template = rr.Image(tensor2numpy(template_image, self.image_downsample))
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)

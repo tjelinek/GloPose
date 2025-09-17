@@ -198,7 +198,7 @@ class BOPChallengePosePredictor:
             default_detections_masks.append(detection_mask_tensor)
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
-        idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, topk_templates = \
+        idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
             compute_templates_similarity_scores(view_graph_descriptors, default_detections_cls_descriptors,
                                                 self.cnos_similarity, self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['confidence_thresh'],
@@ -210,12 +210,10 @@ class BOPChallengePosePredictor:
             'score_distribution': pred_score_distribution,
             'object_ids': selected_objects,
             'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
-            'topk_template_scores': topk_templates[0],
-            'topk_template_indices': topk_templates[1],
         }
         detections = Detections(detections_dict)
         detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
-        return detections
+        return detections, detections_scores
 
     @staticmethod
     def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
