@@ -69,7 +69,7 @@ class BOPChallengePosePredictor:
                                         view_graph_save_paths: Path, detection_templates_save_folder,
                                         onboarding_type: str, split: str, method_name: str, experiment_name: str,
                                         default_detections_file: Path = None,
-                                        templates_source: str = 'condensed_nn') -> None:
+                                        templates_source: str = 'cnns') -> None:
 
         black_background = False
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
@@ -99,7 +99,7 @@ class BOPChallengePosePredictor:
             template_segmentations = {
                 obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
             }
-        elif templates_source == 'condensed_nn':
+        elif templates_source == 'cnns':
             template_images, template_segmentations, template_cls_descriptors, _ = \
                 get_descriptors_for_condensed_templates(detection_templates_save_folder, black_background)
         else:
