@@ -10,9 +10,6 @@ import pycolmap
 import torch
 import torchvision.utils as vutils
 from einops import rearrange
-from hydra import initialize_config_dir, compose
-from hydra.core.global_hydra import GlobalHydra
-from hydra.utils import instantiate
 from kornia.geometry import Se3, Quaternion
 from torchvision.ops import masks_to_boxes
 from tqdm import tqdm
@@ -21,6 +18,8 @@ from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
 
+sys.path.append('./repositories/cnos')
+from src.model.dinov2 import CustomDINOv2, descriptor_from_hydra
 
 @dataclass
 class ViewGraphNode:
@@ -40,21 +39,12 @@ class ViewGraph:
         self.colmap_reconstruction_path: Path = colmap_output_path
         self.device: str = device
 
-        if GlobalHydra.instance().is_initialized():
-            GlobalHydra.instance().clear()
-        cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
-        with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-            cnos_cfg = compose(config_name="run_inference")
-
-        sys.path.append('./repositories/cnos')
-        from src.model.dinov2 import CustomDINOv2
-        self.dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(self.device)
-        self.dino_descriptor.model = self.dino_descriptor.model.to(self.device)
-        self.dino_descriptor.model.device = self.device
-
-    def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name):
+    def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name,
+                 dino_descriptor: CustomDINOv2):
         """Adds a node with ViewGraphNode attributes."""
-        dino_cls_descriptor, dino_dense_descriptor = self._get_descriptor_from_observation(observation, True)
+        dino_cls_descriptor, dino_dense_descriptor =\
+            self._get_descriptor_from_observation(observation.observed_image, observation.observed_segmentation,
+                                                  dino_descriptor, False)
         dino_cls_descriptor = dino_dense_descriptor.squeeze()
         self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
                                                              colmap_db_image_name, dino_cls_descriptor))
@@ -163,8 +153,6 @@ class ViewGraph:
     def send_to_device(self, device):
         """Sends the graph to a given device."""
         self.device = device
-        self.dino_descriptor.model = self.dino_descriptor.model.to(self.device)
-        self.dino_descriptor.model.device = self.device
         for node_id, data in self.view_graph.nodes(data=True):
             node_data: ViewGraphNode = data["data"]
             node_data.observation = node_data.observation.send_to_device(device)
@@ -194,6 +182,8 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
     view_graph = ViewGraph(object_id, colmap_db_path, colmap_output_path,
                            data_graph.storage_device)
 
+    dino_descriptor = descriptor_from_hydra()
+
     for image_id, image in colmap_reconstruction.images.items():
         frame_index = all_image_names.index(image.name)
 
@@ -205,7 +195,7 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
         frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
-        view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name)
+        view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, dino_descriptor)
 
     # TODO this causes errors when COLMAP does not register an image
     # for u, v in structure.edges:
