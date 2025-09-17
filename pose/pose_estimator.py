@@ -66,8 +66,10 @@ class BOPChallengePosePredictor:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
-                                        view_graph_save_paths: Path, onboarding_type: str, split: str, method_name: str,
-                                        experiment_name: str, default_detections_file: Path = None) -> None:
+                                        view_graph_save_paths: Path, detection_templates_save_folder,
+                                        onboarding_type: str, split: str, method_name: str, experiment_name: str,
+                                        default_detections_file: Path = None,
+                                        templates_source: str = 'condensed_nn') -> None:
 
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                           self.config.device)
@@ -85,7 +87,7 @@ class BOPChallengePosePredictor:
         template_images: Dict[int, torch.Tensor]
         template_segmentations: Dict[int, torch.Tensor]
 
-        if detections_from_viewgraph:
+        if templates_source == 'viewgraph':
             template_cls_descriptors = {
                 obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=False)[0]
                 for obj_id, view_graph in view_graphs.items()
@@ -96,9 +98,11 @@ class BOPChallengePosePredictor:
             template_segmentations = {
                 obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
             }
-        else:
+        elif templates_source == 'condensed_nn':
             template_images, template_segmentations, template_cls_descriptors, _ = \
                 get_descriptors_for_condensed_templates(detection_templates_save_folder)
+        else:
+            raise ValueError(f'Unknown templates_source {templates_source}')
 
         json_2d_detection_results = []
 
