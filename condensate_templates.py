@@ -88,7 +88,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                                                                 f'{segmentation_path.suffix}')
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path) -> \
+def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = True) -> \
         Tuple[Dict[int, torch.Tensor], ...]:
 
     descriptor = descriptor_from_hydra()
@@ -123,7 +123,8 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path) -> \
             mask_tensor = torch.from_numpy(mask_array)
             segmentations_dict[obj_id].append(mask_tensor)
 
-            cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
+            cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file,
+                                                                                    black_background)
             cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
             patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0))
 

@@ -18,6 +18,7 @@ from hydra.utils import instantiate
 from kornia.geometry import Se3
 from tqdm import tqdm
 
+from condensate_templates import get_descriptors_for_condensed_templates
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
 
@@ -80,16 +81,24 @@ class BOPChallengePosePredictor:
 
         test_dataset_path = base_dataset_folder / split
 
-        view_graph_descriptors: Dict[Any, Tuple[torch.Tensor, torch.Tensor]] = {
-            obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=False)
-            for obj_id, view_graph in view_graphs.items()
-        }
-        viewgraph_images: Dict[Any, torch.Tensor] = {
-            obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
-        }
-        viewgraph_segmentations: Dict[Any, torch.Tensor] = {
-            obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
-        }
+        template_cls_descriptors: Dict[int, torch.Tensor]
+        template_images: Dict[int, torch.Tensor]
+        template_segmentations: Dict[int, torch.Tensor]
+
+        if detections_from_viewgraph:
+            template_cls_descriptors = {
+                obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background=False)[0]
+                for obj_id, view_graph in view_graphs.items()
+            }
+            template_images = {
+                obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
+            }
+            template_segmentations = {
+                obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
+            }
+        else:
+            template_images, template_segmentations, template_cls_descriptors, _ = \
+                get_descriptors_for_condensed_templates(detection_templates_save_folder)
 
         json_2d_detection_results = []
 
