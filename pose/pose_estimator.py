@@ -135,8 +135,7 @@ class BOPChallengePosePredictor:
                 pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
-            detections = self.proces_custom_sam_detections(cnos_detections, viewgraph_segmentations,
-                                                           view_graph_descriptors)
+            detections = self.proces_custom_sam_detections(cnos_detections, template_cls_descriptors)
 
             detections_duration = time.time() - detections_start_time
 
@@ -186,15 +185,11 @@ class BOPChallengePosePredictor:
 
         print(f'Results saved to {str(json_file_path)}')
 
-    def proces_custom_sam_detections(self, cnos_detections, view_graph_segmentations, view_graph_descriptors):
+    def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
 
         default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
-        default_detections_patch_descriptors =\
-            torch.from_numpy(cnos_detections['patch_descriptors']).to(self.config.device) \
-                if 'patch_descriptors' in cnos_detections else None
-        # default_detections_patch_descriptors =
 
         default_detections_masks = []
         for detection in cnos_detections['masks']:
@@ -204,9 +199,7 @@ class BOPChallengePosePredictor:
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, topk_templates = \
-            compute_templates_similarity_scores(view_graph_descriptors, view_graph_segmentations,
-                                                default_detections_cls_descriptors,
-                                                default_detections_patch_descriptors, default_detections_masks,
+            compute_templates_similarity_scores(view_graph_descriptors, default_detections_cls_descriptors,
                                                 self.cnos_similarity, self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['confidence_thresh'],
                                                 self.cnos_matching_config['max_num_instances'])
