@@ -89,8 +89,10 @@ class BOPChallengePosePredictor:
         template_segmentations: Dict[int, torch.Tensor]
 
         if templates_source == 'viewgraph':
+            from src.model.dinov2 import descriptor_from_hydra
+            dino_descriptor = descriptor_from_hydra()
             template_cls_descriptors = {
-                obj_id: view_graph.compute_dino_descriptors_for_nodes(black_background)[0]
+                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor, black_background)[0]
                 for obj_id, view_graph in view_graphs.items()
             }
             template_images = {
