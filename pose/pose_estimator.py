@@ -148,7 +148,7 @@ class BOPChallengePosePredictor:
                 pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
-            detections = self.proces_custom_sam_detections(cnos_detections, template_cls_descriptors)
+            detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_cls_descriptors)
 
             detections_duration = time.time() - detections_start_time
 
@@ -165,7 +165,8 @@ class BOPChallengePosePredictor:
 
                 if pose_logger is not None:
                     pose_logger.visualize_detections(detections.masks, detection_mask_idx)
-                    pose_logger.visualize_nearest_neighbors(image, viewgraph_images, detection_mask_idx, detections)
+                    pose_logger.visualize_nearest_neighbors(image, template_images, detection_mask_idx, detections,
+                                                            detections_scores)
                     pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
