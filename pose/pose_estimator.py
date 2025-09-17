@@ -424,16 +424,16 @@ def main():
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
-        ('hope', 'test', bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'),
-        ('tless', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'),
-        ('lmo', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json'),
-        ('icbin', 'test', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'),
-        ('handal', 'test', None),
+        ('hope', 'test', 'onboarding_static', bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'),
+        ('tless', 'test', 'train_primesense', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'),
+        ('lmo', 'test', 'train', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json'),
+        ('icbin', 'test', 'train', bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'),
+        ('handal', 'test', 'onboarding_static', None),
     ]
 
     experiment = 'fromDefaultDetections'
 
-    for dataset, split, default_detections_file in sequences_to_run:
+    for dataset, split, detections_split, default_detections_file in sequences_to_run:
 
         print(f'Running on dataset {dataset}, split {split}')
 
@@ -457,15 +457,17 @@ def main():
 
         base_dataset_folder = bop_base / f'{dataset}'
         bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
-        view_graph_location = Path(f'/mnt/personal/jelint19/cache/view_graph_cache/{config}/{dataset}')
+        cache_path = Path(f'/mnt/personal/jelint19/cache')
+        view_graph_location = cache_path / 'view_graph_cache' / config / dataset
+        condensed_templates_base = cache_path / 'detections_templates_cache' / dataset / detections_split
 
         config = TrackerConfig()
         config.device = 'cuda'
         predictor = BOPChallengePosePredictor(config)
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                                  onboarding_type, split_folder, method_name, experiment,
-                                                  default_detections_file)
+                                                  condensed_templates_base, onboarding_type, split_folder, method_name,
+                                                  experiment, default_detections_file)
 
 
 if __name__ == '__main__':
