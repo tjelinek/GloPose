@@ -163,7 +163,7 @@ class PoseEstimatorLogger:
         seg_all = TF.resize(all_detections_segmentations.float().unsqueeze(0),
                         [int(h * self.image_downsample), int(w * self.image_downsample)],
                         interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
-        query_segment_np = seg_all.squeeze(0).to(torch.float).numpy(force=True)
+        query_segment_np = seg_all.to(torch.float).numpy(force=True)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
         rr_segment = rr.SegmentationImage(query_segment_np[detection_idx])
