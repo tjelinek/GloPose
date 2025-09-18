@@ -2,7 +2,7 @@ import json
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Optional, Callable, Tuple
+from typing import List, Dict, Optional, Callable, Tuple, OrderedDict
 
 import numpy as np
 import torch
@@ -404,3 +404,28 @@ def set_config_for_bop_onboarding(config: TrackerConfig, sequence: str):
             config.bop_config.static_onboarding_sequence = 'both'
             config.similarity_transformation = 'kabsch'
         config.sequence = '_'.join(sequence_name_split[:2])
+
+
+def group_test_targets_by_image(test_annotations):
+
+    grouped = OrderedDict()
+
+    for item in test_annotations:
+        key = (item['im_id'], item['scene_id'])
+
+        # Initialize if first time seeing this key
+        if key not in grouped:
+            grouped[key] = {'im_id': item['im_id'],
+                            'scene_id': item['scene_id'],
+                            'objects': [],
+                            'objects_counts': []}
+
+        # Add object info if it exists
+        if 'obj_id' in item:
+            grouped[key]['objects'].append(item['obj_id'])
+            grouped[key]['objects_counts'].append(item['inst_count'])
+
+    # Convert to list while preserving order
+    test_annotations = list(grouped.values())
+
+    return test_annotations

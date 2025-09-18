@@ -26,7 +26,7 @@ from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
 from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from tracker_config import TrackerConfig
-from utils.bop_challenge import get_gop_camera_intrinsics
+from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
@@ -81,6 +81,7 @@ class BOPChallengePosePredictor:
 
         with bop_targets_path.open('r') as file:
             test_annotations = json.load(file)
+            test_annotations = group_test_targets_by_image(test_annotations)
 
         test_dataset_path = base_dataset_folder / split
 
