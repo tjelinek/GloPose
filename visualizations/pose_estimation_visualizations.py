@@ -168,7 +168,7 @@ class PoseEstimatorLogger:
 
         rr_segment = rr.SegmentationImage(query_segment_np[detection_idx])
 
-        segment_cumulative = query_segment_np[:detection_idx].sum(axis=0)
+        segment_cumulative = query_segment_np[:detection_idx+1].sum(axis=0)
         rr_segment_cumulative = rr.SegmentationImage(segment_cumulative)
 
         rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
