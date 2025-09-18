@@ -161,7 +161,7 @@ class BOPChallengePosePredictor:
                 # detections = default_detections
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
-                                           total=detections.masks.shape[0], unit="items"):
+                                           total=detections.masks.shape[0], unit="items", disable=True):
                 corresponding_obj_id: int = detections.object_ids[detection_mask_idx].item()
                 corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = detections.masks[detection_mask_idx]
