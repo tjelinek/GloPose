@@ -199,13 +199,13 @@ class PoseEstimatorLogger:
         for i in range(6):
             if i < detection_topk_template_ids.shape[0]:
                 template_image_idx = detection_topk_template_ids[i].item()
-                template_image = template_images[template_image_idx]
+                template_image = tensor2numpy(template_images[template_image_idx], self.image_downsample)
                 template_score = detection_topk_scores[i].item()
             else:
-                template_image = torch.zeros_like(cropped_detection)
+                template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
                 template_score = 0.
 
-            rr_template = rr.Image(tensor2numpy(template_image, self.image_downsample))
+            rr_template = rr.Image(template_image)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
             # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
             #        rr.TextDocument(f"score: {template_score:.3f}"))
