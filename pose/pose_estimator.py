@@ -503,7 +503,7 @@ def main():
         split_folder = f'{split}{data_type}'
 
         base_dataset_folder = bop_base / f'{dataset}'
-        bop_targets_path = base_dataset_folder / f'test_targets_{targets_year}.json'
+        bop_targets_path = base_dataset_folder / f'{split}_targets_{targets_year}.json'
         cache_path = Path(f'/mnt/personal/jelint19/cache')
         view_graph_location = cache_path / 'view_graph_cache' / config / dataset
         condensed_templates_base = cache_path / 'detections_templates_cache' / dataset / detections_split
