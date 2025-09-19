@@ -29,7 +29,7 @@ from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
-from utils.eval_bop_detection import evaluate_bop_coco
+from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
@@ -215,6 +215,7 @@ class BOPChallengePosePredictor:
         if dataset_name in ['hope', 'handal'] and split == 'val':
             targets_filename = "val_targets_bop24.json"
             # Run evaluation
+
         metrics = evaluate_bop_coco(
             result_filename=result_filename,
             results_path=results_path,
@@ -223,6 +224,9 @@ class BOPChallengePosePredictor:
             ann_type="bbox",
             targets_filename=targets_filename
         )
+
+        results_csv_path = self.write_folder / 'detection_results.csv'
+        update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
 
     def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
         from src.model.utils import Detections

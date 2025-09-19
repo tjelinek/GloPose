@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import os
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from bop_toolkit_lib import pycoco_utils
@@ -247,17 +250,19 @@ def get_result_types():
 if __name__ == "__main__":
     try:
         # Your parameters
-        result_filename = "FlowTemplates_lmo-test_ufm_c0975r05@None@detection_thresh_05.json"
+        result_filename = "FlowTemplates_handal-val_ufm_c0975r05@static@condensedNNsNonMaxSup.json"
         results_path = "/mnt/personal/jelint19/results/PoseEstimation/"
         eval_path = "/mnt/personal/jelint19/results/PoseEstimation/bop_eval"
+        datasets_path = "/mnt/personal/jelint19/data/bop/"
 
         # Run evaluation
         metrics = evaluate_bop_coco(
             result_filename=result_filename,
             results_path=results_path,
+            datasets_path=datasets_path,
             eval_path=eval_path,
             ann_type="bbox",
-            targets_filename="test_targets_bop19.json"
+            targets_filename="val_targets_bop24.json"
         )
 
         # Access individual metrics
@@ -280,3 +285,62 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
+
+
+def update_results_csv(
+        metrics,
+        experiment_name,
+        dataset,
+        split,
+        csv_path="evaluation_results.csv",
+        metric_key="AP"
+):
+    """
+    Update or create a CSV file with evaluation results.
+
+    Args:
+        metrics (dict): Dictionary containing evaluation metrics
+        experiment_name (str): Name of the experiment (row identifier)
+        dataset (str): Dataset name
+        split (str): Split name (e.g., 'val', 'test')
+        csv_path (Path): Path to the CSV file
+        metric_key (str): Which metric to extract (default: 'AP')
+
+    Returns:
+        pd.DataFrame: Updated DataFrame
+    """
+
+    # Create column name
+    column_name = f"{dataset}-{split}"
+
+    # Get the metric value
+    metric_value = metrics.get(metric_key, -1.0)
+
+    # Convert to Path object
+    csv_file = Path(csv_path)
+
+    # Load existing CSV or create new DataFrame
+    if csv_file.exists():
+        print(f"Loading existing CSV: {csv_file}")
+        df = pd.read_csv(csv_file, index_col=0)
+    else:
+        print(f"Creating new CSV: {csv_file}")
+        df = pd.DataFrame()
+
+    # Ensure the column exists
+    if column_name not in df.columns:
+        df[column_name] = None
+
+    # Update the specific cell
+    df.loc[experiment_name, column_name] = metric_value
+
+    # Sort columns and index for better readability
+    df = df.sort_index()  # Sort experiments (rows)
+    df = df.reindex(sorted(df.columns), axis=1)  # Sort dataset-split combinations (columns)
+
+    # Save back to CSV
+    df.to_csv(csv_file)
+    print(f"Updated results saved to: {csv_file}")
+    print(f"Added: {experiment_name} -> {column_name} = {metric_value:.4f}")
+
+    return df
