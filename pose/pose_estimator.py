@@ -25,6 +25,7 @@ from data_providers.frame_provider import PrecomputedFrameProvider
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
 from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
+from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
@@ -230,7 +231,10 @@ class BOPChallengePosePredictor:
             'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
         }
         detections = Detections(detections_dict)
-        detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
+        keep_indices = detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
+        filter_similarities_dict(detections_scores, keep_indices)
+        keep_indices = detections.apply_nms_for_masks_inside_masks()
+        filter_similarities_dict(detections_scores, keep_indices)
         return detections, detections_scores
 
     @staticmethod
