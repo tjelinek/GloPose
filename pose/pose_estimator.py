@@ -29,6 +29,7 @@ from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
 from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
+from utils.eval_bop_detection import evaluate_bop_coco
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
@@ -203,6 +204,25 @@ class BOPChallengePosePredictor:
             json.dump(json_2d_detection_results, f)
 
         print(f'Results saved to {str(json_file_path)}')
+
+        if dataset_name in ['hope', 'handal'] and split != 'val':
+            return
+        result_filename = json_file_path.name
+        results_path = json_file_path.parent
+        eval_path = "/mnt/personal/jelint19/results/PoseEstimation/bop_eval"
+        datasets_path = "/mnt/personal/jelint19/data/bop/"
+        targets_filename = "test_targets_bop19.json"
+        if dataset_name in ['hope', 'handal'] and split == 'val':
+            targets_filename = "val_targets_bop24.json"
+            # Run evaluation
+        metrics = evaluate_bop_coco(
+            result_filename=result_filename,
+            results_path=results_path,
+            datasets_path=datasets_path,
+            eval_path=eval_path,
+            ann_type="bbox",
+            targets_filename=targets_filename
+        )
 
     def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
         from src.model.utils import Detections
