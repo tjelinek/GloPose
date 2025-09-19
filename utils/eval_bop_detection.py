@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import os
-
 import numpy as np
-from bop_toolkit_lib import dataset_params
-from bop_toolkit_lib import inout
-from bop_toolkit_lib import pycoco_utils
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+from bop_toolkit_lib import pycoco_utils
+from bop_toolkit_lib import dataset_params
+from bop_toolkit_lib import inout
 
 
 def evaluate_bop_coco(
@@ -161,7 +160,22 @@ def evaluate_bop_coco(
 
     # Initialize COCO ground truth API
     print("Initializing COCO evaluation...")
-    cocoGt = COCO(dataset_coco_ann)
+    # COCO() expects a file path, but we have a dict, so we need to save it temporarily
+    # or use the alternative initialization method
+    import tempfile
+    import json
+
+    # Save the merged annotations to a temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+        json.dump(dataset_coco_ann, tmp_file)
+        tmp_ann_path = tmp_file.name
+
+    try:
+        cocoGt = COCO(tmp_ann_path)
+    except Exception as e:
+        # Clean up temp file if COCO initialization fails
+        os.unlink(tmp_ann_path)
+        raise e
 
     if ann_type == "segm":
         pycoco_utils.ensure_rle_binary(dataset_coco_results, cocoGt)
@@ -188,6 +202,14 @@ def evaluate_bop_coco(
         res_types = get_result_types()
         coco_scores = {res_type: -1.0 for res_type in res_types}
         coco_scores["average_time_per_image"] = -1.0
+
+    finally:
+        # Clean up temporary file
+        if 'tmp_ann_path' in locals():
+            try:
+                os.unlink(tmp_ann_path)
+            except OSError:
+                pass  # File might already be deleted
 
     # Print results
     print("\n" + "=" * 50)
@@ -228,12 +250,11 @@ if __name__ == "__main__":
         result_filename = "FlowTemplates_lmo-test_ufm_c0975r05@None@detection_thresh_05.json"
         results_path = "/mnt/personal/jelint19/results/PoseEstimation/"
         eval_path = "/mnt/personal/jelint19/results/PoseEstimation/bop_eval"
-        datasets_path = "/mnt/personal/jelint19/data/bop/"
+
         # Run evaluation
         metrics = evaluate_bop_coco(
             result_filename=result_filename,
             results_path=results_path,
-            datasets_path=datasets_path,
             eval_path=eval_path,
             ann_type="bbox",
             targets_filename="test_targets_bop19.json"
