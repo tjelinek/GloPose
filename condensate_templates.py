@@ -168,7 +168,7 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
     ]
 
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
-        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, device)
+        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, descriptors_cache_path, device)
 
 
 if __name__ == '__main__':
