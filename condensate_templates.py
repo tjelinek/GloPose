@@ -154,7 +154,8 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
 
 if __name__ == '__main__':
 
-    _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache')
+    experiment_name = '1nn'
+    _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     _bop_base = Path('/mnt/personal/jelint19/data/bop')
     _device = 'cuda'
 
