@@ -10,8 +10,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 
-def copy_images_to_flat_structure(source_dir=Path('../../../.config/JetBrains/PyCharm2025.2/scratches'), target_dir=Path(
-    '../utils/all_images')):
+def copy_images_to_flat_structure(source_dir, target_dir, dry_run: bool = True):
     """
     Copy images from obj_<id>/rgb/<image> structure to all_images/obj_<id>_<image>
 
@@ -68,8 +67,9 @@ def copy_images_to_flat_structure(source_dir=Path('../../../.config/JetBrains/Py
 
                 try:
                     # Copy the file
-                    shutil.copy2(image_file, target_path)
-                    print(f"  Copied: {image_file} -> {target_path}")
+                    if not dry_run:
+                        shutil.copy2(image_file, target_path)
+                        print(f"  Copied: {image_file} -> {target_path}")
                     copied_count += 1
                     image_counts[obj_id] += 1
                 except Exception as e:
@@ -172,7 +172,7 @@ def main():
         print()
 
         # Copy images and get counts
-        image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY)
+        image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
 
         # Create histogram
         create_histogram(image_counts, dataset, split, HISTOGRAM_FILE)
