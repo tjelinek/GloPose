@@ -17,7 +17,9 @@ sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
 
 
-def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str, device='cuda'):
+@torch.inference_mode
+def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
+                                     descriptors_cache_path: Path = None, device='cuda'):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -44,18 +46,35 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
         rgb_files = sorted(rgb_folder.iterdir())
         seg_files = sorted(segmentation_folder.iterdir())
+
+        # Prepare cache directory for this sequence if caching is enabled
+        sequence_cache_dir = None
+        if descriptors_cache_path is not None:
+            sequence_cache_dir = descriptors_cache_path / dataset / split / sequence.name
+            sequence_cache_dir.mkdir(parents=True, exist_ok=True)
+
         for image_path, seg_path in tqdm(list(zip(rgb_files, seg_files)),
                                          total=len(rgb_files), desc="Processing images"):
 
-            dino_cls_descriptor, dino_dense_descriptor = dino_descriptor.get_detections_from_files(image_path, seg_path)
+            # Check cache and compute descriptor
+            cache_file_path = descriptors_cache_path / dataset / split / sequence.name / f'{image_path.stem}.pt' \
+                if descriptors_cache_path else None
+
+            if cache_file_path and cache_file_path.exists():
+                dino_cls_descriptor = torch.load(cache_file_path, map_location=device)
+            else:
+                dino_cls_descriptor, dino_dense_descriptor = dino_descriptor.get_detections_from_files(image_path,
+                                                                                                       seg_path)
+                if cache_file_path:
+                    torch.save(dino_cls_descriptor.cpu(), cache_file_path)
 
             all_images.append(image_path)
             all_segmentations.append(seg_path)
             object_classes.append(object_id)
-            dino_cls_descriptors.append(dino_cls_descriptor.squeeze().numpy(force=True))
+            dino_cls_descriptors.append(dino_cls_descriptor.squeeze())
 
     object_classes = np.array(object_classes)
-    dino_cls_descriptors = np.array(dino_cls_descriptors)
+    dino_cls_descriptors = torch.stack(dino_cls_descriptors)
     all_images = np.array(all_images)
     all_segmentations = np.array(all_segmentations)
 
@@ -63,7 +82,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     all_images = all_images[permutation]
     all_segmentations = all_segmentations[permutation]
     object_classes = object_classes[permutation]
-    dino_cls_descriptors = dino_cls_descriptors[permutation]
+    dino_cls_descriptors = dino_cls_descriptors[torch.tensor(permutation).to(device)]
 
     cnn.fit_resample(dino_cls_descriptors, object_classes)
     sample_indices = cnn.sample_indices_
@@ -136,8 +155,8 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
     return images_dict, segmentations_dict, cls_descriptors_dict, patch_descriptors_dict
 
 
-def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, device='cuda'):
-
+def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, descriptors_cache_path=None,
+                                      device='cuda'):
     sequences = [
         ('hope', 'onboarding_static'),
         ('hope', 'onboarding_dynamic'),
@@ -156,8 +175,8 @@ if __name__ == '__main__':
 
     experiment_name = '1nn'
     _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
+    _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache')
     _bop_base = Path('/mnt/personal/jelint19/data/bop')
     _device = 'cuda'
 
-    perform_condensation_for_datasets(_bop_base, _cache_base_path, _device)
-
+    perform_condensation_for_datasets(_bop_base, _cache_base_path, _descriptors_cache_path, _device)
