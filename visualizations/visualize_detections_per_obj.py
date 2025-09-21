@@ -147,24 +147,23 @@ def main():
     """
     Main function - you can modify these parameters as needed
     """
-    # You can change these paths as needed
-    relative_paths = [
-        Path('hope/onboarding_static'),
-        Path('hope/onboarding_dynamic'),
-        Path('handal/onboarding_static'),
-        Path('handal/onboarding_dynamic'),
-        Path('icbin/train'),
-        Path('lmo/train'),
-        Path('tless/train_primesense'),
+
+    experiment = '1nn_norm'
+    dataset_sequences = [
+        ('hope', 'onboarding_static'),
+        ('hope', 'onboarding_dynamic'),
+        ('handal', 'onboarding_static'),
+        ('handal', 'onboarding_dynamic'),
+        ('icbin', 'train'),
+        ('lmo', 'train'),
+        ('tless', 'train_primesense'),
     ]
 
-    for relative_path in relative_paths:
-
-        dataset, split = str(relative_path).split('/')
-        SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / relative_path
-        TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation/') / relative_path
-        HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{str(relative_path).replace("/", "-")}.png')  # Histogram output file
-
+    for dataset, split in dataset_sequences:
+        relative_path = Path(dataset) / split
+        SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
+        TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
+        HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}.png')
         print("Image Directory Flattening Script with Histogram")
         print("=" * 50)
         print(f"Source directory: {SOURCE_DIRECTORY.resolve()}")
