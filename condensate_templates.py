@@ -6,6 +6,7 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
+import faiss
 import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image
@@ -15,6 +16,73 @@ from utils.bop_challenge import extract_object_id
 
 sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
+
+
+def harts_cnn_faiss(X, y, device='cuda'):
+    """
+    Hart's original Condensed Nearest Neighbor using FAISS
+    Returns indices of selected samples
+    """
+    # Convert to numpy float32 for FAISS
+    if isinstance(X, torch.Tensor):
+        X_np = X.cpu().numpy().astype(np.float32)
+    else:
+        X_np = X.astype(np.float32)
+
+    if isinstance(y, torch.Tensor):
+        y_np = y.cpu().numpy()
+    else:
+        y_np = y
+
+    n_samples, n_features = X_np.shape
+    unique_classes = np.unique(y_np)
+
+    # Start with one random sample per class
+    condensed_indices = []
+    for class_label in unique_classes:
+        class_mask = (y_np == class_label)
+        class_indices = np.where(class_mask)[0]
+        condensed_indices.append(class_indices[0])  # Take first sample
+
+    condensed_indices = np.array(condensed_indices)
+
+    # Create FAISS index
+    index = faiss.IndexFlatL2(n_features)
+    if device == 'cuda' and faiss.get_num_gpus() > 0:
+        index = faiss.index_cpu_to_gpu(faiss.StandardGpuResources(), 0, index)
+
+    changed = True
+    iteration = 0
+    max_iterations = 100  # Prevent infinite loops
+
+    while changed and iteration < max_iterations:
+        changed = False
+        iteration += 1
+
+        # Build index with current condensed set
+        index.reset()
+        condensed_X = X_np[condensed_indices]
+        index.add(condensed_X)
+
+        # Check all samples not in condensed set
+        remaining_indices = np.setdiff1d(np.arange(n_samples), condensed_indices)
+
+        for sample_idx in remaining_indices:
+            x_sample = X_np[sample_idx:sample_idx + 1]  # Keep 2D shape
+            y_sample = y_np[sample_idx]
+
+            # Find nearest neighbor in condensed set
+            distances, nn_indices = index.search(x_sample, 1)
+            nn_idx_in_condensed = nn_indices[0][0]
+            nn_original_idx = condensed_indices[nn_idx_in_condensed]
+            nn_label = y_np[nn_original_idx]
+
+            # If misclassified, add to condensed set
+            if nn_label != y_sample:
+                condensed_indices = np.append(condensed_indices, sample_idx)
+                changed = True
+
+    return condensed_indices
 
 
 @torch.inference_mode
