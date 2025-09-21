@@ -150,9 +150,9 @@ def main():
     # You can change these paths as needed
     relative_paths = [
         Path('hope/onboarding_static'),
-        Path('hope/onboarding_static'),
+        Path('hope/onboarding_dynamic'),
         Path('handal/onboarding_static'),
-        Path('handal/onboarding_static'),
+        Path('handal/onboarding_dynamic'),
         Path('icbin/train'),
         Path('lmo/train'),
         Path('tless/train_primesense'),
