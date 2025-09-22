@@ -153,12 +153,20 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = object_classes[permutation]
     dino_cls_descriptors = dino_cls_descriptors[torch.tensor(permutation).to(device)]
 
-    dino_cls_descriptors = dino_cls_descriptors.numpy(force=True)
-    dino_cls_descriptors = np.append(dino_cls_descriptors, np.zeros([1, 1024]), axis=0)
-    object_classes = np.append(object_classes.numpy(force=True), -1)
-
-    cnn.fit_resample(dino_cls_descriptors, object_classes)
-    sample_indices = cnn.sample_indices_
+    if method == "hart_imblearn":
+        dino_cls_descriptors = dino_cls_descriptors.numpy(force=True)
+        dino_cls_descriptors = np.append(dino_cls_descriptors, np.zeros([1, 1024]), axis=0)
+        object_classes = np.append(object_classes.numpy(force=True), -1)
+        cnn.fit_resample(dino_cls_descriptors, object_classes)
+        sample_indices = cnn.sample_indices_
+    elif method == 'hart_imblearn_adapted':
+        sample_indices = _fit_resample(dino_cls_descriptors, object_classes)
+    elif method == "hart_symmetric":
+        sample_indices = harts_cnn_faiss_symmetric(dino_cls_descriptors, object_classes)
+    elif method == 'hart':
+        sample_indices = harts_cnn_faiss_original(dino_cls_descriptors, object_classes)
+    else:
+        raise ValueError(f"Method {method} not recognized")
 
     result_save_path = cache_base_path / dataset / split
     shutil.rmtree(result_save_path, ignore_errors=True)
@@ -244,7 +252,8 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
     ]
 
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
-        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, descriptors_cache_path, device)
+        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, 'hart_imblearn_adapted',
+                                         descriptors_cache_path, device)
 
 
 if __name__ == '__main__':
