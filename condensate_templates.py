@@ -340,7 +340,7 @@ if __name__ == '__main__':
 
     experiment_name = '1nn'
     _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
-    _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache')
+    _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache/condensation')
     _bop_base = Path('/mnt/personal/jelint19/data/bop')
     _device = 'cuda'
 
