@@ -297,6 +297,7 @@ def update_results_csv(
 ):
     """
     Update or create a CSV file with evaluation results.
+    All numeric values will be rounded to 3 decimal places.
 
     Args:
         metrics (dict): Dictionary containing evaluation metrics
@@ -313,8 +314,10 @@ def update_results_csv(
     # Create column name
     column_name = f"{dataset}-{split}"
 
-    # Get the metric value
+    # Get the metric value and round to 3 decimal places
     metric_value = metrics.get(metric_key, -1.0)
+    if isinstance(metric_value, (int, float)):
+        metric_value = round(float(metric_value), 3)
 
     # Convert to Path object
     csv_file = Path(csv_path)
@@ -338,9 +341,12 @@ def update_results_csv(
     df = df.sort_index()  # Sort experiments (rows)
     df = df.reindex(sorted(df.columns), axis=1)  # Sort dataset-split combinations (columns)
 
-    # Save back to CSV
-    df.to_csv(csv_file)
+    # Round all numeric values in the DataFrame to 3 decimal places before saving
+    df = df.round(3)
+
+    # Save back to CSV with 3 decimal precision
+    df.to_csv(csv_file, float_format='%.3f')
     print(f"Updated results saved to: {csv_file}")
-    print(f"Added: {experiment_name} -> {column_name} = {metric_value:.4f}")
+    print(f"Added: {experiment_name} -> {column_name} = {metric_value:.3f}")
 
     return df
