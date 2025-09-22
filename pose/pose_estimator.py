@@ -482,6 +482,7 @@ def main():
     ]
 
     experiment = 'fromDefaultDetections'
+    condensation_source = '1nn_custom_hart_symmetric'
 
     for dataset, split, detections_split, default_detections_file in sequences_to_run:
 
