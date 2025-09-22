@@ -7,7 +7,10 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import torch
 import torchvision.transforms as transforms
+from scipy.sparse import issparse
+from sklearn import clone
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.utils import _safe_indexing
 from tqdm import tqdm
 from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
@@ -28,6 +31,82 @@ def _to_np_labels(y):
     if torch is not None and isinstance(y, torch.Tensor):
         return y.numpy(force=True)
     return np.asarray(y)
+
+
+def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
+    X = _to_np_f32(X)
+    y = _to_np_labels(y)
+
+    estimator = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
+
+    random_state = np.random.default_rng(random_state)
+    idx_under = np.empty((0,), dtype=int)
+
+    estimators_ = []
+    for target_class in np.unique(y):
+        # Randomly get one sample from the majority class
+        # Generate the index to select
+        idx_maj = np.flatnonzero(y == target_class)
+        idx_maj_sample = idx_maj[
+            random_state.integers(
+                low=0,
+                high=idx_maj.size,
+                size=n_seeds_S,
+            )
+        ]
+
+        # Create the set C - One majority samples and all minority
+        C_indices = idx_maj_sample
+        C_x = _safe_indexing(X, C_indices)
+        C_y = _safe_indexing(y, C_indices)
+
+        # Create the set S - all majority samples
+        S_indices = np.flatnonzero(y == target_class)
+        S_x = _safe_indexing(X, S_indices)
+        S_y = _safe_indexing(y, S_indices)
+
+        # fit knn on C
+        estimators_.append(clone(estimator).fit(C_x, C_y))
+
+        good_classif_label = idx_maj_sample.copy()
+        # Check each sample in S if we keep it or drop it
+        for idx_sam, (x_sam, y_sam) in enumerate(zip(S_x, S_y)):
+            # Do not select sample which are already well classified
+            if idx_sam in good_classif_label:
+                continue
+
+            # Classify on S
+            if not issparse(x_sam):
+                x_sam = x_sam.reshape(1, -1)
+            pred_y = estimators_[-1].predict(x_sam)
+
+            # If the prediction do not agree with the true label
+            # append it in C_x
+            if y_sam != pred_y:
+                # Keep the index for later
+                idx_maj_sample = np.append(idx_maj_sample, idx_maj[idx_sam])
+
+                # Update C
+                C_indices = np.append(C_indices, idx_maj[idx_sam])
+                C_x = _safe_indexing(X, C_indices)
+                C_y = _safe_indexing(y, C_indices)
+
+                # fit a knn on C
+                estimators_[-1].fit(C_x, C_y)
+
+                # This experimental to speed up the search
+                # Classify all the element in S and avoid to test the
+                # well classified elements
+                pred_S_y = estimators_[-1].predict(S_x)
+                good_classif_label = np.unique(
+                    np.append(idx_maj_sample, np.flatnonzero(pred_S_y == S_y))
+                )
+
+        idx_under = np.concatenate((idx_under, idx_maj_sample), axis=0)
+
+    sample_indices_ = idx_under
+
+    return sample_indices_
 
 
 def harts_cnn_faiss_original(X, y, random_state=None, max_iterations=100):
@@ -88,7 +167,8 @@ def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iteratio
 
 @torch.inference_mode
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
-                                     descriptors_cache_path: Path = None, device='cuda'):
+                                     method: str = 'hart_symmetric', descriptors_cache_path: Path = None,
+                                     device='cuda'):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -160,7 +240,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         cnn.fit_resample(dino_cls_descriptors, object_classes)
         sample_indices = cnn.sample_indices_
     elif method == 'hart_imblearn_adapted':
-        sample_indices = _fit_resample(dino_cls_descriptors, object_classes)
+        sample_indices = imblearn_fitresample_adapted(dino_cls_descriptors, object_classes)
     elif method == "hart_symmetric":
         sample_indices = harts_cnn_faiss_symmetric(dino_cls_descriptors, object_classes)
     elif method == 'hart':
