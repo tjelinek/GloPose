@@ -104,8 +104,8 @@ def create_histogram(image_counts, dataset, split, output_file):
 
     # Customize the plot
     plt.xlabel('Object ID')
-    plt.ylabel('Number of Images')
-    plt.title(f'Images per object: {dataset}-{split}')
+    plt.ylabel('Number of Templates')
+    plt.title(f'Templates per object: {dataset}-{split}')
     plt.grid(axis='y', alpha=0.3)
 
     # Set x-axis labels (rotate if there are many objects)
