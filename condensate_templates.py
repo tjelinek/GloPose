@@ -20,13 +20,13 @@ from src.model.dinov2 import descriptor_from_hydra
 
 def _to_np_f32(X):
     if torch is not None and isinstance(X, torch.Tensor):
-        return X.detach().cpu().numpy().astype(np.float32)
+        return X.numpy(force=True).astype(np.float32)
     return np.asarray(X, dtype=np.float32)
 
 
 def _to_np_labels(y):
     if torch is not None and isinstance(y, torch.Tensor):
-        return y.detach().cpu().numpy()
+        return y.numpy(force=True)
     return np.asarray(y)
 
 
