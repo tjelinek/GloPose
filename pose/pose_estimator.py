@@ -78,7 +78,7 @@ class BOPChallengePosePredictor:
                                                                           self.config.device)
 
         dataset_name = base_dataset_folder.stem
-        rerun_folder = self.write_folder / f'rerun_{experiment_name}' / dataset_name
+        rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
         rerun_folder.mkdir(exist_ok=True, parents=True)
 
         with bop_targets_path.open('r') as file:
@@ -197,9 +197,9 @@ class BOPChallengePosePredictor:
                                    device=self.config.device, pose_logger=pose_logger)
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
-        json_file_path = self.write_folder / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
-                                              f'{view_graph_save_paths.parent.stem}@{onboarding_type}@'
-                                              f'{experiment_name}.json')
+        json_file_path = self.write_folder / experiment_name / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
+                                                                f'{view_graph_save_paths.parent.stem}@'
+                                                                f'{onboarding_type}@{experiment_name}.json')
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
 
@@ -278,7 +278,7 @@ class BOPChallengePosePredictor:
     def predict_poses(self, query_img: torch.Tensor, camera_K: np.ndarray, view_graph: ViewGraph,
                       flow_provider: FlowProviderDirect, match_sample_size, match_min_certainty=0.,
                       match_reliability_threshold=0., query_img_segmentation: Optional[torch.Tensor] = None,
-                      black_background: bool = True, pose_logger: PoseEstimatorLogger = None, device: str = 'cuda')\
+                      black_background: bool = True, pose_logger: PoseEstimatorLogger = None, device: str = 'cuda') \
             -> Se3 | None:
         # query_img_segmentation shape (H, W)
 
@@ -453,7 +453,6 @@ class BOPChallengePosePredictor:
 
 
 def main():
-
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
@@ -510,7 +509,8 @@ def main():
         bop_targets_path = base_dataset_folder / f'{split}_targets_{targets_year}.json'
         cache_path = Path(f'/mnt/personal/jelint19/cache')
         view_graph_location = cache_path / 'view_graph_cache' / config / dataset
-        condensed_templates_base = cache_path / 'detections_templates_cache' / dataset / detections_split
+        condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
+                                    dataset / detections_split)
 
         config = TrackerConfig()
         config.device = 'cuda'
