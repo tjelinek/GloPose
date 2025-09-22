@@ -165,7 +165,6 @@ def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iteratio
     return np.sort(np.unique(np.concatenate(selected)))
 
 
-@torch.inference_mode
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
                                      method: str = 'hart_symmetric', descriptors_cache_path: Path = None,
                                      device='cuda'):
