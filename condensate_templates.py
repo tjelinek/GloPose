@@ -18,71 +18,83 @@ sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
 
 
-def harts_cnn_faiss(X, y, device='cuda'):
-    """
-    Hart's original Condensed Nearest Neighbor using FAISS
-    Returns indices of selected samples
-    """
-    # Convert to numpy float32 for FAISS
-    if isinstance(X, torch.Tensor):
-        X_np = X.cpu().numpy().astype(np.float32)
-    else:
-        X_np = X.astype(np.float32)
+def _to_np_f32(X):
+    if torch is not None and isinstance(X, torch.Tensor):
+        return X.detach().cpu().numpy().astype(np.float32)
+    return np.asarray(X, dtype=np.float32)
 
-    if isinstance(y, torch.Tensor):
-        y_np = y.cpu().numpy()
-    else:
-        y_np = y
 
-    n_samples, n_features = X_np.shape
-    unique_classes = np.unique(y_np)
+def _to_np_labels(y):
+    if torch is not None and isinstance(y, torch.Tensor):
+        return y.detach().cpu().numpy()
+    return np.asarray(y)
 
-    # Start with one random sample per class
-    condensed_indices = []
-    for class_label in unique_classes:
-        class_mask = (y_np == class_label)
-        class_indices = np.where(class_mask)[0]
-        condensed_indices.append(class_indices[0])  # Take first sample
 
-    condensed_indices = np.array(condensed_indices)
+def _build_index(d, device):
+    idx = faiss.IndexFlatL2(d)
+    if device == "cuda" and faiss.get_num_gpus() > 0:
+        idx = faiss.index_cpu_to_gpu(faiss.StandardGpuResources(), 0, idx)
+    return idx
 
-    # Create FAISS index
-    index = faiss.IndexFlatL2(n_features)
-    if device == 'cuda' and faiss.get_num_gpus() > 0:
-        index = faiss.index_cpu_to_gpu(faiss.StandardGpuResources(), 0, index)
 
+def harts_cnn_faiss_original(X, y, device="cuda", random_state=None, max_iterations=100):
+    X = _to_np_f32(X)
+    y = _to_np_labels(y)
+    n, d = X.shape
+    rng = np.random.default_rng(random_state)
+    start = rng.integers(0, n)
+    S = np.array([start], dtype=int)
     changed = True
-    iteration = 0
-    max_iterations = 100  # Prevent infinite loops
-
-    while changed and iteration < max_iterations:
+    it = 0
+    while changed and it < max_iterations:
         changed = False
-        iteration += 1
-
-        # Build index with current condensed set
+        it += 1
+        index = _build_index(d, device)
         index.reset()
-        condensed_X = X_np[condensed_indices]
-        index.add(condensed_X)
-
-        # Check all samples not in condensed set
-        remaining_indices = np.setdiff1d(np.arange(n_samples), condensed_indices)
-
-        for sample_idx in remaining_indices:
-            x_sample = X_np[sample_idx:sample_idx + 1]  # Keep 2D shape
-            y_sample = y_np[sample_idx]
-
-            # Find nearest neighbor in condensed set
-            distances, nn_indices = index.search(x_sample, 1)
-            nn_idx_in_condensed = nn_indices[0][0]
-            nn_original_idx = condensed_indices[nn_idx_in_condensed]
-            nn_label = y_np[nn_original_idx]
-
-            # If misclassified, add to condensed set
-            if nn_label != y_sample:
-                condensed_indices = np.append(condensed_indices, sample_idx)
+        index.add(X[S])
+        for i in range(n):
+            D, I = index.search(X[i:i + 1], 1)
+            pred = y[S[I[0, 0]]]
+            if pred != y[i]:
+                S = np.append(S, i)
+                index.add(X[i:i + 1])
                 changed = True
+    return np.sort(np.unique(S))
 
-    return condensed_indices
+
+def harts_cnn_faiss_symmetric(X, y, device="cuda", n_seeds_S=1, random_state=None, max_iterations=100):
+    X = _to_np_f32(X)
+    y = _to_np_labels(y)
+    n, d = X.shape
+    rng = np.random.default_rng(random_state)
+    classes = np.unique(y)
+    selected = []
+    for c in classes:
+        idx_c = np.flatnonzero(y == c)
+        idx_rest = np.flatnonzero(y != c)
+        if idx_c.size == 0:
+            continue
+        seeds = idx_c[rng.integers(0, idx_c.size, size=n_seeds_S)]
+        C = np.concatenate([idx_rest, seeds])
+        S = idx_c
+        changed = True
+        it = 0
+        while changed and it < max_iterations:
+            changed = False
+            it += 1
+            index = _build_index(d, device)
+            index.reset()
+            index.add(X[C])
+            for i, s in enumerate(S):
+                D, I = index.search(X[s:s + 1], 1)
+                pred = y[C[I[0, 0]]]
+                if pred != y[s]:
+                    C = np.append(C, s)
+                    changed = True
+        selected.append(np.unique(np.append(seeds, np.intersect1d(C, S))))
+    if len(selected) == 0:
+        return np.array([], dtype=int)
+    return np.sort(np.unique(np.concatenate(selected)))
 
 
 @torch.inference_mode
