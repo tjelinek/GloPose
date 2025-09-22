@@ -330,14 +330,15 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
         ('icbin', 'train'),
     ]
 
+    method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
-        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, 'hart_imblearn_adapted',
+        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method,
                                          descriptors_cache_path, device)
 
 
 if __name__ == '__main__':
 
-    experiment_name = '1nn'
+    experiment_name = '1nn_custom_hart_sklearn'
     _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache/condensation')
     _bop_base = Path('/mnt/personal/jelint19/data/bop')
