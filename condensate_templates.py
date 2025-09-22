@@ -6,8 +6,8 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
-import faiss
 import torchvision.transforms as transforms
+from sklearn.neighbors import KNeighborsClassifier
 from tqdm import tqdm
 from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
@@ -30,14 +30,7 @@ def _to_np_labels(y):
     return np.asarray(y)
 
 
-def _build_index(d, device):
-    idx = faiss.IndexFlatL2(d)
-    if device == "cuda" and faiss.get_num_gpus() > 0:
-        idx = faiss.index_cpu_to_gpu(faiss.StandardGpuResources(), 0, idx)
-    return idx
-
-
-def harts_cnn_faiss_original(X, y, device="cuda", random_state=None, max_iterations=100):
+def harts_cnn_faiss_original(X, y, random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     n, d = X.shape
@@ -49,23 +42,20 @@ def harts_cnn_faiss_original(X, y, device="cuda", random_state=None, max_iterati
     while changed and it < max_iterations:
         changed = False
         it += 1
-        index = _build_index(d, device)
-        index.reset()
-        index.add(X[S])
+        knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
+        knn.fit(X[S], y[S])
         for i in range(n):
-            D, I = index.search(X[i:i + 1], 1)
-            pred = y[S[I[0, 0]]]
+            pred = knn.predict(X[i:i+1])[0]
             if pred != y[i]:
                 S = np.append(S, i)
-                index.add(X[i:i + 1])
+                knn.fit(X[S], y[S])
                 changed = True
     return np.sort(np.unique(S))
 
 
-def harts_cnn_faiss_symmetric(X, y, device="cuda", n_seeds_S=1, random_state=None, max_iterations=100):
+def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
-    n, d = X.shape
     rng = np.random.default_rng(random_state)
     classes = np.unique(y)
     selected = []
@@ -76,22 +66,21 @@ def harts_cnn_faiss_symmetric(X, y, device="cuda", n_seeds_S=1, random_state=Non
             continue
         seeds = idx_c[rng.integers(0, idx_c.size, size=n_seeds_S)]
         C = np.concatenate([idx_rest, seeds])
-        S = idx_c
+        S_cls = idx_c
         changed = True
         it = 0
         while changed and it < max_iterations:
             changed = False
             it += 1
-            index = _build_index(d, device)
-            index.reset()
-            index.add(X[C])
-            for i, s in enumerate(S):
-                D, I = index.search(X[s:s + 1], 1)
-                pred = y[C[I[0, 0]]]
+            knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
+            knn.fit(X[C], y[C])
+            for s in S_cls:
+                pred = knn.predict(X[s:s+1])[0]
                 if pred != y[s]:
                     C = np.append(C, s)
+                    knn.fit(X[C], y[C])
                     changed = True
-        selected.append(np.unique(np.append(seeds, np.intersect1d(C, S))))
+        selected.append(np.unique(np.append(seeds, np.intersect1d(C, S_cls))))
     if len(selected) == 0:
         return np.array([], dtype=int)
     return np.sort(np.unique(np.concatenate(selected)))
