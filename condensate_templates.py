@@ -259,8 +259,10 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         obj_save_dir = result_save_path / f'obj_{object_id:06d}'
         images_save_dir = obj_save_dir / 'rgb'
         segmentation_save_dir = obj_save_dir / 'mask_visib'
+        descriptors_save_dir = obj_save_dir / 'descriptors'
         images_save_dir.mkdir(parents=True, exist_ok=True)
         segmentation_save_dir.mkdir(parents=True, exist_ok=True)
+        descriptors_save_dir.mkdir(parents=True, exist_ok=True)
 
         image_path = all_images[index]
         segmentation_path = all_segmentations[index]
@@ -268,6 +270,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         shutil.copy2(image_path, images_save_dir / f'{image_path.stem}_{index}{image_path.suffix}')
         shutil.copy2(segmentation_path, segmentation_save_dir / f'{segmentation_path.stem}_{index}'
                                                                 f'{segmentation_path.suffix}')
+
+        torch.save(dino_cls_descriptors.cpu(), descriptors_save_dir / image_path.stem)
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = False) -> \
@@ -278,7 +282,6 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)
     cls_descriptors_dict: Dict[int, Any] = defaultdict(list)
-    patch_descriptors_dict: Dict[int, Any] = defaultdict(list)
 
     obj_dirs = sorted([d for d in path_to_detections.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
@@ -288,6 +291,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
 
         rgb_dir = obj_dir / 'rgb'
         mask_dir = obj_dir / 'mask_visib'
+        descriptor_dir = obj_dir / 'descriptors'
 
         # Get all image files
         rgb_files = sorted(rgb_dir.glob('*'))
@@ -297,6 +301,9 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
             # Load RGB image
             rgb_img = Image.open(rgb_file).convert('RGB')
             rgb_tensor = transforms.ToTensor()(rgb_img)
+
+            descriptor_file = descriptor_dir / rgb_file.stem
+
             images_dict[obj_id].append(rgb_tensor)
 
             # Load segmentation mask
@@ -305,17 +312,18 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
             mask_tensor = torch.from_numpy(mask_array)
             segmentations_dict[obj_id].append(mask_tensor)
 
-            cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file,
-                                                                                    black_background)
+            if descriptor_file.exists():
+                cls_descriptor = torch.load(descriptor_file)
+            else:
+                cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file,
+                                                                                        black_background)
             cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
-            patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0))
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
         cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
-        patch_descriptors_dict[obj_id] = torch.stack(patch_descriptors_dict[obj_id])
 
-    return images_dict, segmentations_dict, cls_descriptors_dict, patch_descriptors_dict
+    return images_dict, segmentations_dict, cls_descriptors_dict
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
