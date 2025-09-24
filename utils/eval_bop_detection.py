@@ -344,6 +344,9 @@ def update_results_csv(
     # Round all numeric values in the DataFrame to 3 decimal places before saving
     df = df.round(3)
 
+    # Set the index name to show the metric being used
+    df.index.name = f"Experiment / sequence [{metric_key}]"
+
     # Save back to CSV with 3 decimal precision
     df.to_csv(csv_file, float_format='%.3f')
     print(f"Updated results saved to: {csv_file}")
