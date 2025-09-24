@@ -148,34 +148,41 @@ def main():
     Main function - you can modify these parameters as needed
     """
 
-    experiment = '1nn_norm'
-    dataset_sequences = [
-        ('hope', 'onboarding_static'),
-        ('hope', 'onboarding_dynamic'),
-        ('handal', 'onboarding_static'),
-        ('handal', 'onboarding_dynamic'),
-        ('icbin', 'train'),
-        ('lmo', 'train'),
-        ('tless', 'train_primesense'),
+    methods = [
+        'hart',
+        'hart_symmetric',
+        'hart_imblearn',
+        'hart_imblearn_adapted'
     ]
+    for _method in methods:
+        experiment = f'1nn-{_method}'
+        dataset_sequences = [
+            ('hope', 'onboarding_static'),
+            ('hope', 'onboarding_dynamic'),
+            ('handal', 'onboarding_static'),
+            ('handal', 'onboarding_dynamic'),
+            ('icbin', 'train'),
+            ('lmo', 'train'),
+            ('tless', 'train_primesense'),
+        ]
 
-    for dataset, split in dataset_sequences:
-        relative_path = Path(dataset) / split
-        SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
-        TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
-        HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}.png')
-        print("Image Directory Flattening Script with Histogram")
-        print("=" * 50)
-        print(f"Source directory: {SOURCE_DIRECTORY.resolve()}")
-        print(f"Target directory: {TARGET_DIRECTORY.resolve()}")
-        print(f"Histogram file: {HISTOGRAM_FILE.resolve()}")
-        print()
+        for dataset, split in dataset_sequences:
+            relative_path = Path(dataset) / split
+            SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
+            TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
+            HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}.png')
+            print("Image Directory Flattening Script with Histogram")
+            print("=" * 50)
+            print(f"Source directory: {SOURCE_DIRECTORY.resolve()}")
+            print(f"Target directory: {TARGET_DIRECTORY.resolve()}")
+            print(f"Histogram file: {HISTOGRAM_FILE.resolve()}")
+            print()
 
-        # Copy images and get counts
-        image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
+            # Copy images and get counts
+            image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
 
-        # Create histogram
-        create_histogram(image_counts, dataset, split, HISTOGRAM_FILE)
+            # Create histogram
+            create_histogram(image_counts, dataset, split, HISTOGRAM_FILE)
 
 
 if __name__ == "__main__":

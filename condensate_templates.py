@@ -337,11 +337,20 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
 
 
 if __name__ == '__main__':
+    _method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
 
-    experiment_name = '1nn_custom_hart_sklearn'
-    _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
-    _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache/condensation')
-    _bop_base = Path('/mnt/personal/jelint19/data/bop')
-    _device = 'cuda'
+    _methods = [
+        'hart',
+        'hart_symmetric',
+        'hart_imblearn',
+        'hart_imblearn_adapted'
+    ]
+    for _method in _methods:
 
-    perform_condensation_for_datasets(_bop_base, _cache_base_path, _descriptors_cache_path, _device)
+        experiment_name = f'1nn-{_method}'
+        _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
+        _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache/bop')
+        _bop_base = Path('/mnt/personal/jelint19/data/bop')
+        _device = 'cuda'
+
+        perform_condensation_for_datasets(_bop_base, _cache_base_path, _method, _descriptors_cache_path, _device)
