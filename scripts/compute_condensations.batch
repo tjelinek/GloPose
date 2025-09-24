@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --time=23:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=12
+#SBATCH --gres=gpu:1
+#SBATCH --mem=128G
+#SBATCH --partition=gpu
+#SBATCH --job-name=ComputeCondensations
+#SBATCH --err=/mnt/personal/jelint19/results/logs/ComputeCondensations.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/ComputeCondensations.out
+
+modules_file=~/modules_glotracker_login4.txt
+# shellcheck disable=SC2046
+ml $(<$modules_file)
+
+export HYDRA_FULL_ERROR=1
+python condensate_templates.py
