@@ -318,8 +318,8 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
     return images_dict, segmentations_dict, cls_descriptors_dict, patch_descriptors_dict
 
 
-def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, descriptors_cache_path=None,
-                                      device='cuda'):
+def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
+                                      descriptors_cache_path=None, device='cuda'):
     sequences = [
         ('hope', 'onboarding_static'),
         ('hope', 'onboarding_dynamic'),
@@ -330,7 +330,6 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
         ('icbin', 'train'),
     ]
 
-    method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
         perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method,
                                          descriptors_cache_path, device)
