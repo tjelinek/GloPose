@@ -166,8 +166,8 @@ def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iteratio
 
 
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
-                                     method: str = 'hart_symmetric', descriptors_cache_path: Path = None,
-                                     device='cuda'):
+                                     method: str = 'hart_symmetric', descriptor_model='dinov2',
+                                     descriptors_cache_path: Path = None, device='cuda'):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -176,7 +176,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = []
     dino_cls_descriptors = []
 
-    dino_descriptor = descriptor_from_hydra(device)
+    dino_descriptor = descriptor_from_hydra(device, descriptor_model)
 
     sequences = sorted(path_to_split.iterdir())
     cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
@@ -285,7 +285,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
 
     obj_dirs = sorted([d for d in path_to_detections.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
-    for obj_dir in obj_dirs:
+    for obj_dir in tqdm(obj_dirs, desc="Loading templates", total=len(obj_dirs)):
 
         obj_id = int(obj_dir.stem.split('_')[1])
 
@@ -297,7 +297,10 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
         rgb_files = sorted(rgb_dir.glob('*'))
         mask_files = sorted(mask_dir.glob('*'))
 
-        for rgb_file, mask_file in zip(rgb_files, mask_files):
+        for rgb_file, mask_file in tqdm(zip(rgb_files, mask_files),
+                                        desc=f"Templates for {obj_dir.stem}",
+                                        total=len(rgb_files),
+                                        leave=False):
             # Load RGB image
             rgb_img = Image.open(rgb_file).convert('RGB')
             rgb_tensor = transforms.ToTensor()(rgb_img)
@@ -327,7 +330,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
-                                      descriptors_cache_path=None, device='cuda'):
+                                      descriptors_cache_path=None, descriptor_model='dinov2', device='cuda'):
     sequences = [
         ('hope', 'onboarding_static'),
         ('hope', 'onboarding_dynamic'),
@@ -339,25 +342,28 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
     ]
 
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
-        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method,
-                                         descriptors_cache_path, device)
+        perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method, descriptor_model,
+                                         descriptors_cache_path=descriptors_cache_path, device=device)
 
 
 if __name__ == '__main__':
     _method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
 
-    _methods = [
-        'hart',
-        'hart_symmetric',
-        'hart_imblearn',
-        'hart_imblearn_adapted'
-    ]
-    for _method in _methods:
+    _models = ['dinov3', 'dinov3']
+    for _model in _models:
+        _methods = [
+            'hart',
+            'hart_symmetric',
+            'hart_imblearn',
+            'hart_imblearn_adapted'
+        ]
+        for _method in _methods:
 
-        experiment_name = f'1nn-{_method}'
-        _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
-        _descriptors_cache_path = Path('/mnt/personal/jelint19/cache/DINOv2_cache/bop')
-        _bop_base = Path('/mnt/personal/jelint19/data/bop')
-        _device = 'cuda'
+            experiment_name = f'1nn-{_method}-{_model}'
+            _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
+            _descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{_model}_cache/bop')
+            _bop_base = Path('/mnt/personal/jelint19/data/bop')
+            _device = 'cuda'
 
-        perform_condensation_for_datasets(_bop_base, _cache_base_path, _method, _descriptors_cache_path, _device)
+            perform_condensation_for_datasets(_bop_base, _cache_base_path, _method, _descriptors_cache_path, _model,
+                                              device=_device)
