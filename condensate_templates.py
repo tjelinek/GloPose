@@ -349,7 +349,7 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
 if __name__ == '__main__':
     _method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
 
-    _models = ['dinov3', 'dinov3']
+    _models = ['dinov2', 'dinov3']
     for _model in _models:
         _methods = [
             'hart',
