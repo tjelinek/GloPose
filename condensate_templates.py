@@ -110,7 +110,7 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     return sample_indices_
 
 
-def harts_cnn_faiss_original(X, y, random_state=None, max_iterations=100):
+def harts_cnn_original(X, y, random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     n, d = X.shape
@@ -133,7 +133,7 @@ def harts_cnn_faiss_original(X, y, random_state=None, max_iterations=100):
     return np.sort(np.unique(S))
 
 
-def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iterations=100):
+def harts_cnn_symmetric(X, y, n_seeds_S=1, random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     rng = np.random.default_rng(random_state)
@@ -196,8 +196,6 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         rgb_files = sorted(rgb_folder.iterdir())
         seg_files = sorted(segmentation_folder.iterdir())
 
-        # Prepare cache directory for this sequence if caching is enabled
-        sequence_cache_dir = None
         if descriptors_cache_path is not None:
             sequence_cache_dir = descriptors_cache_path / dataset / split / sequence.name
             sequence_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -242,9 +240,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     elif method == 'hart_imblearn_adapted':
         sample_indices = imblearn_fitresample_adapted(dino_cls_descriptors, object_classes)
     elif method == "hart_symmetric":
-        sample_indices = harts_cnn_faiss_symmetric(dino_cls_descriptors, object_classes)
+        sample_indices = harts_cnn_symmetric(dino_cls_descriptors, object_classes)
     elif method == 'hart':
-        sample_indices = harts_cnn_faiss_original(dino_cls_descriptors, object_classes)
+        sample_indices = harts_cnn_original(dino_cls_descriptors, object_classes)
     else:
         raise ValueError(f"Method {method} not recognized")
 
