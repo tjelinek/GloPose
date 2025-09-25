@@ -71,8 +71,8 @@ class BOPChallengePosePredictor:
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         view_graph_save_paths: Path, detection_templates_save_folder,
                                         onboarding_type: str, split: str, method_name: str, experiment_name: str,
-                                        descriptor: str = 'cnns', default_detections_file: Path = None,
-                                        templates_source: str = 'prerendered') -> None:
+                                        descriptor: str = 'dinov2', default_detections_file: Path = None,
+                                        templates_source: str = 'cnns') -> None:
 
         black_background = False
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
