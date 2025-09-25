@@ -318,8 +318,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             if descriptor_file.exists():
                 cls_descriptor = torch.load(descriptor_file)
             else:
-                cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file,
-                                                                                        black_background)
+                cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
             cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
