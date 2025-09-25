@@ -7,12 +7,14 @@
 #SBATCH --mem=128G
 #SBATCH --partition=gpu
 #SBATCH --job-name=ComputeCondensations
-#SBATCH --err=/mnt/personal/jelint19/results/logs/ComputeCondensations.err
-#SBATCH --out=/mnt/personal/jelint19/results/logs/ComputeCondensations.out
+#SBATCH --err=/mnt/personal/jelint19/results/logs/ComputeCondensations_%j.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/ComputeCondensations_%j.out
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
 ml $(<$modules_file)
 
 export HYDRA_FULL_ERROR=1
-python condensate_templates.py
+
+# Pass command line arguments to the Python script
+python condensate_templates.py "$@"

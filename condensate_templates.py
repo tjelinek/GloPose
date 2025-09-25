@@ -1,5 +1,6 @@
 import shutil
 import sys
+import argparse
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -124,7 +125,7 @@ def harts_cnn_faiss_original(X, y, random_state=None, max_iterations=100):
         knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
         knn.fit(X[S], y[S])
         for i in range(n):
-            pred = knn.predict(X[i:i+1])[0]
+            pred = knn.predict(X[i:i + 1])[0]
             if pred != y[i]:
                 S = np.append(S, i)
                 knn.fit(X[S], y[S])
@@ -154,7 +155,7 @@ def harts_cnn_faiss_symmetric(X, y, n_seeds_S=1, random_state=None, max_iteratio
             knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
             knn.fit(X[C], y[C])
             for s in S_cls:
-                pred = knn.predict(X[s:s+1])[0]
+                pred = knn.predict(X[s: s + 1])[0]
                 if pred != y[s]:
                     C = np.append(C, s)
                     knn.fit(X[C], y[C])
@@ -267,16 +268,17 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         image_path = all_images[index]
         segmentation_path = all_segmentations[index]
 
-        shutil.copy2(image_path, images_save_dir / f'{image_path.stem}_{index}{image_path.suffix}')
-        shutil.copy2(segmentation_path, segmentation_save_dir / f'{segmentation_path.stem}_{index}'
-                                                                f'{segmentation_path.suffix}')
+        new_image_name = Path(f'{image_path.stem}_{index + image_path.suffix}')
+        new_seg_name = Path(f'{segmentation_path.stem}_{index + segmentation_path.suffix}')
+        descriptor_name = new_image_name.stem + '.pt'
+        shutil.copy2(image_path, images_save_dir / new_image_name)
+        shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
 
-        torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / image_path.stem)
+        torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = False) -> \
         Tuple[Dict[int, torch.Tensor], ...]:
-
     descriptor = descriptor_from_hydra()
 
     images_dict: Dict[int, Any] = defaultdict(list)
@@ -346,24 +348,38 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
                                          descriptors_cache_path=descriptors_cache_path, device=device)
 
 
+def main():
+    parser = argparse.ArgumentParser(description='Perform template condensation for BOP datasets')
+    parser.add_argument('--method', type=str, required=True,
+                        choices=['hart', 'hart_symmetric', 'hart_imblearn', 'hart_imblearn_adapted'],
+                        help='Condensation method to use')
+    parser.add_argument('--descriptor', type=str, required=True,
+                        choices=['dinov2', 'dinov3'],
+                        help='Descriptor model to use')
+    parser.add_argument('--dataset', type=str, required=True,
+                        choices=['hope', 'handal', 'tless', 'lmo', 'icbin'],
+                        help='Dataset to process')
+    parser.add_argument('--split', type=str, required=True,
+                        help='Dataset split to process')
+    parser.add_argument('--device', type=str, default='cuda',
+                        help='Device to use (default: cuda)')
+
+    args = parser.parse_args()
+
+    # Define paths
+    experiment_name = f'1nn-{args.method}-{args.descriptor}'
+    cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
+    descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
+    bop_base = Path('/mnt/personal/jelint19/data/bop')
+
+    print(f"Processing {args.dataset}/{args.split} with method {args.method} and descriptor {args.descriptor}")
+
+    # Perform condensation for single dataset/split
+    perform_condensation_per_dataset(
+        bop_base, cache_base_path, args.dataset, args.split,
+        args.method, args.descriptor, descriptors_cache_path, args.device
+    )
+
+
 if __name__ == '__main__':
-    _method = 'hart'  # hart, hart_symmetric, hart_imblearn_adapted, hart_imblearn
-
-    _models = ['dinov2', 'dinov3']
-    for _model in _models:
-        _methods = [
-            'hart',
-            'hart_symmetric',
-            'hart_imblearn',
-            'hart_imblearn_adapted'
-        ]
-        for _method in _methods:
-
-            experiment_name = f'1nn-{_method}-{_model}'
-            _cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
-            _descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{_model}_cache/bop')
-            _bop_base = Path('/mnt/personal/jelint19/data/bop')
-            _device = 'cuda'
-
-            perform_condensation_for_datasets(_bop_base, _cache_base_path, _method, _descriptors_cache_path, _model,
-                                              device=_device)
+    main()
