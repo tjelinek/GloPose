@@ -328,7 +328,8 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
             elif onboarding_type is None:
                 pass
             else:
-                raise ValueError(f"Unknown onboarding type {onboarding_type}")
+                pass
+                # raise ValueError(f"Unknown onboarding type {onboarding_type}")
 
             view_graph: ViewGraph = load_view_graph(view_graph_dir, device=device)
             view_graphs[view_graph.object_id] = view_graph
