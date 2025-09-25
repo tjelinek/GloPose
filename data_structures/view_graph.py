@@ -316,13 +316,13 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
     for i, view_graph_dir in tqdm(enumerate(view_graph_save_paths.iterdir()), total=total_dirs,
                                   desc="Loading view graphs"):
         if view_graph_dir.is_dir():
-            if onboarding_type == 'static':
+            if onboarding_type == 'onboarding_static':
                 if not view_graph_dir.stem.endswith('_both'):
                     continue
-            elif onboarding_type == 'static_merged':
+            elif onboarding_type == 'onboarding_static_merged':
                 if not view_graph_dir.stem.endswith('_merged'):
                     continue
-            elif onboarding_type == 'dynamic':
+            elif onboarding_type == 'onboarding_dynamic':
                 if not view_graph_dir.stem.endswith('_dynamic'):
                     continue
             elif onboarding_type is None:

@@ -1,12 +1,16 @@
 import json
+import sys
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Optional, Callable, Tuple, OrderedDict
+from typing import List, Dict, Optional, Callable, Tuple, OrderedDict, Any
 
 import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
+from torchvision import transforms
+from PIL import Image
+from tqdm import tqdm
 
 from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
@@ -429,3 +433,60 @@ def group_test_targets_by_image(test_annotations):
     test_annotations = list(grouped.values())
 
     return test_annotations
+
+
+def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path, descriptor: str) \
+        -> Tuple[Dict[int, torch.Tensor], ...]:
+    sys.path.append('./repositories/cnos')
+    from src.model.dinov2 import descriptor_from_hydra
+    descriptor = descriptor_from_hydra(model=descriptor)
+
+    images_dict: Dict[int, Any] = defaultdict(list)
+    segmentations_dict: Dict[int, Any] = defaultdict(list)
+    cls_descriptors_dict: Dict[int, Any] = defaultdict(list)
+
+    obj_dirs = sorted([d for d in path_to_split.iterdir() if d.is_dir()])
+
+    for obj_dir in tqdm(obj_dirs, desc="Loading templates", total=len(obj_dirs)):
+
+        obj_dir_name = obj_dir.name
+        obj_id = int(obj_dir.stem.split('_')[1]) if 'obj' in obj_dir.stem else int(obj_dir.stem)
+
+        rgb_dir = obj_dir / 'rgb'
+        mask_dir = obj_dir / 'mask_visib'
+        descriptor_dir = path_to_split_cache / obj_dir_name
+
+        # Get all image files
+        rgb_files = sorted(rgb_dir.glob('*'))
+        mask_files = sorted(mask_dir.glob('*'))
+
+        for rgb_file, mask_file in tqdm(zip(rgb_files, mask_files),
+                                        desc=f"Templates for {obj_dir.stem}",
+                                        total=len(rgb_files),
+                                        leave=False):
+            # Load RGB image
+            rgb_img = Image.open(rgb_file).convert('RGB')
+            rgb_tensor = transforms.ToTensor()(rgb_img)
+
+            images_dict[obj_id].append(rgb_tensor)
+
+            # Load segmentation mask
+            mask_img = Image.open(mask_file).convert('L')  # Grayscale
+            mask_array = np.array(mask_img)
+            mask_tensor = torch.from_numpy(mask_array)
+            segmentations_dict[obj_id].append(mask_tensor)
+
+            descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
+            if descriptor_file.exists():
+                cls_descriptor = torch.load(descriptor_file)
+            else:
+                cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
+                torch.save(cls_descriptor, descriptor_file)
+            cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
+
+    for obj_id in images_dict.keys():
+        images_dict[obj_id] = torch.stack(images_dict[obj_id])
+        segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
+        cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
+
+    return images_dict, segmentations_dict, cls_descriptors_dict

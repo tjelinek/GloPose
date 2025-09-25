@@ -27,7 +27,7 @@ from pose.frame_filter import compute_matching_reliability
 from pose.glomap import unique_keypoints_from_matches
 from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
-from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image
+from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image, get_descriptors_for_templates
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
@@ -42,6 +42,7 @@ class BOPChallengePosePredictor:
         self.flow_provider: Optional[FlowProviderDirect] = None
 
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
+        self.cache_folder = Path('/mnt/personal/jelint19/cache/')
 
         self._initialize_flow_provider()
 
@@ -70,8 +71,8 @@ class BOPChallengePosePredictor:
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         view_graph_save_paths: Path, detection_templates_save_folder,
                                         onboarding_type: str, split: str, method_name: str, experiment_name: str,
-                                        default_detections_file: Path = None,
                                         templates_source: str = 'cnns') -> None:
+                                        descriptor: str = 'dinov2', default_detections_file: Path = None,
 
         black_background = False
         view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
@@ -93,20 +94,22 @@ class BOPChallengePosePredictor:
 
         if templates_source == 'viewgraph':
             from src.model.dinov2 import descriptor_from_hydra
-            dino_descriptor = descriptor_from_hydra()
+            dino_descriptor = descriptor_from_hydra(descriptor)
             template_cls_descriptors = {
-                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor, black_background)[0]
+                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor, black_background, )[0]
                 for obj_id, view_graph in view_graphs.items()
             }
             template_images = {
                 obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
             }
-            template_segmentations = {
-                obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
-            }
         elif templates_source == 'cnns':
-            template_images, template_segmentations, template_cls_descriptors, _ = \
-                get_descriptors_for_condensed_templates(detection_templates_save_folder, black_background)
+            template_images, template_segmentations, template_cls_descriptors = \
+                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor, black_background)
+        elif templates_source == 'prerendered':
+            orig_split_path = base_dataset_folder / onboarding_type
+            cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
+            get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor)
+            breakpoint()
         else:
             raise ValueError(f'Unknown templates_source {templates_source}')
 
@@ -488,7 +491,6 @@ def main():
 
         print(f'Running on dataset {dataset}, split {split}')
 
-        onboarding_type = 'static'
         config = 'ufm_c0975r05'
         method_name = 'FlowTemplates'
         data_type = ''
@@ -497,7 +499,6 @@ def main():
             targets_year = 'bop24'
         elif dataset in ['tless', 'lmo', 'icbin']:
             targets_year = 'bop19'
-            onboarding_type = None
             if dataset == 'tless':
                 data_type = '_primesense'
             assert split != 'val'
@@ -518,8 +519,8 @@ def main():
         predictor = BOPChallengePosePredictor(config)
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                                  condensed_templates_base, onboarding_type, split_folder, method_name,
-                                                  experiment, default_detections_file)
+                                                  condensed_templates_base, detections_split, split_folder, method_name,
+                                                  experiment, 'dinov2', default_detections_file)
 
 
 if __name__ == '__main__':
