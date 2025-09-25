@@ -275,9 +275,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = False) -> \
-        Tuple[Dict[int, torch.Tensor], ...]:
-    descriptor = descriptor_from_hydra()
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor: str, black_background: bool = False) \
+        -> Tuple[Dict[int, torch.Tensor], ...]:
+    descriptor = descriptor_from_hydra(model=descriptor)
 
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)
@@ -287,7 +287,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, black_back
 
     for obj_dir in tqdm(obj_dirs, desc="Loading templates", total=len(obj_dirs)):
 
-        obj_id = int(obj_dir.stem.split('_')[1])
+        obj_id = int(obj_dir.stem.split('_')[1]) if 'obj' in obj_dir.stem else int(obj_dir.stem)
 
         rgb_dir = obj_dir / 'rgb'
         mask_dir = obj_dir / 'mask_visib'
