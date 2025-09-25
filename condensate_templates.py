@@ -268,9 +268,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         image_path = all_images[index]
         segmentation_path = all_segmentations[index]
 
-        new_image_name = Path(f'{image_path.stem}_{index + image_path.suffix}')
-        new_seg_name = Path(f'{segmentation_path.stem}_{index + segmentation_path.suffix}')
-        descriptor_name = new_image_name.stem + '.pt'
+        new_image_name = Path(f'{image_path.stem}_{index}{image_path.suffix}')
+        new_seg_name = Path(f'{segmentation_path.stem}_{index}{segmentation_path.suffix}')
+        descriptor_name = f'{new_image_name.stem}.pt'
         shutil.copy2(image_path, images_save_dir / new_image_name)
         shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
 
