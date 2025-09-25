@@ -38,11 +38,12 @@ def submit_job(method, descriptor, dataset, split):
         '--job-name', job_name,
         '--output', f'/mnt/personal/jelint19/results/logs/{log_name}.out',
         '--error', f'/mnt/personal/jelint19/results/logs/{log_name}.err',
-        'run_condensation.sh',  # Your SLURM script name
+        'scripts/compute_condensations.batch',  # Your SLURM script name
         '--method', method,
         '--descriptor', descriptor,
         '--dataset', dataset,
-        '--split', split
+        '--split', split,
+        '--device', 'cpu',
     ]
 
     try:

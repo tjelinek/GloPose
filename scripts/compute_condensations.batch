@@ -2,10 +2,9 @@
 #SBATCH --time=23:59:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=12
-#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --partition=gpu
+#SBATCH --partition=cpu
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
