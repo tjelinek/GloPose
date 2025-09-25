@@ -9,6 +9,8 @@ import torchvision.transforms.functional as TF
 from matplotlib import pyplot as plt
 from kornia.image import ImageSize
 from matplotlib import cm
+from PIL import Image
+from torchvision import transforms
 import cv2
 
 from repositories.cnos.src.model.utils import Detections
@@ -248,9 +250,28 @@ class PoseEstimatorLogger:
         template_images = view_graph_images[viewgraph_id]
         for i in range(6):
             if i < detection_topk_template_ids.shape[0]:
-                template_image_idx = detection_topk_template_ids[i].item()
-                template_image = tensor2numpy(template_images[template_image_idx], self.image_downsample)
-                template_score = detection_topk_scores[i].item()
+                if i < detection_topk_template_ids.shape[0]:
+                    template_image_idx = detection_topk_template_ids[i].item()
+
+                    # Check if template_images contains tensors or file paths
+                    if isinstance(template_images[template_image_idx], (str, Path)):
+                        # It's a file path, load it
+                        image_path = template_images[template_image_idx]
+                        rgb_img = Image.open(image_path).convert('RGB')
+
+                        if self.image_downsample != 1.0:
+                            original_size = rgb_img.size
+                            new_size = (int(original_size[0] * self.image_downsample),
+                                        int(original_size[1] * self.image_downsample))
+                            rgb_img = rgb_img.resize(new_size, Image.Resampling.LANCZOS)
+
+                        template_image_tensor = transforms.ToTensor()(rgb_img)
+                    else:
+                        # It's already a tensor
+                        template_image_tensor = template_images[template_image_idx]
+
+                    template_image = tensor2numpy(template_image_tensor, self.image_downsample)
+                    template_score = detection_topk_scores[i].item()
             else:
                 template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
                 template_score = 0.
