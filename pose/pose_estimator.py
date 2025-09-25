@@ -108,8 +108,8 @@ class BOPChallengePosePredictor:
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
-            get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor)
-            breakpoint()
+            template_images, template_segmentations, template_cls_descriptors = \
+                get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor, self.config.device)
         else:
             raise ValueError(f'Unknown templates_source {templates_source}')
 
