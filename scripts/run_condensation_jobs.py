@@ -30,12 +30,15 @@ DATASETS = [
 
 def submit_job(method, descriptor, dataset, split):
     """Submit a single SLURM job."""
-    job_name = f"condensation-{method}-{descriptor}-{dataset}-{split}"
+    job_name = f"cond-{method}-{descriptor}-{dataset}-{split}"
+    log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}"
 
     cmd = [
         'sbatch',
         '--job-name', job_name,
-        'scripts/compute_condensations.batch',  # Your SLURM script name
+        '--output', f'/mnt/personal/jelint19/results/logs/{log_name}.out',
+        '--error', f'/mnt/personal/jelint19/results/logs/{log_name}.err',
+        'run_condensation.sh',  # Your SLURM script name
         '--method', method,
         '--descriptor', descriptor,
         '--dataset', dataset,

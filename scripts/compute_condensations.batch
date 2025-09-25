@@ -6,9 +6,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128G
 #SBATCH --partition=gpu
-#SBATCH --job-name=ComputeCondensations
-#SBATCH --err=/mnt/personal/jelint19/results/logs/ComputeCondensations_%j.err
-#SBATCH --out=/mnt/personal/jelint19/results/logs/ComputeCondensations_%j.out
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
