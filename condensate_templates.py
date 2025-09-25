@@ -233,10 +233,10 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     dino_cls_descriptors = dino_cls_descriptors[torch.tensor(permutation).to(device)]
 
     if method == "hart_imblearn":
-        dino_cls_descriptors = dino_cls_descriptors.numpy(force=True)
-        dino_cls_descriptors = np.append(dino_cls_descriptors, np.zeros([1, 1024]), axis=0)
+        dino_cls_descriptors_np = dino_cls_descriptors.numpy(force=True)
+        dino_cls_descriptor_np = np.append(dino_cls_descriptors_np, np.zeros([1, 1024]), axis=0)
         object_classes = np.append(object_classes.numpy(force=True), -1)
-        cnn.fit_resample(dino_cls_descriptors, object_classes)
+        cnn.fit_resample(dino_cls_descriptor_np, object_classes)
         sample_indices = cnn.sample_indices_
     elif method == 'hart_imblearn_adapted':
         sample_indices = imblearn_fitresample_adapted(dino_cls_descriptors, object_classes)
@@ -271,7 +271,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         shutil.copy2(segmentation_path, segmentation_save_dir / f'{segmentation_path.stem}_{index}'
                                                                 f'{segmentation_path.suffix}')
 
-        torch.save(dino_cls_descriptors.cpu(), descriptors_save_dir / image_path.stem)
+        torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / image_path.stem)
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, black_background: bool = False) -> \
