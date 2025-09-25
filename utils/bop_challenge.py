@@ -478,7 +478,7 @@ def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path
 
             descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
             if descriptor_file.exists():
-                cls_descriptor = torch.load(descriptor_file)
+                cls_descriptor = torch.load(descriptor_file, weights_only=True)
             else:
                 cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
                 torch.save(cls_descriptor, descriptor_file)
