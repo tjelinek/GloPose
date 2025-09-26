@@ -463,18 +463,10 @@ def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path
         for rgb_file, mask_file in tqdm(zip(rgb_files, mask_files),
                                         desc=f"Templates for {obj_dir.stem}",
                                         total=len(rgb_files),
-                                        leave=False):
-            # Load RGB image
-            rgb_img = Image.open(rgb_file).convert('RGB')
-            rgb_tensor = transforms.ToTensor()(rgb_img)
+                                        leave=False, disable=True):
 
-            images_dict[obj_id].append(rgb_tensor)
-
-            # Load segmentation mask
-            mask_img = Image.open(mask_file).convert('L')  # Grayscale
-            mask_array = np.array(mask_img)
-            mask_tensor = torch.from_numpy(mask_array)
-            segmentations_dict[obj_id].append(mask_tensor)
+            images_dict[obj_id].append(rgb_file)
+            segmentations_dict[obj_id].append(mask_file)
 
             descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
             if descriptor_file.exists():
@@ -485,8 +477,6 @@ def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path
             cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
 
     for obj_id in images_dict.keys():
-        images_dict[obj_id] = torch.stack(images_dict[obj_id])
-        segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
-        cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
+        cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id]).to(device)
 
     return images_dict, segmentations_dict, cls_descriptors_dict
