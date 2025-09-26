@@ -12,6 +12,8 @@ datasets=(
   ycbv
   handal
   hope
+  handal-val
+  hope-val
 )
 
 # Decide which sbatch path to use
