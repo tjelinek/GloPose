@@ -177,7 +177,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = []
     dino_cls_descriptors = []
 
-    dino_descriptor = descriptor_from_hydra(device, descriptor_model)
+    dino_descriptor = descriptor_from_hydra(descriptor_model, device)
 
     sequences = sorted(path_to_split.iterdir())
     cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)

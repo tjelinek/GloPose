@@ -435,7 +435,7 @@ def group_test_targets_by_image(test_annotations):
     return test_annotations
 
 
-def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path, descriptor: str) \
+def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path, descriptor: str, device='cuda') \
         -> Tuple[Dict[int, torch.Tensor], ...]:
     sys.path.append('./repositories/cnos')
     from src.model.dinov2 import descriptor_from_hydra
