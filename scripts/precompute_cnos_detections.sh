@@ -4,17 +4,17 @@
 datasets=(
   lmo
   tless
-  tudl
   icbin
-  itodd
-  hb_kinect
-  hb_primesense
-  ycbv
   handal
   hope
   handal-val
   hope-val
 )
+#  tudl
+#  itodd
+#  hb_kinect
+#  hb_primesense
+#  ycbv
 
 # Parse optional detector argument
 detector=""
