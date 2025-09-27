@@ -15,14 +15,19 @@ modules_file=~/modules_glotracker_login4.txt
 ml $(<$modules_file)
 
 dataset=""
+detector=""
 
-# Parse args to this SLURM script (supports --dataset=val and --dataset val)
+# Parse args to this SLURM script
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dataset)
       dataset="${2:-}"; shift 2 ;;
     --dataset=*)
       dataset="${1#*=}"; shift ;;
+    --detector)
+      detector="${2:-}"; shift 2 ;;
+    --detector=*)
+      detector="${1#*=}"; shift ;;
     *)
       echo "Unknown argument: $1" >&2; shift ;;
   esac
@@ -30,9 +35,13 @@ done
 
 cmd=(python -m repositories.cnos.infer_masks)
 
-# Forward to Python (expects --dataset optional)
+# Forward to Python
 if [[ -n "${dataset}" ]]; then
   cmd+=(--dataset "${dataset}")
+fi
+
+if [[ -n "${detector}" ]]; then
+  cmd+=(--detector "${detector}")
 fi
 
 export HYDRA_FULL_ERROR=1
