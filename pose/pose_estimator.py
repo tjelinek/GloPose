@@ -169,7 +169,7 @@ class BOPChallengePosePredictor:
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items", disable=True):
                 corresponding_obj_id: int = detections.object_ids[detection_mask_idx].item()
-                corresponding_view_graph = view_graphs[corresponding_obj_id]
+                # corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = detections.masks[detection_mask_idx]
 
                 if pose_logger is not None:
@@ -192,12 +192,12 @@ class BOPChallengePosePredictor:
                 }
                 json_2d_detection_results.append(detection_result)
 
-                self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
-                                   self.config.roma_sample_size,
-                                   match_min_certainty=self.config.min_roma_certainty_threshold,
-                                   match_reliability_threshold=self.config.flow_reliability_threshold,
-                                   query_img_segmentation=proposal_mask,
-                                   device=self.config.device, pose_logger=pose_logger)
+                # self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
+                #                    self.config.roma_sample_size,
+                #                    match_min_certainty=self.config.min_roma_certainty_threshold,
+                #                    match_reliability_threshold=self.config.flow_reliability_threshold,
+                #                    query_img_segmentation=proposal_mask,
+                #                    device=self.config.device, pose_logger=pose_logger)
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / experiment_name / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
