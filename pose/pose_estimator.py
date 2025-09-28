@@ -520,7 +520,8 @@ def main():
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
                                                   condensed_templates_base, detections_split, split_folder, method_name,
-                                                  experiment, 'dinov2', default_detections_file)
+                                                  experiment, descriptor='dinov2', templates_source='cnns',
+                                                  default_detections_file=default_detections_file)
 
 
 if __name__ == '__main__':
