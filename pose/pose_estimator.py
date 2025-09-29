@@ -201,7 +201,6 @@ class BOPChallengePosePredictor:
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / experiment_name / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
-                                                                f'{view_graph_save_paths.parent.stem}@'
                                                                 f'{onboarding_type}@{experiment_name}.json')
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
@@ -468,17 +467,17 @@ def main():
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
-        (
-            'hope', 'test', 'onboarding_static',
-            bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
-                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
-        ),
-        ('hope', 'val', 'onboarding_static', None),
-        (
-            'tless', 'test', 'train_primesense',
-            bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
-                       'cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'
-        ),
+        # (
+        #     'hope', 'test', 'onboarding_static',
+        #     bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
+        #                'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
+        # ),
+        # ('hope', 'val', 'onboarding_static', None),
+        # (
+        #     'tless', 'test', 'train_primesense',
+        #     bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
+        #                'cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'
+        # ),
         (
             'lmo', 'test', 'train',
             bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
@@ -493,9 +492,7 @@ def main():
         ('handal', 'val', 'onboarding_static', None),
     ]
 
-    experiment = 'fromDefaultDetections'
-    config_name = 'ufm_c0975r05'
-    method_name = 'FlowTemplates'
+    method_name = 'MyCNOS'
     cache_path = Path('/mnt/personal/jelint19/cache')
 
     for dataset, split, detections_split, default_detections_file in sequences_to_run:
@@ -517,8 +514,10 @@ def main():
 
         # Set up paths based on templates_source
         if args.templates_source == 'viewgraph':
+            config_name = 'ufm_c0975r05'
             view_graph_location = cache_path / 'view_graph_cache' / config_name / dataset
             condensed_templates_base = None
+            experiment = f'viewgraph-templates-{args.descriptor}'
         elif args.templates_source == 'cnns':
             view_graph_location = None
             if not not args.condensation_source:
@@ -526,9 +525,11 @@ def main():
             condensation_source = f"{args.condensation_source}-{args.descriptor}"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
+            experiment = f'cnns-{args.descriptor}'
         else:  # pre-rendered
             view_graph_location = None
             condensed_templates_base = None
+            experiment = f'onboarding-templates-{args.descriptor}'
 
         config = TrackerConfig()
         config.device = 'cuda'
