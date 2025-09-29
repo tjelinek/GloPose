@@ -2,13 +2,14 @@ import subprocess
 import itertools
 
 
-def submit_job(descriptor, templates_source, condensation_source=None, certainty=None):
+def submit_job(descriptor, templates_source, condensation_source=None, certainty=None, detector='sam'):
     """Submit a single SLURM job with the specified configuration."""
     cmd = [
         'sbatch',
         'scripts/pose_estimator.batch',
         f'--descriptor={descriptor}',
-        f'--templates_source={templates_source}'
+        f'--templates_source={templates_source}',
+        f'--detector={detector}'
     ]
 
     if condensation_source:
@@ -17,7 +18,7 @@ def submit_job(descriptor, templates_source, condensation_source=None, certainty
     if certainty is not None:
         cmd.append(f'--certainty={certainty}')
 
-    job_name = f"{descriptor}_{templates_source}"
+    job_name = f"{descriptor}_{templates_source}_{detector}"
     if condensation_source:
         job_name += f"_{condensation_source}"
     if certainty is not None:
@@ -43,21 +44,23 @@ def main():
         '1nn-hart_symmetric'
     ]
     certainties = [0.15, 0.25, 0.5]
+    detectors = ['sam', 'fastsam', 'sam2']
 
     # Track success
     total_jobs = 0
     failed_jobs = 0
 
     # Run all combinations with CNNs
-    for descriptor, condensation_source, certainty in itertools.product(descriptors, condensation_sources, certainties):
+    for descriptor, condensation_source, certainty, detector in itertools.product(descriptors, condensation_sources,
+                                                                                  certainties, detectors):
         total_jobs += 1
-        if submit_job(descriptor, 'cnns', condensation_source, certainty) != 0:
+        if submit_job(descriptor, 'cnns', condensation_source, certainty, detector) != 0:
             failed_jobs += 1
 
     # Run prerendered with both descriptors
-    for descriptor, certainty in itertools.product(descriptors, certainties):
+    for descriptor, certainty, detector in itertools.product(descriptors, certainties, detectors):
         total_jobs += 1
-        if submit_job(descriptor, 'prerendered', certainty=certainty) != 0:
+        if submit_job(descriptor, 'prerendered', certainty=certainty, detector=detector) != 0:
             failed_jobs += 1
 
     print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")

@@ -37,13 +37,13 @@ from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, aggregation_func=None, certainty=None):
+    def __init__(self, config: TrackerConfig, base_cache_folder, aggregation_func=None, certainty=None):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
 
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
-        self.cache_folder = Path('/mnt/personal/jelint19/cache/')
+        self.cache_folder = base_cache_folder
 
         self._initialize_flow_provider()
 
@@ -78,8 +78,8 @@ class BOPChallengePosePredictor:
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         detection_templates_save_folder, onboarding_type: str, split: str,
                                         method_name: str, experiment_name: str, view_graph_save_paths: Path = None,
-                                        descriptor: str = 'dinov2', default_detections_file: Path = None,
-                                        templates_source: str = 'cnns') -> None:
+                                        descriptor: str = 'dinov2', detector_name='sam',
+                                        default_detections_file: Path = None, templates_source: str = 'cnns') -> None:
 
         dataset_name = base_dataset_folder.stem
         rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
@@ -145,9 +145,11 @@ class BOPChallengePosePredictor:
             scene_folder_name = f'{scene_id:06d}'
             image_id_str = f'{im_id:06d}'
             path_to_scene = test_dataset_path / scene_folder_name
+            path_to_scene_detection_cache = (self.cache_folder / 'detections_cache' / dataset_name / split /
+                                             scene_folder_name)
             path_to_image = self._get_image_path(path_to_scene, image_id_str)
             path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
-            path_to_cnos_detections = path_to_scene / 'cnos_sam_detections'
+            path_to_cnos_detections = path_to_scene_detection_cache / f'cnos_{detector_name}_detections_{descriptor}'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
 
             camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
@@ -467,6 +469,7 @@ def main():
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'],
                         default='prerendered')
     parser.add_argument('--condensation_source', default='1nn-hart_imblearn')
+    parser.add_argument('--detector', default='sam')
     parser.add_argument('--certainty', type=float, default=None)
 
     args = parser.parse_args()
@@ -543,13 +546,16 @@ def main():
 
         config = TrackerConfig()
         config.device = 'cuda'
-        predictor = BOPChallengePosePredictor(config, aggregation_func=aggregation, certainty=args.certainty)
+        predictor = BOPChallengePosePredictor(config, cache_path, aggregation_func=aggregation,
+                                              certainty=args.certainty)
         match_cfg = predictor.cnos_matching_config
-        experiment = f'{experiment}-{match_cfg.confidence_thresh}-aggregation-{match_cfg.aggregation_function}'
+        experiment = (f'{experiment}-conf_{match_cfg.confidence_thresh}-aggr_{match_cfg.aggregation_function}_'
+                      f'detector-{args.detector}')
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, condensed_templates_base,
                                                   detections_split, split_folder, method_name, experiment,
                                                   view_graph_location, descriptor=args.descriptor,
+                                                  detector_name=args.detector,
                                                   default_detections_file=default_detections_file,
                                                   templates_source=args.templates_source)
 
