@@ -70,14 +70,10 @@ class BOPChallengePosePredictor:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
-                                        view_graph_save_paths: Path, detection_templates_save_folder,
-                                        onboarding_type: str, split: str, method_name: str, experiment_name: str,
+                                        detection_templates_save_folder, onboarding_type: str, split: str,
+                                        method_name: str, experiment_name: str, view_graph_save_paths: Path = None,
                                         descriptor: str = 'dinov2', default_detections_file: Path = None,
                                         templates_source: str = 'cnns') -> None:
-
-        black_background = False
-        view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
-                                                                          self.config.device)
 
         dataset_name = base_dataset_folder.stem
         rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
@@ -93,11 +89,14 @@ class BOPChallengePosePredictor:
         template_images: Dict[int, torch.Tensor]
         template_segmentations: Dict[int, torch.Tensor]
 
+        view_graphs: Dict[int, ViewGraph] = {}
         if templates_source == 'viewgraph':
             from src.model.dinov2 import descriptor_from_hydra
             dino_descriptor = descriptor_from_hydra(descriptor)
+            view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
+                                                                              self.config.device)
             template_cls_descriptors = {
-                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor, black_background, )[0]
+                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor)[0]
                 for obj_id, view_graph in view_graphs.items()
             }
             template_images = {
@@ -105,7 +104,7 @@ class BOPChallengePosePredictor:
             }
         elif templates_source == 'cnns':
             template_images, template_segmentations, template_cls_descriptors = \
-                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor, black_background)
+                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor)
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
@@ -535,12 +534,11 @@ def main():
         config.device = 'cuda'
         predictor = BOPChallengePosePredictor(config)
 
-        predictor.predict_poses_for_bop_challenge(
-            base_dataset_folder, bop_targets_path, view_graph_location,
-            condensed_templates_base, detections_split, split_folder, method_name,
-            experiment, descriptor=args.descriptor, templates_source=args.templates_source,
-            default_detections_file=default_detections_file
-        )
+        predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, condensed_templates_base,
+                                                  detections_split, split_folder, method_name, experiment,
+                                                  view_graph_location, descriptor=args.descriptor,
+                                                  default_detections_file=default_detections_file,
+                                                  templates_source=args.templates_source)
 
 
 if __name__ == '__main__':
