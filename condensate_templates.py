@@ -275,9 +275,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor: str) \
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str) \
         -> Tuple[Dict[int, torch.Tensor], ...]:
-    descriptor = descriptor_from_hydra(model=descriptor)
+    descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)
@@ -305,7 +305,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             rgb_img = Image.open(rgb_file).convert('RGB')
             rgb_tensor = transforms.ToTensor()(rgb_img)
 
-            descriptor_file = descriptor_dir / rgb_file.stem
+            descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
 
             images_dict[obj_id].append(rgb_tensor)
 
