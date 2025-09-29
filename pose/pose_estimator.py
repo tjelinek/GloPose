@@ -54,7 +54,7 @@ class BOPChallengePosePredictor:
         if aggregation_func is not None:
             overrides.append(f'model.matching_config.aggregation_function={aggregation_func}')
         if certainty is not None:
-            overrides.append(f'model.matching_config.certainty={certainty}')
+            overrides.append(f'model.matching_config.confidence_thresh={certainty}')
 
         with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
             cnos_cfg = compose(config_name="run_inference", overrides=overrides)
