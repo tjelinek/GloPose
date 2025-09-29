@@ -6,7 +6,7 @@ def submit_job(descriptor, templates_source, condensation_source=None):
     """Submit a single SLURM job with the specified configuration."""
     cmd = [
         'sbatch',
-        'run_bop_predictor.batch',
+        'scripts/pose_estimator.batch',
         f'--descriptor={descriptor}',
         f'--templates_source={templates_source}'
     ]
