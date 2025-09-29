@@ -1,0 +1,57 @@
+#!/bin/bash
+#SBATCH --time=03:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:1
+#SBATCH --mem=128G
+#SBATCH --partition=h200fast
+#SBATCH --job-name=BOPPosePredictor
+#SBATCH --err=/mnt/personal/jelint19/results/logs/BOPPosePredictor_%A_%a.err
+#SBATCH --out=/mnt/personal/jelint19/results/logs/BOPPosePredictor_%A_%a.out
+
+modules_file=~/modules_glotracker_login4.txt
+# shellcheck disable=SC2046
+ml $(<$modules_file)
+
+descriptor=""
+templates_source=""
+condensation_source=""
+
+# Parse args to this SLURM script
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --descriptor)
+      descriptor="${2:-}"; shift 2 ;;
+    --descriptor=*)
+      descriptor="${1#*=}"; shift ;;
+    --templates_source)
+      templates_source="${2:-}"; shift 2 ;;
+    --templates_source=*)
+      templates_source="${1#*=}"; shift ;;
+    --condensation_source)
+      condensation_source="${2:-}"; shift 2 ;;
+    --condensation_source=*)
+      condensation_source="${1#*=}"; shift ;;
+    *)
+      echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+cmd=(python runner.py)
+
+# Forward to Python
+if [[ -n "${descriptor}" ]]; then
+  cmd+=(--descriptor "${descriptor}")
+fi
+
+if [[ -n "${templates_source}" ]]; then
+  cmd+=(--templates_source "${templates_source}")
+fi
+
+if [[ -n "${condensation_source}" ]]; then
+  cmd+=(--condensation_source "${condensation_source}")
+fi
+
+export HYDRA_FULL_ERROR=1
+"${cmd[@]}"
