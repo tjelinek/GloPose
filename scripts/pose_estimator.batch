@@ -17,6 +17,7 @@ ml $(<$modules_file)
 descriptor=""
 templates_source=""
 condensation_source=""
+certainty=""
 
 # Parse args to this SLURM script
 while [[ $# -gt 0 ]]; do
@@ -33,6 +34,10 @@ while [[ $# -gt 0 ]]; do
       condensation_source="${2:-}"; shift 2 ;;
     --condensation_source=*)
       condensation_source="${1#*=}"; shift ;;
+    --certainty)
+      certainty="${2:-}"; shift 2 ;;
+    --certainty=*)
+      certainty="${1#*=}"; shift ;;
     *)
       echo "Unknown argument: $1" >&2; shift ;;
   esac
@@ -51,6 +56,10 @@ fi
 
 if [[ -n "${condensation_source}" ]]; then
   cmd+=(--condensation_source "${condensation_source}")
+fi
+
+if [[ -n "${certainty}" ]]; then
+  cmd+=(--certainty "${certainty}")
 fi
 
 export HYDRA_FULL_ERROR=1
