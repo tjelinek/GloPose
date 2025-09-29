@@ -5,6 +5,7 @@ and create a histogram of image counts per object
 """
 
 import shutil
+from itertools import product
 from pathlib import Path
 import matplotlib.pyplot as plt
 from collections import defaultdict
@@ -154,8 +155,10 @@ def main():
         'hart_imblearn',
         'hart_imblearn_adapted'
     ]
-    for _method in methods:
-        experiment = f'1nn-{_method}'
+    descriptors = ['dinov2', 'dinov3']
+    neighbors = ['1nn']
+    for neighbor, method, descriptor in product(neighbors, methods, descriptors):
+        experiment = f'{neighbor}-{method}-{descriptor}'
         dataset_sequences = [
             ('hope', 'onboarding_static'),
             ('hope', 'onboarding_dynamic'),
