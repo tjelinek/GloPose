@@ -459,18 +459,12 @@ class BOPChallengePosePredictor:
 def main():
     parser = argparse.ArgumentParser(description='Run BOP Challenge pose prediction')
 
-    parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], required=True,
-                        help='Feature descriptor to use')
-    parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], required=True,
-                        help='Source of templates')
-    parser.add_argument('--condensation_source',
-                        help='Condensation source (required when templates_source is cnns)')
+    parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], default='dinov2')
+    parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'],
+                        default='prerendered')
+    parser.add_argument('--condensation_source', default='1nn-hart_imblearn')
 
     args = parser.parse_args()
-
-    # Validate condensation_source requirement
-    if args.templates_source == 'cnns' and not args.condensation_source:
-        parser.error("--condensation_source is required when --templates_source is 'cnns'")
 
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
@@ -528,6 +522,8 @@ def main():
             condensed_templates_base = None
         elif args.templates_source == 'cnns':
             view_graph_location = None
+            if not not args.condensation_source:
+                parser.error("--condensation_source is required when --templates_source is 'cnns'")
             condensation_source = f"{args.condensation_source}-{args.descriptor}"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
