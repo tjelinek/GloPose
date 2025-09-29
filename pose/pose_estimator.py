@@ -534,7 +534,7 @@ def main():
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
             aggregation = 'max'
-            experiment = f'cnns-{condensation_source}-{args.descriptor}'
+            experiment = f'cnns-{condensation_source}'
         else:  # pre-rendered
             view_graph_location = None
             condensed_templates_base = None
