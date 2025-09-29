@@ -7,8 +7,6 @@
 #SBATCH --mem=128G
 #SBATCH --partition=h200fast
 #SBATCH --job-name=BOPPosePredictor
-#SBATCH --err=/mnt/personal/jelint19/results/logs/BOPPosePredictor_%A_%a.err
-#SBATCH --out=/mnt/personal/jelint19/results/logs/BOPPosePredictor_%A_%a.out
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
@@ -48,6 +46,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Build log name from parameters
+log_name="${descriptor}_${templates_source}_${detector}"
+if [[ -n "${condensation_source}" ]]; then
+  log_name="${log_name}_${condensation_source}"
+fi
+if [[ -n "${certainty}" ]]; then
+  certainty_str=$(echo "${certainty}" | tr -d '.')
+  log_name="${log_name}_cert${certainty_str}"
+fi
+
+# Create log directory
+log_dir="/mnt/personal/jelint19/results/logs/pose_estimator"
+mkdir -p "${log_dir}"
+
+# Set log files
+export SBATCH_ERROR="${log_dir}/${log_name}.err"
+export SBATCH_OUTPUT="${log_dir}/${log_name}.out"
+
 cmd=(python -m pose.pose_estimator)
 
 # Forward to Python
@@ -72,4 +88,4 @@ if [[ -n "${detector}" ]]; then
 fi
 
 export HYDRA_FULL_ERROR=1
-"${cmd[@]}"
+"${cmd[@]}" 2>"${SBATCH_ERROR}" 1>"${SBATCH_OUTPUT}"
