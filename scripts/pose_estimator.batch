@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-cmd=(python runner.py)
+cmd=(python -m pose.pose_estimator)
 
 # Forward to Python
 if [[ -n "${descriptor}" ]]; then
