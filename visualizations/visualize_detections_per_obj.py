@@ -89,7 +89,7 @@ def get_total_counts(original_dataset_path, dataset, split):
     return dict(total_counts)
 
 
-def create_histogram(image_counts, dataset, split, output_file, total_counts=None):
+def create_histogram(image_counts, dataset, split, output_file, experiment_name, total_counts=None):
     if not image_counts:
         print("No image counts to plot.")
         return
@@ -131,7 +131,7 @@ def create_histogram(image_counts, dataset, split, output_file, total_counts=Non
              markersize=8, markeredgewidth=2, label='Percentage')
 
     # Set title
-    ax1.set_title(f'Templates per object: {dataset}-{split}')
+    ax1.set_title(f'Templates per object: {dataset}-{split}-{experiment_name}')
 
     # Set x-axis labels with object IDs
     if len(sorted_objects) <= 20:
@@ -204,7 +204,7 @@ def main():
             SOURCE_DIRECTORY = Path(
                 '/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
             TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
-            HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}.png')
+            HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}-{experiment}.png')
 
             print("Image Directory Flattening Script with Histogram")
             print("=" * 50)
@@ -220,7 +220,7 @@ def main():
             total_counts = get_total_counts(original_bop_path, dataset, split)
 
             # Create histogram with percentages
-            create_histogram(image_counts, dataset, split, HISTOGRAM_FILE, total_counts)
+            create_histogram(image_counts, dataset, split, HISTOGRAM_FILE, experiment, total_counts)
 
 
 if __name__ == "__main__":
