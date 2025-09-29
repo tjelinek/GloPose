@@ -37,7 +37,7 @@ from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig):
+    def __init__(self, config: TrackerConfig, aggregation_func=None, certainty=None):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
@@ -50,8 +50,14 @@ class BOPChallengePosePredictor:
         if GlobalHydra.instance().is_initialized():
             GlobalHydra.instance().clear()
         cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
+        overrides = []
+        if aggregation_func is not None:
+            overrides.append(f'model.matching_config.aggregation_function={aggregation_func}')
+        if certainty is not None:
+            overrides.append(f'model.matching_config.certainty={certainty}')
+
         with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-            cnos_cfg = compose(config_name="run_inference")
+            cnos_cfg = compose(config_name="run_inference", overrides=overrides)
 
         sys.path.append('./repositories/cnos')
         from src.model.loss import PairwiseSimilarity
@@ -461,6 +467,7 @@ def main():
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'],
                         default='prerendered')
     parser.add_argument('--condensation_source', default='1nn-hart_imblearn')
+    parser.add_argument('--certainty', type=float, default=None)
 
     args = parser.parse_args()
 
@@ -518,6 +525,7 @@ def main():
             view_graph_location = cache_path / 'view_graph_cache' / config_name / dataset
             condensed_templates_base = None
             experiment = f'viewgraph-templates-{args.descriptor}'
+            aggregation = 'avg_5'
         elif args.templates_source == 'cnns':
             view_graph_location = None
             if not args.condensation_source:
@@ -525,15 +533,19 @@ def main():
             condensation_source = f"{args.condensation_source}-{args.descriptor}"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
+            aggregation = 'max'
             experiment = f'cnns-{condensation_source}-{args.descriptor}'
         else:  # pre-rendered
             view_graph_location = None
             condensed_templates_base = None
+            aggregation = 'avg_5'
             experiment = f'onboarding-templates-{args.descriptor}'
 
         config = TrackerConfig()
         config.device = 'cuda'
-        predictor = BOPChallengePosePredictor(config)
+        predictor = BOPChallengePosePredictor(config, aggregation_func=aggregation, certainty=args.certainty)
+        match_cfg = predictor.cnos_matching_config
+        experiment = f'{experiment}-{match_cfg.confidence_thresh}-aggregation-{match_cfg.aggregation_function}'
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, condensed_templates_base,
                                                   detections_split, split_folder, method_name, experiment,
