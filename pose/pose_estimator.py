@@ -1,3 +1,4 @@
+import argparse
 import json
 import pickle
 import shutil
@@ -456,6 +457,21 @@ class BOPChallengePosePredictor:
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Run BOP Challenge pose prediction')
+
+    parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], required=True,
+                        help='Feature descriptor to use')
+    parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], required=True,
+                        help='Source of templates')
+    parser.add_argument('--condensation_source',
+                        help='Condensation source (required when templates_source is cnns)')
+
+    args = parser.parse_args()
+
+    # Validate condensation_source requirement
+    if args.templates_source == 'cnns' and not args.condensation_source:
+        parser.error("--condensation_source is required when --templates_source is 'cnns'")
+
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
@@ -485,14 +501,11 @@ def main():
     ]
 
     experiment = 'fromDefaultDetections'
-    condensation_source = '1nn_custom_hart_symmetric'
+    config_name = 'ufm_c0975r05'
+    method_name = 'FlowTemplates'
+    cache_path = Path('/mnt/personal/jelint19/cache')
 
     for dataset, split, detections_split, default_detections_file in sequences_to_run:
-
-        print(f'Running on dataset {dataset}, split {split}')
-
-        config = 'ufm_c0975r05'
-        method_name = 'FlowTemplates'
         data_type = ''
 
         if dataset in ['hope', 'handal']:
@@ -506,22 +519,32 @@ def main():
             raise ValueError(f"Unknown dataset: {dataset}")
 
         split_folder = f'{split}{data_type}'
-
-        base_dataset_folder = bop_base / f'{dataset}'
+        base_dataset_folder = bop_base / dataset
         bop_targets_path = base_dataset_folder / f'{split}_targets_{targets_year}.json'
-        cache_path = Path(f'/mnt/personal/jelint19/cache')
-        view_graph_location = cache_path / 'view_graph_cache' / config / dataset
-        condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
-                                    dataset / detections_split)
+
+        # Set up paths based on templates_source
+        if args.templates_source == 'viewgraph':
+            view_graph_location = cache_path / 'view_graph_cache' / config_name / dataset
+            condensed_templates_base = None
+        elif args.templates_source == 'cnns':
+            view_graph_location = None
+            condensation_source = f"{args.condensation_source}-{args.descriptor}"
+            condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
+                                        dataset / detections_split)
+        else:  # pre-rendered
+            view_graph_location = None
+            condensed_templates_base = None
 
         config = TrackerConfig()
         config.device = 'cuda'
         predictor = BOPChallengePosePredictor(config)
 
-        predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, view_graph_location,
-                                                  condensed_templates_base, detections_split, split_folder, method_name,
-                                                  experiment, descriptor='dinov2', templates_source='cnns',
-                                                  default_detections_file=default_detections_file)
+        predictor.predict_poses_for_bop_challenge(
+            base_dataset_folder, bop_targets_path, view_graph_location,
+            condensed_templates_base, detections_split, split_folder, method_name,
+            experiment, descriptor=args.descriptor, templates_source=args.templates_source,
+            default_detections_file=default_detections_file
+        )
 
 
 if __name__ == '__main__':
