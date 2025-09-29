@@ -49,8 +49,7 @@ class ViewGraph:
         self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
                                                              colmap_db_image_name, dino_cls_descriptor))
 
-    def compute_dino_descriptors_for_nodes(self, dino_descriptor, black_background: bool)\
-            -> Tuple[torch.Tensor, torch.Tensor]:
+    def compute_dino_descriptors_for_nodes(self, dino_descriptor: CustomDINOv2) -> Tuple[torch.Tensor, torch.Tensor]:
         cls_descriptors = []
         dense_descriptors = []
 
@@ -76,7 +75,7 @@ class ViewGraph:
             seg_path = seg_save_dir / seg_name
 
             dino_cls_descriptor, dino_dense_descriptor =\
-                dino_descriptor.get_detections_from_files(img_path, seg_path, black_background)
+                dino_descriptor.get_detections_from_files(img_path, seg_path)
 
             # dino_cls_descriptor, dino_dense_descriptor =\
             #     self._get_descriptor_from_observation(img, seg, dino_descriptor, black_background)

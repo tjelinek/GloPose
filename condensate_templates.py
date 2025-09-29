@@ -275,7 +275,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor: str, black_background: bool = False) \
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor: str) \
         -> Tuple[Dict[int, torch.Tensor], ...]:
     descriptor = descriptor_from_hydra(model=descriptor)
 
