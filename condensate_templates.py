@@ -275,7 +275,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str) \
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda') \
         -> Tuple[Dict[int, torch.Tensor], ...]:
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
@@ -303,7 +303,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                                         leave=False):
             # Load RGB image
             rgb_img = Image.open(rgb_file).convert('RGB')
-            rgb_tensor = transforms.ToTensor()(rgb_img)
+            rgb_tensor = transforms.ToTensor()(rgb_img).to(device)
 
             descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
 
@@ -312,14 +312,14 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             # Load segmentation mask
             mask_img = Image.open(mask_file).convert('L')  # Grayscale
             mask_array = np.array(mask_img)
-            mask_tensor = torch.from_numpy(mask_array)
+            mask_tensor = torch.from_numpy(mask_array).to(device)
             segmentations_dict[obj_id].append(mask_tensor)
 
             if descriptor_file.exists():
                 cls_descriptor = torch.load(descriptor_file)
             else:
                 cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
-            cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0))
+            cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0).to(device))
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])

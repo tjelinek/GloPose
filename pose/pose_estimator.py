@@ -104,7 +104,7 @@ class BOPChallengePosePredictor:
             }
         elif templates_source == 'cnns':
             template_images, template_segmentations, template_cls_descriptors = \
-                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor)
+                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor, self.config.device)
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
