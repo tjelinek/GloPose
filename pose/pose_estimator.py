@@ -467,17 +467,17 @@ def main():
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
-        # (
-        #     'hope', 'test', 'onboarding_static',
-        #     bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
-        #                'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
-        # ),
-        # ('hope', 'val', 'onboarding_static', None),
-        # (
-        #     'tless', 'test', 'train_primesense',
-        #     bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
-        #                'cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'
-        # ),
+        (
+            'hope', 'test', 'onboarding_static',
+            bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
+                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
+        ),
+        ('hope', 'val', 'onboarding_static', None),
+        (
+            'tless', 'test', 'train_primesense',
+            bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
+                       'cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'
+        ),
         (
             'lmo', 'test', 'train',
             bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
