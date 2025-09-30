@@ -62,7 +62,6 @@ mkdir -p "${log_dir}"
 
 # Set log files
 export SBATCH_ERROR="${log_dir}/${log_name}.err"
-export SBATCH_OUTPUT="${log_dir}/${log_name}.out"
 
 cmd=(python -m pose.pose_estimator)
 
