@@ -62,6 +62,7 @@ mkdir -p "${log_dir}"
 
 # Set log files
 export SBATCH_ERROR="${log_dir}/${log_name}.err"
+export SBATCH_OUTPUT="${log_dir}/${log_name}.out"
 
 cmd=(python -m pose.pose_estimator)
 
@@ -88,3 +89,5 @@ fi
 
 export HYDRA_FULL_ERROR=1
 "${cmd[@]}" 2>"${SBATCH_ERROR}" 1>"${SBATCH_OUTPUT}"
+
+rm SBATCH_OUTPUT
