@@ -36,7 +36,10 @@ def submit_job(descriptor, templates_source, condensation_source=None, certainty
 
 
 def main():
-    descriptors = ['dinov2', 'dinov3']
+    descriptors = [
+        'dinov2',
+        'dinov3'
+    ]
     condensation_sources = [
         '1nn-hart',
         '1nn-hart_imblearn_adapted',
@@ -44,7 +47,11 @@ def main():
         '1nn-hart_symmetric'
     ]
     certainties = [0.15, 0.25, 0.5]
-    detectors = ['sam', 'fastsam', 'sam2']
+    detectors = [
+        'sam',
+        'fastsam',
+        'sam2'
+    ]
 
     # Track success
     total_jobs = 0
