@@ -9,6 +9,8 @@ datasets=(
   hope
   handal-val
   hope-val
+  hot3d-quest3
+  hot3d-aria
 )
 #  tudl
 #  itodd
