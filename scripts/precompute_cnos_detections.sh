@@ -11,6 +11,8 @@ datasets=(
   hope-val
   hot3d-quest3
   hot3d-aria
+  hot3d-quest3-train
+  hot3d-aria-train
 )
 #  tudl
 #  itodd
