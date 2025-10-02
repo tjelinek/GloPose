@@ -18,7 +18,6 @@ condensation_source=""
 certainty=""
 detector=""
 
-# Parse args to this SLURM script
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --descriptor)
@@ -88,6 +87,4 @@ if [[ -n "${detector}" ]]; then
 fi
 
 export HYDRA_FULL_ERROR=1
-"${cmd[@]}" 2>"${SBATCH_ERROR}" 1>"${SBATCH_OUTPUT}"
-
-rm SBATCH_OUTPUT
+"${cmd[@]}" >"${SBATCH_OUTPUT}" 2>&1
