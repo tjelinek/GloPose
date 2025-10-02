@@ -351,17 +351,17 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
 
 def main():
     parser = argparse.ArgumentParser(description='Perform template condensation for BOP datasets')
-    parser.add_argument('--method', type=str, required=True,
+    parser.add_argument('--method', type=str, required=False,
                         choices=['hart', 'hart_symmetric', 'hart_imblearn', 'hart_imblearn_adapted'],
-                        help='Condensation method to use')
-    parser.add_argument('--descriptor', type=str, required=True,
-                        choices=['dinov2', 'dinov3'],
+                        default='hart', help='Condensation method to use')
+    parser.add_argument('--descriptor', type=str, required=False,
+                        choices=['dinov2', 'dinov3'], default='dinov2',
                         help='Descriptor model to use')
-    parser.add_argument('--dataset', type=str, required=True,
+    parser.add_argument('--dataset', type=str, required=False,
                         choices=['hope', 'handal', 'tless', 'lmo', 'icbin'],
-                        help='Dataset to process')
-    parser.add_argument('--split', type=str, required=True,
-                        help='Dataset split to process')
+                        default='hope', help='Dataset to process')
+    parser.add_argument('--split', type=str, required=False,
+                        default='onboarding_static', help='Dataset split to process')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Device to use (default: cuda)')
 
