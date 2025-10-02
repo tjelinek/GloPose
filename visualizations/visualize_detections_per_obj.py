@@ -190,6 +190,10 @@ def main():
     for neighbor, method, descriptor in product(neighbors, methods, descriptors):
         experiment = f'{neighbor}-{method}-{descriptor}'
         dataset_sequences = [
+            ('hot3d', 'object_ref_aria_static_scenewise'),
+            ('hot3d', 'object_ref_quest3_static_scenewise'),
+            # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
+            # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
             ('hope', 'onboarding_static'),
             ('hope', 'onboarding_dynamic'),
             ('handal', 'onboarding_static'),
