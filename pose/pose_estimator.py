@@ -37,12 +37,13 @@ from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, base_cache_folder, aggregation_func=None, certainty=None):
+    def __init__(self, config: TrackerConfig, base_cache_folder, experiment_folder='default', aggregation_func=None,
+                 certainty=None):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
 
-        self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation')
+        self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation') / experiment_folder
         self.cache_folder = base_cache_folder
 
         self._initialize_flow_provider()
@@ -219,7 +220,7 @@ class BOPChallengePosePredictor:
             return
         result_filename = json_file_path.name
         results_path = json_file_path.parent
-        eval_path = "/mnt/personal/jelint19/results/PoseEstimation/bop_eval"
+        eval_path = self.write_folder / "bop_eval"
         datasets_path = "/mnt/personal/jelint19/data/bop/"
         targets_filename = "test_targets_bop19.json"
         if dataset_name in ['hope', 'handal'] and split == 'val':
@@ -466,11 +467,13 @@ def main():
     parser = argparse.ArgumentParser(description='Run BOP Challenge pose prediction')
 
     parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], default='dinov2')
-    parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'],
-                        default='prerendered')
+    parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], default='cnns')
     parser.add_argument('--condensation_source', default='1nn-hart_imblearn')
     parser.add_argument('--detector', default='sam')
     parser.add_argument('--certainty', type=float, default=None)
+    parser.add_argument('--experiment_name', default=None)
+    parser.add_argument('--use_enhanced_nms', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--similarity_metric', default='cosine')
 
     args = parser.parse_args()
 

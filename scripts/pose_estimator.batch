@@ -17,6 +17,9 @@ templates_source=""
 condensation_source=""
 certainty=""
 detector=""
+experiment_name=""
+use_enhanced_nms=""
+similarity_metric=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,12 +43,23 @@ while [[ $# -gt 0 ]]; do
       detector="${2:-}"; shift 2 ;;
     --detector=*)
       detector="${1#*=}"; shift ;;
+    --experiment_name)
+      experiment_name="${2:-}"; shift 2 ;;
+    --experiment_name=*)
+      experiment_name="${1#*=}"; shift ;;
+    --use_enhanced_nms)
+      use_enhanced_nms="${2:-}"; shift 2 ;;
+    --use_enhanced_nms=*)
+      use_enhanced_nms="${1#*=}"; shift ;;
+    --similarity_metric)
+      similarity_metric="${2:-}"; shift 2 ;;
+    --similarity_metric=*)
+      similarity_metric="${1#*=}"; shift ;;
     *)
       echo "Unknown argument: $1" >&2; shift ;;
   esac
 done
 
-# Build log name from parameters
 log_name="${descriptor}_${templates_source}_${detector}"
 if [[ -n "${condensation_source}" ]]; then
   log_name="${log_name}_${condensation_source}"
@@ -53,6 +67,9 @@ fi
 if [[ -n "${certainty}" ]]; then
   certainty_str=$(echo "${certainty}" | tr -d '.')
   log_name="${log_name}_cert${certainty_str}"
+fi
+if [[ -n "${experiment_name}" ]]; then
+  log_name="${log_name}_${experiment_name}"
 fi
 
 # Create log directory
@@ -84,6 +101,18 @@ fi
 
 if [[ -n "${detector}" ]]; then
   cmd+=(--detector "${detector}")
+fi
+
+if [[ -n "${experiment_name}" ]]; then
+  cmd+=(--experiment_name "${experiment_name}")
+fi
+
+if [[ -n "${use_enhanced_nms}" ]]; then
+  cmd+=(--use_enhanced_nms "${use_enhanced_nms}")
+fi
+
+if [[ -n "${similarity_metric}" ]]; then
+  cmd+=(--similarity_metric "${similarity_metric}")
 fi
 
 export HYDRA_FULL_ERROR=1
