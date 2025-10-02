@@ -15,7 +15,10 @@ METHODS = [
     'hart_imblearn_adapted'
 ]
 
-DESCRIPTORS = ['dinov2', 'dinov3']
+DESCRIPTORS = [
+    'dinov2',
+    'dinov3'
+]
 
 DATASETS = [
     ('hope', 'onboarding_static'),
@@ -25,6 +28,10 @@ DATASETS = [
     ('tless', 'train_primesense'),
     ('lmo', 'train'),
     ('icbin', 'train'),
+    ('hot3d', 'object_ref_aria_static_scenewise'),
+    ('hot3d', 'object_ref_quest3_static_scenewise'),
+    # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
+    # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
 ]
 
 

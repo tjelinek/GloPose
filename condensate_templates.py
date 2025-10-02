@@ -331,6 +331,10 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
                                       descriptors_cache_path=None, descriptor_model='dinov2', device='cuda'):
     sequences = [
+        ('hot3d', 'object_ref_aria_static_scenewise'),
+        ('hot3d', 'object_ref_quest3_static_scenewise'),
+        # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
+        # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
         ('hope', 'onboarding_static'),
         ('hope', 'onboarding_dynamic'),
         ('handal', 'onboarding_static'),
