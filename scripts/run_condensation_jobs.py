@@ -6,6 +6,7 @@ Script to submit SLURM jobs for all combinations of datasets, descriptors, and m
 import subprocess
 import time
 from itertools import product
+from pathlib import Path
 
 # Define all combinations to run
 METHODS = [
@@ -40,11 +41,13 @@ def submit_job(method, descriptor, dataset, split):
     job_name = f"cond-{method}-{descriptor}-{dataset}-{split}"
     log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}"
 
+    log_path = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
+    log_path.mkdir(parents=True, exist_ok=True)
+
     cmd = [
         'sbatch',
         '--job-name', job_name,
-        '--output', f'/mnt/personal/jelint19/results/logs/{log_name}.out',
-        '--error', f'/mnt/personal/jelint19/results/logs/{log_name}.err',
+        '--error', f'/mnt/personal/jelint19/results/logs/condensation_jobs/{log_name}.err',
         'scripts/compute_condensations.batch',  # Your SLURM script name
         '--method', method,
         '--descriptor', descriptor,
