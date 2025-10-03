@@ -1,7 +1,7 @@
 import shutil
 import sys
 import argparse
-from collections import defaultdict
+from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -12,6 +12,7 @@ from scipy.sparse import issparse
 from sklearn import clone
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils import _safe_indexing
+from sklearn.utils import check_random_state
 from tqdm import tqdm
 from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
@@ -40,18 +41,18 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
     estimator = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
 
-    random_state = np.random.default_rng(random_state)
+    random_state = check_random_state(random_state)
+    target_stats = Counter(y)
+    class_minority = min(target_stats, key=target_stats.get)
     idx_under = np.empty((0,), dtype=int)
 
     estimators_ = []
     for target_class in np.unique(y):
-        # Randomly get one sample from the majority class
-        # Generate the index to select
         idx_maj = np.flatnonzero(y == target_class)
         idx_maj_sample = idx_maj[
-            random_state.integers(
+            random_state.randint(
                 low=0,
-                high=idx_maj.size,
+                high=target_stats[target_class],
                 size=n_seeds_S,
             )
         ]
