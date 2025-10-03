@@ -43,7 +43,6 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
     random_state = check_random_state(random_state)
     target_stats = Counter(y)
-    class_minority = min(target_stats, key=target_stats.get)
     idx_under = np.empty((0,), dtype=int)
 
     estimators_ = []
@@ -58,12 +57,12 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
         ]
 
         # Create the set C - One majority samples and all minority
-        C_indices = idx_maj_sample
+        C_indices = np.append(np.flatnonzero(y != target_class), idx_maj_sample)
         C_x = _safe_indexing(X, C_indices)
         C_y = _safe_indexing(y, C_indices)
 
         # Create the set S - all majority samples
-        S_indices = np.flatnonzero(y == target_class)
+        S_indices = idx_maj
         S_x = _safe_indexing(X, S_indices)
         S_y = _safe_indexing(y, S_indices)
 
