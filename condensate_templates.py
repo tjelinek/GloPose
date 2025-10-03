@@ -187,9 +187,18 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         if not sequence.is_dir():
             continue
 
-        rgb_folder = sequence / 'rgb'
-        segmentation_folder = sequence / 'mask_visib'
-        scene_gt = sequence / 'scene_gt.json'
+        if 'aria' in split and 'static' in split:
+            rgb_folder = sequence / 'rgb'
+            segmentation_folder = sequence / 'mask_visib_rgb'
+            scene_gt = sequence / 'scene_gt_rgb.json'
+        elif 'quest3' in split and 'static' in split:
+            rgb_folder = sequence / 'gray1'
+            segmentation_folder = sequence / 'mask_visib_gray1'
+            scene_gt = sequence / 'scene_gt_gray1.json'
+        else:
+            rgb_folder = sequence / 'rgb'
+            segmentation_folder = sequence / 'mask_visib'
+            scene_gt = sequence / 'scene_gt.json'
 
         object_id = extract_object_id(scene_gt, 0)[1]
 
