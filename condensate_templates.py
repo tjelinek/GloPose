@@ -367,7 +367,7 @@ def main():
                         choices=['dinov2', 'dinov3'], default='dinov2',
                         help='Descriptor model to use')
     parser.add_argument('--dataset', type=str, required=False,
-                        choices=['hope', 'handal', 'tless', 'lmo', 'icbin'],
+                        choices=['hope', 'handal', 'tless', 'lmo', 'icbin', 'hot3d'],
                         default='hope', help='Dataset to process')
     parser.add_argument('--split', type=str, required=False,
                         default='onboarding_static', help='Dataset split to process')
