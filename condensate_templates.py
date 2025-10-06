@@ -242,8 +242,8 @@ def _compute_stats(X, y, csls_k=10):
 
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
                                      method: str = 'hart_symmetric', descriptor_model='dinov2',
-                                     descriptors_cache_path: Path = None, device='cuda',
-                                     whiten_dim: int = 0, csls_k: int = 10, store_stats: bool = False):
+                                     descriptors_cache_path: Path = None, device='cuda', whiten_dim: int = 0,
+                                     csls_k: int = 10):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -317,12 +317,18 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
     X_np = dino_cls_descriptors.cpu().numpy()
     X_np = _l2n(X_np).astype(np.float32)
+    y_np = object_classes.numpy(force=True)
+
+    mu_w, W_w = _fit_whitener(X_np, out_dim=min(whiten_dim, X_np.shape[1]))
     if whiten_dim and whiten_dim > 0:
-        mu_w, W_w = _fit_whitener(X_np, out_dim=min(whiten_dim, X_np.shape[1]))
         X_for_selection = _apply_whitener(X_np, mu_w, W_w)
+        Xw_np = _apply_whitener(X_np, mu_w, W_w)
     else:
         mu_w, W_w = None, None
+        Xw_np = X_np
         X_for_selection = X_np
+
+    stats = _compute_stats(Xw_np, y_np, csls_k=csls_k)
 
     if method == "hart_imblearn":
         dino_cls_descriptors_np = X_for_selection
@@ -343,12 +349,13 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     result_save_path = cache_base_path / dataset / split
     shutil.rmtree(result_save_path, ignore_errors=True)
 
-    for index in sample_indices:
+    saved_indices = []
+    saved_labels = []
 
+    for index in sample_indices:
         if object_classes[index] == -1:
             continue
-
-        object_id = object_classes[index]
+        object_id = int(object_classes[index].item())
         obj_save_dir = result_save_path / f'obj_{object_id:06d}'
         images_save_dir = obj_save_dir / 'rgb'
         segmentation_save_dir = obj_save_dir / 'mask_visib'
@@ -367,6 +374,25 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
 
         torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
+        saved_indices.append(int(index))
+        saved_labels.append(object_id)
+
+    stats_dir = result_save_path
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    if len(saved_indices) > 0:
+        idx = np.array(saved_indices, dtype=int)
+        y_sel = np.array(saved_labels, dtype=int)
+        payload = {
+            'whitening_mean': None if mu_w is None else torch.from_numpy(mu_w.squeeze(0)),
+            'whitening_W': None if W_w is None else torch.from_numpy(W_w),
+            'template_indices': torch.tensor(idx, dtype=torch.long),
+            'template_labels': torch.tensor(y_sel, dtype=torch.long),
+            'template_csls_avg': stats['template_csls_avg'],
+            'sigma_inv': stats['sigma_inv'],
+            'class_means': {int(k): v for k, v in stats['class_means'].items()},
+        }
+
+        torch.save(payload, stats_dir / 'csls_stats.pt')
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda') \
@@ -442,7 +468,7 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
         perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method, descriptor_model,
                                          descriptors_cache_path=descriptors_cache_path, device=device,
-                                         whiten_dim=whiten_dim, csls_k=csls_k, store_stats=store_stats)
+                                         whiten_dim=whiten_dim, csls_k=csls_k)
 
 
 def main():
@@ -464,8 +490,6 @@ def main():
                         help='PCA-whitening output dim; 0 disables whitening')
     parser.add_argument('--csls_k', type=int, default=10,
                         help='k for CSLS avg computation in stats')
-    parser.add_argument('--store_stats', action='store_true',
-                        help='Store condensation stats (whitening, class means, sigma_inv, CSLS avgs)')
 
     args = parser.parse_args()
 
@@ -480,11 +504,9 @@ def main():
     print(f"Processing {args.dataset}/{args.split} with method {args.method} and descriptor {args.descriptor}")
 
     # Perform condensation for single dataset/split
-    perform_condensation_per_dataset(
-        bop_base, cache_base_path, args.dataset, args.split,
-        args.method, args.descriptor, descriptors_cache_path, args.device,
-        whiten_dim=args.whiten_dim, csls_k=args.csls_k, store_stats=args.store_stats
-    )
+    perform_condensation_per_dataset(bop_base, cache_base_path, args.dataset, args.split, args.method, args.descriptor,
+                                     descriptors_cache_path, args.device, whiten_dim=args.whiten_dim,
+                                     csls_k=args.csls_k)
 
 
 if __name__ == '__main__':
