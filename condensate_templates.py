@@ -13,6 +13,7 @@ from sklearn import clone
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils import _safe_indexing
 from sklearn.utils import check_random_state
+from sklearn.covariance import LedoitWolf
 from tqdm import tqdm
 from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
@@ -164,6 +165,79 @@ def harts_cnn_symmetric(X, y, n_seeds_S=1, random_state=None, max_iterations=100
     if len(selected) == 0:
         return np.array([], dtype=int)
     return np.sort(np.unique(np.concatenate(selected)))
+
+
+def _l2n(x, eps=1e-12):
+    # L2-normalize vectors along the last dimension
+    # Adds epsilon clamp to avoid division by zero
+    if isinstance(x, torch.Tensor):
+        n = torch.norm(x, dim=-1, keepdim=True).clamp_min(eps)
+        return x / n
+    n = np.linalg.norm(x, axis=-1, keepdims=True)
+    n[n < eps] = eps
+    return x / n
+
+
+def _fit_whitener(X, out_dim=0, eps=1e-6):
+    # Compute dataset mean and whitening projection (PCA-whitening)
+    X = _to_np_f32(X)
+    X = _l2n(X)  # Normalize features before PCA
+    mu = X.mean(0, keepdims=True)  # Global mean
+    Xc = X - mu
+    # Perform SVD on mean-centered data
+    U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+    # Optionally keep only top 'out_dim' components for dimensionality reduction
+    if out_dim and out_dim > 0 and out_dim < Vt.shape[0]:
+        Vt = Vt[:out_dim]
+        S = S[:out_dim]
+    # Compute whitening scales (inverse std for each principal component)
+    scale = 1.0 / np.sqrt((S ** 2) / max(1, X.shape[0] - 1) + eps)
+    # Compute whitening matrix: projection + scaling
+    W = (Vt.T * scale).astype(np.float32)
+    # Return mean and whitening matrix
+    return mu.astype(np.float32), W
+
+
+def _apply_whitener(X, mu, W):
+    # Apply whitening: subtract mean, project, and re-normalize
+    X = _to_np_f32(X)
+    Xw = (X - mu) @ W
+    Xw = _l2n(Xw)
+    return Xw.astype(np.float32)
+
+
+def _csls_avg(X, k=10):
+    # Compute average cosine similarity to k nearest neighbors (for CSLS)
+    X = _to_np_f32(X)
+    S = X @ X.T  # Pairwise cosine similarities
+    np.fill_diagonal(S, -np.inf)  # Ignore self-similarity
+    # Find indices of top-k neighbors per sample
+    idx = np.argpartition(-S, kth=min(k, S.shape[1]-1)-1, axis=1)[:, :k]
+    # Average their similarities
+    avgs = (S[np.arange(S.shape[0])[:, None], idx]).mean(axis=1)
+    return avgs.astype(np.float32)
+
+
+def _compute_stats(X_sel, y_sel, csls_k=10):
+    # Compute per-template and per-class statistics for OOD gating and normalization
+    X_sel = _to_np_f32(X_sel)
+    X_sel = _l2n(X_sel)
+    # Compute per-template local CSLS neighborhood averages
+    csls_avg = _csls_avg(X_sel, k=csls_k) if X_sel.shape[0] > 1 else np.zeros((X_sel.shape[0],), dtype=np.float32)
+    # Estimate tied covariance using Ledoit–Wolf shrinkage (robust in high-d)
+    clf = LedoitWolf().fit(X_sel)
+    Sigma_inv = np.linalg.pinv(clf.covariance_).astype(np.float32)
+    # Compute class means for Mahalanobis distance
+    classes = np.unique(y_sel)
+    mu_c = {}
+    for c in classes:
+        mu_c[int(c)] = X_sel[y_sel == c].mean(0).astype(np.float32)
+    # Return all computed stats in torch format
+    return {
+        'template_csls_avg': torch.from_numpy(csls_avg),
+        'sigma_inv': torch.from_numpy(Sigma_inv),
+        'class_means': {k: torch.from_numpy(v) for k, v in mu_c.items()},
+    }
 
 
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
