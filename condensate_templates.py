@@ -242,7 +242,8 @@ def _compute_stats(X_sel, y_sel, csls_k=10):
 
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
                                      method: str = 'hart_symmetric', descriptor_model='dinov2',
-                                     descriptors_cache_path: Path = None, device='cuda'):
+                                     descriptors_cache_path: Path = None, device='cuda',
+                                     whiten_dim: int = 0, csls_k: int = 10, store_stats: bool = False):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -412,7 +413,8 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
-                                      descriptors_cache_path=None, descriptor_model='dinov2', device='cuda'):
+                                      descriptors_cache_path=None, descriptor_model='dinov2', device='cuda',
+                                      whiten_dim: int = 0, csls_k: int = 10, store_stats: bool = False):
     sequences = [
         ('hot3d', 'object_ref_aria_static_scenewise'),
         ('hot3d', 'object_ref_quest3_static_scenewise'),
@@ -429,7 +431,8 @@ def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path
 
     for dataset, split in tqdm(sequences, desc="Processing datasets", total=len(sequences)):
         perform_condensation_per_dataset(bop_base_path, cache_base_path, dataset, split, method, descriptor_model,
-                                         descriptors_cache_path=descriptors_cache_path, device=device)
+                                         descriptors_cache_path=descriptors_cache_path, device=device,
+                                         whiten_dim=whiten_dim, csls_k=csls_k, store_stats=store_stats)
 
 
 def main():
@@ -447,11 +450,19 @@ def main():
                         default='onboarding_static', help='Dataset split to process')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Device to use (default: cuda)')
+    parser.add_argument('--whiten_dim', type=int, default=0,
+                        help='PCA-whitening output dim; 0 disables whitening')
+    parser.add_argument('--csls_k', type=int, default=10,
+                        help='k for CSLS avg computation in stats')
+    parser.add_argument('--store_stats', action='store_true',
+                        help='Store condensation stats (whitening, class means, sigma_inv, CSLS avgs)')
 
     args = parser.parse_args()
 
     # Define paths
     experiment_name = f'1nn-{args.method}-{args.descriptor}'
+    if args.whiten_dim > 0:
+        experiment_name += '-whitening'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
     bop_base = Path('/mnt/personal/jelint19/data/bop')
@@ -461,7 +472,8 @@ def main():
     # Perform condensation for single dataset/split
     perform_condensation_per_dataset(
         bop_base, cache_base_path, args.dataset, args.split,
-        args.method, args.descriptor, descriptors_cache_path, args.device
+        args.method, args.descriptor, descriptors_cache_path, args.device,
+        whiten_dim=args.whiten_dim, csls_k=args.csls_k, store_stats=args.store_stats
     )
 
 
