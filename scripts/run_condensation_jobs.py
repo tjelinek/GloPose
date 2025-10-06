@@ -21,6 +21,13 @@ DESCRIPTORS = [
     'dinov3'
 ]
 
+WHITEN_DIM = [
+    0,
+    64,
+    128,
+    256
+]
+
 DATASETS = [
     ('hope', 'onboarding_static'),
     ('hope', 'onboarding_dynamic'),
@@ -36,7 +43,7 @@ DATASETS = [
 ]
 
 
-def submit_job(method, descriptor, dataset, split):
+def submit_job(method, descriptor, whiten_dim, dataset, split):
     """Submit a single SLURM job."""
     job_name = f"cond-{method}-{descriptor}-{dataset}-{split}"
     log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}"
@@ -51,6 +58,7 @@ def submit_job(method, descriptor, dataset, split):
         'scripts/compute_condensations.batch',  # Your SLURM script name
         '--method', method,
         '--descriptor', descriptor,
+        '--whiten_dim', whiten_dim,
         '--dataset', dataset,
         '--split', split,
         '--device', 'cpu',
@@ -70,13 +78,13 @@ def submit_job(method, descriptor, dataset, split):
 def main():
     """Submit all job combinations."""
     submitted_jobs = []
-    total_jobs = len(METHODS) * len(DESCRIPTORS) * len(DATASETS)
+    total_jobs = len(METHODS) * len(DESCRIPTORS) * len(WHITEN_DIM) * len(DATASETS)
 
     print(f"Submitting {total_jobs} jobs...")
     print("=" * 50)
 
-    for method, descriptor, (dataset, split) in product(METHODS, DESCRIPTORS, DATASETS):
-        job_id = submit_job(method, descriptor, dataset, split)
+    for method, descriptor, whiten_dim, (dataset, split) in product(METHODS, DESCRIPTORS, DATASETS):
+        job_id = submit_job(method, descriptor, whiten_dim, dataset, split)
         if job_id:
             submitted_jobs.append(job_id)
 

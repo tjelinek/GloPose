@@ -496,7 +496,7 @@ def main():
     # Define paths
     experiment_name = f'1nn-{args.method}-{args.descriptor}'
     if args.whiten_dim > 0:
-        experiment_name += '-whitening'
+        experiment_name += f'-whitening_{args.whiten_dim}'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
     bop_base = Path('/mnt/personal/jelint19/data/bop')
