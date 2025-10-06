@@ -315,6 +315,15 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = object_classes[permutation]
     dino_cls_descriptors = dino_cls_descriptors[torch.tensor(permutation).to(device)]
 
+    X_np = dino_cls_descriptors.cpu().numpy()
+    X_np = _l2n(X_np).astype(np.float32)
+    if whiten_dim and whiten_dim > 0:
+        mu_w, W_w = _fit_whitener(X_np, out_dim=min(whiten_dim, X_np.shape[1]))
+        X_for_selection = _apply_whitener(X_np, mu_w, W_w)
+    else:
+        mu_w, W_w = None, None
+        X_for_selection = X_np
+
     if method == "hart_imblearn":
         dino_cls_descriptors_np = dino_cls_descriptors.numpy(force=True)
         dino_cls_descriptor_np = np.append(dino_cls_descriptors_np, np.zeros([1, 1024]), axis=0)
