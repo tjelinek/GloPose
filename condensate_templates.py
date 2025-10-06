@@ -218,20 +218,20 @@ def _csls_avg(X, k=10):
     return avgs.astype(np.float32)
 
 
-def _compute_stats(X_sel, y_sel, csls_k=10):
+def _compute_stats(X, y, csls_k=10):
     # Compute per-template and per-class statistics for OOD gating and normalization
-    X_sel = _to_np_f32(X_sel)
-    X_sel = _l2n(X_sel)
+    X = _to_np_f32(X)
+    X = _l2n(X)
     # Compute per-template local CSLS neighborhood averages
-    csls_avg = _csls_avg(X_sel, k=csls_k) if X_sel.shape[0] > 1 else np.zeros((X_sel.shape[0],), dtype=np.float32)
+    csls_avg = _csls_avg(X, k=csls_k) if X.shape[0] > 1 else np.zeros((X.shape[0],), dtype=np.float32)
     # Estimate tied covariance using Ledoit–Wolf shrinkage (robust in high-d)
-    clf = LedoitWolf().fit(X_sel)
+    clf = LedoitWolf().fit(X)
     Sigma_inv = np.linalg.pinv(clf.covariance_).astype(np.float32)
     # Compute class means for Mahalanobis distance
-    classes = np.unique(y_sel)
+    classes = np.unique(y)
     mu_c = {}
     for c in classes:
-        mu_c[int(c)] = X_sel[y_sel == c].mean(0).astype(np.float32)
+        mu_c[int(c)] = X[y == c].mean(0).astype(np.float32)
     # Return all computed stats in torch format
     return {
         'template_csls_avg': torch.from_numpy(csls_avg),
