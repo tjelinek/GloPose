@@ -45,8 +45,8 @@ DATASETS = [
 
 def submit_job(method, descriptor, whiten_dim, dataset, split):
     """Submit a single SLURM job."""
-    job_name = f"cond-{method}-{descriptor}-{dataset}-{split}"
-    log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}"
+    job_name = f"cond-{method}-{descriptor}-{dataset}-{split}_whiten-dim{whiten_dim}"
+    log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}_whiten-dim{whiten_dim}"
 
     log_path = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
     log_path.mkdir(parents=True, exist_ok=True)
@@ -58,7 +58,7 @@ def submit_job(method, descriptor, whiten_dim, dataset, split):
         'scripts/compute_condensations.batch',  # Your SLURM script name
         '--method', method,
         '--descriptor', descriptor,
-        '--whiten_dim', whiten_dim,
+        '--whiten_dim', str(whiten_dim),
         '--dataset', dataset,
         '--split', split,
         '--device', 'cpu',
@@ -83,7 +83,7 @@ def main():
     print(f"Submitting {total_jobs} jobs...")
     print("=" * 50)
 
-    for method, descriptor, whiten_dim, (dataset, split) in product(METHODS, DESCRIPTORS, DATASETS):
+    for method, descriptor, whiten_dim, (dataset, split) in product(METHODS, DESCRIPTORS, WHITEN_DIM, DATASETS):
         job_id = submit_job(method, descriptor, whiten_dim, dataset, split)
         if job_id:
             submitted_jobs.append(job_id)
