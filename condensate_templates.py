@@ -297,7 +297,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                 dino_cls_descriptor, dino_dense_descriptor = dino_descriptor.get_detections_from_files(image_path,
                                                                                                        seg_path)
                 if cache_file_path:
-                    torch.save(dino_cls_descriptor.cpu(), cache_file_path)
+                    torch.save(dino_cls_descriptor.detach().cpu(), cache_file_path)
 
             all_images.append(image_path)
             all_segmentations.append(seg_path)
@@ -373,7 +373,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         shutil.copy2(image_path, images_save_dir / new_image_name)
         shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
 
-        torch.save(dino_cls_descriptors[index].cpu(), descriptors_save_dir / descriptor_name)
+        torch.save(dino_cls_descriptors[index].detach().cpu(), descriptors_save_dir / descriptor_name)
         saved_indices.append(int(index))
         saved_labels.append(object_id)
 
