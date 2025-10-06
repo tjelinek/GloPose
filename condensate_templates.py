@@ -373,7 +373,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         shutil.copy2(image_path, images_save_dir / new_image_name)
         shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
 
-        torch.save(dino_cls_descriptors[index].detach().cpu(), descriptors_save_dir / descriptor_name)
+        cls_descriptor_to_save = dino_cls_descriptors[index].detach().cpu()
+        torch.save(cls_descriptor_to_save, descriptors_save_dir / descriptor_name)
         saved_indices.append(int(index))
         saved_labels.append(object_id)
 
