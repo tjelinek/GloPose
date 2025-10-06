@@ -325,17 +325,18 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         X_for_selection = X_np
 
     if method == "hart_imblearn":
-        dino_cls_descriptors_np = dino_cls_descriptors.numpy(force=True)
-        dino_cls_descriptor_np = np.append(dino_cls_descriptors_np, np.zeros([1, 1024]), axis=0)
-        object_classes = np.append(object_classes.numpy(force=True), -1)
-        cnn.fit_resample(dino_cls_descriptor_np, object_classes)
+        dino_cls_descriptors_np = X_for_selection
+        dino_cls_dimension = dino_cls_descriptors_np.shape[1]
+        dino_cls_descriptor_np = np.append(dino_cls_descriptors_np, np.zeros([1, dino_cls_dimension]), axis=0)
+        object_classes_np = np.append(object_classes.cpu().numpy(), -1)
+        cnn.fit_resample(dino_cls_descriptor_np, object_classes_np)
         sample_indices = cnn.sample_indices_
     elif method == 'hart_imblearn_adapted':
-        sample_indices = imblearn_fitresample_adapted(dino_cls_descriptors, object_classes)
+        sample_indices = imblearn_fitresample_adapted(torch.from_numpy(X_for_selection), object_classes)
     elif method == "hart_symmetric":
-        sample_indices = harts_cnn_symmetric(dino_cls_descriptors, object_classes)
+        sample_indices = harts_cnn_symmetric(torch.from_numpy(X_for_selection), object_classes)
     elif method == 'hart':
-        sample_indices = harts_cnn_original(dino_cls_descriptors, object_classes)
+        sample_indices = harts_cnn_original(torch.from_numpy(X_for_selection), object_classes)
     else:
         raise ValueError(f"Method {method} not recognized")
 
