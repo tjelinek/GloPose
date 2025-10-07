@@ -1,6 +1,7 @@
 import shutil
 import sys
 import argparse
+import warnings
 from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -23,6 +24,7 @@ from utils.bop_challenge import extract_object_id
 sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
 
+warnings.filterwarnings('ignore', message='The number of unique classes is greater than 50%', category=UserWarning)
 
 def _to_np_f32(X):
     if torch is not None and isinstance(X, torch.Tensor):
