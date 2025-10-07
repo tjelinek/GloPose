@@ -7,8 +7,6 @@
 #SBATCH --mem=32G
 #SBATCH --partition=h200
 #SBATCH --job-name=PrecomputeCNOSDetections
-#SBATCH --err=/mnt/personal/jelint19/results/logs/PrecomputeCNOSDetections.err
-#SBATCH --out=/mnt/personal/jelint19/results/logs/PrecomputeCNOSDetections.out
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
@@ -45,4 +43,6 @@ if [[ -n "${detector}" ]]; then
 fi
 
 export HYDRA_FULL_ERROR=1
-"${cmd[@]}"
+
+# Redirect stdout to stderr so everything goes to the error log
+"${cmd[@]}" 2>&1
