@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --partition=cpu
+#SBATCH --partition=amd
 
 modules_file=~/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
