@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
-import pycolmap
 import torch
 from kornia.morphology import erosion, dilation
 import torch.nn.functional as F
@@ -185,22 +184,3 @@ def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\
     cy = intrinsics[..., 1, 2]
 
     return fx, fy, cx, cy
-
-
-def colmap_K_params_vec(camera_K, camera_type=pycolmap.CameraModelId.PINHOLE):
-    if camera_type == pycolmap.CameraModelId.PINHOLE:
-        f_x = float(camera_K[0, 0])
-        f_y = float(camera_K[1, 1])
-        c_x = float(camera_K[0, 2])
-        c_y = float(camera_K[1, 2])
-        params_vec = [f_x, f_y, c_x, c_y]
-    elif camera_type == pycolmap.CameraModelId.SIMPLE_PINHOLE:
-        f_x = float(camera_K[0, 0])
-        f_y = float(camera_K[1, 1])
-        c_x = float(camera_K[0, 2])
-        c_y = float(camera_K[1, 2])
-        params_vec = [(f_x + f_y) / 2., c_x, c_y]
-    else:
-        raise ValueError(f'Unknown camera model {camera_type}')
-
-    return params_vec

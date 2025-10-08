@@ -18,7 +18,7 @@ from tqdm import tqdm
 from data_providers.flow_provider import FlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from utils.conversions import Se3_to_Rigid3d
-from utils.general import colmap_K_params_vec
+from pose.colmap_utils import colmap_K_params_vec
 from utils.image_utils import get_intrinsics_from_exif
 
 

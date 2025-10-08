@@ -11,7 +11,7 @@ from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
-from utils.general import colmap_K_params_vec
+from pose.colmap_utils import colmap_K_params_vec
 from utils.image_utils import otsu_threshold
 
 

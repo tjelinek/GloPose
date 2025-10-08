@@ -122,3 +122,22 @@ def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.R
         rec1.add_point3D(point3D.xyz, new_track, point3D.color)
 
     return rec1
+
+
+def colmap_K_params_vec(camera_K, camera_type=pycolmap.CameraModelId.PINHOLE):
+    if camera_type == pycolmap.CameraModelId.PINHOLE:
+        f_x = float(camera_K[0, 0])
+        f_y = float(camera_K[1, 1])
+        c_x = float(camera_K[0, 2])
+        c_y = float(camera_K[1, 2])
+        params_vec = [f_x, f_y, c_x, c_y]
+    elif camera_type == pycolmap.CameraModelId.SIMPLE_PINHOLE:
+        f_x = float(camera_K[0, 0])
+        f_y = float(camera_K[1, 1])
+        c_x = float(camera_K[0, 2])
+        c_y = float(camera_K[1, 2])
+        params_vec = [(f_x + f_y) / 2., c_x, c_y]
+    else:
+        raise ValueError(f'Unknown camera model {camera_type}')
+
+    return params_vec
