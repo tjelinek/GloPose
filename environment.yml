@@ -1,0 +1,31 @@
+name: glopose
+channels:
+  - conda-forge
+channel_priority: strict
+dependencies:
+  - python=3.13
+  - pip
+  - numpy>=2
+  - kaolin>=0.17
+  - colmap==3.12.6
+  - pillow
+  - networkx
+  - imageio
+  - pip:
+      - git+https://github.com/thodan/bop_toolkit.git#egg=bop_toolkit_lib[eval_coco,eval_gpu]
+      - -e git+https://github.com/Parskatt/RoMa.git#egg=romatch
+      - -e git+https://github.com/UniFlowMatch/UFM.git#egg=uniflowmatch&subdirectory=UniCeption
+      - -e git+https://github.com/UniFlowMatch/UFM.git#egg=uniflowmatch
+      - git+https://github.com/facebookresearch/segment-anything.git
+      - git+https://github.com/facebookresearch/hand_tracking_toolkit.git
+      - ultralytics
+      - -e git+https://github.com/facebookresearch/sam2.git#egg=sam2
+      - wandb
+      - "rerun-sdk>=0.21"
+      - kornia
+      - kornia_moons
+      - gradio
+      - huggingface_hub
+      - torchvision
+      - tqdm
+      - pycolmap==3.12.6
