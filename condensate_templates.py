@@ -337,8 +337,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         dino_cls_descriptors_np = X_for_selection
         dino_cls_dimension = dino_cls_descriptors_np.shape[1]
         dino_cls_descriptor_np = np.append(dino_cls_descriptors_np, np.zeros([1, dino_cls_dimension]), axis=0)
-        object_classes_np = np.append(object_classes.cpu().numpy(), -1)
-        cnn.fit_resample(dino_cls_descriptor_np, object_classes_np)
+        object_classes = np.append(object_classes.cpu().numpy(), -1)
+        cnn.fit_resample(dino_cls_descriptor_np, object_classes)
         sample_indices = cnn.sample_indices_
     elif method == 'hart_imblearn_adapted':
         sample_indices = imblearn_fitresample_adapted(torch.from_numpy(X_for_selection), object_classes)
