@@ -19,7 +19,7 @@ from hydra.utils import instantiate
 from kornia.geometry import Se3
 from tqdm import tqdm
 
-from condensate_templates import get_descriptors_for_condensed_templates
+from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
 
@@ -109,14 +109,23 @@ class BOPChallengePosePredictor:
             template_images = {
                 obj_id: view_graph.get_concatenated_images() for obj_id, view_graph in view_graphs.items()
             }
+            template_segmentations = {
+                obj_id: view_graph.get_concatenated_segmentations() for obj_id, view_graph in view_graphs.items()
+            }
+
+            template_data = TemplateBank(images=template_images, cls_desc=template_cls_descriptors,
+                                         masks=template_segmentations)
         elif templates_source == 'cnns':
-            template_images, template_segmentations, template_cls_descriptors = \
-                get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor, self.config.device)
+            template_data = get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor,
+                                                                    self.config.device)
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
             template_images, template_segmentations, template_cls_descriptors = \
                 get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor, self.config.device)
+
+            template_data = TemplateBank(images=template_images, cls_desc=template_cls_descriptors,
+                                         masks=template_segmentations)
         else:
             raise ValueError(f'Unknown templates_source {templates_source}')
 
@@ -166,7 +175,7 @@ class BOPChallengePosePredictor:
                 pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
-            detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_cls_descriptors)
+            detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_data)
 
             detections_duration = time.time() - detections_start_time
 
@@ -183,7 +192,7 @@ class BOPChallengePosePredictor:
 
                 if pose_logger is not None:
                     pose_logger.visualize_detections(detections.masks, detection_mask_idx)
-                    pose_logger.visualize_nearest_neighbors(image, template_images, detection_mask_idx, detections,
+                    pose_logger.visualize_nearest_neighbors(image, template_data.images, detection_mask_idx, detections,
                                                             detections_scores)
                     pose_logger.rerun_sequence_id += 1
 
@@ -239,7 +248,7 @@ class BOPChallengePosePredictor:
         results_csv_path = self.write_folder / 'detection_results.csv'
         update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
 
-    def proces_custom_sam_detections(self, cnos_detections, view_graph_descriptors):
+    def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank):
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
 
