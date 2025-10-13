@@ -409,6 +409,13 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
 
     obj_dirs = sorted([d for d in path_to_detections.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
+    stats_file = path_to_detections / 'csls_stats.pt'
+
+    apply_whitening = 'whitening' in path_to_detections.stem
+    stats = torch.load(stats_file, weights_only=True)
+    whitening_mean = stats['whitening_mean']
+    whitening_W = stats['whitening_W']
+
     for obj_dir in tqdm(obj_dirs, desc="Loading templates", total=len(obj_dirs)):
 
         obj_id = int(obj_dir.stem.split('_')[1]) if 'obj' in obj_dir.stem else int(obj_dir.stem)
@@ -440,10 +447,17 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             segmentations_dict[obj_id].append(mask_tensor)
 
             if descriptor_file.exists():
-                cls_descriptor = torch.load(descriptor_file, weights_only=True)
+                cls_descriptor = torch.load(descriptor_file, map_location=device, weights_only=True)
             else:
                 cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
-            cls_descriptors_dict[obj_id].append(cls_descriptor.squeeze(0).to(device))
+
+            x = cls_descriptor.squeeze(0).to(device, dtype=torch.float32)
+            x = _l2n(x)
+
+            if apply_whitening:
+                x = _apply_whitener(x, whitening_mean, whitening_W)
+
+            cls_descriptors_dict[obj_id].append(x)
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
