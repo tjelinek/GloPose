@@ -219,10 +219,15 @@ def _fit_whitener(X, out_dim=0, eps=1e-6):
 
 def _apply_whitener(X, mu, W):
     # Apply whitening: subtract mean, project, and re-normalize
-    X = _to_np_f32(X)
-    Xw = (X - mu) @ W
-    Xw = _l2n(Xw)
-    return Xw.astype(np.float32)
+    if isinstance(X, torch.Tensor):
+        Xw = (X - mu) @ W
+        Xw = _l2n(Xw)
+        return Xw.to(torch.float32)
+    else:
+        X = _to_np_f32(X)
+        Xw = (X - mu) @ W
+        Xw = _l2n(Xw)
+        return Xw.astype(np.float32)
 
 
 def _csls_avg(X, k=10):
