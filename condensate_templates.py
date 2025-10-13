@@ -407,6 +407,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)
     cls_descriptors_dict: Dict[int, Any] = defaultdict(list)
+    patch_descriptors_dict: Dict[int, Any] = defaultdict(list)
 
     obj_dirs = sorted([d for d in path_to_detections.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
@@ -468,10 +469,12 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                 x = _apply_whitener(x, mu_w, W_w)
 
             cls_descriptors_dict[obj_id].append(x)
+            patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0))
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
         cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
+        patch_descriptors_dict[obj_id] = torch.stack(patch_descriptors_dict[obj_id])
 
     template_thresholds: Dict[int, torch.Tensor] = {}
     for obj_id, X in cls_descriptors_dict.items():
@@ -507,6 +510,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
         images_dict,
         segmentations_dict,
         cls_descriptors_dict,
+        patch_descriptors_dict,
         template_thresholds,
         mu_w,
         W_w,
