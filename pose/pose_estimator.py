@@ -19,7 +19,7 @@ from hydra.utils import instantiate
 from kornia.geometry import Se3
 from tqdm import tqdm
 
-from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank
+from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
 
@@ -175,7 +175,9 @@ class BOPChallengePosePredictor:
                 pose_logger.visualize_image(image)
 
             detections_start_time = time.time()
-            detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_data)
+
+            detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_data, image,
+                                                                              dino_descriptor)
 
             detections_duration = time.time() - detections_start_time
 
@@ -248,11 +250,10 @@ class BOPChallengePosePredictor:
         results_csv_path = self.write_folder / 'detection_results.csv'
         update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
 
-    def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank):
+    def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank, image, dino_descriptor,
+                                     recompute_default_descriptors=True):
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
-
-        default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
 
         default_detections_masks = []
         for detection in cnos_detections['masks']:
@@ -260,6 +261,19 @@ class BOPChallengePosePredictor:
             detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.device)
             default_detections_masks.append(detection_mask_tensor)
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
+
+        if recompute_default_descriptors:
+            detections_dict = {
+                'masks': default_detections_masks,
+                'boxes': ops.masks_to_boxes(default_detections_masks.to(torch.float)).to(torch.long)
+            }
+            cnos_detections_class_format = Detections(detections_dict)
+            image_np = image.permute(1, 2, 0).numpy(force=True)
+            default_detections_cls_descriptors, _ = dino_descriptor(image_np, cnos_detections_class_format)
+        else:
+            default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+
+        default_detections_cls_descriptors = _l2n(default_detections_cls_descriptors)
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
             compute_templates_similarity_scores(template_data.cls_desc, default_detections_cls_descriptors,
