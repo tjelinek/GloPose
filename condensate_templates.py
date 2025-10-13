@@ -401,7 +401,8 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda',
                                             threshold_quantile: float = 0.05, default_threshold: float = 0.0,
-                                            mahalanobis_quantile: float = 0.95, force_recompute_descriptors: bool=True):
+                                            mahalanobis_quantile: float = 0.95,
+                                            force_recompute_descriptors: bool = True):
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
