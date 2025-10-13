@@ -399,8 +399,13 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(payload, stats_dir / 'csls_stats.pt')
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda') \
-        -> Tuple[Dict[int, torch.Tensor], ...]:
+def get_descriptors_for_condensed_templates(
+    path_to_detections: Path,
+    descriptor_name: str,
+    device: str = 'cuda',
+    threshold_quantile: float = 0.05,
+    default_threshold: float = 0.0,
+) -> Tuple[Dict[int, torch.Tensor], ...]:
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
