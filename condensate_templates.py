@@ -4,7 +4,7 @@ import argparse
 import warnings
 from collections import defaultdict, Counter
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
