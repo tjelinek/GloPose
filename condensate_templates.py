@@ -3,6 +3,7 @@ import sys
 import argparse
 import warnings
 from collections import defaultdict, Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -25,6 +26,21 @@ sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
 
 warnings.filterwarnings('ignore', message='The number of unique classes is greater than 50%', category=UserWarning)
+
+
+@dataclass
+class TemplateBank:
+    images: Dict[int, torch.Tensor] = None
+    masks: Dict[int, torch.Tensor] = None
+    cls_desc: Dict[int, torch.Tensor] = None
+    patch_desc: Dict[int, torch.Tensor] = None
+    template_thresholds: Dict[int, torch.Tensor] = None
+    whitening_mean: Optional[torch.Tensor] = None
+    whitening_W: Optional[torch.Tensor] = None
+    sigma_inv: Optional[torch.Tensor] = None
+    class_means: Optional[Dict[int, torch.Tensor]] = None
+    maha_thresh_per_class: Optional[Dict[int, torch.Tensor]] = None
+    maha_thresh_global: Optional[torch.Tensor] = None
 
 
 def _to_np_f32(X):
@@ -402,7 +418,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda',
                                             threshold_quantile: float = 0.05, default_threshold: float = 0.0,
                                             mahalanobis_quantile: float = 0.95,
-                                            force_recompute_descriptors: bool = True):
+                                            force_recompute_descriptors: bool = True) -> TemplateBank:
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
@@ -507,18 +523,18 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
         mahalanobis_thresholds = None
         mahalanobis_threshold_global = None
 
-    return (
-        images_dict,
-        segmentations_dict,
-        cls_descriptors_dict,
-        patch_descriptors_dict,
-        template_thresholds,
-        mu_w,
-        W_w,
-        sigma_inv,
-        class_means,
-        mahalanobis_thresholds,
-        mahalanobis_threshold_global,
+    return TemplateBank(
+        images=images_dict,
+        masks=segmentations_dict,
+        cls_desc=cls_descriptors_dict,
+        patch_desc=patch_descriptors_dict,
+        template_thresholds=template_thresholds,
+        whitening_mean=mu_w,
+        whitening_W=W_w,
+        sigma_inv=sigma_inv,
+        class_means=class_means,
+        maha_thresh_per_class=mahalanobis_thresholds,
+        maha_thresh_global=mahalanobis_threshold_global,
     )
 
 
