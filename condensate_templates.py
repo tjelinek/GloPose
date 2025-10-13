@@ -405,7 +405,7 @@ def get_descriptors_for_condensed_templates(
     device: str = 'cuda',
     threshold_quantile: float = 0.05,
     default_threshold: float = 0.0,
-) -> Tuple[Dict[int, torch.Tensor], ...]:
+    mahalanobis_quantile: float = 0.95):
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
@@ -415,11 +415,20 @@ def get_descriptors_for_condensed_templates(
     obj_dirs = sorted([d for d in path_to_detections.iterdir() if d.is_dir() and d.name.startswith('obj_')])
 
     stats_file = path_to_detections / 'csls_stats.pt'
+    stats = torch.load(stats_file, map_location=device, weights_only=True)
+    mu_w = stats.get('whitening_mean', None)
+    W_w = stats.get('whitening_W', None)
+    sigma_inv = stats.get('sigma_inv', None)
+    class_means = stats.get('class_means', None)
 
-    apply_whitening = 'whitening' in path_to_detections.stem
-    stats = torch.load(stats_file, weights_only=True)
-    whitening_mean = stats['whitening_mean']
-    whitening_W = stats['whitening_W']
+    apply_whitening = (mu_w is not None) and (W_w is not None)
+    if apply_whitening:
+        mu_w = mu_w.to(device=device, dtype=torch.float32).view(1, -1)
+        W_w = W_w.to(device=device, dtype=torch.float32)
+    if sigma_inv is not None:
+        sigma_inv = sigma_inv.to(device=device, dtype=torch.float32)
+    if class_means is not None:
+        class_means = {int(k): v.to(device=device, dtype=torch.float32) for k, v in class_means.items()}
 
     for obj_dir in tqdm(obj_dirs, desc="Loading templates", total=len(obj_dirs)):
 
@@ -460,7 +469,7 @@ def get_descriptors_for_condensed_templates(
             x = _l2n(x)
 
             if apply_whitening:
-                x = _apply_whitener(x, whitening_mean, whitening_W)
+                x = _apply_whitener(x, mu_w, W_w)
 
             cls_descriptors_dict[obj_id].append(x)
 
@@ -468,7 +477,48 @@ def get_descriptors_for_condensed_templates(
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
         cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
 
-    return images_dict, segmentations_dict, cls_descriptors_dict
+    template_thresholds: Dict[int, torch.Tensor] = {}
+    for obj_id, X in cls_descriptors_dict.items():
+        if X.shape[0] <= 1:
+            template_thresholds[obj_id] = torch.full((X.shape[0],), float(default_threshold), device=X.device)
+            continue
+        S = X @ X.T
+        diag = torch.eye(S.shape[0], device=S.device, dtype=S.dtype)
+        S = S - 1e9 * diag
+        vals, _ = torch.sort(S, dim=1, descending=True)
+        per_template_vals = vals[:, 0: max(1, min(vals.shape[1]-1, X.shape[0]-1))]
+        q = torch.quantile(per_template_vals, q=threshold_quantile, dim=1, keepdim=False)
+        template_thresholds[obj_id] = q
+
+    mahalanobis_thresholds: Optional[Dict[int, torch.Tensor]] = None
+    mahalanobis_threshold_global: Optional[torch.Tensor] = None
+    if (sigma_inv is not None) and (class_means is not None):
+        all_m = []
+        for obj_id, X in cls_descriptors_dict.items():
+            mu = class_means.get(int(obj_id), X.mean(dim=0, keepdim=True))
+            diff = X - mu
+            m = (diff @ sigma_inv * diff).sum(dim=1)
+            mahalanobis_thresholds[obj_id] = torch.quantile(m, mahalanobis_quantile)
+            all_m.append(m)
+        if len(all_m) > 0:
+            all_m = torch.cat(all_m, dim=0)
+            mahalanobis_threshold_global = torch.quantile(all_m, mahalanobis_quantile)
+    else:
+        mahalanobis_thresholds = None
+        mahalanobis_threshold_global = None
+
+    return (
+        images_dict,
+        segmentations_dict,
+        cls_descriptors_dict,
+        template_thresholds,
+        mu_w,
+        W_w,
+        sigma_inv,
+        class_means,
+        mahalanobis_thresholds,
+        mahalanobis_threshold_global,
+    )
 
 
 def perform_condensation_for_datasets(bop_base_path: Path, cache_base_path: Path, method: str,
