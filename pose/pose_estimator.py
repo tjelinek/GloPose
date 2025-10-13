@@ -19,7 +19,7 @@ from hydra.utils import instantiate
 from kornia.geometry import Se3
 from tqdm import tqdm
 
-from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n
+from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n, _apply_whitener
 from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
 from data_providers.frame_provider import PrecomputedFrameProvider
 
@@ -272,6 +272,11 @@ class BOPChallengePosePredictor:
             default_detections_cls_descriptors, _ = dino_descriptor(image_np, cnos_detections_class_format)
         else:
             default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+
+        if template_data.whitening_mean is not None and template_data.whitening_W is not None:
+            mu_w = template_data.whitening_mean
+            W_w = template_data.whitening_W
+            default_detections_cls_descriptors = _apply_whitener(default_detections_cls_descriptors, mu_w, W_w)
 
         default_detections_cls_descriptors = _l2n(default_detections_cls_descriptors)
 
