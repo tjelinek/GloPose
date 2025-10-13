@@ -399,13 +399,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(payload, stats_dir / 'csls_stats.pt')
 
 
-def get_descriptors_for_condensed_templates(
-    path_to_detections: Path,
-    descriptor_name: str,
-    device: str = 'cuda',
-    threshold_quantile: float = 0.05,
-    default_threshold: float = 0.0,
-    mahalanobis_quantile: float = 0.95):
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda',
+                                            threshold_quantile: float = 0.05, default_threshold: float = 0.0,
+                                            mahalanobis_quantile: float = 0.95, force_recompute_descriptors: bool=True):
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
@@ -460,7 +456,7 @@ def get_descriptors_for_condensed_templates(
             mask_tensor = torch.from_numpy(mask_array).to(device)
             segmentations_dict[obj_id].append(mask_tensor)
 
-            if descriptor_file.exists():
+            if descriptor_file.exists() and not force_recompute_descriptors:
                 cls_descriptor = torch.load(descriptor_file, map_location=device, weights_only=True)
             else:
                 cls_descriptor, patch_descriptor = descriptor.get_detections_from_files(rgb_file, mask_file)
