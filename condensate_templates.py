@@ -506,7 +506,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
         q = torch.quantile(per_template_vals, q=threshold_quantile, dim=1, keepdim=False)
         template_thresholds[obj_id] = q
 
-    mahalanobis_thresholds: Optional[Dict[int, torch.Tensor]] = None
+    mahalanobis_thresholds: Optional[Dict[int, torch.Tensor]] = {}
     mahalanobis_threshold_global: Optional[torch.Tensor] = None
     if (sigma_inv is not None) and (class_means is not None):
         all_m = []
