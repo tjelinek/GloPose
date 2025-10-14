@@ -69,7 +69,9 @@ def main():
         1
     ]
     similarity_metrics = [
-        'cosine'
+        'cosine',
+        'csls',
+        'mahalanobis'
     ]
 
     total_jobs = 0
