@@ -496,18 +496,22 @@ def main():
 
     parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], default='dinov2')
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], default='cnns')
-    parser.add_argument('--condensation_source', default='1nn-hart_imblearn')
+    parser.add_argument('--condensation_source', default='1nn-hart')
     parser.add_argument('--detector', default='sam')
     parser.add_argument('--certainty', type=float, default=None)
     parser.add_argument('--experiment_name', default=None)
     parser.add_argument('--use_enhanced_nms', type=lambda x: bool(int(x)), default=True)
-    parser.add_argument('--similarity_metric', default='cosine')
+    parser.add_argument('--descriptor_mask_detections', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--similarity_metric', default='csls')
 
     args = parser.parse_args()
 
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
+        # (
+        #     'hot3d', 'test', 'onboarding_static', None
+        # ),
         (
             'hope', 'test', 'onboarding_static',
             bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
@@ -564,7 +568,7 @@ def main():
             view_graph_location = None
             if not args.condensation_source:
                 parser.error("--condensation_source is required when --templates_source is 'cnns'")
-            condensation_source = f"{args.condensation_source}-{args.descriptor}"
+            condensation_source = f"{args.condensation_source}-{args.descriptor}-whitening_256"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
             aggregation = 'max'
