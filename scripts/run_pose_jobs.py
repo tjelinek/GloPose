@@ -5,8 +5,20 @@ import argparse
 
 def submit_job(descriptor, templates_source, condensation_source=None, certainty=None, detector='sam',
                experiment_name=None, use_enhanced_nms=1, similarity_metric='cosine'):
+
+    job_name = f"{descriptor}_{templates_source}_{detector}"
+    if condensation_source:
+        job_name += f"_{condensation_source}"
+    if certainty is not None:
+        certainty_str = f"{certainty:.2f}".replace('.', '')
+        job_name += f"_cert{certainty_str}"
+    if experiment_name:
+        job_name += f"_{experiment_name}"
+
     cmd = [
         'sbatch',
+        '--job-name', job_name,
+        '--error', f'/mnt/personal/jelint19/results/logs/condensation_jobs/{job_name}.err',
         'scripts/pose_estimator.batch',
         f'--descriptor={descriptor}',
         f'--templates_source={templates_source}',
@@ -23,15 +35,6 @@ def submit_job(descriptor, templates_source, condensation_source=None, certainty
 
     if experiment_name:
         cmd.append(f'--experiment_name={experiment_name}')
-
-    job_name = f"{descriptor}_{templates_source}_{detector}"
-    if condensation_source:
-        job_name += f"_{condensation_source}"
-    if certainty is not None:
-        certainty_str = f"{certainty:.2f}".replace('.', '')
-        job_name += f"_cert{certainty_str}"
-    if experiment_name:
-        job_name += f"_{experiment_name}"
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
