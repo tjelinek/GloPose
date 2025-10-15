@@ -39,7 +39,7 @@ class TemplateBank:
     whitening_W: Optional[torch.Tensor] = None
     sigma_inv: Optional[torch.Tensor] = None
     class_means: Optional[Dict[int, torch.Tensor]] = None
-    maha_thresh_per_class: Optional[Dict[int, torch.Tensor]] = None
+    maha_thresh_per_class: Optional[torch.Tensor] = None
     maha_thresh_global: Optional[torch.Tensor] = None
     template_csls_avg: Optional[Dict[int, torch.Tensor]] = None
 
@@ -410,16 +410,28 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         idx = torch.tensor(saved_indices, dtype=torch.long)
         y_sel = torch.tensor(saved_labels, dtype=torch.long)
 
-        template_csls_avg = defaultdict(list)
+        template_csls_avg_condensed_dict = defaultdict(list)
+        template_csls_avg_all_dict = defaultdict(list)
         for i in range(len(idx)):
-            template_csls_avg[y_sel[i].item()].append(stats['template_csls_avg'][idx[i]])
-        template_csls_avg = {k: torch.stack(template_csls_avg[k]) for k in template_csls_avg.keys()}
+            template_csls_avg_condensed_dict[y_sel[i].item()].append(stats['template_csls_avg'][idx[i]])
+        for i in range(len(object_classes)):
+            if object_classes[i] == -1:
+                continue
+            template_csls_avg_all_dict[object_classes[i].item()].append(stats['template_csls_avg'][i])
+        template_csls_avg_condensed_dict = {k: torch.stack(template_csls_avg_condensed_dict[k])
+                                            for k in template_csls_avg_condensed_dict.keys()}
+        template_csls_avg_all_dict = {k: torch.stack(template_csls_avg_all_dict[k])
+                                      for k in template_csls_avg_all_dict.keys()}
+
+        template_csls_avg = stats['template_csls_avg']
         payload = {
             'whitening_mean': None if mu_w is None else torch.from_numpy(mu_w.squeeze(0)),
             'whitening_W': None if W_w is None else torch.from_numpy(W_w),
             'template_indices': idx,
             'template_labels': y_sel,
             'template_csls_avg': template_csls_avg,
+            'template_csls_avg_all_dict': template_csls_avg_all_dict,
+            'template_csls_avg_condensed_dict': template_csls_avg_condensed_dict,
             'sigma_inv': stats['sigma_inv'],
             'class_means': {int(k): v for k, v in stats['class_means'].items()},
         }
