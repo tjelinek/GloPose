@@ -41,7 +41,7 @@ class TemplateBank:
     class_means: Optional[Dict[int, torch.Tensor]] = None
     maha_thresh_per_class: Optional[Dict[int, torch.Tensor]] = None
     maha_thresh_global: Optional[torch.Tensor] = None
-    template_csls_avg: Optional[torch.Tensor] = None
+    template_csls_avg: Optional[Dict[int, torch.Tensor]] = None
 
 
 def _to_np_f32(X):
@@ -405,15 +405,21 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
     stats_dir = result_save_path
     stats_dir.mkdir(parents=True, exist_ok=True)
+
     if len(saved_indices) > 0:
-        idx = np.array(saved_indices, dtype=int)
-        y_sel = np.array(saved_labels, dtype=int)
+        idx = torch.tensor(saved_indices, dtype=torch.long)
+        y_sel = torch.tensor(saved_labels, dtype=torch.long)
+
+        template_csls_avg = defaultdict(list)
+        for i in range(len(idx)):
+            template_csls_avg[y_sel[i].item()].append(stats['template_csls_avg'][idx[i]])
+        template_csls_avg = {k: torch.stack(template_csls_avg[k]) for k in template_csls_avg.keys()}
         payload = {
             'whitening_mean': None if mu_w is None else torch.from_numpy(mu_w.squeeze(0)),
             'whitening_W': None if W_w is None else torch.from_numpy(W_w),
-            'template_indices': torch.tensor(idx, dtype=torch.long),
-            'template_labels': torch.tensor(y_sel, dtype=torch.long),
-            'template_csls_avg': stats['template_csls_avg'],
+            'template_indices': idx,
+            'template_labels': y_sel,
+            'template_csls_avg': template_csls_avg,
             'sigma_inv': stats['sigma_inv'],
             'class_means': {int(k): v for k, v in stats['class_means'].items()},
         }
@@ -573,7 +579,7 @@ def main():
     parser = argparse.ArgumentParser(description='Perform template condensation for BOP datasets')
     parser.add_argument('--method', type=str, required=False,
                         choices=['hart', 'hart_symmetric', 'hart_imblearn', 'hart_imblearn_adapted'],
-                        default='hart', help='Condensation method to use')
+                        default='hart_imblearn', help='Condensation method to use')
     parser.add_argument('--descriptor', type=str, required=False,
                         choices=['dinov2', 'dinov3'], default='dinov2',
                         help='Descriptor model to use')
