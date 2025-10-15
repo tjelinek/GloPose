@@ -281,7 +281,7 @@ class BOPChallengePosePredictor:
         default_detections_cls_descriptors = _l2n(default_detections_cls_descriptors)
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
-            compute_templates_similarity_scores(template_data.cls_desc, default_detections_cls_descriptors,
+            compute_templates_similarity_scores(template_data, default_detections_cls_descriptors,
                                                 self.cnos_similarity, self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['confidence_thresh'],
                                                 self.cnos_matching_config['max_num_instances'])
