@@ -41,6 +41,7 @@ class TemplateBank:
     class_means: Optional[Dict[int, torch.Tensor]] = None
     maha_thresh_per_class: Optional[Dict[int, torch.Tensor]] = None
     maha_thresh_global: Optional[torch.Tensor] = None
+    template_csls_avg: Optional[torch.Tensor] = None
 
 
 def _to_np_f32(X):
@@ -439,6 +440,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
     W_w = stats.get('whitening_W', None)
     sigma_inv = stats.get('sigma_inv', None)
     class_means = stats.get('class_means', None)
+    csls_avg = stats.get('template_csls_avg', None)
 
     apply_whitening = (mu_w is not None) and (W_w is not None)
     if apply_whitening:
@@ -540,6 +542,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
         class_means=class_means,
         maha_thresh_per_class=mahalanobis_thresholds,
         maha_thresh_global=mahalanobis_threshold_global,
+        template_csls_avg=csls_avg,
     )
 
 
