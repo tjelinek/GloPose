@@ -53,24 +53,24 @@ def main():
         'descriptor': ['dinov2', 'dinov3'],
         'detector': ['sam', 'fastsam', 'sam2'],
         'use_enhanced_nms': [0, 1],
-        'similarity_metric': ['cosine', 'csls', 'mahalanobis'],
-    }
-
-    config_space_cnns = {
-        **config_space,
-        'templates_source': ['cnns'],
-        'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+        'similarity_metric': ['cosine', 'csls'],
         'certainty': [0.15, 0.25, 0.5],
     }
 
-    config_space_prerendered = {
-        **config_space,
-        'templates_source': ['prerendered'],
-        'certainty': [0.15, 0.25, 0.5],
-    }
+    config_spaces = [
+        {
+            **config_space,
+            'templates_source': ['cnns'],
+            'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+        },
+        {
+            **config_space,
+            'templates_source': ['prerendered'],
+        }
+    ]
 
     exclusions = [
-        # [('use_enhanced_nms', 1), ('similarity_metric', 'csls'],
+        # [('use_enhanced_nms', 1), ('similarity_metric', 'csls')],
         # [('use_enhanced_nms', 1), ('similarity_metric', 'cosine')],
     ]
 
@@ -78,23 +78,15 @@ def main():
     failed_jobs = 0
     excluded_jobs = 0
 
-    for values in itertools.product(*config_space_cnns.values()):
-        config = dict(zip(config_space_cnns.keys(), values))
-        if is_excluded(config, exclusions):
-            excluded_jobs += 1
-            continue
-        total_jobs += 1
-        if submit_job(config, experiment_name=args.experiment_name) != 0:
-            failed_jobs += 1
-
-    for values in itertools.product(*config_space_prerendered.values()):
-        config = dict(zip(config_space_prerendered.keys(), values))
-        if is_excluded(config, exclusions):
-            excluded_jobs += 1
-            continue
-        total_jobs += 1
-        if submit_job(config, experiment_name=args.experiment_name) != 0:
-            failed_jobs += 1
+    for config_space in config_spaces:
+        for values in itertools.product(*config_space.values()):
+            config = dict(zip(config_space.keys(), values))
+            if is_excluded(config, exclusions):
+                excluded_jobs += 1
+                continue
+            total_jobs += 1
+            if submit_job(config, experiment_name=args.experiment_name) != 0:
+                failed_jobs += 1
 
     print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")
     print(f"Excluded combinations: {excluded_jobs}")
