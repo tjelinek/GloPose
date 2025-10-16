@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from collections import defaultdict
+import numpy as np
 
 
 def copy_images_to_flat_structure(source_dir, target_dir, dry_run: bool = True):
@@ -88,7 +89,6 @@ def get_total_counts(original_dataset_path, dataset, split):
             total_counts[obj] = up_total + down_total
 
     return dict(total_counts)
-
 
 def create_histogram(image_counts, dataset, split, output_file, experiment_name, total_counts=None):
     if not image_counts:
@@ -175,14 +175,14 @@ def create_histogram(image_counts, dataset, split, output_file, experiment_name,
 
 def create_boxplot(all_counts_by_dataset, output_file, experiment_name):
     output_file = Path(output_file)
-    
+
     labels = []
     data = []
-    
+
     for (dataset, split), counts in sorted(all_counts_by_dataset.items()):
         labels.append(f'{dataset}\n{split}')
         data.append(list(counts.values()))
-    
+
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.boxplot(data, tick_labels=labels)
     ax.set_ylabel('Number of Templates')
@@ -195,6 +195,61 @@ def create_boxplot(all_counts_by_dataset, output_file, experiment_name):
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Box plot saved as: {output_file}")
+
+
+def create_linechart(all_stats, output_file, descriptor):
+    output_file = Path(output_file)
+
+    dataset_splits = sorted(set((ds, sp) for ds, sp, _ in all_stats.keys()))
+    methods = sorted(set(m for _, _, m in all_stats.keys()))
+
+    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    method_colors = {method: colors[i] for i, method in enumerate(methods)}
+
+    markers = {'min': 2, 'median': '_', 'max': 3}
+    linestyles = {'min': ':', 'median': '--', 'max': '-'}
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    x_positions = range(len(dataset_splits))
+    x_labels = [f'{ds}\n{sp}' for ds, sp in dataset_splits]
+
+    for method in methods:
+        mins = []
+        medians = []
+        maxs = []
+
+        for dataset, split in dataset_splits:
+            stats = all_stats.get((dataset, split, method))
+            if stats:
+                mins.append(stats['min'])
+                medians.append(stats['median'])
+                maxs.append(stats['max'])
+            else:
+                mins.append(None)
+                medians.append(None)
+                maxs.append(None)
+
+        color = method_colors[method]
+        ax.plot(x_positions, mins, color=color, linestyle=linestyles['min'], linewidth=1.5,
+                label=f'{method} (min)')
+        ax.plot(x_positions, medians, color=color, linestyle=linestyles['median'], linewidth=1.5,
+                label=f'{method} (median)')
+        ax.plot(x_positions, maxs, color=color, linestyle=linestyles['max'], linewidth=1.5,
+                label=f'{method} (max)')
+
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(x_labels, rotation=45, ha='right')
+    ax.set_ylabel('Number of Templates')
+    ax.set_yscale('log', base=2)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f'{int(y)}'))
+    ax.set_title(f'Templates statistics per dataset/split ({descriptor})')
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+    fig.tight_layout()
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Line chart saved as: {output_file}")
 
 
 def main():
@@ -211,52 +266,64 @@ def main():
     neighbors = ['1nn']
 
     original_bop_path = Path('/mnt/personal/jelint19/data/bop')
+    results_base = Path('/mnt/personal/jelint19/results/condensation')
 
-    for neighbor, method, descriptor in product(neighbors, methods, descriptors):
-        experiment = f'{neighbor}-{method}-{descriptor}'
-        dataset_sequences = [
-            ('hot3d', 'object_ref_aria_static_scenewise'),
-            ('hot3d', 'object_ref_quest3_static_scenewise'),
-            # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
-            # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
-            ('hope', 'onboarding_static'),
-            ('hope', 'onboarding_dynamic'),
-            ('handal', 'onboarding_static'),
-            ('handal', 'onboarding_dynamic'),
-            ('icbin', 'train'),
-            ('lmo', 'train'),
-            ('tless', 'train_primesense'),
-        ]
+    for descriptor in descriptors:
+        all_stats = {}
 
-        all_counts_by_dataset = {}
+        for neighbor, method in product(neighbors, methods):
+            experiment = f'{neighbor}-{method}-{descriptor}'
+            dataset_sequences = [
+                ('hot3d', 'object_ref_aria_static_scenewise'),
+                ('hot3d', 'object_ref_quest3_static_scenewise'),
+                # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
+                # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
+                ('hope', 'onboarding_static'),
+                ('hope', 'onboarding_dynamic'),
+                ('handal', 'onboarding_static'),
+                ('handal', 'onboarding_dynamic'),
+                ('icbin', 'train'),
+                ('lmo', 'train'),
+                ('tless', 'train_primesense'),
+            ]
 
-        for dataset, split in dataset_sequences:
-            relative_path = Path(dataset) / split
-            SOURCE_DIRECTORY = Path(
-                '/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
-            TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
-            HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}-{experiment}.png')
+            all_counts_by_dataset = {}
 
-            print("Image Directory Flattening Script with Histogram")
-            print("=" * 50)
-            print(f"Source directory: {SOURCE_DIRECTORY.resolve()}")
-            print(f"Target directory: {TARGET_DIRECTORY.resolve()}")
-            print(f"Histogram file: {HISTOGRAM_FILE.resolve()}")
-            print()
+            for dataset, split in dataset_sequences:
+                relative_path = Path(dataset) / split
+                SOURCE_DIRECTORY = Path(
+                    '/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
+                TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
+                HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}-{experiment}.png')
 
-            # Copy images and get selected counts
-            image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
+                print("Image Directory Flattening Script with Histogram")
+                print("=" * 50)
+                print(f"Source directory: {SOURCE_DIRECTORY.resolve()}")
+                print(f"Target directory: {TARGET_DIRECTORY.resolve()}")
+                print(f"Histogram file: {HISTOGRAM_FILE.resolve()}")
+                print()
 
-            # Get total counts from original dataset
-            total_counts = get_total_counts(original_bop_path, dataset, split)
+                image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
 
-            # Create histogram with percentages
-            create_histogram(image_counts, dataset, split, HISTOGRAM_FILE, experiment, total_counts)
-            
-            all_counts_by_dataset[(dataset, split)] = image_counts
+                total_counts = get_total_counts(original_bop_path, dataset, split)
 
-        BOXPLOT_FILE = TARGET_DIRECTORY.parent.parent / Path(f'box-plot_{experiment}.png')
-        create_boxplot(all_counts_by_dataset, BOXPLOT_FILE, experiment)
+                create_histogram(image_counts, dataset, split, HISTOGRAM_FILE, experiment, total_counts)
+
+                all_counts_by_dataset[(dataset, split)] = image_counts
+
+                if image_counts:
+                    counts_values = list(image_counts.values())
+                    all_stats[(dataset, split, method)] = {
+                        'min': np.min(counts_values),
+                        'median': np.median(counts_values),
+                        'max': np.max(counts_values)
+                    }
+
+            BOXPLOT_FILE = TARGET_DIRECTORY.parent.parent / Path(f'box-plot_{experiment}.png')
+            create_boxplot(all_counts_by_dataset, BOXPLOT_FILE, experiment)
+
+        LINECHART_FILE = results_base / Path(f'linechart_{descriptor}.png')
+        create_linechart(all_stats, LINECHART_FILE, descriptor)
 
 
 if __name__ == "__main__":
