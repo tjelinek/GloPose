@@ -10,8 +10,14 @@ def is_excluded(config, exclusions):
     return False
 
 
+def format_value(value):
+    if isinstance(value, float):
+        return f"{value:.2f}".replace('.', '')
+    return value
+
+
 def submit_job(config, experiment_name=None):
-    job_name_parts = [f"{key}_{value}" for key, value in sorted(config.items()) if value is not None]
+    job_name_parts = [f"{key}_{format_value(value)}" for key, value in sorted(config.items()) if value is not None]
     if experiment_name:
         job_name_parts.append(experiment_name)
     job_name = '_'.join(job_name_parts)
