@@ -10,14 +10,12 @@ def is_excluded(config, exclusions):
     return False
 
 
-def submit_job(descriptor, templates_source, condensation_source=None, certainty=None, detector='sam',
-               experiment_name=None, use_enhanced_nms=1, similarity_metric='cosine'):
-
-    job_name = f"{descriptor}_{templates_source}_{detector}"
-    if condensation_source:
-        job_name += f"_{condensation_source}"
-    if certainty is not None:
-        certainty_str = f"{certainty:.2f}".replace('.', '')
+def submit_job(config, experiment_name=None):
+    job_name = f"{config['descriptor']}_{config['templates_source']}_{config['detector']}"
+    if config.get('condensation_source'):
+        job_name += f"_{config['condensation_source']}"
+    if config.get('certainty') is not None:
+        certainty_str = f"{config['certainty']:.2f}".replace('.', '')
         job_name += f"_cert{certainty_str}"
     if experiment_name:
         job_name += f"_{experiment_name}"
@@ -27,18 +25,11 @@ def submit_job(descriptor, templates_source, condensation_source=None, certainty
         '--job-name', job_name,
         '--error', f'/mnt/personal/jelint19/results/logs/condensation_jobs/{job_name}.err',
         'scripts/pose_estimator.batch',
-        f'--descriptor={descriptor}',
-        f'--templates_source={templates_source}',
-        f'--detector={detector}',
-        f'--use_enhanced_nms={use_enhanced_nms}',
-        f'--similarity_metric={similarity_metric}'
     ]
 
-    if condensation_source:
-        cmd.append(f'--condensation_source={condensation_source}')
-
-    if certainty is not None:
-        cmd.append(f'--certainty={certainty}')
+    for key, value in config.items():
+        if value is not None:
+            cmd.append(f'--{key}={value}')
 
     if experiment_name:
         cmd.append(f'--experiment_name={experiment_name}')
@@ -58,76 +49,51 @@ def main():
     parser.add_argument('--experiment_name', default=None)
     args = parser.parse_args()
 
-    descriptors = [
-        'dinov2',
-        'dinov3'
-    ]
-    condensation_sources = [
-        '1nn-hart',
-        '1nn-hart_imblearn_adapted',
-        '1nn-hart_imblearn',
-        '1nn-hart_symmetric'
-    ]
-    certainties = [0.15, 0.25, 0.5]
-    detectors = [
-        'sam',
-        'fastsam',
-        'sam2'
-    ]
-    use_enhanced_nms_values = [
-        0,
-        1
-    ]
-    similarity_metrics = [
-        'cosine',
-        'csls',
-        'mahalanobis'
-    ]
+    config_space = {
+        'descriptor': ['dinov2', 'dinov3'],
+        'detector': ['sam', 'fastsam', 'sam2'],
+        'use_enhanced_nms': [0, 1],
+        'similarity_metric': ['cosine', 'csls', 'mahalanobis'],
+    }
+
+    config_space_cnns = {
+        **config_space,
+        'templates_source': ['cnns'],
+        'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+        'certainty': [0.15, 0.25, 0.5],
+    }
+
+    config_space_prerendered = {
+        **config_space,
+        'templates_source': ['prerendered'],
+        'certainty': [0.15, 0.25, 0.5],
+    }
 
     exclusions = [
-        (('use_enhanced_nms', 1), ('similarity_metric', 'csls')),
-        (('use_enhanced_nms', 1), ('similarity_metric', 'cosine')),
+        # [('use_enhanced_nms', 1), ('similarity_metric', 'csls'],
+        # [('use_enhanced_nms', 1), ('similarity_metric', 'cosine')],
     ]
 
     total_jobs = 0
     failed_jobs = 0
     excluded_jobs = 0
 
-    for descriptor, condensation_source, certainty, detector, use_enhanced_nms, similarity_metric in itertools.product(
-            descriptors, condensation_sources, certainties, detectors, use_enhanced_nms_values, similarity_metrics):
-        config = {
-            'descriptor': descriptor,
-            'condensation_source': condensation_source,
-            'certainty': certainty,
-            'detector': detector,
-            'use_enhanced_nms': use_enhanced_nms,
-            'similarity_metric': similarity_metric
-        }
+    for values in itertools.product(*config_space_cnns.values()):
+        config = dict(zip(config_space_cnns.keys(), values))
         if is_excluded(config, exclusions):
             excluded_jobs += 1
             continue
         total_jobs += 1
-        if submit_job(descriptor, 'cnns', condensation_source, certainty, detector,
-                      experiment_name=args.experiment_name, use_enhanced_nms=use_enhanced_nms,
-                      similarity_metric=similarity_metric) != 0:
+        if submit_job(config, experiment_name=args.experiment_name) != 0:
             failed_jobs += 1
 
-    for descriptor, certainty, detector, use_enhanced_nms, similarity_metric in itertools.product(
-            descriptors, certainties, detectors, use_enhanced_nms_values, similarity_metrics):
-        config = {
-            'descriptor': descriptor,
-            'certainty': certainty,
-            'detector': detector,
-            'use_enhanced_nms': use_enhanced_nms,
-            'similarity_metric': similarity_metric
-        }
+    for values in itertools.product(*config_space_prerendered.values()):
+        config = dict(zip(config_space_prerendered.keys(), values))
         if is_excluded(config, exclusions):
             excluded_jobs += 1
             continue
         total_jobs += 1
-        if submit_job(descriptor, 'prerendered', certainty=certainty, detector=detector,
-                      experiment_name=args.experiment_name, use_enhanced_nms=use_enhanced_nms,
-                      similarity_metric=similarity_metric) != 0:
+        if submit_job(config, experiment_name=args.experiment_name) != 0:
             failed_jobs += 1
 
     print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")
