@@ -10,8 +10,5 @@
 
 ml "$(<~/modules_glotracker_login4.txt)"
 
-log_dir="/mnt/personal/jelint19/results/logs/pose_estimator"
-mkdir -p "${log_dir}"
-
 export HYDRA_FULL_ERROR=1
-python -m pose.pose_estimator "$@" 2>&1 | tee "${log_dir}/${LOG_NAME}.err" >&2
+python -m pose.pose_estimator "$@"
