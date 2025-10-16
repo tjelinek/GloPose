@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 from pathlib import Path
 
@@ -245,45 +246,92 @@ def get_result_types():
     ]
 
 
-# Example usage
-if __name__ == "__main__":
-    try:
-        # Your parameters
-        result_filename = "FlowTemplates_handal-val_ufm_c0975r05@static@condensedNNsNonMaxSup.json"
-        results_path = "/mnt/personal/jelint19/results/PoseEstimation/"
-        eval_path = "/mnt/personal/jelint19/results/PoseEstimation/bop_eval"
-        datasets_path = "/mnt/personal/jelint19/data/bop/"
+def compute_median_ranks(df, exclude_columns=None, rank_column_name='Median Rank'):
+    """
+    Compute median rank for each method (row) across all dataset columns.
+    Higher metric values are better, so rank 1 goes to the highest value.
 
-        # Run evaluation
-        metrics = evaluate_bop_coco(
-            result_filename=result_filename,
-            results_path=results_path,
-            datasets_path=datasets_path,
-            eval_path=eval_path,
-            ann_type="bbox",
-            targets_filename="val_targets_bop24.json"
-        )
+    Args:
+        df: DataFrame with methods as rows and datasets as columns
+        exclude_columns: List of column names to exclude from ranking (e.g., existing rank columns)
+        rank_column_name: Name to check for existing rank column to exclude
 
-        # Access individual metrics
-        if metrics:
-            ap = metrics.get('AP', -1)
-            ap50 = metrics.get('AP50', -1)
-            ap75 = metrics.get('AP75', -1)
-            avg_time = metrics.get('average_time_per_image', -1)
+    Returns:
+        Series with median rank for each method (lower is better)
+    """
+    if exclude_columns is None:
+        exclude_columns = []
 
-            print(f"\nKey metrics extracted:")
-            print(f"AP: {ap:.4f}")
-            print(f"AP@0.5: {ap50:.4f}")
-            print(f"AP@0.75: {ap75:.4f}")
-            print(f"Avg time/image: {avg_time:.4f}s")
-        else:
-            print("Evaluation returned no metrics!")
+    # Automatically exclude the rank column itself if it exists
+    if rank_column_name in df.columns:
+        exclude_columns = list(exclude_columns) + [rank_column_name]
 
-    except Exception as e:
-        print(f"Error during evaluation: {e}")
-        import traceback
+    # Get only the dataset columns (exclude any rank columns)
+    dataset_cols = [col for col in df.columns if col not in exclude_columns]
 
-        traceback.print_exc()
+    if len(dataset_cols) == 0:
+        return pd.Series(index=df.index, dtype=float)
+
+    # For each column, rank the methods
+    # Higher values are better, so ascending=False gives rank 1 to the highest value
+    ranks = pd.DataFrame(index=df.index)
+
+    for col in dataset_cols:
+        # Only rank non-null, non-negative values
+        # Treat -1 and NaN as missing data
+        valid_mask = (df[col].notna()) & (df[col] >= 0)
+        if valid_mask.sum() > 0:
+            ranks[col] = df[col].where(valid_mask).rank(ascending=False, method='average', na_option='keep')
+
+    # Compute median rank across all datasets (ignoring NaN values)
+    median_ranks = ranks.median(axis=1, skipna=True)
+
+    # Round to 2 decimal places for readability
+    median_ranks = median_ranks.round(2)
+
+    return median_ranks
+
+
+def add_median_ranks_to_csv(csv_path="evaluation_results.csv", rank_column_name='Median Rank'):
+    """
+    Load an existing CSV and add/update the median rank column.
+
+    Args:
+        csv_path: Path to the CSV file
+        rank_column_name: Name for the median rank column
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with median ranks
+    """
+    csv_file = Path(csv_path)
+
+    if not csv_file.exists():
+        print(f"CSV file not found: {csv_file}")
+        return None
+
+    print(f"Loading CSV: {csv_file}")
+    df = pd.read_csv(csv_file, index_col=0)
+
+    # Compute median ranks
+    median_ranks = compute_median_ranks(df, rank_column_name=rank_column_name)
+
+    # Add to DataFrame
+    df[rank_column_name] = median_ranks
+
+    # Reorder columns to put Median Rank first
+    cols = [rank_column_name] + [col for col in df.columns if col != rank_column_name]
+    df = df[cols]
+
+    # Sort by median rank (best methods first)
+    df = df.sort_values(rank_column_name)
+
+    # Save back to CSV
+    df.to_csv(csv_file, float_format='%.3f')
+    print(f"Updated CSV with median ranks saved to: {csv_file}")
+    print(f"\nTop 3 methods by median rank:")
+    print(df[rank_column_name].head(3))
+
+    return df
 
 
 def update_results_csv(
@@ -292,7 +340,9 @@ def update_results_csv(
         dataset,
         split,
         csv_path="evaluation_results.csv",
-        metric_key="AP"
+        metric_key="AP",
+        compute_ranks=True,
+        rank_column_name='Median Rank'
 ):
     """
     Update or create a CSV file with evaluation results.
@@ -305,6 +355,8 @@ def update_results_csv(
         split (str): Split name (e.g., 'val', 'test')
         csv_path (Path): Path to the CSV file
         metric_key (str): Which metric to extract (default: 'AP')
+        compute_ranks (bool): Whether to compute and add median ranks
+        rank_column_name (str): Name for the median rank column
 
     Returns:
         pd.DataFrame: Updated DataFrame
@@ -336,9 +388,27 @@ def update_results_csv(
     # Update the specific cell
     df.loc[experiment_name, column_name] = metric_value
 
-    # Sort columns and index for better readability
-    df = df.sort_index()  # Sort experiments (rows)
-    df = df.reindex(sorted(df.columns), axis=1)  # Sort dataset-split combinations (columns)
+    # Compute median ranks if requested
+    if compute_ranks:
+        median_ranks = compute_median_ranks(df, rank_column_name=rank_column_name)
+        df[rank_column_name] = median_ranks
+
+        # Reorder columns to put Median Rank first
+        cols = [rank_column_name] + [col for col in df.columns if col != rank_column_name]
+        df = df[cols]
+
+        # Sort by median rank (best methods first)
+        df = df.sort_values(rank_column_name)
+    else:
+        # Sort by index if not using ranks
+        df = df.sort_index()
+
+    # Sort remaining columns (dataset-split combinations) for readability
+    if rank_column_name in df.columns:
+        dataset_cols = [col for col in df.columns if col != rank_column_name]
+        df = df[[rank_column_name] + sorted(dataset_cols)]
+    else:
+        df = df.reindex(sorted(df.columns), axis=1)
 
     # Round all numeric values in the DataFrame to 3 decimal places before saving
     df = df.round(3)
@@ -351,4 +421,51 @@ def update_results_csv(
     print(f"Updated results saved to: {csv_file}")
     print(f"Added: {experiment_name} -> {column_name} = {metric_value:.3f}")
 
+    if compute_ranks and not median_ranks.empty:
+        print(f"Median Rank for {experiment_name}: {median_ranks.get(experiment_name, 'N/A'):.2f}")
+
     return df
+
+
+# Example usage
+if __name__ == "__main__":
+    try:
+        # Your parameters
+        result_filename = "FlowTemplates_handal-val_ufm_c0975r05@static@condensedNNsNonMaxSup.json"
+        results_path = "/mnt/personal/jelint19/results/PoseEstimation/default/"
+        eval_path = "/mnt/personal/jelint19/results/PoseEstimation/default/bop_eval"
+        datasets_path = "/mnt/personal/jelint19/data/bop/"
+
+        # Run evaluation
+        metrics = evaluate_bop_coco(
+            result_filename=result_filename,
+            results_path=results_path,
+            datasets_path=datasets_path,
+            eval_path=eval_path,
+            ann_type="bbox",
+            targets_filename="val_targets_bop24.json"
+        )
+
+        # Access individual metrics
+        if metrics:
+            ap = metrics.get('AP', -1)
+            ap50 = metrics.get('AP50', -1)
+            ap75 = metrics.get('AP75', -1)
+            avg_time = metrics.get('average_time_per_image', -1)
+
+            print(f"\nKey metrics extracted:")
+            print(f"AP: {ap:.4f}")
+            print(f"AP@0.5: {ap50:.4f}")
+            print(f"AP@0.75: {ap75:.4f}")
+            print(f"Avg time/image: {avg_time:.4f}s")
+        else:
+            print("Evaluation returned no metrics!")
+
+        # Example: Update CSV with median ranks
+        # You can also call add_median_ranks_to_csv() separately to update an existing CSV
+
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+        import traceback
+
+        traceback.print_exc()
