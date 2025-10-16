@@ -11,14 +11,10 @@ def is_excluded(config, exclusions):
 
 
 def submit_job(config, experiment_name=None):
-    job_name = f"{config['descriptor']}_{config['templates_source']}_{config['detector']}"
-    if config.get('condensation_source'):
-        job_name += f"_{config['condensation_source']}"
-    if config.get('certainty') is not None:
-        certainty_str = f"{config['certainty']:.2f}".replace('.', '')
-        job_name += f"_cert{certainty_str}"
+    job_name_parts = [f"{key}_{value}" for key, value in sorted(config.items()) if value is not None]
     if experiment_name:
-        job_name += f"_{experiment_name}"
+        job_name_parts.append(experiment_name)
+    job_name = '_'.join(job_name_parts)
 
     cmd = [
         'sbatch',
