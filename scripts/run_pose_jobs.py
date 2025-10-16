@@ -3,6 +3,13 @@ import itertools
 import argparse
 
 
+def is_excluded(config, exclusions):
+    for exclusion in exclusions:
+        if all(config.get(key) == value for key, value in exclusion):
+            return True
+    return False
+
+
 def submit_job(descriptor, templates_source, condensation_source=None, certainty=None, detector='sam',
                experiment_name=None, use_enhanced_nms=1, similarity_metric='cosine'):
 
@@ -77,11 +84,28 @@ def main():
         'mahalanobis'
     ]
 
+    exclusions = [
+        (('use_enhanced_nms', 1), ('similarity_metric', 'csls')),
+        (('use_enhanced_nms', 1), ('similarity_metric', 'cosine')),
+    ]
+
     total_jobs = 0
     failed_jobs = 0
+    excluded_jobs = 0
 
     for descriptor, condensation_source, certainty, detector, use_enhanced_nms, similarity_metric in itertools.product(
             descriptors, condensation_sources, certainties, detectors, use_enhanced_nms_values, similarity_metrics):
+        config = {
+            'descriptor': descriptor,
+            'condensation_source': condensation_source,
+            'certainty': certainty,
+            'detector': detector,
+            'use_enhanced_nms': use_enhanced_nms,
+            'similarity_metric': similarity_metric
+        }
+        if is_excluded(config, exclusions):
+            excluded_jobs += 1
+            continue
         total_jobs += 1
         if submit_job(descriptor, 'cnns', condensation_source, certainty, detector,
                       experiment_name=args.experiment_name, use_enhanced_nms=use_enhanced_nms,
@@ -90,6 +114,16 @@ def main():
 
     for descriptor, certainty, detector, use_enhanced_nms, similarity_metric in itertools.product(
             descriptors, certainties, detectors, use_enhanced_nms_values, similarity_metrics):
+        config = {
+            'descriptor': descriptor,
+            'certainty': certainty,
+            'detector': detector,
+            'use_enhanced_nms': use_enhanced_nms,
+            'similarity_metric': similarity_metric
+        }
+        if is_excluded(config, exclusions):
+            excluded_jobs += 1
+            continue
         total_jobs += 1
         if submit_job(descriptor, 'prerendered', certainty=certainty, detector=detector,
                       experiment_name=args.experiment_name, use_enhanced_nms=use_enhanced_nms,
@@ -97,6 +131,7 @@ def main():
             failed_jobs += 1
 
     print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")
+    print(f"Excluded combinations: {excluded_jobs}")
     if failed_jobs > 0:
         print(f"Failed submissions: {failed_jobs}")
 
