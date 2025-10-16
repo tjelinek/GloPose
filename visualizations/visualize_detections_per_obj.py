@@ -7,6 +7,7 @@ import shutil
 from itertools import product
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from collections import defaultdict
 
 
@@ -172,6 +173,30 @@ def create_histogram(image_counts, dataset, split, output_file, experiment_name,
     print(f"  Average selected per object: {avg_selected:.1f}")
 
 
+def create_boxplot(all_counts_by_dataset, output_file, experiment_name):
+    output_file = Path(output_file)
+    
+    labels = []
+    data = []
+    
+    for (dataset, split), counts in sorted(all_counts_by_dataset.items()):
+        labels.append(f'{dataset}\n{split}')
+        data.append(list(counts.values()))
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.boxplot(data, tick_labels=labels)
+    ax.set_ylabel('Number of Templates')
+    ax.set_yscale('log', base=2)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f'{int(y)}'))
+    ax.set_title(f'Templates distribution: {experiment_name}')
+    ax.grid(axis='y', alpha=0.3)
+    plt.xticks(rotation=45, ha='right')
+    fig.tight_layout()
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Box plot saved as: {output_file}")
+
+
 def main():
     """
     Main function - processes multiple experiments and datasets
@@ -203,6 +228,8 @@ def main():
             ('tless', 'train_primesense'),
         ]
 
+        all_counts_by_dataset = {}
+
         for dataset, split in dataset_sequences:
             relative_path = Path(dataset) / split
             SOURCE_DIRECTORY = Path(
@@ -225,6 +252,11 @@ def main():
 
             # Create histogram with percentages
             create_histogram(image_counts, dataset, split, HISTOGRAM_FILE, experiment, total_counts)
+            
+            all_counts_by_dataset[(dataset, split)] = image_counts
+
+        BOXPLOT_FILE = TARGET_DIRECTORY.parent.parent / Path(f'box-plot_{experiment}.png')
+        create_boxplot(all_counts_by_dataset, BOXPLOT_FILE, experiment)
 
 
 if __name__ == "__main__":
