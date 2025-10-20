@@ -56,7 +56,7 @@ def tensor2numpy(image, downsample_factor=1.0):
     return image.permute(1, 2, 0).numpy(force=True) * 255.
 
 
-def add_score_overlay(image, score):
+def add_score_overlay(image, score, similarity_metric):
     """Add a colored score box at the top of the image based on the score."""
     image = image.astype(np.uint8)
     h, w = image.shape[:2]
@@ -83,7 +83,7 @@ def add_score_overlay(image, score):
 
     # Add text if score > 0
     if score > 0:
-        text = f"Template score {score:.3f}"  # Format to 3 decimal places
+        text = f"{similarity_metric} similarity {score:.3f}"  # Format to 3 decimal places
         font = cv2.FONT_HERSHEY_SIMPLEX
 
         # Calculate text size and position to center it in the box
@@ -227,7 +227,7 @@ class PoseEstimatorLogger:
         rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
 
     def visualize_nearest_neighbors(self, query_image: torch.Tensor, view_graph_images: Dict[int, torch.Tensor],
-                                    detection_idx: int, detections: Detections, detections_scores):
+                                    detection_idx: int, detections: Detections, detections_scores, similarity_metric):
 
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
@@ -276,7 +276,7 @@ class PoseEstimatorLogger:
                 template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
                 template_score = 0.
 
-            template_image_with_overlay = add_score_overlay(template_image, template_score)
+            template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
             rr_template = rr.Image(template_image_with_overlay)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
             # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
