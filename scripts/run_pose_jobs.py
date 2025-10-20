@@ -62,11 +62,19 @@ def main():
     args = parser.parse_args()
 
     config_space = {
-        'descriptor': ['dinov2', 'dinov3'],
-        'detector': ['sam', 'fastsam', 'sam2'],
-        'use_enhanced_nms': [0, 1],
-        'similarity_metric': ['cosine', 'csls'],
-        'certainty': [0.15, 0.25, 0.5],
+        'descriptor': [
+            'dinov2',
+            'dinov3'
+        ],
+        'detector': [
+            'sam',
+            'fastsam',
+            'sam2'
+        ],
+        'use_enhanced_nms': [
+            0,
+            1
+        ],
     }
 
     config_spaces = [
@@ -74,10 +82,18 @@ def main():
             **config_space,
             'templates_source': ['cnns'],
             'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'similarity_metric': ['cosine', 'csls'],
+            'confidence_thresh': [0.15, 0.25, 0.5],
+            'ood_detection_method': ['global_threshold', 'lowe_test', 'mahalanobis_ood_detection', None],
+            'cosine_similarity_quantile': [.25, .5, .75],
+            'mahalanobis_quantile': [.95, .75, .5],
+            'lowe_ratio': [1.05, 1.1, 1.25, 1.5],
         },
         {
             **config_space,
             'templates_source': ['prerendered'],
+            'similarity_metric': ['cosine'],
+            'confidence_thresh': [0.15, 0.25, 0.5],
         }
     ]
 
