@@ -45,7 +45,7 @@ class BOPChallengePosePredictor:
         cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
         overrides = []
 
-        for override_k, override_v in matching_config_overrides:
+        for override_k, override_v in matching_config_overrides.items():
             if override_v is not None:
                 overrides.append(f'model.matching_config.{override_k}={override_v}')
 
@@ -277,11 +277,11 @@ class BOPChallengePosePredictor:
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
             compute_templates_similarity_scores(template_data, default_detections_cls_descriptors,
-                                                self.cnos_matching_config['metric'],
+                                                self.cnos_matching_config['similarity_metric'],
                                                 self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['max_num_instances'],
                                                 self.cnos_matching_config['confidence_thresh'],
-                                                self.cnos_matching_config['lowe_ratio'],
+                                                self.cnos_matching_config['lowe_ratio_threshold'],
                                                 self.cnos_matching_config['ood_detection_method'],
                                                 )
         selected_detections_masks = default_detections_masks[idx_selected_proposals]
@@ -330,7 +330,7 @@ def main():
     parser.add_argument('--ood_detection_method', default=None)
     parser.add_argument('--cosine_similarity_quantile', type=float, default=None)
     parser.add_argument('--mahalanobis_quantile', type=float, default=None)
-    parser.add_argument('--lowe_ratio', type=float, default=None)
+    parser.add_argument('--lowe_ratio_threshold', type=float, default=None)
     parser.add_argument('--dry_run', action='store_true')
 
     args = parser.parse_args()
@@ -414,7 +414,8 @@ def main():
             'confidence_thresh': args.confidence_thresh,
             'cosine_similarity_quantile': args.cosine_similarity_quantile,
             'mahalanobis_quantile': args.mahalanobis_quantile,
-            'lowe_ratio': args.lowe_ratio,
+            'lowe_ratio': args.lowe_ratio_threshold,
+            'similarity_metric': args.similarity_metric,
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides)
         match_cfg = predictor.cnos_matching_config
