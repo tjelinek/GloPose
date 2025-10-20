@@ -63,12 +63,12 @@ def main():
 
     config_space = {
         'descriptor': [
-            'dinov2',
+            # 'dinov2',
             'dinov3'
         ],
         'detector': [
-            'sam',
-            'fastsam',
+            # 'sam',
+            # 'fastsam',
             'sam2'
         ],
         'use_enhanced_nms': [
@@ -83,23 +83,58 @@ def main():
             'templates_source': ['cnns'],
             'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
             'similarity_metric': ['cosine', 'csls'],
-            'confidence_thresh': [0.15, 0.25, 0.5],
-            'ood_detection_method': ['global_threshold', 'lowe_test', 'mahalanobis_ood_detection', None],
-            'cosine_similarity_quantile': [.25, .5, .75],
-            'mahalanobis_quantile': [.95, .75, .5],
+            'ood_detection_method': [None],
+        },
+        {
+            **config_space,
+            'templates_source': ['cnns'],
+            'aggregation_function': ['max'],
+            'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'similarity_metric': ['cosine', 'csls'],
+            'ood_detection_method': ['global_threshold'],
+            'confidence_thresh': [0.15, 0.25, 0.5, 0.75],
+        },
+        {
+            **config_space,
+            'templates_source': ['cnns'],
+            'aggregation_function': ['max'],
+            'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'similarity_metric': ['cosine', 'csls'],
+            'ood_detection_method': ['lowe_test'],
             'lowe_ratio': [1.05, 1.1, 1.25, 1.5],
         },
         {
             **config_space,
+            'templates_source': ['cnns'],
+            'aggregation_function': ['max'],
+            'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'similarity_metric': ['cosine', 'csls'],
+            'ood_detection_method': ['cosine_similarity_quantiles'],
+            'cosine_similarity_quantile': [.25, .5, .75],
+        },
+        {
+            **config_space,
+            'templates_source': ['cnns'],
+            'aggregation_function': ['max'],
+            'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'ood_detection_method': ['mahalanobis_ood_detection'],
+            'mahalanobis_quantile': [.95, .75, .5, .25],
+        },
+        {
+            **config_space,
             'templates_source': ['prerendered'],
+            'aggregation_function': ['max', 'avg_5'],
             'similarity_metric': ['cosine'],
+            'ood_detection_method': ['global_threshold'],
             'confidence_thresh': [0.15, 0.25, 0.5],
         }
     ]
 
     exclusions = [
-        # [('use_enhanced_nms', 1), ('similarity_metric', 'csls')],
-        # [('use_enhanced_nms', 1), ('similarity_metric', 'cosine')],
+        [('use_enhanced_nms', 0), ('ood_detection_method', None)],
+        [('use_enhanced_nms', 0), ('ood_detection_method', 'lowe_test')],
+        [('use_enhanced_nms', 0), ('ood_detection_method', 'cosine_similarity_quantiles')],
+        [('use_enhanced_nms', 0), ('ood_detection_method', 'mahalanobis_ood_detection')],
     ]
 
     total_jobs = 0

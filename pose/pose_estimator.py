@@ -1,7 +1,6 @@
 import argparse
 import json
 import pickle
-import sys
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -30,8 +29,8 @@ from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, base_cache_folder, experiment_folder='default', aggregation_func=None,
-                 certainty=None):
+    def __init__(self, config: TrackerConfig, base_cache_folder, matching_config_overrides: Dict[str, Any],
+                 experiment_folder='default', ):
 
         self.config = config
         self.flow_provider: Optional[FlowProviderDirect] = None
@@ -45,20 +44,16 @@ class BOPChallengePosePredictor:
             GlobalHydra.instance().clear()
         cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
         overrides = []
-        if aggregation_func is not None:
-            overrides.append(f'model.matching_config.aggregation_function={aggregation_func}')
-        if certainty is not None:
-            overrides.append(f'model.matching_config.confidence_thresh={certainty}')
+
+        for override_k, override_v in matching_config_overrides:
+            if override_v is not None:
+                overrides.append(f'model.matching_config.{override_k}={override_v}')
 
         with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
             cnos_cfg = compose(config_name="run_inference", overrides=overrides)
 
-        sys.path.append('./repositories/cnos')
-        from src.model.loss import PairwiseSimilarity
-
         self.cnos_matching_config = instantiate(cnos_cfg.model.matching_config)
         self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
-        self.cnos_similarity: PairwiseSimilarity = self.cnos_matching_config['metric']
 
     def _initialize_flow_provider(self) -> None:
 
@@ -73,7 +68,8 @@ class BOPChallengePosePredictor:
                                         detection_templates_save_folder, onboarding_type: str, split: str,
                                         method_name: str, experiment_name: str, view_graph_save_paths: Path = None,
                                         descriptor: str = 'dinov2', detector_name='sam',
-                                        default_detections_file: Path = None, templates_source: str = 'cnns') -> None:
+                                        default_detections_file: Path = None, templates_source: str = 'cnns',
+                                        dry_run: bool = False) -> None:
 
         dataset_name = base_dataset_folder.stem
         rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
@@ -109,8 +105,13 @@ class BOPChallengePosePredictor:
             template_data = TemplateBank(images=template_images, cls_desc=template_cls_descriptors,
                                          masks=template_segmentations)
         elif templates_source == 'cnns':
-            template_data = get_descriptors_for_condensed_templates(detection_templates_save_folder, descriptor,
-                                                                    self.config.device)
+            template_data = get_descriptors_for_condensed_templates(
+                detection_templates_save_folder,
+                descriptor,
+                self.cnos_matching_config['cosine_similarity_quantile'],
+                self.cnos_matching_config['mahalanobis_quantile'],
+                device=self.config.device
+            )
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
@@ -241,7 +242,8 @@ class BOPChallengePosePredictor:
         )
 
         results_csv_path = self.write_folder / 'detection_results.csv'
-        update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
+        if not dry_run:
+            update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
 
     def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank, image, dino_descriptor,
                                      recompute_default_descriptors=True):
@@ -274,10 +276,14 @@ class BOPChallengePosePredictor:
         default_detections_cls_descriptors = _l2n(default_detections_cls_descriptors)
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
-            compute_templates_similarity_scores(template_data, default_detections_cls_descriptors, self.cnos_similarity,
+            compute_templates_similarity_scores(template_data, default_detections_cls_descriptors,
+                                                self.cnos_matching_config['metric'],
                                                 self.cnos_matching_config['aggregation_function'],
+                                                self.cnos_matching_config['max_num_instances'],
                                                 self.cnos_matching_config['confidence_thresh'],
-                                                self.cnos_matching_config['max_num_instances'], True, False)
+                                                self.cnos_matching_config['lowe_ratio'],
+                                                self.cnos_matching_config['ood_detection_method'],
+                                                )
         selected_detections_masks = default_detections_masks[idx_selected_proposals]
         detections_dict = {
             'masks': selected_detections_masks,
@@ -315,11 +321,17 @@ def main():
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], default='cnns')
     parser.add_argument('--condensation_source', default='1nn-hart')
     parser.add_argument('--detector', default='sam')
-    parser.add_argument('--certainty', type=float, default=None)
+    parser.add_argument('--aggregation_function', default=None)
+    parser.add_argument('--confidence_thresh', type=float, default=None)
     parser.add_argument('--experiment_name', default=None)
     parser.add_argument('--use_enhanced_nms', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--descriptor_mask_detections', type=lambda x: bool(int(x)), default=True)
-    parser.add_argument('--similarity_metric', default='csls')
+    parser.add_argument('--similarity_metric', default='cosine')
+    parser.add_argument('--ood_detection_method', default=None)
+    parser.add_argument('--cosine_similarity_quantile', type=float, default=None)
+    parser.add_argument('--mahalanobis_quantile', type=float, default=None)
+    parser.add_argument('--lowe_ratio', type=float, default=None)
+    parser.add_argument('--dry_run', action='store_true')
 
     args = parser.parse_args()
 
@@ -380,7 +392,6 @@ def main():
             view_graph_location = cache_path / 'view_graph_cache' / config_name / dataset
             condensed_templates_base = None
             experiment = f'viewgraph-templates-{args.descriptor}'
-            aggregation = 'avg_5'
         elif args.templates_source == 'cnns':
             view_graph_location = None
             if not args.condensation_source:
@@ -388,18 +399,24 @@ def main():
             condensation_source = f"{args.condensation_source}-{args.descriptor}-whitening_256"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
-            aggregation = 'max'
             experiment = f'cnns-{condensation_source}'
         else:  # pre-rendered
             view_graph_location = None
             condensed_templates_base = None
-            aggregation = 'avg_5'
             experiment = f'onboarding-templates-{args.descriptor}'
 
         config = TrackerConfig()
         config.device = 'cuda'
-        predictor = BOPChallengePosePredictor(config, cache_path, aggregation_func=aggregation,
-                                              certainty=args.certainty)
+
+        matching_config_overrides = {
+            'aggregation_func': args.aggregation_function,
+            'ood_detection_method': args.ood_detection_method,
+            'confidence_thresh': args.confidence_thresh,
+            'cosine_similarity_quantile': args.cosine_similarity_quantile,
+            'mahalanobis_quantile': args.mahalanobis_quantile,
+            'lowe_ratio': args.lowe_ratio,
+        }
+        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides)
         match_cfg = predictor.cnos_matching_config
         experiment = (f'{experiment}-conf_{match_cfg.confidence_thresh}-aggr_{match_cfg.aggregation_function}_'
                       f'detector-{args.detector}')
@@ -409,7 +426,8 @@ def main():
                                                   view_graph_location, descriptor=args.descriptor,
                                                   detector_name=args.detector,
                                                   default_detections_file=default_detections_file,
-                                                  templates_source=args.templates_source)
+                                                  templates_source=args.templates_source,
+                                                  dry_run=args.dry_run)
 
 
 if __name__ == '__main__':
