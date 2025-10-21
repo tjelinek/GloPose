@@ -8,7 +8,7 @@
 #SBATCH --partition=h200fast
 #SBATCH --job-name=BOPPosePredictor
 
-ml "$(<~/modules_glotracker_login4.txt)"
+ml $(<~/modules_glotracker_login4.txt)
 
 export HYDRA_FULL_ERROR=1
 python -m pose.pose_estimator "$@"

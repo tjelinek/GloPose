@@ -20,7 +20,7 @@ def submit_job(config, experiment_folder=None, dry_run=False):
     job_name_parts = [f"{key}_{format_value(value)}" for key, value in sorted(config.items()) if value is not None]
     job_name = '_'.join(job_name_parts)
 
-    log_dir = '/mnt/personal/jelint19/results/logs/condensation_jobs'
+    log_dir = '/mnt/personal/jelint19/results/logs/pose_estimator'
 
     python_args = []
     for key, value in config.items():
@@ -38,7 +38,6 @@ def submit_job(config, experiment_folder=None, dry_run=False):
     cmd = [
               'sbatch',
               '--job-name', job_name,
-              '--output', f'{log_dir}/{job_name}.out',
               '--error', f'{log_dir}/{job_name}.err',
               'scripts/pose_estimator.batch',
           ] + python_args
