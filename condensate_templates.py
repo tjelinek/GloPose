@@ -439,10 +439,10 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         torch.save(payload, stats_dir / 'csls_stats.pt')
 
 
-def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str, device: str = 'cuda',
-                                            threshold_quantile: float = 0.05, default_threshold: float = 0.0,
-                                            mahalanobis_quantile: float = 0.95,
-                                            force_recompute_descriptors: bool = True) -> TemplateBank:
+def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str,
+                                            cosine_similarity_quantile: float, mahalanobis_quantile: float,
+                                            force_recompute_descriptors: bool = True, device: str = 'cuda') \
+        -> TemplateBank:
     descriptor = descriptor_from_hydra(model=descriptor_name)
 
     images_dict: Dict[int, Any] = defaultdict(list)
@@ -521,14 +521,14 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
     template_thresholds: Dict[int, torch.Tensor] = {}
     for obj_id, X in cls_descriptors_dict.items():
         if X.shape[0] <= 1:
-            template_thresholds[obj_id] = torch.full((X.shape[0],), float(default_threshold), device=X.device)
+            template_thresholds[obj_id] = None
             continue
         S = X @ X.T
         diag = torch.eye(S.shape[0], device=S.device, dtype=S.dtype)
         S = S - 1e9 * diag
         vals, _ = torch.sort(S, dim=1, descending=True)
         per_template_vals = vals[:, 0: max(1, min(vals.shape[1]-1, X.shape[0]-1))]
-        q = torch.quantile(per_template_vals, q=threshold_quantile, dim=1, keepdim=False)
+        q = torch.quantile(per_template_vals, q=cosine_similarity_quantile, dim=1, keepdim=False)
         template_thresholds[obj_id] = q
 
     mahalanobis_thresholds: Optional[Dict[int, torch.Tensor]] = {}
