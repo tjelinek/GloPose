@@ -83,7 +83,7 @@ def main():
             'templates_source': ['cnns'],
             'condensation_source': ['1nn-hart', '1nn-hart_imblearn_adapted', '1nn-hart_imblearn', '1nn-hart_symmetric'],
             'similarity_metric': ['cosine', 'csls'],
-            'ood_detection_method': [None],
+            'ood_detection_method': ['none'],
         },
         {
             **config_space,
@@ -131,7 +131,7 @@ def main():
     ]
 
     exclusions = [
-        [('use_enhanced_nms', 0), ('ood_detection_method', None)],
+        [('use_enhanced_nms', 0), ('ood_detection_method', 'none')],
         [('use_enhanced_nms', 0), ('ood_detection_method', 'lowe_test')],
         [('use_enhanced_nms', 0), ('ood_detection_method', 'cosine_similarity_quantiles')],
         [('use_enhanced_nms', 0), ('ood_detection_method', 'mahalanobis_ood_detection')],
