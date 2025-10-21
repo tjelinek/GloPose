@@ -184,7 +184,7 @@ def create_boxplot(all_counts_by_dataset, output_file, experiment_name):
         data.append(list(counts.values()))
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.boxplot(data, tick_labels=labels)
+    ax.boxplot(data, labels=labels)
     ax.set_ylabel('Number of Templates')
     ax.set_yscale('log', base=2)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f'{int(y)}'))
@@ -303,7 +303,7 @@ def main():
                 print(f"Histogram file: {HISTOGRAM_FILE.resolve()}")
                 print()
 
-                image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=True)
+                image_counts = copy_images_to_flat_structure(SOURCE_DIRECTORY, TARGET_DIRECTORY, dry_run=False)
 
                 total_counts = get_total_counts(original_bop_path, dataset, split)
 
