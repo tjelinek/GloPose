@@ -324,7 +324,7 @@ def main():
     parser.add_argument('--detector', default='sam')
     parser.add_argument('--aggregation_function', default=None)
     parser.add_argument('--confidence_thresh', type=float, default=None)
-    parser.add_argument('--experiment_name', default=None)
+    parser.add_argument('--experiment_folder', default='default')
     parser.add_argument('--use_enhanced_nms', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--descriptor_mask_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--similarity_metric', default='cosine')
@@ -418,7 +418,7 @@ def main():
             'lowe_ratio': args.lowe_ratio_threshold,
             'similarity_metric': args.similarity_metric,
         }
-        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides)
+        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
         experiment = (f'{experiment}-conf_{match_cfg.confidence_thresh}-aggr_{match_cfg.aggregation_function}_'
                       f'detector-{args.detector}')

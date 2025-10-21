@@ -16,10 +16,8 @@ def format_value(value):
     return value
 
 
-def submit_job(config, experiment_name=None, dry_run=False):
+def submit_job(config, experiment_folder=None, dry_run=False):
     job_name_parts = [f"{key}_{format_value(value)}" for key, value in sorted(config.items()) if value is not None]
-    if experiment_name:
-        job_name_parts.append(experiment_name)
     job_name = '_'.join(job_name_parts)
 
     log_dir = '/mnt/personal/jelint19/results/logs/condensation_jobs'
@@ -28,8 +26,8 @@ def submit_job(config, experiment_name=None, dry_run=False):
     for key, value in config.items():
         if value is not None:
             python_args.append(f'--{key}={value}')
-    if experiment_name:
-        python_args.append(f'--experiment_name={experiment_name}')
+    if experiment_folder:
+        python_args.append(f'--experiment_folder={experiment_folder}')
 
     python_cmd = f"python -m pose.pose_estimator {' '.join(python_args)}"
 
@@ -57,7 +55,7 @@ def submit_job(config, experiment_name=None, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--experiment_name', default=None)
+    parser.add_argument('--experiment_folder', default=None)
     parser.add_argument('--dry_run', action='store_true')
     args = parser.parse_args()
 
@@ -148,7 +146,7 @@ def main():
                 excluded_jobs += 1
                 continue
             total_jobs += 1
-            if submit_job(config, experiment_name=args.experiment_name, dry_run=args.dry_run) != 0:
+            if submit_job(config, experiment_folder=args.experiment_folder, dry_run=args.dry_run) != 0:
                 failed_jobs += 1
 
     print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")
