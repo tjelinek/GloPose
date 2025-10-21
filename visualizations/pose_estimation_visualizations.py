@@ -56,50 +56,42 @@ def tensor2numpy(image, downsample_factor=1.0):
     return image.permute(1, 2, 0).numpy(force=True) * 255.
 
 
-def add_score_overlay(image, score, similarity_metric):
-    """Add a colored score box at the top of the image based on the score."""
+def add_score_overlay(image, score, similarity_metric, bounds=None):
     image = image.astype(np.uint8)
     h, w = image.shape[:2]
-    box_height = int(h * 0.1)  # 10% of image height
-
-    # Create overlay image
+    box_height = int(h * 0.1)
     overlay = image.copy()
 
+    if similarity_metric.lower() == "csls":
+        min_v, max_v = (-4.0, 2.0) if bounds is None else bounds
+    else:
+        min_v, max_v = (-1.0, 1.0) if bounds is None else bounds
+
     if score == 0:
-        # Black box for zero score
         color = (0, 0, 0)
     else:
-        # Get color from second half of inferno colormap
-        # Normalize score to [0.5, 1.0] range for second half of inferno
-        # Assuming scores are between 0 and 1, adjust if different
-        normalized_score = 0.5 + (score * 0.5)  # Map to second half
+        s = np.clip(score, min_v, max_v)
+        t = (s - min_v) / (max_v - min_v)
+        normalized_score = 0.5 + 0.5 * t
         inferno_cmap = cm.get_cmap('inferno')
-        color_rgba = inferno_cmap(normalized_score)
-        # Convert RGBA to BGR for OpenCV (and scale to 0-255)
-        color = (int(color_rgba[2] * 255), int(color_rgba[1] * 255), int(color_rgba[0] * 255))
+        r, g, b, _ = inferno_cmap(normalized_score)
+        color = (int(b * 255), int(g * 255), int(r * 255))
 
-    # Draw filled rectangle at top
     cv2.rectangle(overlay, (0, 0), (w, box_height), color, -1)
 
-    # Add text if score > 0
-    if score > 0:
-        text = f"{similarity_metric} similarity {score:.3f}"  # Format to 3 decimal places
-        font = cv2.FONT_HERSHEY_SIMPLEX
+    text = f"{similarity_metric} similarity {score:.3f}"
+    font = cv2.FONT_HERSHEY_SIMPLEX
 
-        # Calculate text size and position to center it in the box
-        text_size = cv2.getTextSize(text, font, 1, 2)[0]
+    # Calculate text size and position to center it in the box
+    text_size = cv2.getTextSize(text, font, 1, 2)[0]
 
-        # Scale font size to fit the box if needed
-        font_scale = min(1.0, (box_height * 0.8) / text_size[1])
-        font_scale = min(font_scale, (w * 0.9) / text_size[0])
-
-        # Recalculate text position with new font scale
-        text_size = cv2.getTextSize(text, font, font_scale, 2)[0]
-        text_x = (w - text_size[0]) // 2
-        text_y = (box_height + text_size[1]) // 2
-
-        # Draw white text
-        cv2.putText(overlay, text, (text_x, text_y), font, font_scale, (255, 255, 255), 2)
+    # Scale font size to fit the box if needed
+    font_scale = min(1.0, (box_height * 0.8) / text_size[1])
+    font_scale = min(font_scale, (w * 0.9) / text_size[0])
+    text_size = cv2.getTextSize(text, font, font_scale, 2)[0]
+    text_x = (w - text_size[0]) // 2
+    text_y = (box_height + text_size[1]) // 2
+    cv2.putText(overlay, text, (text_x, text_y), font, font_scale, (255, 255, 255), 2)
 
     return overlay
 
@@ -274,9 +266,10 @@ class PoseEstimatorLogger:
                     template_score = detection_topk_scores[i].item()
             else:
                 template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
-                template_score = 0.
+                template_score = None
 
-            template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
+            if template_score is not None:
+                template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
             rr_template = rr.Image(template_image_with_overlay)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
             # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
