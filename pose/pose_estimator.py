@@ -420,8 +420,19 @@ def main():
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
-        experiment = (f'{experiment}-conf_{match_cfg.confidence_thresh}-aggr_{match_cfg.aggregation_function}_'
-                      f'detector-{args.detector}')
+        experiment = (f'{experiment}-aggr_{match_cfg.aggregation_function}_sim_{match_cfg.similarity_metric}'
+                      f'detector-{args.detector}-nms{args.use_enhanced_nms}-OOD')
+
+        if args.ood_detection_method == 'global_threshold':
+            experiment += f'conf_{match_cfg.confidence_thresh}'
+        elif args.ood_detection_method == 'lowe_test':
+            experiment += f'lowe_{match_cfg.lowe_ratio_threshold}'
+        elif args.ood_detection_method == 'cosine_similarity_quantiles':
+            experiment += f'cosQuantiles_{match_cfg.cosine_similarity_quantile}'
+        elif args.ood_detection_method == 'mahalanobis_ood_detection':
+            experiment += f'mahaTau_{match_cfg.mahalanobis_quantile}'
+        elif args.ood_detection_method == 'none':
+            experiment += f'none'
 
         predictor.predict_poses_for_bop_challenge(base_dataset_folder, bop_targets_path, condensed_templates_base,
                                                   detections_split, split_folder, method_name, experiment,
