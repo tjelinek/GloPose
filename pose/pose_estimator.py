@@ -420,7 +420,7 @@ def main():
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
-        experiment = (f'{experiment}-aggr_{match_cfg.aggregation_function}_sim_{match_cfg.similarity_metric}'
+        experiment = (f'{experiment}-aggr_{match_cfg.aggregation_function}-sim_{match_cfg.similarity_metric}'
                       f'detector-{args.detector}-nms{args.use_enhanced_nms}-OOD')
 
         if args.ood_detection_method == 'global_threshold':
