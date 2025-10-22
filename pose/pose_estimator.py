@@ -438,7 +438,7 @@ def main():
                                                   detections_split, split_folder, method_name, experiment,
                                                   view_graph_location, descriptor=args.descriptor,
                                                   detector_name=args.detector,
-                                                  descriptor_mask_detections=descriptor_mask_detections,
+                                                  descriptor_mask_detections=args.descriptor_mask_detections,
                                                   default_detections_file=default_detections_file,
                                                   templates_source=args.templates_source,
                                                   dry_run=args.dry_run)
