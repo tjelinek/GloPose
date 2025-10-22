@@ -410,7 +410,7 @@ def main():
         config.device = 'cuda'
 
         matching_config_overrides = {
-            'aggregation_func': args.aggregation_function,
+            'aggregation_function': args.aggregation_function,
             'ood_detection_method': args.ood_detection_method,
             'confidence_thresh': args.confidence_thresh,
             'cosine_similarity_quantile': args.cosine_similarity_quantile,
