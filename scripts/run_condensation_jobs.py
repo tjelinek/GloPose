@@ -53,7 +53,7 @@ def submit_job(method, descriptor, whiten_dim, dataset, split, descriptor_mask_d
     """Submit a single SLURM job."""
     job_name = f"cond-{method}-{descriptor}-{dataset}-{split}_whiten-dim{whiten_dim}"
     log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}_whiten-dim{whiten_dim}"
-    if descriptor_mask_detections > 0:
+    if descriptor_mask_detections == 0:
         log_name += '_nonMaskedBG'
         job_name += '_nonMaskedBG'
     log_path = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
