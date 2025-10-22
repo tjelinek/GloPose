@@ -72,6 +72,10 @@ def main():
             0,
             1
         ],
+        'descriptor_mask_detections': [
+            0,
+            1
+        ],
     }
 
     config_spaces = [

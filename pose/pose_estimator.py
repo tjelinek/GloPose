@@ -68,8 +68,8 @@ class BOPChallengePosePredictor:
                                         detection_templates_save_folder, onboarding_type: str, split: str,
                                         method_name: str, experiment_name: str, view_graph_save_paths: Path = None,
                                         descriptor: str = 'dinov2', detector_name='sam',
-                                        default_detections_file: Path = None, templates_source: str = 'cnns',
-                                        dry_run: bool = False) -> None:
+                                        descriptor_mask_detections=True, default_detections_file: Path = None,
+                                        templates_source: str = 'cnns', dry_run: bool = False) -> None:
 
         dataset_name = base_dataset_folder.stem
         rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
@@ -87,7 +87,7 @@ class BOPChallengePosePredictor:
 
         view_graphs: Dict[int, ViewGraph] = {}
         from src.model.dinov2 import descriptor_from_hydra
-        dino_descriptor = descriptor_from_hydra(descriptor)
+        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections)
         if templates_source == 'viewgraph':
             view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                               self.config.device)
@@ -420,8 +420,8 @@ def main():
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
-        experiment = (f'{experiment}-aggr_{match_cfg.aggregation_function}-sim_{match_cfg.similarity_metric}'
-                      f'detector-{args.detector}-nms{args.use_enhanced_nms}-OOD')
+        experiment = (f'{experiment}-mask_{args.descriptor_mask_detections}-aggr_{match_cfg.aggregation_function}-'
+                      f'sim_{match_cfg.similarity_metric}-detector_{args.detector}-nms{args.use_enhanced_nms}-OOD')
 
         if args.ood_detection_method == 'global_threshold':
             experiment += f'conf_{match_cfg.confidence_thresh}'
@@ -438,6 +438,7 @@ def main():
                                                   detections_split, split_folder, method_name, experiment,
                                                   view_graph_location, descriptor=args.descriptor,
                                                   detector_name=args.detector,
+                                                  descriptor_mask_detections=descriptor_mask_detections,
                                                   default_detections_file=default_detections_file,
                                                   templates_source=args.templates_source,
                                                   dry_run=args.dry_run)
