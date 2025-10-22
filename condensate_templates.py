@@ -267,8 +267,8 @@ def _compute_stats(X, y, csls_k=10):
 
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
                                      method: str = 'hart_symmetric', descriptor_model='dinov2',
-                                     descriptors_cache_path: Path = None, device='cuda', whiten_dim: int = 0,
-                                     csls_k: int = 10):
+                                     descriptor_mask_detections=True, descriptors_cache_path: Path = None,
+                                     device='cuda', whiten_dim: int = 0, csls_k: int = 10):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -277,7 +277,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = []
     dino_cls_descriptors = []
 
-    dino_descriptor = descriptor_from_hydra(descriptor_model, device)
+    dino_descriptor = descriptor_from_hydra(descriptor_model, descriptor_mask_detections, device=device)
 
     sequences = sorted(path_to_split.iterdir())
     cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
@@ -604,6 +604,7 @@ def main():
                         help='Device to use (default: cuda)')
     parser.add_argument('--whiten_dim', type=int, default=0,
                         help='PCA-whitening output dim; 0 disables whitening')
+    parser.add_argument('--descriptor_mask_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--csls_k', type=int, default=10,
                         help='k for CSLS avg computation in stats')
 
@@ -613,6 +614,8 @@ def main():
     experiment_name = f'1nn-{args.method}-{args.descriptor}'
     if args.whiten_dim > 0:
         experiment_name += f'-whitening_{args.whiten_dim}'
+    if args.descriptor_mask_detections > 0:
+        experiment_name += f'-_nonMaskedBG'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
     bop_base = Path('/mnt/personal/jelint19/data/bop')
@@ -621,8 +624,9 @@ def main():
 
     # Perform condensation for single dataset/split
     perform_condensation_per_dataset(bop_base, cache_base_path, args.dataset, args.split, args.method, args.descriptor,
-                                     descriptors_cache_path, args.device, whiten_dim=args.whiten_dim,
-                                     csls_k=args.csls_k)
+                                     descriptor_mask_detections=args.descriptor_mask_detections,
+                                     descriptors_cache_path=descriptors_cache_path, device=args.device,
+                                     whiten_dim=args.whiten_dim, csls_k=args.csls_k)
 
 
 if __name__ == '__main__':

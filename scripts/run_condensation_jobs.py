@@ -25,7 +25,13 @@ WHITEN_DIM = [
     0,
     64,
     128,
-    256
+    256,
+    1024
+]
+
+MASK_BG = [
+    0,
+    1
 ]
 
 DATASETS = [
@@ -43,11 +49,13 @@ DATASETS = [
 ]
 
 
-def submit_job(method, descriptor, whiten_dim, dataset, split):
+def submit_job(method, descriptor, whiten_dim, dataset, split, descriptor_mask_detections):
     """Submit a single SLURM job."""
     job_name = f"cond-{method}-{descriptor}-{dataset}-{split}_whiten-dim{whiten_dim}"
     log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}_whiten-dim{whiten_dim}"
-
+    if descriptor_mask_detections > 0:
+        log_name += '_nonMaskedBG'
+        job_name += '_nonMaskedBG'
     log_path = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
     log_path.mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +67,7 @@ def submit_job(method, descriptor, whiten_dim, dataset, split):
         '--method', method,
         '--descriptor', descriptor,
         '--whiten_dim', str(whiten_dim),
+        '--descriptor_mask_detections', str(descriptor_mask_detections),
         '--dataset', dataset,
         '--split', split,
         '--device', 'cpu',
@@ -78,13 +87,14 @@ def submit_job(method, descriptor, whiten_dim, dataset, split):
 def main():
     """Submit all job combinations."""
     submitted_jobs = []
-    total_jobs = len(METHODS) * len(DESCRIPTORS) * len(WHITEN_DIM) * len(DATASETS)
+    total_jobs = len(METHODS) * len(DESCRIPTORS) * len(WHITEN_DIM) * len(DATASETS) * len(MASK_BG)
 
     print(f"Submitting {total_jobs} jobs...")
     print("=" * 50)
 
-    for method, descriptor, whiten_dim, (dataset, split) in product(METHODS, DESCRIPTORS, WHITEN_DIM, DATASETS):
-        job_id = submit_job(method, descriptor, whiten_dim, dataset, split)
+    for method, descriptor, whiten_dim, descriptor_mask_detections, (dataset, split) \
+            in product(METHODS, DESCRIPTORS, WHITEN_DIM, MASK_BG, DATASETS):
+        job_id = submit_job(method, descriptor, whiten_dim, dataset, split, descriptor_mask_detections)
         if job_id:
             submitted_jobs.append(job_id)
 
