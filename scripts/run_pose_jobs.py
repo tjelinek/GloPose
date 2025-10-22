@@ -136,6 +136,10 @@ def main():
         [('use_enhanced_nms', 0), ('ood_detection_method', 'lowe_test')],
         [('use_enhanced_nms', 0), ('ood_detection_method', 'cosine_similarity_quantiles')],
         [('use_enhanced_nms', 0), ('ood_detection_method', 'mahalanobis_ood_detection')],
+        [('descriptor_mask_detections', 0), ('ood_detection_method', 'none')],
+        [('descriptor_mask_detections', 0), ('ood_detection_method', 'lowe_test')],
+        [('descriptor_mask_detections', 0), ('ood_detection_method', 'cosine_similarity_quantiles')],
+        [('descriptor_mask_detections', 0), ('ood_detection_method', 'mahalanobis_ood_detection')],
     ]
 
     total_jobs = 0
