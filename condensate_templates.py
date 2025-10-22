@@ -60,7 +60,7 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
 
-    estimator = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
+    estimator = KNeighborsClassifier(n_neighbors=1, n_jobs=1)
 
     random_state = check_random_state(random_state)
     target_stats = Counter(y)
