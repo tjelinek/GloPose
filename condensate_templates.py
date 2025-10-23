@@ -510,8 +510,8 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             if apply_whitening:
                 x = _apply_whitener(x, mu_w, W_w)
 
-            cls_descriptors_dict[obj_id].append(x.squeeze(0))
-            patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0))
+            cls_descriptors_dict[obj_id].append(x.squeeze(0).detach())
+            patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0).detach())
 
         images_dict[obj_id] = torch.stack(images_dict[obj_id])
         segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
