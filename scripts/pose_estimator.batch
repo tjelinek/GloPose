@@ -11,4 +11,27 @@
 ml $(<~/modules_glotracker_login4.txt)
 
 export HYDRA_FULL_ERROR=1
-python -m pose.pose_estimator "$@"
+
+FAILED_JOBS_LOG=""
+for arg in "$@"; do
+    if [[ $arg == --failed_jobs_log=* ]]; then
+        FAILED_JOBS_LOG="${arg#*=}"
+        break
+    fi
+done
+
+PYTHON_ARGS=()
+for arg in "$@"; do
+    if [[ $arg != --failed_jobs_log=* ]]; then
+        PYTHON_ARGS+=("$arg")
+    fi
+done
+
+python -m pose.pose_estimator "${PYTHON_ARGS[@]}"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ] && [ -n "$FAILED_JOBS_LOG" ]; then
+    echo "$SLURM_JOB_NAME" >> "$FAILED_JOBS_LOG"
+fi
+
+exit $EXIT_CODE
