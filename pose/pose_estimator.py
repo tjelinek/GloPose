@@ -415,7 +415,7 @@ def main():
             'confidence_thresh': args.confidence_thresh,
             'cosine_similarity_quantile': args.cosine_similarity_quantile,
             'mahalanobis_quantile': args.mahalanobis_quantile,
-            'lowe_ratio': args.lowe_ratio_threshold,
+            'lowe_ratio_threshold': args.lowe_ratio_threshold,
             'similarity_metric': args.similarity_metric,
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
