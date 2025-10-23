@@ -32,18 +32,18 @@ def submit_job(config, experiment_folder=None, failed_jobs_log=None, dry_run=Fal
     if failed_jobs_log:
         python_args.append(f'--failed_jobs_log={failed_jobs_log}')
 
-    python_cmd = f"python -m pose.pose_estimator {' '.join(python_args)}"
-
-    if dry_run:
-        print(f"[DRY RUN] {python_cmd}")
-        return 0
-
     cmd = [
               'sbatch',
               '--job-name', job_name,
               '--error', f'{log_dir}/{job_name}.err',
               'scripts/pose_estimator.batch',
           ] + python_args
+
+    if dry_run:
+        # cmd_joined = ' '.join(cmd)
+        python_cmd = f"python -m pose.pose_estimator {' '.join(python_args)}"
+        print(f"[DRY RUN] {python_cmd}")
+        return 0
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
