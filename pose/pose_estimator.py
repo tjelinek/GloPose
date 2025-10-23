@@ -406,11 +406,11 @@ def main():
             condensation_source = f"{args.condensation_source}-{args.descriptor}{whitening_suffix}"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
-            experiment = f'cnns-{condensation_source}'
+            experiment = f'cnns@{condensation_source}'
         else:  # pre-rendered
             view_graph_location = None
             condensed_templates_base = None
-            experiment = f'onboarding-templates-{args.descriptor}'
+            experiment = f'onboarding-templates@{args.descriptor}'
 
         config = TrackerConfig()
         config.device = 'cuda'
@@ -426,8 +426,8 @@ def main():
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
-        experiment = (f'{experiment}-mask_{args.descriptor_mask_detections}-aggr_{match_cfg.aggregation_function}-'
-                      f'sim_{match_cfg.similarity_metric}-detector_{args.detector}-nms{args.use_enhanced_nms}-OOD_')
+        experiment = (f'{experiment}@mask_{args.descriptor_mask_detections}@aggr_{match_cfg.aggregation_function}@'
+                      f'sim_{match_cfg.similarity_metric}@detector_{args.detector}@nms{args.use_enhanced_nms}@OOD_')
 
         if args.ood_detection_method == 'global_threshold':
             experiment += f'conf_{match_cfg.confidence_thresh}'
