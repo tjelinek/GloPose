@@ -18,8 +18,8 @@ def format_value(value):
 
 
 def submit_job(config, experiment_folder=None, failed_jobs_log=None, dry_run=False):
-    job_name_parts = [f"{key}_{format_value(value)}" for key, value in sorted(config.items()) if value is not None]
-    job_name = '_'.join(job_name_parts)
+    job_name_parts = [f"{key[:5]}_{format_value(value)}" for key, value in sorted(config.items()) if value is not None]
+    job_name = '@'.join(job_name_parts)
 
     log_dir = '/mnt/personal/jelint19/results/logs/pose_estimator'
 
