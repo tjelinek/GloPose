@@ -233,14 +233,17 @@ class BOPChallengePosePredictor:
             targets_filename = "val_targets_bop24.json"
             # Run evaluation
 
-        metrics = evaluate_bop_coco(
-            result_filename=result_filename,
-            results_path=results_path,
-            datasets_path=datasets_path,
-            eval_path=eval_path,
-            ann_type="bbox",
-            targets_filename=targets_filename
-        )
+        try:
+            metrics = evaluate_bop_coco(
+                result_filename=result_filename,
+                results_path=results_path,
+                datasets_path=datasets_path,
+                eval_path=eval_path,
+                ann_type="bbox",
+                targets_filename=targets_filename
+            )
+        except ValueError:
+            return  # Empty detection results
 
         results_csv_path = self.write_folder / 'detection_results.csv'
         if not dry_run:
@@ -321,6 +324,7 @@ def main():
     parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], default='dinov2')
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], default='cnns')
     parser.add_argument('--condensation_source', default='1nn-hart')
+    parser.add_argument('--whitening_dim', type=int, default=0)
     parser.add_argument('--detector', default='sam')
     parser.add_argument('--aggregation_function', default=None)
     parser.add_argument('--confidence_thresh', type=float, default=None)
@@ -397,7 +401,9 @@ def main():
             view_graph_location = None
             if not args.condensation_source:
                 parser.error("--condensation_source is required when --templates_source is 'cnns'")
-            condensation_source = f"{args.condensation_source}-{args.descriptor}-whitening_256"
+
+            whitening_suffix = f'-whitening_{args.whitening_dim}' if args.whitening_dim > 0 else ''
+            condensation_source = f"{args.condensation_source}-{args.descriptor}{whitening_suffix}"
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
             experiment = f'cnns-{condensation_source}'
