@@ -361,6 +361,8 @@ def update_results_csv(
     Returns:
         pd.DataFrame: Updated DataFrame
     """
+    relative_column_name = 'Mean relative to the best'
+    excluded_columns = [rank_column_name, relative_column_name]
 
     # Create column name
     column_name = f"{dataset}-{split}"
@@ -377,6 +379,11 @@ def update_results_csv(
     if csv_file.exists():
         print(f"Loading existing CSV: {csv_file}")
         df = pd.read_csv(csv_file, index_col=0)
+
+        # Remove duplicate indices, keeping the last occurrence
+        if df.index.duplicated().any():
+            print(f"Found duplicate experiments, removing duplicates...")
+            df = df[~df.index.duplicated(keep='last')]
     else:
         print(f"Creating new CSV: {csv_file}")
         df = pd.DataFrame()
@@ -390,35 +397,34 @@ def update_results_csv(
 
     # Compute median ranks if requested
     if compute_ranks:
-        median_ranks = compute_median_ranks(df, rank_column_name=rank_column_name)
+        median_ranks = compute_median_ranks(df, exclude_columns=excluded_columns, rank_column_name=rank_column_name)
         df[rank_column_name] = median_ranks
 
         relative_to_best = []
-        dataset_cols = [col for col in df.columns if col != rank_column_name]
+        dataset_cols = [col for col in df.columns if col not in excluded_columns]
         for idx in df.index:
             ratios = []
             for col in dataset_cols:
-                val = df.loc[idx, col]
-                best = df[col].max()
-                if pd.notna(val) and pd.notna(best) and best > 0:
-                    ratios.append(val / best)
+                val = df.at[idx, col]
+                best_val = float(df[col].max())
+                if pd.notna(val) and pd.notna(best_val) and best_val > 0:
+                    ratios.append(val / best_val)
             relative_to_best.append(round(sum(ratios) / len(ratios), 3) if ratios else None)
 
-        df['Mean relative to the best'] = relative_to_best
+        df[relative_column_name] = relative_to_best
 
-        cols = ['Mean relative to the best', rank_column_name] + [col for col in df.columns if
-                                                         col not in ['Mean relative to the best', rank_column_name]]
+        cols = [relative_column_name, rank_column_name] + [col for col in df.columns if col not in excluded_columns]
         df = df[cols]
 
-        df = df.sort_values('Mean relative to the best', ascending=False)
+        df = df.sort_values(relative_column_name, ascending=False)
     else:
         # Sort by index if not using ranks
         df = df.sort_index()
 
     # Sort remaining columns (dataset-split combinations) for readability
     if rank_column_name in df.columns:
-        dataset_cols = [col for col in df.columns if col not in [rank_column_name, 'Mean relative to the best']]
-        special_cols = [c for c in ['Mean relative to the best', rank_column_name] if c in df.columns]
+        dataset_cols = [col for col in df.columns if col not in excluded_columns]
+        special_cols = [c for c in excluded_columns if c in df.columns]
         df = df[special_cols + sorted(dataset_cols)]
     else:
         df = df.reindex(sorted(df.columns), axis=1)
@@ -436,9 +442,9 @@ def update_results_csv(
 
     if compute_ranks and not median_ranks.empty:
         print(f"Median Rank for {experiment_name}: {median_ranks.get(experiment_name, 'N/A'):.2f}")
-        rtb = df.loc[experiment_name, 'Mean relative to the best']
+        rtb = df.at[experiment_name, relative_column_name]
         if pd.notna(rtb):
-            print(f"Mean relative to the best for {experiment_name}: {rtb:.3f}")
+            print(f"{relative_column_name} for {experiment_name}: {rtb:.3f}")
 
     return df
 
