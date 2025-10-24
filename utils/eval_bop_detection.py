@@ -393,20 +393,33 @@ def update_results_csv(
         median_ranks = compute_median_ranks(df, rank_column_name=rank_column_name)
         df[rank_column_name] = median_ranks
 
-        # Reorder columns to put Median Rank first
-        cols = [rank_column_name] + [col for col in df.columns if col != rank_column_name]
+        relative_to_best = []
+        dataset_cols = [col for col in df.columns if col != rank_column_name]
+        for idx in df.index:
+            ratios = []
+            for col in dataset_cols:
+                val = df.loc[idx, col]
+                best = df[col].max()
+                if pd.notna(val) and pd.notna(best) and best > 0:
+                    ratios.append(val / best)
+            relative_to_best.append(round(sum(ratios) / len(ratios), 3) if ratios else None)
+
+        df['Mean relative to the best'] = relative_to_best
+
+        cols = ['Mean relative to the best', rank_column_name] + [col for col in df.columns if
+                                                         col not in ['Mean relative to the best', rank_column_name]]
         df = df[cols]
 
-        # Sort by median rank (best methods first)
-        df = df.sort_values(rank_column_name)
+        df = df.sort_values('Mean relative to the best', ascending=False)
     else:
         # Sort by index if not using ranks
         df = df.sort_index()
 
     # Sort remaining columns (dataset-split combinations) for readability
     if rank_column_name in df.columns:
-        dataset_cols = [col for col in df.columns if col != rank_column_name]
-        df = df[[rank_column_name] + sorted(dataset_cols)]
+        dataset_cols = [col for col in df.columns if col not in [rank_column_name, 'Mean relative to the best']]
+        special_cols = [c for c in ['Mean relative to the best', rank_column_name] if c in df.columns]
+        df = df[special_cols + sorted(dataset_cols)]
     else:
         df = df.reindex(sorted(df.columns), axis=1)
 
@@ -423,6 +436,9 @@ def update_results_csv(
 
     if compute_ranks and not median_ranks.empty:
         print(f"Median Rank for {experiment_name}: {median_ranks.get(experiment_name, 'N/A'):.2f}")
+        rtb = df.loc[experiment_name, 'Mean relative to the best']
+        if pd.notna(rtb):
+            print(f"Mean relative to the best for {experiment_name}: {rtb:.3f}")
 
     return df
 
