@@ -343,32 +343,14 @@ def main():
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     sequences_to_run = [
-        # (
-        #     'hot3d', 'test', 'onboarding_static', None
-        # ),
         (
-            'hope', 'test', 'onboarding_static',
-            bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
-                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
-        ),
-        ('hope', 'val', 'onboarding_static', None),
-        (
-            'tless', 'test', 'train_primesense',
-            bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
-                       'cnos-fastsam_tless-test_8ca61cb0-4472-4f11-bce7-1362a12d396f.json'
-        ),
-        (
-            'lmo', 'test', 'train',
-            bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
-                       'cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json'
-        ),
-        (
-            'icbin', 'test', 'train',
-            bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
-                       'cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'
+            'hot3d', 'test', 'object_ref_aria_static_scenewise', None
         ),
         ('handal', 'test', 'onboarding_static', None),
         ('handal', 'val', 'onboarding_static', None),
+        (
+            'hot3d', 'test', 'object_ref_aria_quest3_scenewise', None
+        ),
     ]
 
     method_name = 'MyCNOS'
@@ -379,6 +361,14 @@ def main():
 
         if dataset in ['hope', 'handal']:
             targets_year = 'bop24'
+        elif dataset in 'hot3d':
+            targets_year = 'bop24'
+            if 'aria' in detections_split:
+                data_type = '_aria_scenewise'
+            elif 'quest3' in detections_split:
+                data_type = '_quest3_scenewise'
+            else:
+                raise ValueError(f'Detections split may only be "aria" or "quest3", but is {detections_split}')
         elif dataset in ['tless', 'lmo', 'icbin']:
             targets_year = 'bop19'
             if dataset == 'tless':
