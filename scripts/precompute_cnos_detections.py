@@ -3,6 +3,26 @@ from pathlib import Path
 import argparse
 
 DATASETS = [
+    'tless-train_pbr',
+    'tless-train_primesense',
+    'lmo-train',
+    'icbin-train_pbr',
+    'icbin-train',
+    'handal-onboarding_static',
+    'handal-onboarding_dynamic',
+    'handal-train_pbr',
+    'hope-onboarding_static',
+    'hope-onboarding_dynamic',
+    'hope-train_pbr',
+    'hot3d-object_ref_aria_dynamic_scenewise',
+    'hot3d-object_ref_aria_static_scenewise',
+    'hot3d-train_pbr',
+    'hot3d-object_ref_quest3_dynamic_scenewise',
+    'hot3d-object_ref_quest3_static_scenewise',
+    'hot3d-aria',
+    'hot3d-quest3',
+    'hot3d-aria-train',
+    'hot3d-quest3-train',
     'lmo',
     'tless',
     'icbin',
@@ -50,7 +70,7 @@ def submit_job(dataset, detector):
         '--detector', detector,
     ]
 
-    print(f"Submitting job for dataset: {dataset}, detector: {detector}")
+    print(f"Submitting job for dataset, detector: {detector}")
 
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
