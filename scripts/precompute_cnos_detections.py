@@ -19,7 +19,8 @@ DATASETS = [
 DETECTORS = [
     'sam',
     'fastsam',
-    'sam2']
+    'sam2'
+]
 
 
 def submit_job(dataset, detector):
