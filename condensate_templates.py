@@ -316,13 +316,22 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
             cache_file_path = descriptors_cache_path / dataset / split / sequence.name / f'{image_path.stem}.pt' \
                 if descriptors_cache_path else None
 
+            descriptors_loaded_successfully = False
             if cache_file_path and cache_file_path.exists():
-                dino_cls_descriptor = torch.load(cache_file_path, map_location=device, weights_only=True)
-            else:
+                loaded_descriptors = torch.load(cache_file_path, map_location=device, weights_only=True)
+                if type(loaded_descriptors) is tuple:
+                    dino_cls_descriptor, dino_dense_descriptor = loaded_descriptors
+                    descriptors_loaded_successfully = True
+
+            if not descriptors_loaded_successfully:
                 dino_cls_descriptor, dino_dense_descriptor = dino_descriptor.get_detections_from_files(image_path,
                                                                                                        seg_path)
                 if cache_file_path:
-                    torch.save(dino_cls_descriptor.detach().cpu(), cache_file_path)
+                    dino_cls_descriptor_to_save = dino_cls_descriptor.detach().clone().cpu()
+                    dino_dense_descriptor_to_save = dino_dense_descriptor.detach().clone().cpu()
+
+                    payload = (dino_cls_descriptor_to_save, dino_dense_descriptor_to_save)
+                    torch.save(payload, cache_file_path)
 
             all_images.append(image_path)
             all_segmentations.append(seg_path)
