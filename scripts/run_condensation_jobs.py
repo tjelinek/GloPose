@@ -12,12 +12,12 @@ from pathlib import Path
 METHODS = [
     'hart',
     'hart_symmetric',
-    'hart_imblearn',
-    'hart_imblearn_adapted'
+    # 'hart_imblearn',
+    # 'hart_imblearn_adapted'
 ]
 
 DESCRIPTORS = [
-    'dinov2',
+    # 'dinov2',
     'dinov3'
 ]
 
