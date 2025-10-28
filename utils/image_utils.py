@@ -353,14 +353,13 @@ def compute_overlap_ratio(masks: torch.Tensor, targets: torch.Tensor) -> torch.T
     masks_bool = masks > 0
     targets_bool = targets > 0
 
-    masks_exp = masks_bool[:, None, :, :]
-    targets_exp = targets_bool[None, :, :, :]
-    intersection = (masks_exp & targets_exp).sum(dim=(-2, -1))
+    masks_flat = masks_bool.flatten(1).float()  # [N, H*W]
+    targets_flat = targets_bool.flatten(1).float()  # [M, H*W]
 
-    mask_areas = masks_bool.sum(dim=(-2, -1))
+    intersection = masks_flat @ targets_flat.T  # [N, M]
+    mask_areas = masks_flat.sum(dim=1, keepdim=True)  # [N, 1]
 
-    overlap_ratio = intersection.float() / mask_areas[:, None].float()
-
+    overlap_ratio = intersection / mask_areas
     return overlap_ratio
 
 
@@ -368,8 +367,11 @@ def compute_target_coverage(masks: torch.Tensor, targets: torch.Tensor) -> torch
     masks_bool = masks > 0
     targets_bool = targets > 0
 
-    intersection = (masks_bool & targets_bool).sum(dim=(-2, -1))
-    target_areas = targets_bool.sum(dim=(-2, -1))
+    masks_flat = masks_bool.flatten(1).float()  # [N, H*W]
+    targets_flat = targets_bool.flatten(1).float()  # [N, H*W]
 
-    coverage = intersection.float() / target_areas.float()
+    intersection = (masks_flat * targets_flat).sum(dim=1)  # [N]
+    target_areas = targets_flat.sum(dim=1)  # [N]
+
+    coverage = intersection / target_areas
     return coverage
