@@ -269,10 +269,11 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                                      method: str = 'hart_symmetric', descriptor_model='dinov2',
                                      descriptor_mask_detections=True, descriptors_cache_path: Path = None,
                                      device='cuda', whiten_dim: int = 0, csls_k: int = 10,
-                                     onboarding_augmentations_path: Path=None, train_pbr_augmentations_path: Path=None,
-                                     augment_with_split_detections: bool=False,
-                                     augment_with_train_pbr_detections: bool=False,
-                                     augmentations_detector: str=None):
+                                     onboarding_augmentations_path: Path = None,
+                                     train_pbr_augmentations_path: Path = None,
+                                     augment_with_split_detections: bool = False,
+                                     augment_with_train_pbr_detections: bool = False,
+                                     augmentations_detector: str = None):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
