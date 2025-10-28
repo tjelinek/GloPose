@@ -23,10 +23,6 @@ DESCRIPTORS = [
 
 WHITEN_DIM = [
     0,
-    64,
-    128,
-    256,
-    1024
 ]
 
 MASK_BG = [
