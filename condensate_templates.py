@@ -1,3 +1,4 @@
+import pickle
 import shutil
 import sys
 import argparse
@@ -284,6 +285,20 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
     dino_descriptor = descriptor_from_hydra(descriptor_model, descriptor_mask_detections, device=device)
 
+    if (train_pbr_augmentations_path is not None and train_pbr_augmentations_path.exists()
+            and augment_with_train_pbr_detections):
+        X_cls_pbr, X_patch_pbr, y_pbr = \
+            get_detections_descrpitors(augmentations_detector, dataset, descriptor_model, train_pbr_augmentations_path)
+    else:
+        X_cls_pbr, X_patch_pbr, y_pbr = None, None, None
+
+    if (onboarding_augmentations_path is not None and onboarding_augmentations_path.exists()
+            and augment_with_train_pbr_detections):
+        X_cls_onboarding, X_patch_onboarding, y_onboarding = \
+            get_detections_descrpitors(augmentations_detector, dataset, descriptor_model, onboarding_augmentations_path)
+    else:
+        X_cls_onboarding, X_patch_onboarding, y_onboarding = None, None, None
+
     sequences = sorted(path_to_split.iterdir())
     cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
 
@@ -451,6 +466,35 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         }
 
         torch.save(payload, stats_dir / 'csls_stats.pt')
+
+
+def get_detections_descrpitors(augmentations_detector: str | None, dataset: str, descriptor_model: str,
+                               onboarding_augmentations_path: Path) -> Any:
+    return method_name(onboarding_augmentations_path, augmentations_detector, descriptor_model, dataset)
+
+
+def method_name(onboarding_augmentations_path: Path, detector_name: str | None, descriptor_name: str, dataset: str):
+    X_cls_pbr = []
+    X_patch_pbr = []
+    y_pbr = []
+
+    all_augmentations_sequences = sorted(onboarding_augmentations_path.iterdir())
+    for sequence in tqdm(all_augmentations_sequences, total=len(all_augmentations_sequences),
+                         desc=f'train_pbr descriptors of {dataset}'):
+        descriptor_dir = sequence / f'cnos_{detector_name}_detections_{descriptor_name}'
+
+        descriptors_files = sorted(descriptor_dir.iterdir())
+        for descriptor_file in descriptors_files:
+            with open(descriptor_file, "rb") as pickle_file:
+                payload = pickle.load(pickle_file)
+
+            X_cls_pbr.append(payload['descriptors'])
+            X_patch_pbr.append(payload['patch_descriptors'])
+            y_pbr.extend(payload['detections_object_ids'])
+
+    X_cls_pbr = np.concatenate(X_cls_pbr)
+    X_patch_pbr = np.concatenate(X_patch_pbr)
+    y_pbr = np.array(y_pbr)
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str,
@@ -635,7 +679,7 @@ def main():
         experiment_name += f'_nonMaskedBG'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
-    detections_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.dataset}')
+    detections_cache_path = Path(f'/mnt/personal/jelint19/cache/detections_cache/{args.dataset}')
     onboarding_augmentations_path = detections_cache_path / f'{args.split}'
     train_pbr_augmentations_path = detections_cache_path / 'train_pbr'
     bop_base = Path('/mnt/personal/jelint19/data/bop')
