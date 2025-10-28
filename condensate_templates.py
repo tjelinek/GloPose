@@ -268,7 +268,11 @@ def _compute_stats(X, y, csls_k=10):
 def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, dataset: str, split: str,
                                      method: str = 'hart_symmetric', descriptor_model='dinov2',
                                      descriptor_mask_detections=True, descriptors_cache_path: Path = None,
-                                     device='cuda', whiten_dim: int = 0, csls_k: int = 10):
+                                     device='cuda', whiten_dim: int = 0, csls_k: int = 10,
+                                     onboarding_augmentations_path: Path=None, train_pbr_augmentations_path: Path=None,
+                                     augment_with_split_detections: bool=False,
+                                     augment_with_train_pbr_detections: bool=False,
+                                     augmentations_detector: str=None):
     path_to_dataset = bop_base / dataset
     path_to_split = path_to_dataset / split
 
@@ -616,6 +620,9 @@ def main():
     parser.add_argument('--descriptor_mask_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--csls_k', type=int, default=10,
                         help='k for CSLS avg computation in stats')
+    parser.add_argument('--augment_with_split_detections', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--augment_with_train_pbr_detections', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--augmentations_detector', type=str, default='sam2')
 
     args = parser.parse_args()
 
@@ -627,6 +634,9 @@ def main():
         experiment_name += f'_nonMaskedBG'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
+    detections_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.dataset}')
+    onboarding_augmentations_path = detections_cache_path / f'{args.split}'
+    train_pbr_augmentations_path = detections_cache_path / 'train_pbr'
     bop_base = Path('/mnt/personal/jelint19/data/bop')
 
     print(f"Processing {args.dataset}/{args.split} with method {args.method} and descriptor {args.descriptor}")
@@ -635,7 +645,12 @@ def main():
     perform_condensation_per_dataset(bop_base, cache_base_path, args.dataset, args.split, args.method, args.descriptor,
                                      descriptor_mask_detections=args.descriptor_mask_detections,
                                      descriptors_cache_path=descriptors_cache_path, device=args.device,
-                                     whiten_dim=args.whiten_dim, csls_k=args.csls_k)
+                                     whiten_dim=args.whiten_dim, csls_k=args.csls_k,
+                                     onboarding_augmentations_path=onboarding_augmentations_path,
+                                     train_pbr_augmentations_path=train_pbr_augmentations_path,
+                                     augment_with_split_detections=args.augment_with_split_detections,
+                                     augment_with_train_pbr_detections=args.augment_with_train_pbr_detections,
+                                     augmentations_detector=args.augmentations_detector)
 
 
 if __name__ == '__main__':
