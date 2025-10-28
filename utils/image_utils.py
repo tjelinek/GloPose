@@ -341,3 +341,35 @@ def decode_rle_list(rle_dict: Dict):
         flag = 1 - flag  # toggle between 0 and 1
 
     return mask.reshape((h, w), order='F')  # Fortran order
+
+
+def compute_overlap_ratio(masks: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """
+    masks: [N, H, W]
+    targets: [M, H, W]
+    Gives NxM matrix that gives share of pixels in masks that intersect targets.
+    """
+
+    masks_bool = masks > 0
+    targets_bool = targets > 0
+
+    masks_exp = masks_bool[:, None, :, :]
+    targets_exp = targets_bool[None, :, :, :]
+    intersection = (masks_exp & targets_exp).sum(dim=(-2, -1))
+
+    mask_areas = masks_bool.sum(dim=(-2, -1))
+
+    overlap_ratio = intersection.float() / mask_areas[:, None].float()
+
+    return overlap_ratio
+
+
+def compute_target_coverage(masks: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    masks_bool = masks > 0
+    targets_bool = targets > 0
+
+    intersection = (masks_bool & targets_bool).sum(dim=(-2, -1))
+    target_areas = targets_bool.sum(dim=(-2, -1))
+
+    coverage = intersection.float() / target_areas.float()
+    return coverage
