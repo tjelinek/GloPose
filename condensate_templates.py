@@ -376,13 +376,11 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     object_classes = torch.tensor(object_classes).to(device)
     dino_cls_descriptors = torch.cat(dino_cls_descriptors)
     dino_patch_descriptors = torch.cat(dino_patch_descriptors)
-    all_images = np.array(all_images)
-    all_segmentations = np.array(all_segmentations, dtype=np.object_)
 
     permutation = np.random.permutation(len(all_images))
     permutation_tensor = torch.tensor(permutation).to(device)
-    all_images = all_images[permutation]
-    all_segmentations = all_segmentations[permutation]
+    all_images = [all_images[i] for i in permutation]
+    all_segmentations = [all_segmentations[i] for i in permutation]
     object_classes = object_classes[permutation]
     dino_cls_descriptors = dino_cls_descriptors[permutation_tensor]
     dino_patch_descriptors = dino_patch_descriptors[permutation_tensor]
