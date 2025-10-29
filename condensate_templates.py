@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
-import torchvision.transforms as transforms
+import torchvision.transforms as TVF
 from scipy.sparse import issparse
 from sklearn import clone
 from sklearn.neighbors import KNeighborsClassifier
@@ -341,8 +341,11 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                     payload = (dino_cls_descriptor_to_save, dino_dense_descriptor_to_save)
                     torch.save(payload, cache_file_path)
 
+            seg_img = Image.open(seg_path)
+            seg_array = TVF.functional.pil_to_tensor(seg_img).to(torch.bool).squeeze(0).to(device)
+
             all_images.append(image_path)
-            all_segmentations.append(seg_path)
+            all_segmentations.append(seg_array)
             object_classes.append(object_id)
             dino_cls_descriptors.append(dino_cls_descriptor)
             dino_patch_descriptors.append(dino_dense_descriptor)
@@ -352,25 +355,29 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         path_to_pbr = path_to_split.parent / 'train_pbr'
         X_cls_pbr, X_patch_pbr, y_pbr, image_paths_pbr, masks_pbr = \
             get_detections_descriptors(augmentations_detector, dataset, path_to_pbr, descriptor_model,
-                                       train_pbr_augmentations_path)
+                                       train_pbr_augmentations_path, skip=10, device=device)
         dino_cls_descriptors.extend(X_cls_pbr)
         dino_patch_descriptors.extend(X_patch_pbr)
         object_classes.extend(y_pbr)
+        all_images.extend(image_paths_pbr)
+        all_segmentations.extend(masks_pbr)
 
     if (onboarding_augmentations_path is not None and onboarding_augmentations_path.exists()
             and augment_with_split_detections):
         X_cls_onboarding, X_patch_onboarding, y_onboarding, image_paths_onboarding, masks_onboarding = \
             get_detections_descriptors(augmentations_detector, dataset, path_to_split, descriptor_model,
-                                       onboarding_augmentations_path)
+                                       onboarding_augmentations_path, device=device)
         dino_cls_descriptors.extend(X_cls_onboarding)
         dino_patch_descriptors.extend(X_patch_onboarding)
         object_classes.extend(y_onboarding)
+        all_images.extend(image_paths_onboarding)
+        all_segmentations.extend(masks_onboarding)
 
     object_classes = torch.tensor(object_classes).to(device)
     dino_cls_descriptors = torch.cat(dino_cls_descriptors)
     dino_patch_descriptors = torch.cat(dino_patch_descriptors)
     all_images = np.array(all_images)
-    all_segmentations = np.array(all_segmentations)
+    all_segmentations = np.array(all_segmentations, dtype=np.object_)
 
     permutation = np.random.permutation(len(all_images))
     permutation_tensor = torch.tensor(permutation).to(device)
@@ -380,18 +387,19 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     dino_cls_descriptors = dino_cls_descriptors[permutation_tensor]
     dino_patch_descriptors = dino_patch_descriptors[permutation_tensor]
 
-    X_np = dino_cls_descriptors.cpu().numpy()
-    X_np = _l2n(X_np).astype(np.float32)
+    X_cls_np = dino_cls_descriptors.numpy(force=True)
+    X_patch_np = dino_patch_descriptors.numpy(force=True)
+    X_cls_np = _l2n(X_cls_np).astype(np.float32)
     y_np = object_classes.numpy(force=True)
 
-    mu_w, W_w = _fit_whitener(X_np, out_dim=min(whiten_dim, X_np.shape[1]))
+    mu_w, W_w = _fit_whitener(X_cls_np, out_dim=min(whiten_dim, X_cls_np.shape[1]))
     if whiten_dim and whiten_dim > 0:
-        X_for_selection = _apply_whitener(X_np, mu_w, W_w)
-        Xw_np = _apply_whitener(X_np, mu_w, W_w)
+        X_for_selection = _apply_whitener(X_cls_np, mu_w, W_w)
+        Xw_np = _apply_whitener(X_cls_np, mu_w, W_w)
     else:
         mu_w, W_w = None, None
-        Xw_np = X_np
-        X_for_selection = X_np
+        Xw_np = X_cls_np
+        X_for_selection = X_cls_np
 
     stats = _compute_stats(Xw_np, y_np, csls_k=csls_k)
 
@@ -480,9 +488,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
 
 
 def get_detections_descriptors(augmentations_detector: str, dataset: str, path_to_split: Path, descriptor_model: str,
-                               onboarding_augmentations_path: Path) -> Any:
-    X_cls_pbr = []
-    X_patch_pbr = []
+                               onboarding_augmentations_path: Path, skip: int = 1, device='cpu') -> Any:
+    X_cls = []
+    X_patch = []
     y_pbr = []
     masks = []
     image_paths = []
@@ -492,7 +500,7 @@ def get_detections_descriptors(augmentations_detector: str, dataset: str, path_t
                          desc=f'{onboarding_augmentations_path.stem} descriptors of {dataset}'):
         descriptor_dir = sequence / f'cnos_{augmentations_detector}_detections_{descriptor_model}'
 
-        descriptors_files = sorted(descriptor_dir.iterdir())
+        descriptors_files = sorted(descriptor_dir.iterdir())[::skip]
         for descriptor_file in descriptors_files:
             with open(descriptor_file, "rb") as pickle_file:
                 payload = pickle.load(pickle_file)
@@ -501,15 +509,16 @@ def get_detections_descriptors(augmentations_detector: str, dataset: str, path_t
             image_file = path_to_sequence / 'rgb' / f'{descriptor_file.stem}.jpg'
 
             detection_masks_rle = payload['masks']
-            detection_masks_array = [rle_to_mask(rle_mask) for rle_mask in detection_masks_rle]
+            detection_masks_array = \
+                [torch.from_numpy(rle_to_mask(rle_mask)).to(device) for rle_mask in detection_masks_rle]
 
             masks.extend(detection_masks_array)
-            X_cls_pbr.append(payload['descriptors'])
-            X_patch_pbr.append(payload['patch_descriptors'])
+            X_cls.append(torch.from_numpy(payload['descriptors']).to(device))
+            X_patch.append(torch.from_numpy(payload['patch_descriptors']).to(device))
             y_pbr.extend(payload['detections_object_ids'])
             image_paths.extend([image_file] * len(detection_masks_array))
 
-    return X_cls_pbr, X_patch_pbr, y_pbr, image_paths, masks
+    return X_cls, X_patch, y_pbr, image_paths, masks
 
 
 def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor_name: str,
@@ -560,7 +569,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                                         leave=False):
             # Load RGB image
             rgb_img = Image.open(rgb_file).convert('RGB')
-            rgb_tensor = transforms.ToTensor()(rgb_img).to(device)
+            rgb_tensor = TVF.ToTensor()(rgb_img).to(device)
 
             descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
 
