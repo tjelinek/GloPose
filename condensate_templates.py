@@ -133,7 +133,9 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     return sample_indices_
 
 
-def harts_cnn_original(X, y, random_state=None, max_iterations=100):
+def harts_cnn_original(X, y, patch_descriptors=None, min_cls_cosine_similarity=0.15,
+                       min_avg_patch_cosine_similarity=0.15, segmentation_masks=None,
+                       random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     n, d = X.shape
@@ -156,7 +158,9 @@ def harts_cnn_original(X, y, random_state=None, max_iterations=100):
     return np.sort(np.unique(S))
 
 
-def harts_cnn_symmetric(X, y, n_seeds_S=1, random_state=None, max_iterations=100):
+def harts_cnn_symmetric(X, y, patch_descriptors=None, min_cls_cosine_similarity=0.15,
+                        min_avg_patch_cosine_similarity=0.15, segmentation_masks=None,
+                        n_seeds_S=1, random_state=None, max_iterations=100):
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     rng = np.random.default_rng(random_state)
@@ -413,9 +417,23 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     elif method == 'hart_imblearn_adapted':
         sample_indices = imblearn_fitresample_adapted(torch.from_numpy(X_for_selection), object_classes)
     elif method == "hart_symmetric":
-        sample_indices = harts_cnn_symmetric(torch.from_numpy(X_for_selection), object_classes)
+        sample_indices = harts_cnn_symmetric(
+            torch.from_numpy(X_for_selection),
+            object_classes,
+            patch_descriptors=dino_patch_descriptors,
+            min_cls_cosine_similarity=min_cls_cosine_similarity,
+            min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
+            segmentation_masks=all_segmentations
+        )
     elif method == 'hart':
-        sample_indices = harts_cnn_original(torch.from_numpy(X_for_selection), object_classes)
+        sample_indices = harts_cnn_original(
+            torch.from_numpy(X_for_selection),
+            object_classes,
+            patch_descriptors=dino_patch_descriptors,
+            min_cls_cosine_similarity=min_cls_cosine_similarity,
+            min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
+            segmentation_masks=all_segmentations
+        )
     else:
         raise ValueError(f"Method {method} not recognized")
 
