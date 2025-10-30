@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional, List
 import numpy as np
 import torch
 import torchvision
+import torch.nn.functional as F
 import torchvision.transforms as TVF
 from scipy.sparse import issparse
 from sklearn import clone
@@ -143,9 +144,7 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
 
 def _cosine_knn_predict(train_x: torch.Tensor, train_y: torch.Tensor, query_x: torch.Tensor) -> torch.Tensor:
-    tx = F.normalize(train_x, dim=1)
-    qx = F.normalize(query_x, dim=1)
-    sims = qx @ tx.T
+    sims = query_x @ train_x.T
     idx = sims.argmax(dim=1)
     return train_y[idx]
 
@@ -163,6 +162,9 @@ def harts_cnn_original(
 
     n, d = X.shape
     device = X.device
+
+    X = F.normalize(X, dim=1)
+
     rng = torch.Generator(device=device)
     rng.manual_seed(random_state)
 
