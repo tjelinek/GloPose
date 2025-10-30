@@ -204,43 +204,48 @@ def harts_cnn_symmetric(
     n_seeds_S: int = 1,
     random_state: Optional[int] = 42,
     max_iterations: int = 100,
-) -> np.ndarray:
+) -> torch.Tensor:
+
     device = X.device
 
-    rng = np.random.default_rng(random_state)
-    classes = np.unique(y)
+    generator = torch.Generator(device=device).manual_seed(random_state)
+
+    X_norm = F.normalize(X, dim=1)
+    classes = torch.unique(y)
     selected = []
-
-    knn = KNeighborsClassifier(n_neighbors=1, n_jobs=1, metric="cosine")
-
-        idx_c = np.flatnonzero(y == c)
-        idx_rest = np.flatnonzero(y != c)
-        if idx_c.size == 0:
     for c in tqdm(classes, desc='Hart symmetric algorithm classes', total=len(classes)):
+        idx_c = torch.nonzero(y == c, as_tuple=True)[0]
+        idx_rest = torch.nonzero(y != c, as_tuple=True)[0]
+        if idx_c.numel() == 0:
             continue
-        seeds = idx_c[rng.integers(0, idx_c.size, size=n_seeds_S)]
-        C = np.concatenate([idx_rest, seeds])
+        seed_indices = torch.randint(0, idx_c.numel(), (n_seeds_S,), device=device, generator=generator)
+        seeds = idx_c[seed_indices]
+        C = torch.cat([idx_rest, seeds])
         S_cls = idx_c
         changed = True
         it = 0
-
-        pbar = tqdm(total=max_iterations, desc='Hart symmetric algorithm iterations')
         while changed and it < max_iterations:
-            pbar.update(1)
-
             changed = False
             it += 1
-            knn.fit(X[C], y[C])
+            X_C_norm = X_norm[C]
+            y_C = y[C]
             for s in S_cls:
-                pred = knn.predict(X[s: s + 1])[0]
+                pred = _cosine_knn_predict(X_C_norm, y_C, X_norm[s:s+1])[0]
                 if pred != y[s]:
-                    C = np.append(C, s)
-                    knn.fit(X[C], y[C])
+                    C = torch.cat([C, s.view(1)])
                     changed = True
-        selected.append(np.unique(np.append(seeds, np.intersect1d(C, S_cls))))
+        C_set = set(C.tolist())
+        S_cls_set = set(S_cls.tolist())
+        intersection = torch.tensor(list(C_set & S_cls_set), dtype=torch.long, device=device)
+        selected_for_class = torch.unique(torch.cat([seeds, intersection]))
+        selected.append(selected_for_class)
     if len(selected) == 0:
-        return np.array([], dtype=int)
-    return np.sort(np.unique(np.concatenate(selected)))
+        return torch.tensor([], dtype=torch.long, device=device)
+
+    result = torch.unique(torch.cat(selected))
+    S, _ = torch.sort(result)
+
+    return S
 
 
 def _l2n(x, eps=1e-12):
@@ -466,16 +471,16 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         sample_indices = imblearn_fitresample_adapted(torch.from_numpy(X_for_selection), object_classes)
     elif method == "hart_symmetric":
         sample_indices = harts_cnn_symmetric(
-            torch.from_numpy(X_for_selection),
+            torch.from_numpy(X_for_selection).to(device),
             object_classes,
             patch_descriptors=dino_patch_descriptors,
             min_cls_cosine_similarity=min_cls_cosine_similarity,
             min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
             segmentation_masks=all_segmentations
-        )
+        ).numpy(force=True)
     elif method == 'hart':
         sample_indices = harts_cnn_original(
-            torch.from_numpy(X_for_selection),
+            torch.from_numpy(X_for_selection).to(device),
             object_classes,
             patch_descriptors=dino_patch_descriptors,
             min_cls_cosine_similarity=min_cls_cosine_similarity,
