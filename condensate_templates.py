@@ -142,9 +142,16 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     return sample_indices_
 
 
-def harts_cnn_original(X, y, patch_descriptors=None, min_cls_cosine_similarity=0.15,
-                       min_avg_patch_cosine_similarity=0.15, segmentation_masks=None,
-                       random_state=None, max_iterations=100):
+def harts_cnn_original(
+    X: np.ndarray,
+    y: np.ndarray,
+    patch_descriptors: Optional[np.ndarray] = None,
+    min_cls_cosine_similarity: float = 0.15,
+    min_avg_patch_cosine_similarity: float = 0.15,
+    segmentation_masks: Optional[List[np.ndarray]] = None,
+    random_state: Optional[int] = None,
+    max_iterations: int = 100,
+) -> np.ndarray:
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     n, d = X.shape
@@ -169,9 +176,17 @@ def harts_cnn_original(X, y, patch_descriptors=None, min_cls_cosine_similarity=0
     return np.sort(np.unique(S))
 
 
-def harts_cnn_symmetric(X, y, patch_descriptors=None, min_cls_cosine_similarity=0.15,
-                        min_avg_patch_cosine_similarity=0.15, segmentation_masks=None,
-                        n_seeds_S=1, random_state=None, max_iterations=100):
+def harts_cnn_symmetric(
+    X: np.ndarray,
+    y: np.ndarray,
+    patch_descriptors: Optional[np.ndarray] = None,
+    min_cls_cosine_similarity: float = 0.15,
+    min_avg_patch_cosine_similarity: float = 0.15,
+    segmentation_masks: Optional[List[np.ndarray]] = None,
+    n_seeds_S: int = 1,
+    random_state: Optional[int] = None,
+    max_iterations: int = 100,
+) -> np.ndarray:
     X = _to_np_f32(X)
     y = _to_np_labels(y)
     rng = np.random.default_rng(random_state)
