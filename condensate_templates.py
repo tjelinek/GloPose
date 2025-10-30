@@ -374,13 +374,13 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
                     torch.save(payload, cache_file_path)
 
             seg_img = Image.open(seg_path)
-            seg_array = TVF.functional.pil_to_tensor(seg_img).to(torch.bool).squeeze(0).to(device)
+            seg_array = TVF.functional.pil_to_tensor(seg_img).to(torch.bool).squeeze(0).cpu()
 
             all_images.append(image_path)
             all_segmentations.append(seg_array)
             object_classes.append(object_id)
             dino_cls_descriptors.append(dino_cls_descriptor)
-            dino_patch_descriptors.append(dino_dense_descriptor)
+            dino_patch_descriptors.append(dino_dense_descriptor.cpu())
 
     if (train_pbr_augmentations_path is not None and train_pbr_augmentations_path.exists()
             and augment_with_train_pbr_detections):
