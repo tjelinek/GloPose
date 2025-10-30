@@ -145,8 +145,8 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
 def _cosine_knn_predict(train_x: torch.Tensor, train_y: torch.Tensor, query_x: torch.Tensor) -> torch.Tensor:
     sims = query_x @ train_x.T
-    idx = sims.argmax(dim=1)
-    return train_y[idx]
+    topk_vals, topk_idx = torch.topk(sims, k=1, dim=1)
+    return train_y[topk_idx.squeeze(1)]
 
 
 def harts_cnn_original(
