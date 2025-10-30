@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
+import torchvision
 import torchvision.transforms as TVF
 from scipy.sparse import issparse
 from sklearn import clone
@@ -469,13 +470,13 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         descriptors_save_dir.mkdir(parents=True, exist_ok=True)
 
         image_path = all_images[index]
-        segmentation_path = all_segmentations[index]
+        segmentation_tensor = all_segmentations[index]
 
         new_image_name = Path(f'{image_path.stem}_{index}{image_path.suffix}')
-        new_seg_name = Path(f'{segmentation_path.stem}_{index}{segmentation_path.suffix}')
+        new_seg_name = Path(f'{image_path.stem}_{index}.png')
         descriptor_name = f'{new_image_name.stem}.pt'
         shutil.copy2(image_path, images_save_dir / new_image_name)
-        shutil.copy2(segmentation_path, segmentation_save_dir / new_seg_name)
+        torchvision.utils.save_image(segmentation_tensor.float(), segmentation_save_dir / new_seg_name,)
 
         cls_descriptor_to_save = dino_cls_descriptors[index].detach().cpu().clone()
         torch.save(cls_descriptor_to_save, descriptors_save_dir / descriptor_name)
