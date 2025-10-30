@@ -152,10 +152,12 @@ def harts_cnn_original(X, y, patch_descriptors=None, min_cls_cosine_similarity=0
     S = np.array([start], dtype=int)
     changed = True
     it = 0
+
+    knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16, metric="cosine")
+
     while changed and it < max_iterations:
         changed = False
         it += 1
-        knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
         knn.fit(X[S], y[S])
         for i in range(n):
             pred = knn.predict(X[i:i + 1])[0]
@@ -174,6 +176,9 @@ def harts_cnn_symmetric(X, y, patch_descriptors=None, min_cls_cosine_similarity=
     rng = np.random.default_rng(random_state)
     classes = np.unique(y)
     selected = []
+
+    knn = KNeighborsClassifier(n_neighbors=1, n_jobs=1, metric="cosine")
+
     for c in classes:
         idx_c = np.flatnonzero(y == c)
         idx_rest = np.flatnonzero(y != c)
@@ -184,10 +189,10 @@ def harts_cnn_symmetric(X, y, patch_descriptors=None, min_cls_cosine_similarity=
         S_cls = idx_c
         changed = True
         it = 0
+
         while changed and it < max_iterations:
             changed = False
             it += 1
-            knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16)
             knn.fit(X[C], y[C])
             for s in S_cls:
                 pred = knn.predict(X[s: s + 1])[0]
