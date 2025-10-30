@@ -142,6 +142,14 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     return sample_indices_
 
 
+def _cosine_knn_predict(train_x: torch.Tensor, train_y: torch.Tensor, query_x: torch.Tensor) -> torch.Tensor:
+    tx = F.normalize(train_x, dim=1)
+    qx = F.normalize(query_x, dim=1)
+    sims = qx @ tx.T
+    idx = sims.argmax(dim=1)
+    return train_y[idx]
+
+
 def harts_cnn_original(
     X: torch.Tensor,
     y: torch.Tensor,
@@ -154,25 +162,34 @@ def harts_cnn_original(
 ) -> torch.Tensor:
 
     n, d = X.shape
-    rng = np.random.default_rng(random_state)
-    start = rng.integers(0, n)
-    S = np.array([start], dtype=int)
+    device = X.device
+    rng = torch.Generator(device=device)
+    rng.manual_seed(random_state)
+
+    start = torch.randint(0, n, (1,), generator=rng, device=device).item()
+    S = torch.tensor([start], dtype=torch.long, device=device)
+
     changed = True
     it = 0
 
-    knn = KNeighborsClassifier(n_neighbors=1, n_jobs=16, metric="cosine")
-
+    pbar = tqdm(total=max_iterations, desc='Hart algorithm iterations')
     while changed and it < max_iterations:
+        pbar.update(1)
+
         changed = False
         it += 1
-        knn.fit(X[S], y[S])
         for i in range(n):
-            pred = knn.predict(X[i:i + 1])[0]
+            pred = _cosine_knn_predict(X[S], y[S], X[i:i + 1])[0]
+
             if pred != y[i]:
-                S = np.append(S, i)
-                knn.fit(X[S], y[S])
+                S = torch.cat([S, torch.tensor([i], dtype=torch.long, device=device)], dim=0)
+
                 changed = True
-    return np.sort(np.unique(S))
+
+    S = torch.unique(S)
+    S, _ = torch.sort(S)
+
+    return S
 
 
 def harts_cnn_symmetric(
