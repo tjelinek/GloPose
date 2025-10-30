@@ -157,7 +157,7 @@ def harts_cnn_original(
     min_cls_cosine_similarity: float = 0.15,
     min_avg_patch_cosine_similarity: float = 0.15,
     segmentation_masks: Optional[List[torch.Tensor]] = None,
-    random_state: int = 42,
+    random_state: Optional[int] = 42,
     max_iterations: int = 100,
 ) -> torch.Tensor:
 
@@ -200,9 +200,10 @@ def harts_cnn_symmetric(
     min_avg_patch_cosine_similarity: float = 0.15,
     segmentation_masks: Optional[List[torch.Tensor]] = None,
     n_seeds_S: int = 1,
-    random_state: Optional[int] = None,
+    random_state: Optional[int] = 42,
     max_iterations: int = 100,
 ) -> np.ndarray:
+    device = X.device
 
     rng = np.random.default_rng(random_state)
     classes = np.unique(y)
@@ -210,10 +211,10 @@ def harts_cnn_symmetric(
 
     knn = KNeighborsClassifier(n_neighbors=1, n_jobs=1, metric="cosine")
 
-    for c in classes:
         idx_c = np.flatnonzero(y == c)
         idx_rest = np.flatnonzero(y != c)
         if idx_c.size == 0:
+    for c in tqdm(classes, desc='Hart symmetric algorithm classes', total=len(classes)):
             continue
         seeds = idx_c[rng.integers(0, idx_c.size, size=n_seeds_S)]
         C = np.concatenate([idx_rest, seeds])
@@ -221,7 +222,10 @@ def harts_cnn_symmetric(
         changed = True
         it = 0
 
+        pbar = tqdm(total=max_iterations, desc='Hart symmetric algorithm iterations')
         while changed and it < max_iterations:
+            pbar.update(1)
+
             changed = False
             it += 1
             knn.fit(X[C], y[C])
