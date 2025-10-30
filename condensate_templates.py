@@ -143,12 +143,6 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
     return sample_indices_
 
 
-def _cosine_knn_predict(train_x: torch.Tensor, train_y: torch.Tensor, query_x: torch.Tensor) -> torch.Tensor:
-    sims = query_x @ train_x.T
-    topk_vals, topk_idx = torch.topk(sims, k=1, dim=1)
-    return train_y[topk_idx.squeeze(1)]
-
-
 def harts_cnn_original(
     X: torch.Tensor,
     y: torch.Tensor,
@@ -233,8 +227,11 @@ def harts_cnn_symmetric(
             X_C_norm = X_norm[C]
             y_C = y[C]
             for s in S_cls:
-                pred = _cosine_knn_predict(X_C_norm, y_C, X_norm[s:s+1])[0]
-                if pred != y[s]:
+                cosine_sim = X_norm[s:s+1] @ X_C_norm.T
+                topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
+                y_pred = y_C[topk_idx.squeeze(1)]
+
+                if y_pred.item() != y[s] or topk_vals.item() < min_cls_cosine_similarity:
                     C = torch.cat([C, s.view(1)])
                     changed = True
         C_set = set(C.tolist())
