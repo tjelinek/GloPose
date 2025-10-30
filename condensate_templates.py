@@ -14,7 +14,7 @@ import warnings
 from collections import defaultdict, Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import numpy as np
 import torch
