@@ -1,3 +1,11 @@
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+from threadpoolctl import threadpool_limits
+threadpool_limits(limits=1)
+
 import pickle
 import shutil
 import sys
