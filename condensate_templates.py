@@ -181,9 +181,12 @@ def harts_cnn_original(
         changed = False
         it += 1
         for i in range(n):
-            pred = _cosine_knn_predict(X[S], y[S], X[i:i + 1])[0]
 
-            if pred != y[i]:
+            cosine_sim = X[i:i + 1] @  X[S].T
+            topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
+            y_pred = y[S][topk_idx.squeeze(1)]
+
+            if y_pred.item() != y[i] or topk_vals.item() < min_cls_cosine_similarity:
                 S = torch.cat([S, torch.tensor([i], dtype=torch.long, device=device)], dim=0)
 
                 changed = True
