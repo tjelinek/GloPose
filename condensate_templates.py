@@ -704,7 +704,7 @@ def main():
     parser = argparse.ArgumentParser(description='Perform template condensation for BOP datasets')
     parser.add_argument('--method', type=str, required=False,
                         choices=['hart', 'hart_symmetric', 'hart_imblearn', 'hart_imblearn_adapted'],
-                        default='hart_imblearn', help='Condensation method to use')
+                        default='hart', help='Condensation method to use')
     parser.add_argument('--descriptor', type=str, required=False,
                         choices=['dinov2', 'dinov3'], default='dinov2',
                         help='Descriptor model to use')
