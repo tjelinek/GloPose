@@ -143,17 +143,16 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
 
 def harts_cnn_original(
-    X: np.ndarray,
-    y: np.ndarray,
-    patch_descriptors: Optional[np.ndarray] = None,
+    X: torch.Tensor,
+    y: torch.Tensor,
+    patch_descriptors: Optional[torch.Tensor] = None,
     min_cls_cosine_similarity: float = 0.15,
     min_avg_patch_cosine_similarity: float = 0.15,
-    segmentation_masks: Optional[List[np.ndarray]] = None,
+    segmentation_masks: Optional[List[torch.Tensor]] = None,
     random_state: Optional[int] = None,
     max_iterations: int = 100,
 ) -> np.ndarray:
-    X = _to_np_f32(X)
-    y = _to_np_labels(y)
+
     n, d = X.shape
     rng = np.random.default_rng(random_state)
     start = rng.integers(0, n)
@@ -177,18 +176,17 @@ def harts_cnn_original(
 
 
 def harts_cnn_symmetric(
-    X: np.ndarray,
-    y: np.ndarray,
-    patch_descriptors: Optional[np.ndarray] = None,
+    X: torch.Tensor,
+    y: torch.Tensor,
+    patch_descriptors: Optional[torch.Tensor] = None,
     min_cls_cosine_similarity: float = 0.15,
     min_avg_patch_cosine_similarity: float = 0.15,
-    segmentation_masks: Optional[List[np.ndarray]] = None,
+    segmentation_masks: Optional[List[torch.Tensor]] = None,
     n_seeds_S: int = 1,
     random_state: Optional[int] = None,
     max_iterations: int = 100,
 ) -> np.ndarray:
-    X = _to_np_f32(X)
-    y = _to_np_labels(y)
+
     rng = np.random.default_rng(random_state)
     classes = np.unique(y)
     selected = []
