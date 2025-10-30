@@ -149,9 +149,9 @@ def harts_cnn_original(
     min_cls_cosine_similarity: float = 0.15,
     min_avg_patch_cosine_similarity: float = 0.15,
     segmentation_masks: Optional[List[torch.Tensor]] = None,
-    random_state: Optional[int] = None,
+    random_state: int = 42,
     max_iterations: int = 100,
-) -> np.ndarray:
+) -> torch.Tensor:
 
     n, d = X.shape
     rng = np.random.default_rng(random_state)
@@ -415,10 +415,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     all_segmentations = [all_segmentations[i] for i in permutation]
     object_classes = object_classes[permutation]
     dino_cls_descriptors = dino_cls_descriptors[permutation_tensor]
-    dino_patch_descriptors = dino_patch_descriptors[permutation_tensor]
+    dino_patch_descriptors = dino_patch_descriptors[permutation_tensor.cpu()]
 
     X_cls_np = dino_cls_descriptors.numpy(force=True)
-    X_patch_np = dino_patch_descriptors.numpy(force=True)
     X_cls_np = _l2n(X_cls_np).astype(np.float32)
     y_np = object_classes.numpy(force=True)
 
@@ -459,7 +458,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
             min_cls_cosine_similarity=min_cls_cosine_similarity,
             min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
             segmentation_masks=all_segmentations
-        )
+        ).numpy(force=True)
     else:
         raise ValueError(f"Method {method} not recognized")
 
@@ -554,11 +553,11 @@ def get_detections_descriptors(augmentations_detector: str, dataset: str, path_t
 
             detection_masks_rle = payload['masks']
             detection_masks_array = \
-                [torch.from_numpy(rle_to_mask(rle_mask)).to(device) for rle_mask in detection_masks_rle]
+                [torch.from_numpy(rle_to_mask(rle_mask)).cpu() for rle_mask in detection_masks_rle]
 
             masks.extend(detection_masks_array)
             X_cls.append(torch.from_numpy(payload['descriptors']).to(device))
-            X_patch.append(torch.from_numpy(payload['patch_descriptors']).to(device))
+            X_patch.append(torch.from_numpy(payload['patch_descriptors']).cpu())
             y_pbr.extend(payload['detections_object_ids'])
             image_paths.extend([image_file] * len(detection_masks_array))
 
