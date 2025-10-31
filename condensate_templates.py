@@ -612,7 +612,15 @@ def get_detections_descriptors(augmentations_detector: str, dataset: str, path_t
                 payload = pickle.load(pickle_file)
 
             path_to_sequence = path_to_split / sequence.name
-            image_file = path_to_sequence / 'rgb' / f'{descriptor_file.stem}.jpg'
+            image_file = next(
+                (path_to_sequence / 'rgb' / f'{descriptor_file.stem}{ext}'
+                 for ext in ('.jpg', '.png')
+                 if (path_to_sequence / 'rgb' / f'{descriptor_file.stem}{ext}').exists()),
+                None
+            )
+
+            if image_file is None:
+                continue
 
             detection_masks_rle = payload['masks']
             detection_masks_array = \
