@@ -33,6 +33,7 @@ from imblearn.under_sampling import CondensedNearestNeighbour
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 from utils.bop_challenge import extract_object_id
+from utils.detection_utils import average_patch_similarity
 
 sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
@@ -182,7 +183,22 @@ def harts_cnn_original(
             topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
             y_pred = y[S][topk_idx.squeeze(1)]
 
-            if y_pred.item() != y[i] or topk_vals.item() < min_cls_cosine_similarity:
+            patchwise_similar = True
+            if patch_descriptor_filtering:
+
+                S_pred = S[topk_idx]
+                X_patch_C_topk = X_patch[S_pred.cpu()] if X_patch is not None else None
+                segmentation_C_topk = segmentation_masks[S_pred.item()].unsqueeze(0) if use_segmentation else None
+
+                segmentation_s = segmentation_masks[i].unsqueeze(0) if use_segmentation else None
+                X_patch_s = X_patch[i:i + 1]
+
+                avg_patch_sim = average_patch_similarity(X_patch_s, X_patch_C_topk, segmentation_s,
+                                                         segmentation_C_topk, use_segmentation)
+
+                patchwise_similar = avg_patch_sim >= min_avg_patch_cosine_similarity
+
+            if y_pred.item() != y[i] or topk_vals.item() < min_cls_cosine_similarity or not patchwise_similar:
                 S = torch.cat([S, torch.tensor([i], dtype=torch.long, device=device)], dim=0)
 
                 changed = True
