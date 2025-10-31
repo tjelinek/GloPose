@@ -146,9 +146,11 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 def harts_cnn_original(
     X: torch.Tensor,
     y: torch.Tensor,
-    patch_descriptors: Optional[torch.Tensor] = None,
+    X_patch: Optional[torch.Tensor] = None,
     min_cls_cosine_similarity: float = 0.15,
     min_avg_patch_cosine_similarity: float = 0.15,
+    patch_descriptor_filtering: bool = True,
+    use_segmentation: bool = True,
     segmentation_masks: Optional[List[torch.Tensor]] = None,
     random_state: Optional[int] = 42,
     max_iterations: int = 100,
@@ -192,15 +194,16 @@ def harts_cnn_original(
 
 
 def harts_cnn_symmetric(
-    X: torch.Tensor,
-    y: torch.Tensor,
-    patch_descriptors: Optional[torch.Tensor] = None,
-    min_cls_cosine_similarity: float = 0.15,
-    min_avg_patch_cosine_similarity: float = 0.15,
-    segmentation_masks: Optional[List[torch.Tensor]] = None,
-    n_seeds_S: int = 1,
-    random_state: Optional[int] = 42,
-    max_iterations: int = 100,
+        X: torch.Tensor,
+        y: torch.Tensor,
+        X_patch: Optional[torch.Tensor] = None,
+        min_cls_cosine_similarity: float = 0.15,
+        min_avg_patch_cosine_similarity: float = 0.15,
+        patch_descriptor_filtering: bool = True,
+        use_segmentation: bool = True,
+        segmentation_masks: Optional[List[torch.Tensor]] = None,
+        random_state: Optional[int] = 42,
+        max_iterations: int = 100,
 ) -> torch.Tensor:
 
     device = X.device
@@ -470,19 +473,20 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     elif method == 'hart_imblearn_adapted':
         sample_indices = imblearn_fitresample_adapted(torch.from_numpy(X_for_selection), object_classes)
     elif method == "hart_symmetric":
-        sample_indices = harts_cnn_symmetric(
-            torch.from_numpy(X_for_selection).to(device),
-            object_classes,
-            patch_descriptors=dino_patch_descriptors,
-            min_cls_cosine_similarity=min_cls_cosine_similarity,
-            min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
-            segmentation_masks=all_segmentations
-        ).numpy(force=True)
+        sample_indices = harts_cnn_symmetric(torch.from_numpy(X_for_selection).to(device), object_classes,
+                                             X_patch=dino_patch_descriptors,
+                                             patch_descriptor_filtering=patch_descriptors_filtering,
+                                             use_segmentation=descriptor_mask_detections,
+                                             min_cls_cosine_similarity=min_cls_cosine_similarity,
+                                             min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
+                                             segmentation_masks=all_segmentations).numpy(force=True)
     elif method == 'hart':
         sample_indices = harts_cnn_original(
             torch.from_numpy(X_for_selection).to(device),
             object_classes,
-            patch_descriptors=dino_patch_descriptors,
+            X_patch=dino_patch_descriptors,
+            patch_descriptor_filtering=patch_descriptors_filtering,
+            use_segmentation=descriptor_mask_detections,
             min_cls_cosine_similarity=min_cls_cosine_similarity,
             min_avg_patch_cosine_similarity=min_avg_patch_cosine_similarity,
             segmentation_masks=all_segmentations
