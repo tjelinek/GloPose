@@ -68,7 +68,7 @@ def main():
         'augmentations_detector': ['sam2'],
         'patch_descriptors_filtering': [0, 1],
         'min_cls_cosine_similarity': [0.15, 0.25, 0.5],
-        'min_avg_patch_cosine_similarity': [0.15, 0.25, 0.5],
+        'min_avg_patch_cosine_similarity': [0., 0.15, 0.25, 0.5],
     }
 
     config_spaces = [
@@ -104,7 +104,12 @@ def main():
         },
     ]
 
-    exclusions = []
+    exclusions = [
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.15)],
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.25)],
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.5)],
+        [('patch_descriptors_filtering', 1), ('min_avg_patch_cosine_similarity', 0.)],
+    ]
 
     total_jobs = 0
     failed_jobs = 0
