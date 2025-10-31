@@ -818,6 +818,14 @@ def main():
         experiment_name += f'-whitening_{args.whiten_dim}'
     if args.descriptor_mask_detections > 0:
         experiment_name += f'_nonMaskedBG'
+    if args.augment_with_split_detections:
+        experiment_name += f'_aug-split'
+    if args.augment_with_train_pbr_detections:
+        experiment_name += f'_aug-pbr'
+    if args.min_cls_cosine_similarity > 0:
+        experiment_name += f'_min-cls-sim-{args.min_cls_cosine_similarity}'
+    if args.patch_descriptors_filtering:
+        experiment_name += f'_min-patch-sim-{args.min_avg_patch_cosine_similarity}'
     cache_base_path = Path('/mnt/personal/jelint19/cache/detections_templates_cache') / experiment_name
     descriptors_cache_path = Path(f'/mnt/personal/jelint19/cache/{args.descriptor}_cache/bop')
     detections_cache_path = Path(f'/mnt/personal/jelint19/cache/detections_cache/{args.dataset}')
