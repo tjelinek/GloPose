@@ -60,7 +60,6 @@ def main():
     config_space = {
         'method': ['hart', 'hart_symmetric'],
         'descriptor': ['dinov3'],
-        'whiten_dim': [0],
         'descriptor_mask_detections': [0, 1],
         'device': ['cpu'],
         'augment_with_split_detections': [0, 1],
