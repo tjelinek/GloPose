@@ -218,7 +218,7 @@ def harts_cnn_symmetric(
         idx_rest = torch.nonzero(y != c, as_tuple=True)[0]
         if idx_c.numel() == 0:
             continue
-        seed_indices = torch.randint(0, idx_c.numel(), (n_seeds_S,), device=device, generator=generator)
+        seed_indices = torch.randint(0, idx_c.numel(), (random_state,), device=device, generator=generator)
         seeds = idx_c[seed_indices]
         C = torch.cat([idx_rest, seeds])
         S_cls = idx_c
