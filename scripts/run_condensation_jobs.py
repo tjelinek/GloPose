@@ -74,11 +74,20 @@ def main():
     log_dir.mkdir(parents=True, exist_ok=True)
 
     config_space = {
-        'method': ['hart', 'hart_symmetric'],
+        'method': [
+            'hart',
+            # 'hart_symmetric'
+        ],
         'descriptor': ['dinov3'],
-        'descriptor_mask_detections': [0, 1],
+        'descriptor_mask_detections': [
+            # 0,
+            1
+        ],
         'device': ['cpu'],
-        'augment_with_split_detections': [0, 1],
+        'augment_with_split_detections': [
+            # 0,
+            1
+        ],
         'augment_with_train_pbr_detections': [0, 1],
         'augmentations_detector': ['sam2'],
         'patch_descriptors_filtering': [0, 1],
