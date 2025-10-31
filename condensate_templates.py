@@ -232,9 +232,24 @@ def harts_cnn_symmetric(
             for s in S_cls:
                 cosine_sim = X_norm[s:s+1] @ X_C_norm.T
                 topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
-                y_pred = y_C[topk_idx.squeeze(1)]
+                topk_idx = topk_idx.squeeze(1)
+                y_pred = y_C[topk_idx]
 
-                if y_pred.item() != y[s] or topk_vals.item() < min_cls_cosine_similarity:
+                patchwise_similar = True
+                if patch_descriptor_filtering:
+                    C_pred = C[topk_idx]
+                    X_patch_C_topk = X_patch[C_pred.cpu()] if X_patch is not None else None
+                    segmentation_C_topk = segmentation_masks[C_pred.item()].unsqueeze(0) if use_segmentation else None
+
+                    segmentation_s = segmentation_masks[s].unsqueeze(0) if use_segmentation else None
+                    X_patch_s = X_patch[s:s + 1]
+
+                    avg_patch_sim = average_patch_similarity(X_patch_s, X_patch_C_topk, segmentation_s,
+                                                             segmentation_C_topk, use_segmentation)
+
+                    patchwise_similar = avg_patch_sim >= min_avg_patch_cosine_similarity
+
+                if (y_pred.item() != y[s] or topk_vals.item() < min_cls_cosine_similarity or not patchwise_similar):
                     C = torch.cat([C, s.view(1)])
                     changed = True
         C_set = set(C.tolist())
