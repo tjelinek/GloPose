@@ -7,7 +7,7 @@ def average_patch_similarity(
         patch_descriptors2: torch.Tensor,
         segmentation_mask1: torch.Tensor = None,
         segmentation_mask2: torch.Tensor = None,
-        use_segmentation: torch.Tensor = False,
+        use_segmentation: bool = False,
         required_share_nonzero: float = 0.25,
 ) -> torch.Tensor:
     B, P, _, D = patch_descriptors1.shape
