@@ -4,6 +4,22 @@ import argparse
 from pathlib import Path
 
 
+ALIASES = {
+    'method': 'mth',
+    'descriptor': 'dsc',
+    'descriptor_mask_detections': 'msk',
+    'device': 'dev',
+    'augment_with_split_detections': 'aug_spl',
+    'augment_with_train_pbr_detections': 'aug_pbr',
+    'augmentations_detector': 'aug_det',
+    'patch_descriptors_filtering': 'ptch_flt',
+    'min_cls_cosine_similarity': 'cls_sim',
+    'min_avg_patch_cosine_similarity': 'pch_sim',
+    'dataset': 'ds',
+    'split': 'spl',
+}
+
+
 def is_excluded(config, exclusions):
     for exclusion in exclusions:
         if all(config.get(key) == value for key, value in exclusion):
@@ -18,7 +34,7 @@ def format_value(value):
 
 
 def submit_job(config, dry_run=False):
-    job_name_parts = [f"{key[:5]}_{format_value(value)}" for key, value in sorted(config.items())]
+    job_name_parts = [f"{ALIASES.get(key, key)}_{format_value(value)}" for key, value in sorted(config.items())]
     job_name = '@'.join(job_name_parts)
 
     log_dir = '/mnt/personal/jelint19/results/logs/condensation_jobs'
