@@ -1,110 +1,129 @@
-#!/usr/bin/env python3
-"""
-Script to submit SLURM jobs for all combinations of datasets, descriptors, and methods.
-"""
-
 import subprocess
-import time
-from itertools import product
+import itertools
+import argparse
 from pathlib import Path
 
-# Define all combinations to run
-METHODS = [
-    'hart',
-    'hart_symmetric',
-    # 'hart_imblearn',
-    # 'hart_imblearn_adapted'
-]
 
-DESCRIPTORS = [
-    # 'dinov2',
-    'dinov3'
-]
-
-WHITEN_DIM = [
-    0,
-]
-
-MASK_BG = [
-    0,
-    1
-]
-
-DATASETS = [
-    ('hope', 'onboarding_static'),
-    ('hope', 'onboarding_dynamic'),
-    ('handal', 'onboarding_static'),
-    ('handal', 'onboarding_dynamic'),
-    ('tless', 'train_primesense'),
-    ('lmo', 'train'),
-    ('icbin', 'train'),
-    ('hot3d', 'object_ref_aria_static_scenewise'),
-    ('hot3d', 'object_ref_quest3_static_scenewise'),
-    # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
-    # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
-]
+def is_excluded(config, exclusions):
+    for exclusion in exclusions:
+        if all(config.get(key) == value for key, value in exclusion):
+            return True
+    return False
 
 
-def submit_job(method, descriptor, whiten_dim, dataset, split, descriptor_mask_detections):
-    """Submit a single SLURM job."""
-    job_name = f"cond-{method}-{descriptor}-{dataset}-{split}_whiten-dim{whiten_dim}"
-    log_name = f"condensation_{method}_{descriptor}_{dataset}_{split}_whiten-dim{whiten_dim}"
-    if descriptor_mask_detections == 0:
-        log_name += '_nonMaskedBG'
-        job_name += '_nonMaskedBG'
-    log_path = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
-    log_path.mkdir(parents=True, exist_ok=True)
+def format_value(value):
+    if isinstance(value, float):
+        return f"{value:.2f}".replace('.', '')
+    return value
+
+
+def submit_job(config, dry_run=False):
+    job_name_parts = [f"{key[:5]}_{format_value(value)}" for key, value in sorted(config.items())]
+    job_name = '@'.join(job_name_parts)
+
+    log_dir = '/mnt/personal/jelint19/results/logs/condensation_jobs'
+
+    python_args = []
+    for key, value in config.items():
+        python_args.append(f'--{key}={value}')
 
     cmd = [
         'sbatch',
         '--job-name', job_name,
-        '--error', f'/mnt/personal/jelint19/results/logs/condensation_jobs/{log_name}.err',
-        'scripts/compute_condensations.batch',  # Your SLURM script name
-        '--method', method,
-        '--descriptor', descriptor,
-        '--whiten_dim', str(whiten_dim),
-        '--descriptor_mask_detections', str(descriptor_mask_detections),
-        '--dataset', dataset,
-        '--split', split,
-        '--device', 'cpu',
-    ]
+        '--error', f'{log_dir}/{job_name}.err',
+        'scripts/compute_condensations.batch',
+    ] + python_args
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        job_id = result.stdout.strip().split()[-1]  # Extract job ID from output
-        print(f"Submitted job {job_id}: {job_name}")
-        return job_id
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to submit job {job_name}: {e}")
-        print(f"Error output: {e.stderr}")
-        return None
+    if dry_run:
+        python_cmd = f"python -m pose.compute_condensations {' '.join(python_args)}"
+        print(f"[DRY RUN] {python_cmd}")
+        return 0
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode == 0:
+        print(f"Submitted: {job_name} - {result.stdout.strip()}")
+    else:
+        print(f"Failed: {job_name} - {result.stderr.strip()}")
+
+    return result.returncode
 
 
 def main():
-    """Submit all job combinations."""
-    submitted_jobs = []
-    total_jobs = len(METHODS) * len(DESCRIPTORS) * len(WHITEN_DIM) * len(DATASETS) * len(MASK_BG)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dry_run', action='store_true')
+    args = parser.parse_args()
 
-    print(f"Submitting {total_jobs} jobs...")
-    print("=" * 50)
+    log_dir = Path('/mnt/personal/jelint19/results/logs/condensation_jobs')
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    for method, descriptor, whiten_dim, descriptor_mask_detections, (dataset, split) \
-            in product(METHODS, DESCRIPTORS, WHITEN_DIM, MASK_BG, DATASETS):
-        job_id = submit_job(method, descriptor, whiten_dim, dataset, split, descriptor_mask_detections)
-        if job_id:
-            submitted_jobs.append(job_id)
+    config_space = {
+        'method': ['hart', 'hart_symmetric'],
+        'descriptor': ['dinov3'],
+        'whiten_dim': [0],
+        'descriptor_mask_detections': [0, 1],
+        'device': ['cpu'],
+        'augment_with_split_detections': [0, 1],
+        'augment_with_train_pbr_detections': [0, 1],
+        'augmentations_detector': ['sam2'],
+        'patch_descriptors_filtering': [0, 1],
+        'min_cls_cosine_similarity': [0.15, 0.25, 0.5],
+        'min_avg_patch_cosine_similarity': [0.15, 0.25, 0.5],
+    }
 
-        # Small delay to avoid overwhelming the scheduler
-        time.sleep(0.1)
+    config_spaces = [
+        {
+            **config_space,
+            'dataset': ['hope'],
+            'split': ['onboarding_static', 'onboarding_dynamic'],
+        },
+        {
+            **config_space,
+            'dataset': ['handal'],
+            'split': ['onboarding_static', 'onboarding_dynamic'],
+        },
+        {
+            **config_space,
+            'dataset': ['tless'],
+            'split': ['train_primesense'],
+        },
+        {
+            **config_space,
+            'dataset': ['lmo'],
+            'split': ['train'],
+        },
+        {
+            **config_space,
+            'dataset': ['icbin'],
+            'split': ['train'],
+        },
+        {
+            **config_space,
+            'dataset': ['hot3d'],
+            'split': ['object_ref_aria_static_scenewise', 'object_ref_quest3_static_scenewise'],
+        },
+    ]
 
-    print("=" * 50)
-    print(f"Successfully submitted {len(submitted_jobs)}/{total_jobs} jobs")
+    exclusions = []
 
-    if submitted_jobs:
-        print("\nTo monitor job status, use:")
-        print(f"squeue -u $USER")
-        print("\nTo cancel all jobs, use:")
-        print(f"scancel {' '.join(submitted_jobs)}")
+    total_jobs = 0
+    failed_jobs = 0
+    excluded_jobs = 0
+
+    for config_space in config_spaces:
+        for values in itertools.product(*config_space.values()):
+            config = dict(zip(config_space.keys(), values))
+            if is_excluded(config, exclusions):
+                excluded_jobs += 1
+                continue
+            total_jobs += 1
+            if submit_job(config, dry_run=args.dry_run) != 0:
+                failed_jobs += 1
+
+    print(f"\nTotal jobs submitted: {total_jobs - failed_jobs}/{total_jobs}")
+    print(f"Excluded combinations: {excluded_jobs}")
+    if failed_jobs > 0:
+        print(f"Failed submissions: {failed_jobs}")
 
 
 if __name__ == '__main__':
