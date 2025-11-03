@@ -151,7 +151,7 @@ class BOPChallengePosePredictor:
             path_to_scene = test_dataset_path / scene_folder_name
             path_to_scene_detection_cache = (self.cache_folder / 'detections_cache' / dataset_name / split /
                                              scene_folder_name)
-            path_to_image = self._get_image_path(path_to_scene, image_id_str)
+            path_to_image = self._get_image_path(path_to_scene, image_id_str, dataset_name)
             path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
             path_to_cnos_detections = path_to_scene_detection_cache / f'cnos_{detector_name}_detections_{descriptor}'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
@@ -304,7 +304,7 @@ class BOPChallengePosePredictor:
         return detections, detections_scores
 
     @staticmethod
-    def _get_image_path(path_to_scene: Path, image_id_str: str) -> Path:
+    def _get_image_path(path_to_scene: Path, image_id_str: str, dataset_name: str) -> Path:
 
         # Try .png first
         image_filename = f'{image_id_str}.png'
@@ -312,7 +312,13 @@ class BOPChallengePosePredictor:
 
         if not path_to_image.exists():
             image_filename = f'{image_id_str}.jpg'
-            path_to_image = path_to_scene / 'rgb' / image_filename
+            if dataset_name == 'hot3d':
+                path_to_image = path_to_scene / 'rgb' / image_filename
+                if not path_to_image.exists():
+                    path_to_image = Path(str(path_to_scene).replace('aria', 'quest3'))
+            else:
+                path_to_image = path_to_scene / 'rgb' / image_filename
+
             assert path_to_image.exists(), f"Image file not found: {path_to_image}"
 
         return path_to_image
