@@ -531,7 +531,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     saved_indices = []
     saved_labels = []
 
-    for index in sample_indices:
+    for index in tqdm(sample_indices, desc="Condensed templates saved", total=len(sample_indices)):
         if object_classes[index] == -1:
             continue
         object_id = int(object_classes[index].item())
