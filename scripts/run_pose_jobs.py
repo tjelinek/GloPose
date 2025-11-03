@@ -84,6 +84,24 @@ def main():
             # 0,
             1
         ],
+        'augment_with_split_detections': [
+            0,
+            1
+        ],
+        'augment_with_train_pbr_detections': [
+            0,
+            1
+        ],
+        'min_avg_patch_cosine_similarity': [
+            0.,
+            0.15,
+            0.25,
+            0.5,
+        ],
+        'patch_descriptors_filtering' : [
+            0,
+            1
+        ],
     }
 
     config_spaces = [
@@ -149,6 +167,10 @@ def main():
         [('descriptor_mask_detections', 0), ('ood_detection_method', 'lowe_test')],
         [('descriptor_mask_detections', 0), ('ood_detection_method', 'cosine_similarity_quantiles')],
         [('descriptor_mask_detections', 0), ('ood_detection_method', 'mahalanobis_ood_detection')],
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.15)],
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.25)],
+        [('patch_descriptors_filtering', 0), ('min_avg_patch_cosine_similarity', 0.5)],
+        [('patch_descriptors_filtering', 1), ('min_avg_patch_cosine_similarity', 0.)],
     ]
 
     total_jobs = 0

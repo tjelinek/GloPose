@@ -343,6 +343,10 @@ def main():
     parser.add_argument('--mahalanobis_quantile', type=float, default=None)
     parser.add_argument('--lowe_ratio_threshold', type=float, default=None)
     parser.add_argument('--dry_run', action='store_true')
+    parser.add_argument('--augment_with_split_detections', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--augment_with_train_pbr_detections', type=lambda x: bool(int(x)), default=True)
+    parser.add_argument('--min_avg_patch_cosine_similarity', type=float, default=0.15)
+    parser.add_argument('--patch_descriptors_filtering', type=lambda x: bool(int(x)), default=True)
 
     args = parser.parse_args()
 
@@ -421,6 +425,16 @@ def main():
 
             whitening_suffix = f'-whitening_{args.whitening_dim}' if args.whitening_dim > 0 else ''
             condensation_source = f"{args.condensation_source}-{args.descriptor}{whitening_suffix}"
+            if args.descriptor_mask_detections > 0:
+                condensation_source += '_nonMaskedBG'
+            if args.augment_with_split_detections:
+                condensation_source += '_aug-split'
+            if args.augment_with_train_pbr_detections:
+                condensation_source += '_aug-pbr'
+            if args.min_cls_cosine_similarity > 0:
+                condensation_source += f'_min-cls-sim-{args.confidence_threshold}'
+            if args.patch_descriptors_filtering:
+                condensation_source += f'_min-patch-sim-{args.min_avg_patch_cosine_similarity}'
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
                                         dataset / detections_split)
             experiment = f'cnns@{condensation_source}'
