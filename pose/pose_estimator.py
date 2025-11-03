@@ -20,7 +20,7 @@ from data_providers.frame_provider import PrecomputedFrameProvider
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
 from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
-from utils.bop_challenge import get_gop_camera_intrinsics, group_test_targets_by_image, get_descriptors_for_templates
+from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
