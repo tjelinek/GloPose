@@ -42,7 +42,7 @@ def submit_job(config, failed_jobs_log=None, dry_run=False):
     python_args = []
     for key, value in config.items():
         python_args.append(f'--{key}={value}')
-    if failed_jobs_log:
+    if failed_jobs_log and not dry_run:
         python_args.append(f'--failed_jobs_log={failed_jobs_log}')
 
     cmd = [
@@ -53,7 +53,7 @@ def submit_job(config, failed_jobs_log=None, dry_run=False):
     ] + python_args
 
     if dry_run:
-        python_cmd = f"python -m pose.compute_condensations {' '.join(python_args)}"
+        python_cmd = f"python -m condensate_templates {' '.join(python_args)}"
         print(f"[DRY RUN] {python_cmd}")
         return 0
 
