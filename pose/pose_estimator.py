@@ -431,8 +431,8 @@ def main():
                 condensation_source += '_aug-split'
             if args.augment_with_train_pbr_detections:
                 condensation_source += '_aug-pbr'
-            if args.min_cls_cosine_similarity > 0:
-                condensation_source += f'_min-cls-sim-{args.confidence_threshold}'
+            if args.confidence_thresh > 0:
+                condensation_source += f'_min-cls-sim-{args.confidence_thresh}'
             if args.patch_descriptors_filtering:
                 condensation_source += f'_min-patch-sim-{args.min_avg_patch_cosine_similarity}'
             condensed_templates_base = (cache_path / 'detections_templates_cache' / condensation_source /
@@ -454,6 +454,8 @@ def main():
             'mahalanobis_quantile': args.mahalanobis_quantile,
             'lowe_ratio_threshold': args.lowe_ratio_threshold,
             'similarity_metric': args.similarity_metric,
+            'patch_descriptors_filtering': args.patch_descriptors_filtering,
+            'min_avg_patch_cosine_similarity': args.min_avg_patch_cosine_similarity,
         }
         predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
         match_cfg = predictor.cnos_matching_config
