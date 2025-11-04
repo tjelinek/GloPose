@@ -187,7 +187,7 @@ def harts_cnn_original(
             if patch_descriptor_filtering:
 
                 S_pred = S[topk_idx]
-                X_patch_C_topk = X_patch[S_pred.cpu()] if X_patch is not None else None
+                X_patch_C_topk = X_patch[S_pred.cpu().item()].unsqueeze(0) if X_patch is not None else None
                 segmentation_C_topk = segmentation_masks[S_pred.item()].unsqueeze(0) if use_segmentation else None
 
                 segmentation_s = segmentation_masks[i].unsqueeze(0) if use_segmentation else None
