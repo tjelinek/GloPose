@@ -171,7 +171,8 @@ class BOPChallengePosePredictor:
             detections_start_time = time.time()
 
             detections, detections_scores = self.proces_custom_sam_detections(cnos_detections, template_data, image,
-                                                                              dino_descriptor)
+                                                                              dino_descriptor,
+                                                                              descriptor_mask_detections)
 
             detections_duration = time.time() - detections_start_time
 
@@ -250,7 +251,7 @@ class BOPChallengePosePredictor:
             update_results_csv(metrics, experiment_name, dataset_name, split, results_csv_path)
 
     def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank, image, dino_descriptor,
-                                     recompute_default_descriptors=True):
+                                     descriptor_mask_detections, recompute_default_descriptors=True):
         from src.model.utils import Detections
         from src.model.detector import compute_templates_similarity_scores
 
@@ -268,7 +269,8 @@ class BOPChallengePosePredictor:
             }
             cnos_detections_class_format = Detections(detections_dict)
             image_np = image.permute(1, 2, 0).numpy(force=True)
-            default_detections_cls_descriptors, _ = dino_descriptor(image_np, cnos_detections_class_format)
+            default_detections_cls_descriptors, default_detections_patch_descriptors =\
+                dino_descriptor(image_np, cnos_detections_class_format)
         else:
             default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
 
@@ -281,13 +283,16 @@ class BOPChallengePosePredictor:
 
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
             compute_templates_similarity_scores(template_data, default_detections_cls_descriptors,
+                                                default_detections_patch_descriptors, default_detections_masks,
                                                 self.cnos_matching_config['similarity_metric'],
                                                 self.cnos_matching_config['aggregation_function'],
                                                 self.cnos_matching_config['max_num_instances'],
                                                 self.cnos_matching_config['confidence_thresh'],
                                                 self.cnos_matching_config['lowe_ratio_threshold'],
                                                 self.cnos_matching_config['ood_detection_method'],
-                                                )
+                                                self.cnos_matching_config['patch_descriptors_filtering'],
+                                                self.cnos_matching_config['min_avg_patch_cosine_similarity'],
+                                                descriptor_mask_detections)
         selected_detections_masks = default_detections_masks[idx_selected_proposals]
         detections_dict = {
             'masks': selected_detections_masks,
