@@ -129,7 +129,10 @@ def main():
         {
             **config_space,
             'dataset': ['hot3d'],
-            'split': ['object_ref_aria_static_scenewise', 'object_ref_quest3_static_scenewise'],
+            'split': [
+                'object_ref_aria_static_scenewise',
+                # 'object_ref_quest3_static_scenewise'
+                      ],
         },
     ]
 
