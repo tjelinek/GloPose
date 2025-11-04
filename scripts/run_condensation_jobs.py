@@ -93,7 +93,10 @@ def main():
             # 0,
             1
         ],
-        'augment_with_train_pbr_detections': [0, 1],
+        'augment_with_train_pbr_detections': [
+            0,
+            1
+        ],
         'augmentations_detector': ['sam2'],
         'patch_descriptors_filtering': [0, 1],
         'min_cls_cosine_similarity': [0.15, 0.25, 0.5],
