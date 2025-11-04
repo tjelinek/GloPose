@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torchvision.ops import masks_to_boxes
 
 
 def average_patch_similarity(
@@ -35,16 +36,29 @@ def average_patch_similarity(
 
 def _create_patch_mask(segmentation_mask: torch.Tensor, P: int, required_share_nonzero: float) -> torch.Tensor:
     B, H, W = segmentation_mask.shape
-    patch_h = H // P
-    patch_w = W // P
+    device = segmentation_mask.device
 
-    mask_patches = segmentation_mask[:, :P * patch_h, :P * patch_w].reshape(B, P, patch_h, P, patch_w)
-    mask_patches = mask_patches.permute(0, 1, 3, 2, 4).reshape(B, P * P, patch_h * patch_w)
+    bboxes = masks_to_boxes(segmentation_mask)
+    patch_masks = torch.zeros(B, P * P, dtype=torch.bool, device=device)
 
-    nonzero_share = (mask_patches != 0).float().mean(dim=-1)
-    patch_mask = nonzero_share >= required_share_nonzero
+    for b in range(B):
+        x1, y1, x2, y2 = bboxes[b].int()
+        cropped = segmentation_mask[b, y1:y2 + 1, x1:x2 + 1]
 
-    return patch_mask
+        crop_h, crop_w = cropped.shape
+        patch_h = crop_h // P
+        patch_w = crop_w // P
+
+        if patch_h == 0 or patch_w == 0:
+            continue
+
+        mask_patches = cropped[:P * patch_h, :P * patch_w].reshape(P, patch_h, P, patch_w)
+        mask_patches = mask_patches.permute(0, 2, 1, 3).reshape(P * P, patch_h * patch_w)
+
+        nonzero_share = (mask_patches != 0).float().mean(dim=-1)
+        patch_masks[b] = nonzero_share >= required_share_nonzero
+
+    return patch_masks
 
 
 def _compute_nearest_neighbor_similarity(desc_src: torch.Tensor, desc_tgt: torch.Tensor,
