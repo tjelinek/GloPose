@@ -831,7 +831,7 @@ def main():
     detections_cache_path = Path(f'/mnt/personal/jelint19/cache/detections_cache/{args.dataset}')
     onboarding_augmentations_path = detections_cache_path / f'{args.split}'
     train_pbr_augmentations_path = detections_cache_path / 'train_pbr'
-    bop_base = Path('/mnt/personal/jelint19/data/bop')
+    bop_base = Path('/mnt/data/vrg/public_datasets/bop')
 
     print(f"Processing {args.dataset}/{args.split} with method {args.method} and descriptor {args.descriptor}")
 

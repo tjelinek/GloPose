@@ -227,7 +227,7 @@ class BOPChallengePosePredictor:
         result_filename = json_file_path.name
         results_path = json_file_path.parent
         eval_path = self.write_folder / "bop_eval"
-        datasets_path = "/mnt/personal/jelint19/data/bop/"
+        datasets_path = "/mnt/data/vrg/public_datasets/bop/"
         targets_filename = "test_targets_bop19.json"
         if dataset_name in ['hope', 'handal'] and split == 'val':
             targets_filename = "val_targets_bop24.json"
@@ -350,7 +350,7 @@ def main():
 
     args = parser.parse_args()
 
-    bop_base = Path('/mnt/personal/jelint19/data/bop')
+    bop_base = Path(' /mnt/data/vrg/public_datasets/bop')
 
     sequences_to_run = [
         (
