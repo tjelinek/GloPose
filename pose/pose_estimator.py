@@ -355,7 +355,7 @@ def main():
 
     args = parser.parse_args()
 
-    bop_base = Path(' /mnt/data/vrg/public_datasets/bop')
+    bop_base = Path('/mnt/data/vrg/public_datasets/bop')
 
     sequences_to_run = [
         (
