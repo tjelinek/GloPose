@@ -80,7 +80,8 @@ def main():
     config_space = {
         'method': [
             'hart',
-            # 'hart_symmetric'
+            # 'hart_symmetric',
+            # 'hart_imblearn'
         ],
         'descriptor': ['dinov3'],
         'descriptor_mask_detections': [
