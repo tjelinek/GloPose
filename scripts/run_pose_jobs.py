@@ -35,6 +35,7 @@ def submit_job(config, experiment_folder=None, failed_jobs_log=None, dry_run=Fal
     cmd = [
               'sbatch',
               '--job-name', job_name,
+              '--output', f'{log_dir}/{job_name}.out',
               '--error', f'{log_dir}/{job_name}.err',
               'scripts/pose_estimator.batch',
           ] + python_args
