@@ -649,7 +649,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                                             cosine_similarity_quantile: float, mahalanobis_quantile: float,
                                             force_recompute_descriptors: bool = True, device: str = 'cuda') \
         -> TemplateBank:
-    descriptor = descriptor_from_hydra(model=descriptor_name)
+    descriptor = descriptor_from_hydra(model=descriptor_name, device=device)
 
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)

@@ -87,7 +87,7 @@ class BOPChallengePosePredictor:
 
         view_graphs: Dict[int, ViewGraph] = {}
         from src.model.dinov2 import descriptor_from_hydra
-        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections)
+        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections, self.config.device)
         if templates_source == 'viewgraph':
             view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                               self.config.device)
