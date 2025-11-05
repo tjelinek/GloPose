@@ -43,8 +43,8 @@ warnings.filterwarnings('ignore', message='The number of unique classes is great
 
 @dataclass
 class TemplateBank:
-    images: Dict[int, torch.Tensor] = None
-    masks: Dict[int, torch.Tensor] = None
+    images: Dict[int, List[torch.Tensor]] = None
+    masks: Dict[int, List[torch.Tensor]] = None
     cls_desc: Dict[int, torch.Tensor] = None
     patch_desc: Dict[int, torch.Tensor] = None
     template_thresholds: Dict[int, torch.Tensor] = None
@@ -719,8 +719,6 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
             cls_descriptors_dict[obj_id].append(x.squeeze(0).detach())
             patch_descriptors_dict[obj_id].append(patch_descriptor.squeeze(0).detach())
 
-        images_dict[obj_id] = torch.stack(images_dict[obj_id])
-        segmentations_dict[obj_id] = torch.stack(segmentations_dict[obj_id])
         cls_descriptors_dict[obj_id] = torch.stack(cls_descriptors_dict[obj_id])
         patch_descriptors_dict[obj_id] = torch.stack(patch_descriptors_dict[obj_id])
 
