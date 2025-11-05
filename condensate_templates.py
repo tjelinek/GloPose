@@ -824,7 +824,7 @@ def main():
     experiment_name = f'1nn-{args.method}-{args.descriptor}'
     if args.whiten_dim > 0:
         experiment_name += f'-whitening_{args.whiten_dim}'
-    if args.descriptor_mask_detections > 0:
+    if args.descriptor_mask_detections < 1:
         experiment_name += f'_nonMaskedBG'
     if args.augment_with_split_detections:
         experiment_name += f'_aug-split'
