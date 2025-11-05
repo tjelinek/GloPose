@@ -3,6 +3,22 @@ from pathlib import Path
 import argparse
 
 DATASETS = [
+    'tudl',
+    'tudl-train_pbr',
+    'tudl-train_real',
+    'tudl-train_renderer',
+    'itodd',
+    'itodd-val',
+    'itodd-train_pbr',
+    'itodd-templates_pyrenderer',
+    'hb-train_pbr',
+    'hb-templates_pyrenderer',
+    'hb_kinect',
+    'hb_primesense',
+    'ycbv',
+    'ycbv-train_pbr',
+    'ycbv-train_real',
+    'ycbv-templates_pyrenderer',
     'tless-train_pbr',
     'tless-train_primesense',
     'lmo-train',
