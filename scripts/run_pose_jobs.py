@@ -29,7 +29,7 @@ def submit_job(config, experiment_folder=None, failed_jobs_log=None, dry_run=Fal
             python_args.append(f'--{key}={value}')
     if experiment_folder:
         python_args.append(f'--experiment_folder={experiment_folder}')
-    if failed_jobs_log:
+    if failed_jobs_log and not dry_run:
         python_args.append(f'--failed_jobs_log={failed_jobs_log}')
 
     cmd = [
