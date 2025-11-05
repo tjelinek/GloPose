@@ -55,6 +55,9 @@ class TemplateBank:
     maha_thresh_per_class: Optional[torch.Tensor] = None
     maha_thresh_global: Optional[torch.Tensor] = None
     template_csls_avg: Optional[Dict[int, torch.Tensor]] = None
+    orig_onboarding_images: int = None
+    orig_pbr_images: int = None
+    orig_onboarding_sam_detections: int = None
 
 
 def _to_np_f32(X):
@@ -444,6 +447,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
             dino_cls_descriptors.append(dino_cls_descriptor)
             dino_patch_descriptors.append(dino_dense_descriptor.cpu())
 
+    num_images = len(all_images)
+
+    X_cls_pbr = None
     if (train_pbr_augmentations_path is not None and train_pbr_augmentations_path.exists()
             and augment_with_train_pbr_detections):
         path_to_pbr = path_to_split.parent / 'train_pbr'
@@ -456,6 +462,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         all_images.extend(image_paths_pbr)
         all_segmentations.extend(masks_pbr)
 
+    X_cls_onboarding = None
     if (onboarding_augmentations_path is not None and onboarding_augmentations_path.exists()
             and augment_with_split_detections):
         X_cls_onboarding, X_patch_onboarding, y_onboarding, image_paths_onboarding, masks_onboarding = \
@@ -588,6 +595,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
             'template_csls_avg_condensed_dict': template_csls_avg_condensed_dict,
             'sigma_inv': stats['sigma_inv'],
             'class_means': {int(k): v for k, v in stats['class_means'].items()},
+            'orig_onboarding_images': num_images,
+            'orig_pbr_images': len(X_cls_pbr) if X_cls_pbr is not None else 0,
+            'orig_onboarding_sam_detections': len(X_cls_onboarding) if X_cls_onboarding is not None else 0,
         }
 
         torch.save(payload, stats_dir / 'csls_stats.pt')
