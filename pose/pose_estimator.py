@@ -431,7 +431,7 @@ def main():
 
             whitening_suffix = f'-whitening_{args.whitening_dim}' if args.whitening_dim > 0 else ''
             condensation_source = f"{args.condensation_source}-{args.descriptor}{whitening_suffix}"
-            if args.descriptor_mask_detections > 0:
+            if args.descriptor_mask_detections < 1:
                 condensation_source += '_nonMaskedBG'
             if args.augment_with_split_detections:
                 condensation_source += '_aug-split'
