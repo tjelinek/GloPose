@@ -126,7 +126,12 @@ def main():
             **config_space,
             'templates_source': ['cnns'],
             'aggregation_function': ['max'],
-            'condensation_source': ['1nn-hart', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'condensation_source':
+                [
+                    '1nn-hart',
+                    # '1nn-hart_imblearn',
+                    # '1nn-hart_symmetric'
+                ],
             'similarity_metric': ['cosine', 'csls'],
             'ood_detection_method': ['lowe_test'],
             'lowe_ratio_threshold': [1.05, 1.1, 1.25, 1.5],
@@ -135,7 +140,12 @@ def main():
             **config_space,
             'templates_source': ['cnns'],
             'aggregation_function': ['max'],
-            'condensation_source': ['1nn-hart', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'condensation_source':
+                [
+                    '1nn-hart',
+                    # '1nn-hart_imblearn',
+                    # '1nn-hart_symmetric'
+                ],
             'similarity_metric': ['cosine', 'csls'],
             'ood_detection_method': ['cosine_similarity_quantiles'],
             'cosine_similarity_quantile': [.25, .5, .75],
@@ -144,7 +154,12 @@ def main():
             **config_space,
             'templates_source': ['cnns'],
             'aggregation_function': ['max'],
-            'condensation_source': ['1nn-hart', '1nn-hart_imblearn', '1nn-hart_symmetric'],
+            'condensation_source':
+                [
+                    '1nn-hart',
+                    # '1nn-hart_imblearn',
+                    # '1nn-hart_symmetric'
+                ],
             'ood_detection_method': ['mahalanobis_ood_detection'],
             'mahalanobis_quantile': [.95, .75, .5, .25],
         },
