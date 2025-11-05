@@ -259,10 +259,9 @@ def main():
     methods = [
         'hart',
         'hart_symmetric',
-        'hart_imblearn',
-        'hart_imblearn_adapted'
+        # 'hart_imblearn',
+        # 'hart_imblearn_adapted'
     ]
-    descriptors = ['dinov2', 'dinov3']
     neighbors = ['1nn']
 
     original_bop_path = Path('/mnt/personal/jelint19/data/bop')
@@ -286,6 +285,10 @@ def main():
                 ('lmo', 'train'),
                 ('tless', 'train_primesense'),
             ]
+    descriptors = [
+        # 'dinov2'
+        'dinov3',
+    ]
 
             all_counts_by_dataset = {}
 
