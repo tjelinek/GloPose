@@ -98,7 +98,7 @@ def main():
             0.25,
             0.5,
         ],
-        'patch_descriptors_filtering' : [
+        'patch_descriptors_filtering': [
             0,
             1
         ],
