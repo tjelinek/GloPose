@@ -131,7 +131,7 @@ def main():
                 ],
             'similarity_metric': ['cosine', 'csls'],
             'ood_detection_method': ['global_threshold'],
-            'confidence_thresh': [0.15, 0.25, 0.5, 0.75],
+            'confidence_thresh': [0.15, 0.25, 0.5],
         },
         {
             **config_space,
