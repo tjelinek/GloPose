@@ -262,42 +262,40 @@ def main():
         # 'hart_imblearn',
         # 'hart_imblearn_adapted'
     ]
-    neighbors = ['1nn']
-
-    original_bop_path = Path('/mnt/personal/jelint19/data/bop')
-    results_base = Path('/mnt/personal/jelint19/results/condensation')
-
-    for descriptor in descriptors:
-        all_stats = {}
-
-        for neighbor, method in product(neighbors, methods):
-            experiment = f'{neighbor}-{method}-{descriptor}'
-            dataset_sequences = [
-                ('hot3d', 'object_ref_aria_static_scenewise'),
-                ('hot3d', 'object_ref_quest3_static_scenewise'),
-                # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
-                # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
-                ('hope', 'onboarding_static'),
-                ('hope', 'onboarding_dynamic'),
-                ('handal', 'onboarding_static'),
-                ('handal', 'onboarding_dynamic'),
-                ('icbin', 'train'),
-                ('lmo', 'train'),
-                ('tless', 'train_primesense'),
-            ]
     descriptors = [
         # 'dinov2'
         'dinov3',
     ]
+    dataset_sequences = [
+        ('hot3d', 'object_ref_aria_static_scenewise'),
+        ('hot3d', 'object_ref_quest3_static_scenewise'),
+        # ('hot3d', 'object_ref_aria_dynamic_scenewise'),
+        # ('hot3d', 'object_ref_quest3_dynamic_scenewise'),
+        ('hope', 'onboarding_static'),
+        ('hope', 'onboarding_dynamic'),
+        ('handal', 'onboarding_static'),
+        ('handal', 'onboarding_dynamic'),
+        ('icbin', 'train'),
+        ('lmo', 'train'),
+        ('tless', 'train_primesense'),
+    ]
+
+    results_base = Path('/mnt/personal/jelint19/results/condensation')
+    original_bop_path = Path('/mnt/data/vrg/public_datasets/bop')
+
+    for descriptor in descriptors:
+        all_stats = {}
+
+        for method in methods:
+            experiment = f'1nn-{method}-{descriptor}'
 
             all_counts_by_dataset = {}
 
             for dataset, split in dataset_sequences:
                 relative_path = Path(dataset) / split
-                SOURCE_DIRECTORY = Path(
-                    '/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
-                TARGET_DIRECTORY = Path('/mnt/personal/jelint19/results/condensation') / experiment / relative_path
-                HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / Path(f'histogram_{dataset}-{split}-{experiment}.png')
+                SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
+                TARGET_DIRECTORY = results_base / experiment / relative_path
+                HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / f'histogram_{dataset}-{split}-{experiment}.png'
 
                 print("Image Directory Flattening Script with Histogram")
                 print("=" * 50)
@@ -322,10 +320,10 @@ def main():
                         'max': np.max(counts_values)
                     }
 
-            BOXPLOT_FILE = TARGET_DIRECTORY.parent.parent / Path(f'box-plot_{experiment}.png')
+            BOXPLOT_FILE = TARGET_DIRECTORY.parent.parent / f'box-plot_{experiment}.png'
             create_boxplot(all_counts_by_dataset, BOXPLOT_FILE, experiment)
 
-        LINECHART_FILE = results_base / Path(f'linechart_{descriptor}.png')
+        LINECHART_FILE = results_base / f'linechart_{descriptor}.png'
         create_linechart(all_stats, LINECHART_FILE, descriptor)
 
 
