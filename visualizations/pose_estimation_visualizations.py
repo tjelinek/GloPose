@@ -49,7 +49,7 @@ class RerunAnnotationsPose:
 
 
 def tensor2numpy(image, downsample_factor=1.0):
-    _, h, w = image.shape
+    h, w = image.shape[-2:]
     image = TF.resize(image.float().unsqueeze(0),
                       [int(h * downsample_factor), int(w * downsample_factor)],
                       interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
@@ -246,38 +246,44 @@ class PoseEstimatorLogger:
         rr.log(RerunAnnotationsPose.detection_image, rr_detection)
 
         template_images = template_images[viewgraph_id]
+        template_masks = template_masks[viewgraph_id]
+
         for i in range(6):
             if i < detection_topk_template_ids.shape[0]:
-                if i < detection_topk_template_ids.shape[0]:
-                    template_image_idx = detection_topk_template_ids[i].item()
+                template_image_idx = detection_topk_template_ids[i].item()
 
-                    # Check if template_images contains tensors or file paths
-                    if isinstance(template_images[template_image_idx], (str, Path)):
-                        # It's a file path, load it
-                        image_path = template_images[template_image_idx]
-                        rgb_img = Image.open(image_path).convert('RGB')
+                if isinstance(template_images[template_image_idx], (str, Path)):
+                    image_path = template_images[template_image_idx]
+                    rgb_img = Image.open(image_path).convert('RGB')
 
-                        if self.image_downsample != 1.0:
-                            original_size = rgb_img.size
-                            new_size = (int(original_size[0] * self.image_downsample),
-                                        int(original_size[1] * self.image_downsample))
-                            rgb_img = rgb_img.resize(new_size, Image.Resampling.LANCZOS)
+                    template_image_tensor = transforms.ToTensor()(rgb_img)
+                else:
+                    template_image_tensor = template_images[template_image_idx]
 
-                        template_image_tensor = transforms.ToTensor()(rgb_img)
-                    else:
-                        # It's already a tensor
-                        template_image_tensor = template_images[template_image_idx]
+                if isinstance(template_masks[template_image_idx], (str, Path)):
+                    mask_path = template_masks[template_image_idx]
+                    mask_img = Image.open(mask_path).convert('L')
 
-                    template_image = tensor2numpy(template_image_tensor, self.image_downsample)
-                    template_score = detection_topk_scores[i].item()
+                    template_mask_tensor = transforms.ToTensor()(mask_img)
+                else:
+                    template_mask_tensor = template_masks[template_image_idx]
+
+                template_image = tensor2numpy(template_image_tensor, self.image_downsample)
+                template_mask = tensor2numpy(template_mask_tensor[None], self.image_downsample)
+                template_score = detection_topk_scores[i].item()
             else:
                 template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
+                template_mask = tensor2numpy(torch.zeros_like(cropped_detection)[0:1], self.image_downsample)
                 template_score = None
 
             if template_score is not None:
                 template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
+
             rr_template = rr.Image(template_image_with_overlay)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
+
+            rr_mask = rr.SegmentationImage(template_mask, opacity=0.5)
+            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/mask', rr_mask)
             # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
             #        rr.TextDocument(f"score: {template_score:.3f}"))
 
