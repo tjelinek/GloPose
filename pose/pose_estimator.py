@@ -332,6 +332,7 @@ class BOPChallengePosePredictor:
 def main():
     parser = argparse.ArgumentParser(description='Run BOP Challenge pose prediction')
 
+    parser.add_argument('--device', default='cuda')
     parser.add_argument('--descriptor', choices=['dinov2', 'dinov3'], default='dinov2')
     parser.add_argument('--templates_source', choices=['viewgraph', 'cnns', 'prerendered'], default='cnns')
     parser.add_argument('--condensation_source', default='1nn-hart')
@@ -350,7 +351,7 @@ def main():
     parser.add_argument('--dry_run', action='store_true')
     parser.add_argument('--augment_with_split_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--augment_with_train_pbr_detections', type=lambda x: bool(int(x)), default=True)
-    parser.add_argument('--min_avg_patch_cosine_similarity', type=float, default=0.15)
+    parser.add_argument('--min_avg_patch_cosine_similarity', type=float, default=0.25)
     parser.add_argument('--patch_descriptors_filtering', type=lambda x: bool(int(x)), default=True)
 
     args = parser.parse_args()
@@ -449,7 +450,7 @@ def main():
             experiment = f'onboarding-templates@{args.descriptor}'
 
         config = TrackerConfig()
-        config.device = 'cuda'
+        config.device = args.device
 
         matching_config_overrides = {
             'aggregation_function': args.aggregation_function,
