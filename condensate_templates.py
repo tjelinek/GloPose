@@ -692,12 +692,12 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                                         total=len(rgb_files),
                                         leave=False):
             # Load RGB image
-            rgb_img = Image.open(rgb_file).convert('RGB')
-            rgb_tensor = TVF.ToTensor()(rgb_img).to(device)
+            # rgb_img = Image.open(rgb_file).convert('RGB')
+            # rgb_tensor = TVF.ToTensor()(rgb_img).cpu()
 
             descriptor_file = descriptor_dir / f'{rgb_file.stem}.pt'
 
-            images_dict[obj_id].append(rgb_tensor)
+            images_dict[obj_id].append(rgb_file)
 
             # Load segmentation mask
             mask_img = Image.open(mask_file).convert('L')  # Grayscale
