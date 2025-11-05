@@ -434,9 +434,9 @@ def main():
             if args.descriptor_mask_detections < 1:
                 condensation_source += '_nonMaskedBG'
             if args.augment_with_split_detections:
-                condensation_source += '_aug-split'
+                condensation_source += '_split-aug'
             if args.augment_with_train_pbr_detections:
-                condensation_source += '_aug-pbr'
+                condensation_source += '_pbr-aug'
             if args.confidence_thresh is not None and args.confidence_thresh > 0:
                 condensation_source += f'_min-cls-sim-{args.confidence_thresh}'
             if args.patch_descriptors_filtering:
