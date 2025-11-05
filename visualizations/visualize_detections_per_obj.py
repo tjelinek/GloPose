@@ -64,7 +64,7 @@ def get_total_counts(original_dataset_path, dataset, split):
     sequences = sorted([d for d in path_to_split.iterdir() if d.is_dir()])
 
     for sequence in sequences:
-        rgb_folder = sequence / 'rgb'
+        rgb_folder = sequence / 'rgb' if 'quest3' not in str(path_to_split) else sequence / 'gray1'
         if not rgb_folder.exists():
             continue
 
