@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Final, Dict
+from typing import Final, Dict, List
 
 import numpy as np
 import rerun as rr
@@ -218,8 +218,14 @@ class PoseEstimatorLogger:
         rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
         rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
 
-    def visualize_nearest_neighbors(self, query_image: torch.Tensor, view_graph_images: Dict[int, torch.Tensor],
-                                    detection_idx: int, detections: Detections, detections_scores, similarity_metric):
+    def visualize_nearest_neighbors(self,
+                                    query_image: torch.Tensor,
+                                    template_images: Dict[int, List[torch.Tensor] | Path],
+                                    template_masks: Dict[int, List[torch.Tensor] | Path],
+                                    detection_idx: int,
+                                    detections: Detections,
+                                    detections_scores,
+                                    similarity_metric: str):
 
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
@@ -239,7 +245,7 @@ class PoseEstimatorLogger:
         rr_detection = rr.Image(tensor2numpy(cropped_detection))
         rr.log(RerunAnnotationsPose.detection_image, rr_detection)
 
-        template_images = view_graph_images[viewgraph_id]
+        template_images = template_images[viewgraph_id]
         for i in range(6):
             if i < detection_topk_template_ids.shape[0]:
                 if i < detection_topk_template_ids.shape[0]:

@@ -189,8 +189,8 @@ class BOPChallengePosePredictor:
 
                 if pose_logger is not None:
                     pose_logger.visualize_detections(detections.masks, detection_mask_idx)
-                    pose_logger.visualize_nearest_neighbors(image, template_data.images, detection_mask_idx, detections,
-                                                            detections_scores,
+                    pose_logger.visualize_nearest_neighbors(image, template_data.images, template_data.masks,
+                                                            detection_mask_idx, detections, detections_scores,
                                                             self.cnos_matching_config['similarity_metric'])
                     pose_logger.rerun_sequence_id += 1
 
