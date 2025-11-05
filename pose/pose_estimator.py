@@ -437,7 +437,7 @@ def main():
                 condensation_source += '_aug-split'
             if args.augment_with_train_pbr_detections:
                 condensation_source += '_aug-pbr'
-            if args.confidence_thresh > 0:
+            if args.confidence_thresh is not None and args.confidence_thresh > 0:
                 condensation_source += f'_min-cls-sim-{args.confidence_thresh}'
             if args.patch_descriptors_filtering:
                 condensation_source += f'_min-patch-sim-{args.min_avg_patch_cosine_similarity}'
