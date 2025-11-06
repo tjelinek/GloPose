@@ -255,7 +255,6 @@ class PoseEstimatorLogger:
                 if isinstance(template_images[template_image_idx], (str, Path)):
                     image_path = template_images[template_image_idx]
                     rgb_img = Image.open(image_path).convert('RGB')
-
                     template_image_tensor = transforms.ToTensor()(rgb_img)
                 else:
                     template_image_tensor = template_images[template_image_idx]
@@ -263,7 +262,6 @@ class PoseEstimatorLogger:
                 if isinstance(template_masks[template_image_idx], (str, Path)):
                     mask_path = template_masks[template_image_idx]
                     mask_img = Image.open(mask_path).convert('L')
-
                     template_mask_tensor = transforms.ToTensor()(mask_img)
                 else:
                     template_mask_tensor = template_masks[template_image_idx]
@@ -271,21 +269,17 @@ class PoseEstimatorLogger:
                 template_image = tensor2numpy(template_image_tensor, self.image_downsample)
                 template_mask = tensor2numpy(template_mask_tensor[None], self.image_downsample)
                 template_score = detection_topk_scores[i].item()
+                template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
             else:
                 template_image = tensor2numpy(torch.zeros_like(cropped_detection), self.image_downsample)
                 template_mask = tensor2numpy(torch.zeros_like(cropped_detection)[0:1], self.image_downsample)
-                template_score = None
-
-            if template_score is not None:
-                template_image_with_overlay = add_score_overlay(template_image, template_score, similarity_metric)
+                template_image_with_overlay = template_image
 
             rr_template = rr.Image(template_image_with_overlay)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
 
             rr_mask = rr.SegmentationImage(template_mask, opacity=0.5)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/mask', rr_mask)
-            # rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/scores',
-            #        rr.TextDocument(f"score: {template_score:.3f}"))
 
     def visualize_image(self, query_image: torch.Tensor):
         h, w = query_image.shape[-2:]
