@@ -279,7 +279,8 @@ class PoseEstimatorLogger:
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
 
             rr_mask = rr.SegmentationImage(template_mask, opacity=0.5)
-            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/mask', rr_mask)
+            context = rr.AnnotationContext([(0, "", (0, 0, 0, 0))])  # 0 is transparent
+            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/mask', rr_mask, context)
 
     def visualize_image(self, query_image: torch.Tensor):
         h, w = query_image.shape[-2:]
