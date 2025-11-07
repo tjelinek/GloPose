@@ -87,11 +87,11 @@ def main():
         ],
         'augment_with_split_detections': [
             0,
-            1
+            # 1
         ],
         'augment_with_train_pbr_detections': [
             0,
-            1
+            # 1
         ],
         'min_avg_patch_cosine_similarity': [
             0.,
@@ -116,7 +116,10 @@ def main():
                     # '1nn-hart_imblearn',
                     # '1nn-hart_symmetric'
                 ],
-            'similarity_metric': ['cosine', 'csls'],
+            'similarity_metric': [
+                'cosine',
+                # 'csls'
+            ],
             'ood_detection_method': ['none'],
         },
         {
@@ -129,7 +132,10 @@ def main():
                     # '1nn-hart_imblearn',
                     # '1nn-hart_symmetric'
                 ],
-            'similarity_metric': ['cosine', 'csls'],
+            'similarity_metric': [
+                'cosine',
+                # 'csls'
+            ],
             'ood_detection_method': ['global_threshold'],
             'confidence_thresh': [0.15, 0.25, 0.5],
         },
