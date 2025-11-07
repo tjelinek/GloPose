@@ -244,7 +244,6 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
     else:
         sim3d = pycolmap.estimate_sim3d(pred_camera_centers, gt_camera_centers)
 
-    sim3d = sim3d_report#['tgt_from_src']
     reconstruction.transform(sim3d)
 
     return reconstruction, True
