@@ -78,7 +78,7 @@ def main():
             'sam2'
         ],
         'use_enhanced_nms': [
-            # 0,
+            0,
             1
         ],
         'descriptor_mask_detections': [
