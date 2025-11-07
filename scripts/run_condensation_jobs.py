@@ -90,12 +90,12 @@ def main():
         ],
         'device': ['cpu'],
         'augment_with_split_detections': [
-            # 0,
-            1
+            0,
+            # 1
         ],
         'augment_with_train_pbr_detections': [
             0,
-            1
+            # 1
         ],
         'augmentations_detector': ['sam2'],
         'patch_descriptors_filtering': [0, 1],
