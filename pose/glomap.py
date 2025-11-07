@@ -327,6 +327,9 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
 
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = False
+        opts.ba_local_num_images = 3
+        opts.ba_global_images_freq = 3
+        opts.triangulation.max_transitivity = 2
         if initial_pair_provided:
             opts.init_image_id1 = first_image_id
             opts.init_image_id2 = second_image_id
