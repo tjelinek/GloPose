@@ -306,6 +306,12 @@ class BOPChallengePosePredictor:
         filter_similarities_dict(detections_scores, keep_indices)
         keep_indices = detections.apply_nms_for_masks_inside_masks()
         filter_similarities_dict(detections_scores, keep_indices)
+
+        indices = torch.arange(len(detections.masks), device=self.config.device)
+        sort_indices = indices[torch.argsort(detections.scores[indices], descending=True)]
+        detections.filter(sort_indices)
+        filter_similarities_dict(detections_scores, sort_indices)
+
         return detections, detections_scores
 
     @staticmethod
