@@ -365,17 +365,17 @@ def main():
     bop_base = Path('/mnt/data/vrg/public_datasets/bop')
 
     sequences_to_run = [
-        (
-            'hot3d', 'test', 'object_ref_aria_static_scenewise', None
-        ),
-        (
-            'hot3d', 'test', 'object_ref_aria_quest3_scenewise', None
-        ),
-        (
-            'hope', 'test', 'onboarding_static',
-            bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
-                       'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
-        ),
+        # (
+        #     'hot3d', 'test', 'object_ref_aria_static_scenewise', None
+        # ),
+        # (
+        #     'hot3d', 'test', 'object_ref_aria_quest3_scenewise', None
+        # ),
+        # (
+        #     'hope', 'test', 'onboarding_static',
+        #     bop_base / 'default_detections/h3_bop24_model_free_unseen/cnos-sam/onboarding_static/'
+        #                'cnos-sam_hope-test_static-020a-45bd-8ec5-c95560b68011.json'
+        # ),
         ('hope', 'val', 'onboarding_static', None),
         (
             'tless', 'test', 'train_primesense',
@@ -392,7 +392,7 @@ def main():
             bop_base / 'default_detections/classic_bop23_model_based_unseen/cnos-fastsam/'
                        'cnos-fastsam_icbin-test_f21a9faf-7ef2-4325-885f-f4b6460f4432.json'
         ),
-        ('handal', 'test', 'onboarding_static', None),
+        # ('handal', 'test', 'onboarding_static', None),
         ('handal', 'val', 'onboarding_static', None),
     ]
 
