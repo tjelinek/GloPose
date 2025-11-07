@@ -137,7 +137,7 @@ class BOPChallengePosePredictor:
             im_id = item['im_id']
             scene_id = item['scene_id']
 
-            downsample_factor = 0.5 if dataset_name in ['hope', 'handal'] else 1.0
+            downsample_factor = 0.25 if dataset_name in ['hope', 'handal'] else 1.0
 
             step = len(test_annotations) / 10
             if i == int(step * (i // int(step))) and i // int(step) < 10:
