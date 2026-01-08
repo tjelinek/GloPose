@@ -66,7 +66,7 @@ else
     sequences_short="no_sequences"
 fi
 
-modules_file=~/modules_glotracker_login4.txt
+modules_file=~/scripts/modules_glotracker_login4.txt
 # shellcheck disable=SC2046
 ml $(<$modules_file)
 
