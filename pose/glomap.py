@@ -199,7 +199,9 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     if progress is not None:
         progress(0.5, desc="Running reconstruction...")
 
-    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper, first_image_id, second_image_id)
+    ignore_two_view_tracks = not add_track_merging_matches
+    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper, first_image_id, second_image_id,
+               ignore_two_view_tracks)
 
     if progress is not None:
         progress(1.0, desc="Reconstruction finished.")
@@ -256,7 +258,8 @@ def two_view_geometry(colmap_db_path: Path):
 
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
-               first_image_id: Optional[int] = None, second_image_id: Optional[int] = None):
+               first_image_id: Optional[int] = None, second_image_id: Optional[int] = None,
+               ignore_two_view_tracks: bool = True):
 
     colmap_output_path.mkdir(exist_ok=True, parents=True)
 
@@ -277,7 +280,7 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 "--database_path", str(colmap_db_path),
                 "--output_path", str(colmap_output_path),
                 "--image_path", str(colmap_image_path),
-                "--TrackEstablishment.min_num_view_per_track", str(2),
+                "--TrackEstablishment.min_num_view_per_track", str(3 if ignore_two_view_tracks else 2),
             ]
 
         elif mapper == 'colmap':
@@ -287,7 +290,7 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 "--database_path", str(colmap_db_path),
                 "--output_path", str(colmap_output_path),
                 "--image_path", str(colmap_image_path),
-                "--Mapper.tri_ignore_two_view_tracks", str(0),
+                "--Mapper.tri_ignore_two_view_tracks", str(int(ignore_two_view_tracks)),
                 *("--Mapper.init_image_id1", str(first_image_id) if initial_pair_provided else ""),
                 *("--Mapper.init_image_id2", str(second_image_id) if initial_pair_provided else ""),
                 "--log_to_stderr", str(1),
@@ -326,7 +329,7 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
     elif mapper == 'pycolmap':
 
         opts = pycolmap.IncrementalPipelineOptions()
-        opts.triangulation.ignore_two_view_tracks = False
+        opts.triangulation.ignore_two_view_tracks = ignore_two_view_tracks
         opts.ba_local_num_images = 3
         opts.ba_global_images_freq = 3
         opts.triangulation.max_transitivity = 2
