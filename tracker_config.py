@@ -16,7 +16,7 @@ from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 class TrackerConfig:
     # General settings
     device: str = 'cuda'
-    default_data_folder: Path = Path('/mnt/personal/jelint19/data/').expanduser()
+    default_data_folder: Path = Path('/mnt/data/vrg/public_datasets/').expanduser()
     default_results_folder: Path = Path('/mnt/personal/jelint19/results/FlowTracker/').expanduser()
     purge_cache: bool = False
 
