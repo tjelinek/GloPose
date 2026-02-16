@@ -78,7 +78,7 @@ def main():
             'sam2'
         ],
         'use_enhanced_nms': [
-            0,
+            # 0,
             1
         ],
         'descriptor_mask_detections': [
@@ -97,10 +97,10 @@ def main():
             0.,
             0.15,
             0.25,
-            0.5,
+            # 0.5,
         ],
         'patch_descriptors_filtering': [
-            0,
+            # 0,
             1
         ],
     }
@@ -134,7 +134,7 @@ def main():
                 ],
             'similarity_metric': [
                 'cosine',
-                # 'csls'
+                'csls'
             ],
             'ood_detection_method': ['global_threshold'],
             'confidence_thresh': [0.15, 0.25, 0.5],
