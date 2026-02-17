@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict
 
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
@@ -8,46 +8,28 @@ from kornia.geometry import Se3, Quaternion, PinholeCamera
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from tracker6d import Tracker6D
 
+from utils.dataset_sequences import get_navi_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-def get_navi_sequences() -> List[str]:
-
-    dataset_path = Path('/mnt/personal/jelint19/data/NAVI/navi_v1.5')
-    video_sequences = []
-
-    # Iterate through all object directories
-    for object_dir in dataset_path.iterdir():
-        if object_dir.is_dir():
-            object_id = object_dir.name
-
-            # Look for video folders within each object directory
-            for item in object_dir.iterdir():
-                if item.is_dir() and item.name.startswith('video-'):
-                    video_folder_name = item.name
-                    video_path = f"{object_id}@{video_folder_name}"
-                    video_sequences.append(video_path)
-
-    return sorted(video_sequences)
-
-
-NAVI_SEQUENCES = get_navi_sequences()
-
-
 def main():
     dataset = 'navi'
     args = parse_args()
+
+    config = load_config(args.config)
+    navi_sequences = get_navi_sequences(config.default_data_folder / 'NAVI' / 'navi_v1.5')
+
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = NAVI_SEQUENCES[4:5]
+        sequences = navi_sequences[4:5]
 
     for obj_type_sequence in sequences:
         with (exception_logger()):
 
-            if obj_type_sequence not in NAVI_SEQUENCES:
+            if obj_type_sequence not in navi_sequences:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")
 
             obj_name, sequence = obj_type_sequence.split('@')

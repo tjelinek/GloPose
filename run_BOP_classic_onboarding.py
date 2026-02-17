@@ -5,42 +5,25 @@ from tracker6d import Tracker6D
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
                                 read_object_id, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, \
                                 read_pinhole_params
+from utils.dataset_sequences import get_bop_classic_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-BOP_TLESS_ONBOARDING_SEQUENCES = [
-    "tless@train_primesense@000001", "tless@train_primesense@000002", "tless@train_primesense@000003",
-    "tless@train_primesense@000004", "tless@train_primesense@000005", "tless@train_primesense@000006",
-    "tless@train_primesense@000007", "tless@train_primesense@000008", "tless@train_primesense@000009",
-    "tless@train_primesense@000010", "tless@train_primesense@000011", "tless@train_primesense@000012",
-    "tless@train_primesense@000013", "tless@train_primesense@000014", "tless@train_primesense@000015",
-    "tless@train_primesense@000016", "tless@train_primesense@000017", "tless@train_primesense@000018",
-    "tless@train_primesense@000019", "tless@train_primesense@000020", "tless@train_primesense@000021",
-    "tless@train_primesense@000022", "tless@train_primesense@000023", "tless@train_primesense@000024",
-    "tless@train_primesense@000025", "tless@train_primesense@000026", "tless@train_primesense@000027",
-    "tless@train_primesense@000028", "tless@train_primesense@000029", "tless@train_primesense@000030",
-]
-
-BOP_LMO_ONBOARDING_SEQUENCES = [
-    "lmo@train@000001", "lmo@train@000005", "lmo@train@000006",
-    "lmo@train@000008", "lmo@train@000009", "lmo@train@000010",
-    "lmo@train@000011", "lmo@train@000012",
-]
-
-BOP_ICBIN_ONBOARDING_SEQUENCES = [
-    "icbin@train@000001", "icbin@train@000002"
-]
-
-
 def main():
     args = parse_args()
+    config = load_config(args.config)
+
+    bop_path = config.default_data_folder / 'bop'
+    tless_seqs = get_bop_classic_sequences(bop_path, 'tless', 'train_primesense')
+    lmo_seqs = get_bop_classic_sequences(bop_path, 'lmo', 'train')
+    icbin_seqs = get_bop_classic_sequences(bop_path, 'icbin', 'train')
+
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = (BOP_TLESS_ONBOARDING_SEQUENCES + BOP_LMO_ONBOARDING_SEQUENCES +
-                     BOP_ICBIN_ONBOARDING_SEQUENCES)[0:1]
+        sequences = (tless_seqs + lmo_seqs + icbin_seqs)[0:1]
 
     for sequence_code in sequences:
         sequence_code_split = sequence_code.split('@')

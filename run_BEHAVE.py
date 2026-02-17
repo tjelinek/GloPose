@@ -8,6 +8,7 @@ from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
 from tracker6d import Tracker6D
+from utils.dataset_sequences import get_behave_sequences
 from utils.image_utils import get_nth_video_frame
 from utils.runtime_utils import parse_args
 from utils.general import load_config
@@ -16,21 +17,12 @@ from utils.general import load_config
 def main():
     dataset = 'BEHAVE'
     args = parse_args()
+    config = load_config(args.config)
+
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = [
-            # '225z4rz6dtrsezi34lsrcnukni',
-            # '227ybq4jddcxeobo7njvjnkmgy',
-            # '24bw7vtbjt3ony3cgvye2oyjgu',
-            # '24n2fzuerdocahja7fxod3jzfe',
-            # '25zqalav3mxmbuvwzrgdxvp6ne',
-            # '26623u6vetquo3323cyano7xpu',
-            # '27pfmpfuewryv7u2vqe56sbsua',
-            # '2ayiktcgtfbj45woxvfv74plui',
-            # '2b2o7cfrp6j5luxwixtq2syeoy',
-            '2csdgc36d5txks6kpssnrojmby',
-        ]
+        sequences = get_behave_sequences(config.default_data_folder / 'BEHAVE' / 'train')
 
     sequence = sequences[0]
     config = load_config(args.config)

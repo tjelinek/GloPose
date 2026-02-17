@@ -1,60 +1,33 @@
 from pathlib import Path
-from typing import Tuple, List
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from tracker6d import Tracker6D
 from utils.bop_challenge import add_extrinsics_to_pinhole_params, load_gt_images, load_gt_segmentations, \
                                  extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
-
+from utils.dataset_sequences import get_handal_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
 
-def get_handal_sequences() -> Tuple[List[Path], List[Path]]:
-    dataset_path = Path("/mnt/personal/jelint19/data/HANDAL")
-
-    train_sequences = []
-    test_sequences = []
-
-    for category_dir in dataset_path.iterdir():
-        if not category_dir.is_dir():
-            continue
-
-        category_name = category_dir.name
-
-        train_dir = category_dir / "train"
-        if train_dir.exists():
-            for sequence_dir in train_dir.iterdir():
-                if sequence_dir.is_dir():
-                    train_sequences.append(f"{category_name}@{sequence_dir.name}")
-
-        test_dir = category_dir / "test"
-        if test_dir.exists():
-            for sequence_dir in test_dir.iterdir():
-                if sequence_dir.is_dir():
-                    test_sequences.append(f"{category_name}@{sequence_dir.name}")
-
-    return train_sequences, test_sequences
-
-
-HANDAL_TRAIN_SEQUENCES, HANDAL_TEST_SEQUENCES = get_handal_sequences()
-
-
 def main():
     dataset = 'handal_native'
     args = parse_args()
+
+    config = load_config(args.config)
+    handal_train, handal_test = get_handal_sequences(config.default_data_folder / 'HANDAL')
+
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = HANDAL_TEST_SEQUENCES[4:5]
+        sequences = handal_test[4:5]
 
     for obj_type_sequence in sequences:
         with (exception_logger()):
 
-            if obj_type_sequence in HANDAL_TRAIN_SEQUENCES:
+            if obj_type_sequence in handal_train:
                 sequence_type = 'train'
-            elif obj_type_sequence in HANDAL_TEST_SEQUENCES:
+            elif obj_type_sequence in handal_test:
                 sequence_type = 'test'
             else:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")

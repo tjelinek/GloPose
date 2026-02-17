@@ -1,5 +1,6 @@
 from pathlib import Path
 from dataset_generators import scenarios
+from utils.dataset_sequences import get_google_scanned_objects_sequences
 from utils.experiment_runners import run_on_synthetic_data
 from utils.runtime_utils import parse_args, exception_logger
 from utils.general import load_config
@@ -15,16 +16,8 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = [
-            'Squirrel',
-            # 'STACKING_BEAR',
-            # 'Schleich_Allosaurus',
-            # 'Nestl_Skinny_Cow_Heavenly_Crisp_Candy_Bar_Chocolate_Raspberry_6_pack_462_oz_total',
-            # 'SCHOOL_BUS',
-            # 'Sootheze_Cold_Therapy_Elephant',
-            # 'TOP_TEN_HI',
-            'Transformers_Age_of_Extinction_Mega_1Step_Bumblebee_Figure',
-        ][:1]
+        sequences = get_google_scanned_objects_sequences(
+            config.default_data_folder / 'GoogleScannedObjects' / 'models')[:1]
 
     for sequence in sequences:
 

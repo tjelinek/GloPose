@@ -6,6 +6,7 @@ from pathlib import Path
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from utils.dataset_sequences import get_ho3d_sequences
 from utils.runtime_utils import parse_args, exception_logger
 from tracker6d import Tracker6D
 from utils.general import load_config
@@ -15,18 +16,9 @@ def main():
     dataset = 'HO3D'
     split = 'train'  # 'evaluation' or 'train'
 
-    train_sequences = [
-        'ABF10', 'BB10', 'GPMF10', 'GSF10', 'MC1', 'MDF10', 'ND2', 'ShSu12', 'SiBF12', 'SM3', 'SMu41',
-        'ABF11', 'BB11', 'GPMF11', 'GSF11', 'MC2', 'MDF11', 'SB10', 'ShSu13', 'SiBF13', 'SM4', 'SMu42',
-        'ABF12', 'BB12', 'GPMF12', 'GSF12', 'MC4', 'MDF12', 'SB12', 'ShSu14', 'SiBF14', 'SM5', 'SS1',
-        'ABF13', 'BB13', 'GPMF13', 'GSF13', 'MC5', 'MDF13', 'SB14', 'SiBF10', 'SiS1', 'SMu1', 'SS2',
-        'ABF14', 'BB14', 'GPMF14', 'GSF14', 'MC6', 'MDF14', 'ShSu10', 'SiBF11', 'SM2', 'SMu40', 'SS3',
-    ]
-    test_sequences = [
-        'AP10', 'AP12', 'AP14', 'MPM11', 'MPM13', 'SB11', 'SM1',
-        'AP11', 'AP13', 'MPM10', 'MPM12', 'MPM14', 'SB13',
-    ]
     args = parse_args()
+    config = load_config(args.config)
+    train_sequences, test_sequences = get_ho3d_sequences(config.default_data_folder / 'HO3D')
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:

@@ -6,6 +6,7 @@ from pathlib import Path
 from kornia.geometry import Quaternion, Se3
 
 from tracker6d import Tracker6D
+from utils.dataset_sequences import get_tum_rgbd_sequences
 from utils.runtime_utils import parse_args
 from utils.general import load_config
 
@@ -13,49 +14,12 @@ from utils.general import load_config
 def main():
     dataset = 'TUM_RGBD'
     args = parse_args()
+    config = load_config(args.config)
+
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = [
-            'rgbd_dataset_freiburg1_360',
-            'rgbd_dataset_freiburg1_desk',
-            'rgbd_dataset_freiburg1_desk2',
-            'rgbd_dataset_freiburg1_floor',
-            'rgbd_dataset_freiburg1_plant',
-            'rgbd_dataset_freiburg1_room',
-            'rgbd_dataset_freiburg1_rpy',
-            'rgbd_dataset_freiburg1_teddy',
-            'rgbd_dataset_freiburg1_xyz',
-            'rgbd_dataset_freiburg2_360_hemisphere',
-            'rgbd_dataset_freiburg2_360_kidnap',
-            'rgbd_dataset_freiburg2_coke',
-            'rgbd_dataset_freiburg2_desk',
-            'rgbd_dataset_freiburg2_dishes',
-            'rgbd_dataset_freiburg2_flowerbouquet',
-            'rgbd_dataset_freiburg2_flowerbouquet_brownbackground',
-            'rgbd_dataset_freiburg2_large_no_loop',
-            'rgbd_dataset_freiburg2_large_with_loop',
-            'rgbd_dataset_freiburg2_metallic_sphere',
-            'rgbd_dataset_freiburg2_metallic_sphere2',
-            'rgbd_dataset_freiburg2_pioneer_360',
-            'rgbd_dataset_freiburg2_pioneer_slam',
-            'rgbd_dataset_freiburg2_pioneer_slam2',
-            'rgbd_dataset_freiburg2_pioneer_slam3',
-            'rgbd_dataset_freiburg2_rpy',
-            'rgbd_dataset_freiburg2_xyz',
-            'rgbd_dataset_freiburg3_cabinet',
-            'rgbd_dataset_freiburg3_large_cabinet',
-            'rgbd_dataset_freiburg3_long_office_household',
-            'rgbd_dataset_freiburg3_sitting_halfsphere',
-            'rgbd_dataset_freiburg3_sitting_rpy',
-            'rgbd_dataset_freiburg3_sitting_static',
-            'rgbd_dataset_freiburg3_sitting_xyz',
-            'rgbd_dataset_freiburg3_teddy',
-            'rgbd_dataset_freiburg3_walking_halfsphere',
-            'rgbd_dataset_freiburg3_walking_rpy',
-            'rgbd_dataset_freiburg3_walking_static',
-            'rgbd_dataset_freiburg3_walking_xyz',
-        ]
+        sequences = get_tum_rgbd_sequences(config.default_data_folder / 'SLAM' / 'tum_rgbd')
 
     for sequence in sequences:
         config = load_config(args.config)
