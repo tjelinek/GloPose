@@ -184,8 +184,8 @@ class PrecomputedFlowProviderDirect(FlowProviderDirect, ABC):
         self._save_to_datagraph(source_image_index, target_image_index, warp, certainty)
 
         if sample:
-            if ((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
-                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5) and
+            if (((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
+                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5)) and
                     zero_certainty_outside_segmentation):  # This should prevent the sampling to fail due to CUDA error
                 warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
                 certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
