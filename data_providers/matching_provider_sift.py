@@ -73,7 +73,7 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
         pass
 
 
-class PrecomputedUFMFlowProviderDirect(SIFTMatchingProviderDirect):
+class PrecomputedSIFTMatchingProvider(SIFTMatchingProviderDirect):
 
     def __init__(self, num_sift_features: int, data_graph: DataGraph, device: str):
 
