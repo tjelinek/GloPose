@@ -31,6 +31,7 @@ class TrackerConfig:
 
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
+    rerun_jpeg_quality: int = 75
     large_images_results_write_frequency: int = 1
 
     # Input data settings

@@ -98,10 +98,11 @@ def add_score_overlay(image, score, similarity_metric, bounds=None):
 
 class PoseEstimatorLogger:
 
-    def __init__(self, output_path: Path, image_downsample: float = 0.5):
+    def __init__(self, output_path: Path, image_downsample: float = 0.5, rerun_jpeg_quality: int = 75):
         self.init_rerun(output_path)
         self.rerun_sequence_id: int = 0
         self.image_downsample = image_downsample
+        self.rerun_jpeg_quality = rerun_jpeg_quality
 
     @staticmethod
     def init_rerun(output_path: Path):
@@ -242,7 +243,7 @@ class PoseEstimatorLogger:
         x1, y1, x2, y2 = detection_bbox.int()
         cropped_detection = query_image[..., y1:y2, x1:x2]
 
-        rr_detection = rr.Image(tensor2numpy(cropped_detection))
+        rr_detection = rr.Image(tensor2numpy(cropped_detection)).compress(jpeg_quality=self.rerun_jpeg_quality)
         rr.log(RerunAnnotationsPose.detection_image, rr_detection)
 
         template_images = template_images[viewgraph_id]
@@ -275,7 +276,7 @@ class PoseEstimatorLogger:
                 template_mask = tensor2numpy(torch.zeros_like(cropped_detection)[0:1], self.image_downsample)
                 template_image_with_overlay = template_image
 
-            rr_template = rr.Image(template_image_with_overlay)
+            rr_template = rr.Image(template_image_with_overlay).compress(jpeg_quality=self.rerun_jpeg_quality)
             rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
 
             rr_mask = rr.SegmentationImage(template_mask, opacity=0.5)
@@ -287,7 +288,7 @@ class PoseEstimatorLogger:
         img = TF.resize(query_image, [int(h * self.image_downsample), int(w * self.image_downsample)])
         query_image_np = tensor2numpy(img)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
-        rr_image = rr.Image(query_image_np)
+        rr_image = rr.Image(query_image_np).compress(jpeg_quality=self.rerun_jpeg_quality)
         rr.log(RerunAnnotationsPose.observed_image, rr_image)
         rr.log(RerunAnnotationsPose.observed_image_all, rr_image)
 
@@ -319,7 +320,7 @@ class PoseEstimatorLogger:
         template_target_image_np = tensor2numpy(template_target_image)
         template_target_image_segment_np = template_target_image_segment.squeeze().numpy(force=True)
 
-        rerun_image = rr.Image(template_target_image_np)
+        rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.rerun_jpeg_quality)
         rerun_segment = rr.SegmentationImage(template_target_image_segment_np)
         rr.log(RerunAnnotationsPose.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotationsPose.matches_low_certainty, rerun_image)
@@ -351,7 +352,7 @@ class PoseEstimatorLogger:
         template_target_blacks = np.ones_like(template_target_image_np)
         template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
 
-        rerun_certainty_img = rr.Image(template_target_image_certainty_np)
+        rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(jpeg_quality=self.rerun_jpeg_quality)
         rr.log(RerunAnnotationsPose.matching_certainty, rerun_certainty_img)
 
         template_image_size = ImageSize(*template_image.shape[-2:])

@@ -361,7 +361,7 @@ class WriteResults:
                 matchability_image = (~matchability_mask.unsqueeze(0).permute(1, 2, 0)).to(torch.float).numpy(force=True)
                 template = template.numpy(force=True) * 255.0
                 matchability_image_overlay = overlay_mask(template, matchability_image, 1.0, color=(0, 0, 0))
-                rr_matchability_image = rr.Image(template)
+                rr_matchability_image = rr.Image(template).compress(jpeg_quality=self.config.rerun_jpeg_quality)
                 rr.log(RerunAnnotations.matchability, rr_matchability_image)
 
             self.logged_keyframe_graph.add_node(kf_idx)
@@ -664,7 +664,7 @@ class WriteResults:
                 self.logged_templates_3d_space.append(keyframe_node_idx)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
-                rr.log(template_image_grid_annotation, rr.Image(template))
+                rr.log(template_image_grid_annotation, rr.Image(template).compress(jpeg_quality=self.config.rerun_jpeg_quality))
 
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
@@ -734,7 +734,7 @@ class WriteResults:
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
         template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True)
-        rerun_image = rr.Image(template_target_image_np)
+        rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
@@ -747,7 +747,7 @@ class WriteResults:
             template_target_image_matchable_np = overlay_mask(template_target_image_np * 255.,
                                                               ~matchability_mask_pad_np,  1.0, (0, 0, 0))
 
-            mathability_image_rerun = rr.Image(template_target_image_matchable_np)
+            mathability_image_rerun = rr.Image(template_target_image_matchable_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
             rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
             rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
@@ -789,7 +789,7 @@ class WriteResults:
             template_target_blacks = np.ones_like(template_target_image_np)
             template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
 
-            rerun_certainty_img = rr.Image(template_target_image_certainty_np)
+            rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
             rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
         elif self.config.frame_filter == 'SIFT':
             keypoints_matching_indices = arc_observation.sift_keypoint_indices
@@ -937,7 +937,7 @@ class WriteResults:
 
         if self.config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame)
-            rr.log(rerun_annotation, rr.Image(image))
+            rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.rerun_jpeg_quality))
         else:
             image_np = image.numpy(force=True)
             imageio.imwrite(save_path, image_np)
@@ -951,7 +951,7 @@ class WriteResults:
             image_np = image_bytes_np.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             image = Image.fromarray(image_np)
             rr.set_time_sequence("frame", frame)
-            rr.log(rerun_annotation, rr.Image(image))
+            rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.rerun_jpeg_quality))
         else:
             plt.savefig(str(save_path), **kwargs)
 
