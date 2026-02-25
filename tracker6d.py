@@ -48,17 +48,18 @@ class Tracker6D:
 
         self.progress = progress
 
+        cache_root = config.default_cache_folder
         self.matching_cache_folder: Path = \
-            (Path(f'/mnt/personal/jelint19/cache/{self.config.frame_filter_matcher}_cache') /
+            (cache_root / f'{self.config.frame_filter_matcher}_cache' /
              config.roma_config.config_name / config.dataset / f'{config.sequence}_{config.special_hash}')
-        self.cache_folder_SIFT: Path = (Path('/mnt/personal/jelint19/cache/SIFT_cache') /
+        self.cache_folder_SIFT: Path = (cache_root / 'SIFT_cache' /
                                         config.sift_matcher_config.config_name / config.dataset /
                                         f'{config.sequence}_{config.special_hash}')
-        self.cache_folder_SAM2: Path = ((Path('/mnt/personal/jelint19/cache/SAM_cache') / self.config.dataset /
+        self.cache_folder_SAM2: Path = ((cache_root / 'SAM_cache' / self.config.dataset /
                                          f'{self.config.sequence}_{self.config.special_hash}') /
                                         str(self.config.image_downsample))
 
-        self.cache_folder_view_graph: Path = (Path('/mnt/personal/jelint19/cache/view_graph_cache') /
+        self.cache_folder_view_graph: Path = (cache_root / 'view_graph_cache' /
                                               config.experiment_name / config.dataset /
                                               f'{config.sequence}_{config.special_hash}')
 
