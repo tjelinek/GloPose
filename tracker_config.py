@@ -86,7 +86,7 @@ class TrackerConfig:
     add_track_merging_matches: bool = True
     use_default_colmap_K: bool = True
     reconstruction_matcher: str = 'UFM'  # Either SIFT, UFM, or RoMa
-    similarity_transformation = 'kabsch'  # Either 'depths' or 'kabsch'
+    similarity_transformation: str = 'kabsch'  # Either 'depths' or 'kabsch'
 
     # SIFT options
     sift_matcher_config: BaseSiftConfig = field(default_factory=BaseSiftConfig)
