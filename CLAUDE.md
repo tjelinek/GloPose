@@ -326,6 +326,7 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 
 - [ ] Introduce a provider factory/registry: map config strings (`'RoMa'`, `'UFM'`, `'SIFT'`) to classes. Eliminates the
   `if/elif/else` chains in the constructor.
+- [ ] Unify SIFT matching provider and RoMa/UFM flow providers under a single `MatchingProvider` interface. We only care about matches (source/target points + certainty), not raw flow warps. `FlowProviderDirect` and `SIFTMatchingProviderDirect` should share a common base with a `get_source_target_points` contract; the flow-specific internals (`compute_flow`, `_compute_raw`, warp format) become implementation details.
 - [ ] `DataGraph` should be internal to onboarding — not exposed to detection or pose modules
 
 #### 2.3 Break up CommonFrameData
