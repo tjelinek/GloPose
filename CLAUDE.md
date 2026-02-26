@@ -361,7 +361,22 @@ Goal: clear separation between offline representation building (B1) and online i
     - [ ] SAM proposal generation + descriptor matching + NMS
     - [ ] Rename or decompose `BOPChallengePosePredictor` — it only does detection despite the name
 
-#### 3.2 Clean up BOP coupling
+#### 3.2 CNOS integration investigation
+
+- [ ] Inspect original CNOS detector pipeline end-to-end to understand where our detection results diverge (some
+  datasets show significantly worse performance). Compare: descriptor extraction, proposal generation, similarity
+  scoring, NMS, and post-processing steps against the original CNOS code.
+- [ ] Decide integration strategy: either (a) reliably integrate CNOS as a dependency with a clean adapter, or
+  (b) vendor the specific pieces we need (descriptor matching, similarity scoring) into our own codebase and
+  drop the CNOS dependency. Document the decision and rationale.
+
+#### 3.3 Document dataset formats
+
+- [ ] Inspect all dataset formats (HANDAL, HO3D, NAVI, BEHAVE, BOP classic datasets, GoogleScannedObjects, etc.)
+  and document their folder layouts, annotation schemas, image naming conventions, camera intrinsics formats,
+  and ground truth structures. Store as internal reference (e.g. `docs/dataset_formats.md`).
+
+#### 3.4 Clean up BOP coupling
 
 - [ ] BOP folder conventions (scene/image path construction, annotation loading) are scattered across
   `pose_estimator.py`, `condensate_templates.py`, and `run_*.py` scripts
@@ -390,6 +405,9 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
     - [ ] `evaluate_detections(detections, ground_truth) -> DetectionMetrics` (BOP COCO)
     - [ ] `evaluate_poses(pose_estimates, ground_truth) -> PoseMetrics` (BOP 6DoF)
     - [ ] `evaluate_reconstruction(reconstruction, ground_truth) -> ReconstructionMetrics`
+        - [ ] Chamfer distance
+        - [ ] Hausdorff distance
+        - [ ] Additional metrics as needed (F-score, completeness, accuracy)
 - [ ] Move `utils/eval_*.py` and `utils/bop_challenge.py` into this module
 
 ---
