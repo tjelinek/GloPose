@@ -445,3 +445,39 @@ def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.
     reliability *= float(enough_certain_matches)
     reliability = reliability.item()
     return reliability
+
+
+def create_frame_filter(config, data_graph: DataGraph,
+                        flow_provider: FlowProviderDirect = None) -> BaseFrameFilter:
+    """Factory that maps a config string to a BaseFrameFilter instance.
+
+    Args:
+        config: TrackerConfig (or duck-typed equivalent) with frame_filter,
+                sift_matcher_config, device attributes.
+        data_graph: The shared DataGraph.
+        flow_provider: Flow provider for dense-matching-based filters.
+    """
+    def _dense_matching():
+        return RoMaFrameFilter(config, data_graph, flow_provider)
+
+    def _ransac():
+        return RoMaFrameFilterRANSAC(config, data_graph, flow_provider)
+
+    def _passthrough():
+        return FrameFilterPassThrough(config, data_graph)
+
+    def _sift():
+        from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
+        sift_matcher = PrecomputedSIFTMatchingProvider(
+            config.sift_matcher_config.sift_filter_num_feats, data_graph, config.device)
+        return FrameFilterSift(config, data_graph, sift_matcher)
+
+    filters = {
+        'dense_matching': _dense_matching,
+        'RoMaRANSAC': _ransac,
+        'passthrough': _passthrough,
+        'SIFT': _sift,
+    }
+    if config.frame_filter not in filters:
+        raise ValueError(f"Unknown frame filter '{config.frame_filter}'. Options: {list(filters.keys())}")
+    return filters[config.frame_filter]()

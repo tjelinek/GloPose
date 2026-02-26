@@ -13,12 +13,11 @@ from PIL import Image
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import FlowCache, RoMaFlowProviderDirect, UFMFlowProviderDirect
+from data_providers.flow_provider import FlowCache, create_flow_provider
 from data_providers.frame_provider import FrameProviderAll
-from data_providers.matching_provider_sift import SIFTMatchingProviderDirect, PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
-from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
+from pose.frame_filter import create_frame_filter
 from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
 from tracker_config import TrackerConfig
 from utils.eval_reconstruction import evaluate_reconstruction, update_sequence_reconstructions_stats, \
@@ -109,42 +108,15 @@ class OnboardingPipeline:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        if self.config.frame_filter_matcher in ('RoMa', 'UFM'):
-            filtering_cache = FlowCache(self.config.device, self.matching_cache_folder, self.data_graph,
-                                        allow_disk_cache=self.config.dense_matching_allow_disk_cache,
-                                        purge_cache=self.config.purge_cache)
-            if self.config.frame_filter_matcher == 'RoMa':
-                self.match_provider_filtering = \
-                    RoMaFlowProviderDirect(self.config.device, self.config.roma_config, cache=filtering_cache)
-            else:
-                self.match_provider_filtering = \
-                    UFMFlowProviderDirect(self.config.device, self.config.ufm_config, cache=filtering_cache)
-        else:
-            raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
-
-        if self.config.reconstruction_matcher == 'RoMa':
-            self.match_provider_reconstruction = RoMaFlowProviderDirect(self.config.device, self.config.roma_config)
-        elif self.config.reconstruction_matcher == 'UFM':
-            self.match_provider_reconstruction = UFMFlowProviderDirect(self.config.device, self.config.ufm_config)
-        elif self.config.reconstruction_matcher == 'SIFT':
-            self.match_provider_reconstruction = SIFTMatchingProviderDirect(self.config.sift_matcher_config,
-                                                                            self.config.device)
-        else:
-            raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
-
-        self.frame_filter: Union[RoMaFrameFilter, FrameFilterSift]
-        if self.config.frame_filter == 'dense_matching':
-            self.frame_filter = RoMaFrameFilter(self.config, self.data_graph, self.match_provider_filtering)
-        elif self.config.frame_filter == 'passthrough':
-            self.frame_filter = FrameFilterPassThrough(self.config, self.data_graph)
-        elif self.config.frame_filter == 'RoMaRANSAC':
-            self.frame_filter = RoMaFrameFilterRANSAC(self.config, self.data_graph, self.match_provider_filtering)
-        elif self.config.frame_filter == 'SIFT':
-            sift_matcher = PrecomputedSIFTMatchingProvider(self.config.sift_matcher_config.sift_filter_num_feats,
-                                                           self.data_graph, self.config.device)
-            self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
-        else:
-            raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
+        filtering_cache = FlowCache(self.config.device, self.matching_cache_folder, self.data_graph,
+                                    allow_disk_cache=self.config.dense_matching_allow_disk_cache,
+                                    purge_cache=self.config.purge_cache)
+        self.match_provider_filtering = create_flow_provider(
+            self.config.frame_filter_matcher, self.config, cache=filtering_cache)
+        self.match_provider_reconstruction = create_flow_provider(
+            self.config.reconstruction_matcher, self.config)
+        self.frame_filter = create_frame_filter(
+            self.config, self.data_graph, self.match_provider_filtering)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor,
                                   images_paths: List[Path] | Path, initial_segmentation: torch.Tensor,

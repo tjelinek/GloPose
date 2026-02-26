@@ -432,3 +432,28 @@ class UFMFlowProviderDirect(FlowProviderDirect):
         certainty_samples = good_certainty[balanced_samples]
 
         return match_samples, certainty_samples
+
+
+def create_flow_provider(name: str, config, cache: FlowCache = None) -> FlowProviderDirect:
+    """Factory that maps a config string to a FlowProviderDirect instance.
+
+    Args:
+        name: One of 'RoMa', 'UFM', 'SIFT'.
+        config: TrackerConfig (or duck-typed equivalent) with device, roma_config,
+                ufm_config, sift_matcher_config attributes.
+        cache: Optional FlowCache for caching flow results.
+    """
+    def _roma():
+        return RoMaFlowProviderDirect(config.device, config.roma_config, cache=cache)
+
+    def _ufm():
+        return UFMFlowProviderDirect(config.device, config.ufm_config, cache=cache)
+
+    def _sift():
+        from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
+        return SIFTMatchingProviderDirect(config.sift_matcher_config, config.device)
+
+    providers = {'RoMa': _roma, 'UFM': _ufm, 'SIFT': _sift}
+    if name not in providers:
+        raise ValueError(f"Unknown flow provider '{name}'. Options: {list(providers.keys())}")
+    return providers[name]()
