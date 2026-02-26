@@ -138,6 +138,9 @@ NetworkX, Gradio, Rerun SDK, wandb
 - Hardcoded RCI paths are scattered across many files beyond `onboarding_pipeline.py` (scripts, dataset generators, pose
   estimator, etc.). The `TrackerConfig` defaults (`default_data_folder`, `default_results_folder`,
   `default_cache_folder`) centralize the main ones.
+- **Test sequence selection:** When proposing RCI test commands, pick ~5 sequences uniformly spaced across the full
+  dataset — not just the first few. For HANDAL (40 objects): `obj_000001`, `obj_000009`, `obj_000017`, `obj_000025`,
+  `obj_000033`. This catches issues that only appear on specific object geometries or sequence lengths.
 
 ## Development Environment
 
@@ -326,7 +329,7 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 
 - [x] ~~Introduce a provider factory/registry: map config strings (`'RoMa'`, `'UFM'`, `'SIFT'`) to classes. Eliminates the
   `if/elif/else` chains in the constructor.~~
-- [ ] Unify SIFT matching provider and RoMa/UFM flow providers under a single `MatchingProvider` interface. We only care about matches (source/target points + certainty), not raw flow warps. `FlowProviderDirect` and `SIFTMatchingProviderDirect` should share a common base with a `get_source_target_points` contract; the flow-specific internals (`compute_flow`, `_compute_raw`, warp format) become implementation details.
+- [x] ~~Unify SIFT matching provider and RoMa/UFM flow providers under a single `MatchingProvider` interface~~
 - [ ] `DataGraph` should be internal to onboarding — not exposed to detection or pose modules
 
 #### 2.3 Break up CommonFrameData

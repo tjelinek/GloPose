@@ -334,6 +334,12 @@ class FrameFilterSift(BaseFrameFilter):
         if current_frame_idx == 0:
             self.keyframe_graph.add_node(current_frame_idx)
             self.data_graph.get_frame_data(current_frame_idx).matching_source_keyframe = current_frame_idx
+            # Create self-edge so visualization code can access it
+            if not self.data_graph.G.has_edge(current_frame_idx, current_frame_idx):
+                self.data_graph.add_new_arc(current_frame_idx, current_frame_idx)
+            edge_data = self.data_graph.get_edge_observations(current_frame_idx, current_frame_idx)
+            edge_data.num_matches = 0
+            edge_data.is_match_reliable = True
             return
 
         preceding_frame_idx = current_frame_idx - 1
@@ -362,7 +368,7 @@ class FrameFilterSift(BaseFrameFilter):
             print(f'{num_matches}, {min_matches}, {more_than_enough_matches}')
 
             if num_matches >= self.config.sift_filter_min_matches:
-                self.keyframe_graph.add_edge(current_frame_idx, keyframe_idx)
+                self.keyframe_graph.add_edge(keyframe_idx, current_frame_idx)
 
             if num_matches >= more_than_enough_matches:
                 print(f'{keyframe_idx} has more than enough matches')
@@ -416,8 +422,8 @@ class FrameFilterSift(BaseFrameFilter):
         source_img = source_frame_observation.frame_observation.observed_image.squeeze()
         target_img = target_frame_observation.frame_observation.observed_image.squeeze()
 
-        source_seg = source_frame_observation.frame_observation.observed_segmentation
-        target_seg = target_frame_observation.frame_observation.observed_segmentation
+        source_seg = source_frame_observation.frame_observation.observed_segmentation.squeeze()
+        target_seg = target_frame_observation.frame_observation.observed_segmentation.squeeze()
 
         src_pts, dst_pts, certainty = self.sift_matcher.get_source_target_points(
             source_img, target_img, source_image_segmentation=source_seg,
@@ -431,6 +437,9 @@ class FrameFilterSift(BaseFrameFilter):
 
         edge_data.num_matches = num_matches
         edge_data.is_match_reliable = num_matches >= self.config.sift_filter_min_matches
+        edge_data.src_pts_xy_roma = src_pts
+        edge_data.dst_pts_xy_roma = dst_pts
+        edge_data.src_dst_certainty_roma = certainty
 
         return num_matches
 

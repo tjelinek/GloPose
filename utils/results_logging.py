@@ -792,16 +792,15 @@ class WriteResults:
             rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
             rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
         elif self.config.frame_filter == 'SIFT':
-            keypoints_matching_indices = arc_observation.sift_keypoint_indices
+            src_pts_xy = arc_observation.src_pts_xy_roma
+            dst_pts_xy = arc_observation.dst_pts_xy_roma
 
-            template_src_pts = template_data.sift_keypoints
-            target_src_pts = target_data.sift_keypoints
-
-            inliers_source_xy = template_src_pts[keypoints_matching_indices[:, 0]]
-            inliers_target_xy = target_src_pts[keypoints_matching_indices[:, 1]]
-
-            inliers_source_yx = inliers_source_xy[:, [1, 0]].numpy(force=True)
-            inliers_target_yx = inliers_target_xy[:, [1, 0]].numpy(force=True)
+            if src_pts_xy is not None and dst_pts_xy is not None and len(src_pts_xy) > 0:
+                inliers_source_yx = src_pts_xy[:, [1, 0]].numpy(force=True)
+                inliers_target_yx = dst_pts_xy[:, [1, 0]].numpy(force=True)
+            else:
+                inliers_source_yx = np.zeros((0, 2))
+                inliers_target_yx = np.zeros((0, 2))
             outliers_source_yx = np.zeros((0, 2))
             outliers_target_yx = np.zeros((0, 2))
         else:

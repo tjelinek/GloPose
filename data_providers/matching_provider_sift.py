@@ -1,4 +1,4 @@
-from pathlib import Path
+from abc import abstractmethod, ABC
 from typing import Optional, Tuple
 
 import cv2
@@ -8,86 +8,170 @@ from kornia.feature import get_laf_center, match_adalam, LightGlueMatcher
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
-from configs.matching_configs.sift_configs.base_sift_config import BaseSiftConfig
-from data_providers.flow_provider import FlowProviderDirect
-from data_structures.data_graph import DataGraph
+from data_providers.flow_provider import MatchingProvider, FlowMatchingProvider
 from utils.sift import sift_to_rootsift
 
 
-class SIFTMatchingProviderDirect(FlowProviderDirect):
+# ---------------------------------------------------------------------------
+# Keypoint detector / matcher ABCs
+# ---------------------------------------------------------------------------
 
-    def __init__(self, sift_config: BaseSiftConfig, device: str):
-        super().__init__(device)
-        self.num_sift_features: int = sift_config.sift_filter_num_feats
-        self.device: str = device
+class KeypointDetector(ABC):
+    @abstractmethod
+    def detect(self, image: torch.Tensor, num_features: int,
+               segmentation: torch.Tensor | None = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Returns (lafs, keypoints_xy, descriptors)."""
+        pass
 
-    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
-                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
-                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
-                     target_image_index: int = None, zero_certainty_outside_segmentation: bool = False):
 
-        raise NotImplementedError("This awaits implementation.\n"
-                                  "The source target points muse be converted to RoMa format.")
+class KeypointMatcher(ABC):
+    @abstractmethod
+    def match(self, descriptors1: torch.Tensor, descriptors2: torch.Tensor,
+              lafs1: torch.Tensor, lafs2: torch.Tensor,
+              hw1: Tuple[int, int], hw2: Tuple[int, int]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Returns (scores, match_indices).
+
+        scores: per-match confidence in [0, 1].
+        match_indices: (N, 2) tensor of matched keypoint index pairs.
+        """
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Concrete detectors
+# ---------------------------------------------------------------------------
+
+class SIFTKeypointDetector(KeypointDetector):
+
+    def __init__(self, device: str = 'cpu'):
+        self.device = device
+
+    def detect(self, image: torch.Tensor, num_features: int,
+               segmentation: torch.Tensor | None = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return detect_sift_features(image, num_features, segmentation, self.device)
+
+
+# ---------------------------------------------------------------------------
+# Concrete matchers
+# ---------------------------------------------------------------------------
+
+class LightGlueKeypointMatcher(KeypointMatcher):
+
+    def __init__(self, device: str = 'cpu'):
+        self.device = device
+        self._matcher = LightGlueMatcher('sift').eval().to(self.device)
+
+    def match(self, descriptors1: torch.Tensor, descriptors2: torch.Tensor,
+              lafs1: torch.Tensor, lafs2: torch.Tensor,
+              hw1: Tuple[int, int], hw2: Tuple[int, int]) -> Tuple[torch.Tensor, torch.Tensor]:
+        with torch.inference_mode():
+            scores, idxs = self._matcher(descriptors1, descriptors2, lafs1, lafs2, hw1=hw1, hw2=hw2)
+        return scores, idxs
+
+
+class AdaLAMKeypointMatcher(KeypointMatcher):
+
+    def __init__(self, device: str = 'cpu'):
+        self.device = device
+
+    def match(self, descriptors1: torch.Tensor, descriptors2: torch.Tensor,
+              lafs1: torch.Tensor, lafs2: torch.Tensor,
+              hw1: Tuple[int, int], hw2: Tuple[int, int]) -> Tuple[torch.Tensor, torch.Tensor]:
+        with torch.inference_mode():
+            scores, idxs = match_adalam(descriptors1, descriptors2, lafs1, lafs2, hw1=hw1, hw2=hw2)
+        return scores, idxs
+
+
+# ---------------------------------------------------------------------------
+# SparseMatchingProvider — composes a KeypointDetector + KeypointMatcher
+# ---------------------------------------------------------------------------
+
+class SparseMatchingProvider(MatchingProvider):
+    """Sparse keypoint matching provider (e.g. SIFT + LightGlue).
+
+    Composes a KeypointDetector and a KeypointMatcher to produce matched
+    source/target points with real matching confidence scores.
+    """
+
+    def __init__(self, detector: KeypointDetector, matcher: KeypointMatcher,
+                 num_features: int, device: str = 'cpu'):
+        self.detector = detector
+        self.matcher = matcher
+        self.num_features = num_features
+        self.device = device
 
     def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample=None, source_image_segmentation: torch.Tensor = None,
-                                 target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
-                                 target_image_name: Path = None, source_image_index: int = None,
+                                 target_image_segmentation: torch.Tensor = None, source_image_name=None,
+                                 target_image_name=None, source_image_index: int = None,
                                  target_image_index: int = None, as_int: bool = False,
-                                 zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False):
-        lafs1, kpts1_xy, descriptors1 = detect_sift_features(source_image, self.num_sift_features,
-                                                             source_image_segmentation, self.device)
-        lafs2, kpts2_xy, descriptors2 = detect_sift_features(target_image, self.num_sift_features,
-                                                             source_image_segmentation, self.device)
+                                 zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        kpts1_xy_int = kpts1_xy.to(torch.long)  # XY format
-        kpts2_xy_int = kpts2_xy.to(torch.long)  # XY format
+        lafs1, kpts1_xy, descriptors1 = self.detector.detect(
+            source_image, self.num_features, source_image_segmentation)
+        lafs2, kpts2_xy, descriptors2 = self.detector.detect(
+            target_image, self.num_features, target_image_segmentation)
 
-        in_segment_mask1 = source_image_segmentation[kpts1_xy_int[:, 1], kpts1_xy_int[:, 0]].to(torch.bool)
-        in_segment_mask2 = source_image_segmentation[kpts2_xy_int[:, 1], kpts2_xy_int[:, 0]].to(torch.bool)
+        # Filter keypoints to foreground using segmentation masks
+        if source_image_segmentation is not None:
+            kpts1_xy_int = kpts1_xy.to(torch.long)
+            in_seg1 = source_image_segmentation[kpts1_xy_int[:, 1], kpts1_xy_int[:, 0]].to(torch.bool)
+            kpts1_xy = kpts1_xy[in_seg1]
+            lafs1 = lafs1[:, in_seg1]
+            descriptors1 = descriptors1[in_seg1]
 
-        kpts1_xy = kpts1_xy[in_segment_mask1]
-        lafs1 = lafs1[:, in_segment_mask1]
-        descriptors1 = descriptors1[in_segment_mask1]
+        if target_image_segmentation is not None:
+            kpts2_xy_int = kpts2_xy.to(torch.long)
+            in_seg2 = target_image_segmentation[kpts2_xy_int[:, 1], kpts2_xy_int[:, 0]].to(torch.bool)
+            kpts2_xy = kpts2_xy[in_seg2]
+            lafs2 = lafs2[:, in_seg2]
+            descriptors2 = descriptors2[in_seg2]
 
-        kpts2_xy = kpts2_xy[in_segment_mask2]
-        lafs2 = lafs2[:, in_segment_mask2]
-        descriptors2 = descriptors2[in_segment_mask2]
+        if descriptors1.shape[0] == 0 or descriptors2.shape[0] == 0:
+            empty = torch.zeros(0, 2, device=self.device, dtype=torch.float)
+            return empty, empty.clone(), torch.zeros(0, device=self.device, dtype=torch.float)
 
         hw1 = tuple(source_image.shape[-2:])
         hw2 = tuple(target_image.shape[-2:])
 
-        dists, idxs = match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
+        scores, idxs = self.matcher.match(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2)
 
         src_pts_xy = kpts1_xy[idxs[:, 0]]
         dst_pts_xy = kpts2_xy[idxs[:, 1]]
 
-        certainty = torch.ones(src_pts_xy.shape[0], dtype=torch.float, device=self.device)
+        # Use real matching scores as certainty (not torch.ones)
+        certainty = scores.to(torch.float).to(self.device)
 
         if as_int:
-            src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
+            src_pts_xy, dst_pts_xy = FlowMatchingProvider.keypoints_to_int(
+                src_pts_xy, dst_pts_xy, source_image, target_image)
+
+        if only_foreground_matches:
+            src_pts_int = src_pts_xy.to(torch.long) if not as_int else src_pts_xy
+            dst_pts_int = dst_pts_xy.to(torch.long) if not as_int else dst_pts_xy
+
+            if source_image_segmentation is not None:
+                fg_src = source_image_segmentation[src_pts_int[:, 1], src_pts_int[:, 0]].bool()
+            else:
+                fg_src = torch.ones(src_pts_xy.shape[0], dtype=torch.bool, device=self.device)
+
+            if target_image_segmentation is not None:
+                fg_tgt = target_image_segmentation[dst_pts_int[:, 1], dst_pts_int[:, 0]].bool()
+            else:
+                fg_tgt = torch.ones(dst_pts_xy.shape[0], dtype=torch.bool, device=self.device)
+
+            fg_mask = fg_src & fg_tgt
+            src_pts_xy = src_pts_xy[fg_mask]
+            dst_pts_xy = dst_pts_xy[fg_mask]
+            certainty = certainty[fg_mask]
 
         return src_pts_xy, dst_pts_xy, certainty
 
-    def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        pass
 
-
-class PrecomputedSIFTMatchingProvider(SIFTMatchingProviderDirect):
-
-    def __init__(self, num_sift_features: int, data_graph: DataGraph, device: str):
-
-        SIFTMatchingProviderDirect.__init__(self, num_sift_features, device)
-        self.data_graph: DataGraph = data_graph
-
-    def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
-                     source_image_segmentation: torch.Tensor = None, target_image_segmentation: torch.Tensor = None,
-                     source_image_name: Path = None, target_image_name: Path = None, source_image_index: int = None,
-                     target_image_index: int = None,
-                     zero_certainty_outside_segmentation=False) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        pass
-
+# ---------------------------------------------------------------------------
+# Helper functions (kept as-is for reuse)
+# ---------------------------------------------------------------------------
 
 def detect_sift_features(image: torch.Tensor, num_features: int, segmentation: Optional[torch.Tensor] = None,
                          device: str = 'cpu'):
