@@ -42,7 +42,7 @@ def main():
             config.sequence = sequence
             config.dataset = dataset
             config.image_downsample = .5
-            config.large_images_results_write_frequency = 8
+
 
             config.skip_indices *= 1
 

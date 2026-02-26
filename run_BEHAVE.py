@@ -34,7 +34,7 @@ def main():
     config.sequence = sequence
     config.dataset = dataset
     config.image_downsample = 1.0
-    config.large_images_results_write_frequency = 20
+
 
     config.skip_indices *= 10
 

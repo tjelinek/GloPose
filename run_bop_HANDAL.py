@@ -30,7 +30,7 @@ def main():
             config.sequence = sequence
             config.dataset = dataset
             config.image_downsample = .5
-            config.large_images_results_write_frequency = 5
+
             config.run_only_on_frames_with_known_pose = True
             config.skip_indices *= 1
 

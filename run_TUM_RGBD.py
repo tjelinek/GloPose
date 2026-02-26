@@ -82,7 +82,7 @@ def main():
         config.input_frames = sequence_length
         config.segmentation_provider = 'whites'
         config.frame_provider = 'precomputed'
-        config.large_images_results_write_frequency = 10
+
 
         tracker = OnboardingPipeline(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
         tracker.run_pipeline()
