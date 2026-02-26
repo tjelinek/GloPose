@@ -732,21 +732,30 @@ upper hemisphere.
 
 ### 11.3 Stage 2: Proposal Generation (SAM)
 
-For each query image, a class-agnostic segmentation model generates mask proposals:
+For each query image, a class-agnostic segmentation model generates mask proposals.
+The original CNOS only supports **SAM1**. SAM2 and FastSAM support are our additions.
 
-**SAM** (`src/model/sam.py`):
+**SAM1** (original, `src/model/sam.py`):
+- `SamAutomaticMaskGenerator` (extends SAM's built-in generator)
 - Image optionally resized to `segmentor_width_size=640` before mask generation
-- `SamAutomaticMaskGenerator` with:
-  - `stability_score_thresh=0.97` (only high-confidence masks)
+- Key parameters:
+  - `stability_score_thresh=0.97` (only very high-confidence masks kept)
   - `box_nms_thresh=0.7` (SAM's internal proposal NMS)
+  - `points_per_batch=64`
   - Multi-crop support with `crop_nms_thresh=0.7`
-- Masks interpolated back to original resolution
+- Masks interpolated back to original resolution via bilinear interpolation
+- Model: SAM ViT-H (`vit_h`, 2.5GB checkpoint)
 
-**SAM2** (`src/model/sam2.py`):
-- `SAM2AutomaticMaskGenerator` wrapper, same interface
+**SAM2** (our addition, `src/model/sam2.py`):
+- `SAM2AutomaticMaskGenerator` wrapper
+- **Lower threshold**: `stability_score_thresh=0.75` (generates many more proposals than SAM1's 0.97)
+- The threshold is passed to both `pred_iou_thresh` and `stability_score_thresh` on the SAM2
+  generator, creating a double-filtering effect
+- Model: SAM2.1 Hiera-Large (`sam2.1_hiera_large`)
+- Same `box_nms_thresh=0.7`
 
-**FastSAM** (`src/model/fastsam.py`):
-- YOLO-based segmentation: `conf=0.25`, `iou=0.9`, `max_det=200`
+**FastSAM** (our addition, `src/model/fastsam.py`):
+- YOLO-based segmentation: `conf=0.05`, `iou=0.9`, `max_det=200`
 
 **Post-filtering** (in `Detections.remove_very_small_detections`):
 - Remove proposals with box area < `min_box_size^2` = 0.05^2 (0.25% of image area)
@@ -825,11 +834,11 @@ Final JSON (BOP23 format, converted from NPZ via multiprocessing):
 
 Directly submittable to BOP evaluation server (Tasks 5 & 6).
 
-### 11.7 Default Parameters
+### 11.7 Default Parameters (Original CNOS)
 
 | Parameter | Default | Description |
 |---|---|---|
-| Segmentor | SAM | Class-agnostic proposal generator |
+| Segmentor | SAM1 (ViT-H) | Class-agnostic proposal generator |
 | `segmentor_width_size` | 640 | Input width for SAM |
 | Descriptor model | `dinov2_vitl14` | 1024-d CLS token |
 | Proposal crop size | 224 | Input size for DINOv2 |
@@ -841,7 +850,7 @@ Directly submittable to BOP evaluation server (Tasks 5 & 6).
 | `nms_thresh` | 0.25 | Per-class NMS IoU threshold |
 | `min_box_size` | 0.05 | Min box side / image side |
 | `min_mask_size` | 3e-4 | Min mask area / image area |
-| SAM `stability_score_thresh` | 0.97 | Mask confidence gate |
+| SAM `stability_score_thresh` | 0.97 | Mask confidence gate (high = fewer, better proposals) |
 | SAM `box_nms_thresh` | 0.7 | SAM-internal NMS |
 | `chunk_size` | 16 | DINOv2 batch size |
 
@@ -852,6 +861,7 @@ and in `pose/pose_estimator.py`, `condensate_templates.py`):
 
 | Feature | Original CNOS | GloPose Extension |
 |---------|--------------|-------------------|
+.| Segmentor | SAM1 only (`stability_score_thresh=0.97`) | + SAM2 (thresh=0.75, many more proposals), FastSAM |
 | Similarity metric | Cosine only | + CSLS (cross-domain similarity local scaling) |
 | OOD filtering | Single `confidence_thresh` | + Lowe ratio test, cosine quantiles, Mahalanobis distance |
 | Descriptor post-processing | None | PCA whitening + L2 re-normalization |
