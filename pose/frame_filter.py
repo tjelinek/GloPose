@@ -7,7 +7,7 @@ import numpy as np
 import pycolmap
 import torch
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect
+from data_providers.flow_provider import FlowProviderDirect
 from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
@@ -53,11 +53,11 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, flow_provider: PrecomputedRoMaFlowProviderDirect):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, flow_provider: FlowProviderDirect):
 
         super().__init__(config, data_graph)
 
-        self.flow_provider: PrecomputedRoMaFlowProviderDirect = flow_provider
+        self.flow_provider: FlowProviderDirect = flow_provider
 
         self.current_flow_reliability_threshold = self.config.flow_reliability_threshold
 

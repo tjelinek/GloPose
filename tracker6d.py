@@ -13,10 +13,9 @@ from PIL import Image
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect, \
-    RoMaFlowProviderDirect, UFMFlowProviderDirect
+from data_providers.flow_provider import FlowCache, RoMaFlowProviderDirect, UFMFlowProviderDirect
 from data_providers.frame_provider import FrameProviderAll, SAM2SegmentationProvider
-from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
+from data_providers.matching_provider_sift import SIFTMatchingProviderDirect, PrecomputedSIFTMatchingProvider
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
@@ -117,18 +116,16 @@ class Tracker6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
+        filtering_cache = FlowCache(self.matching_cache_folder, self.data_graph,
+                                    allow_disk_cache=self.config.dense_matching_allow_disk_cache,
+                                    purge_cache=self.config.purge_cache)
+
         if self.config.frame_filter_matcher == 'RoMa':
             self.match_provider_filtering = \
-                PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
-                                                  self.matching_cache_folder, self.data_graph,
-                                                  allow_disk_cache=self.config.dense_matching_allow_disk_cache,
-                                                  purge_cache=self.config.purge_cache)
+                RoMaFlowProviderDirect(self.config.device, self.config.roma_config, cache=filtering_cache)
         elif self.config.frame_filter_matcher == 'UFM':
             self.match_provider_filtering = \
-                PrecomputedUFMFlowProviderDirect(self.config.device, self.config.ufm_config,
-                                                 self.matching_cache_folder, self.data_graph,
-                                                 allow_disk_cache=self.config.dense_matching_allow_disk_cache,
-                                                 purge_cache=self.config.purge_cache)
+                UFMFlowProviderDirect(self.config.device, self.config.ufm_config, cache=filtering_cache)
         else:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
@@ -150,8 +147,8 @@ class Tracker6D:
         elif self.config.frame_filter == 'RoMaRANSAC':
             self.frame_filter = RoMaFrameFilterRANSAC(self.config, self.data_graph, self.match_provider_filtering)
         elif self.config.frame_filter == 'SIFT':
-            sift_matcher = PrecomputedUFMFlowProviderDirect(self.config.sift_matcher_config.sift_filter_num_feats,
-                                                            self.data_graph, self.config.device)
+            sift_matcher = PrecomputedSIFTMatchingProvider(self.config.sift_matcher_config,
+                                                           self.data_graph, self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')

@@ -75,9 +75,9 @@ class SIFTMatchingProviderDirect(FlowProviderDirect):
 
 class PrecomputedSIFTMatchingProvider(SIFTMatchingProviderDirect):
 
-    def __init__(self, num_sift_features: int, data_graph: DataGraph, device: str):
+    def __init__(self, sift_config: BaseSiftConfig, data_graph: DataGraph, device: str):
 
-        SIFTMatchingProviderDirect.__init__(self, num_sift_features, device)
+        SIFTMatchingProviderDirect.__init__(self, sift_config, device)
         self.data_graph: DataGraph = data_graph
 
     def compute_flow(self, source_image_tensor: torch.Tensor, target_image_tensor: torch.Tensor, sample=None,
