@@ -267,7 +267,7 @@ CWD-dependent, pollutes namespaces, and provides no insulation from API changes.
 - [x] Rename `PrecomputedUFMFlowProviderDirect` in `matching_provider_sift.py` → `PrecomputedSIFTMatchingProvider`
 - [x] Replace diamond inheritance with `FlowCache` composition
 - [x] Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`
-- [ ] Fix operator-precedence bug in `flow_provider.py` (reverted)
+- [x] Fix operator-precedence bug in `flow_provider.py` (fixed during FlowCache refactoring)
 
 ---
 
