@@ -359,7 +359,7 @@ class WriteResults:
             if self.config.matchability_based_reliability:
                 matchability_mask = keyframe_node.matchability_mask
                 matchability_image = (~matchability_mask.unsqueeze(0).permute(1, 2, 0)).to(torch.float).numpy(force=True)
-                template = template.numpy(force=True) * 255.0
+                template = (template.numpy(force=True) * 255.0).astype(np.uint8)
                 matchability_image_overlay = overlay_mask(template, matchability_image, 1.0, color=(0, 0, 0))
                 rr_matchability_image = rr.Image(template).compress(jpeg_quality=self.config.rerun_jpeg_quality)
                 rr.log(RerunAnnotations.matchability, rr_matchability_image)
@@ -659,7 +659,7 @@ class WriteResults:
                 template_idx = len(self.logged_templates_3d_space)
 
                 keyframe_node = self.data_graph.get_frame_data(keyframe_node_idx)
-                template = keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).numpy(force=True)
+                template = (keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).numpy(force=True) * 255.).astype(np.uint8)
 
                 self.logged_templates_3d_space.append(keyframe_node_idx)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
@@ -733,7 +733,7 @@ class WriteResults:
         target_image = target_data.frame_observation.observed_image.squeeze()
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
-        template_target_image_np = template_target_image.permute(1, 2, 0).numpy(force=True)
+        template_target_image_np = (template_target_image.permute(1, 2, 0).numpy(force=True) * 255.).astype(np.uint8)
         rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
@@ -937,7 +937,8 @@ class WriteResults:
 
         if self.config.write_to_rerun_rather_than_disk:
             rr.set_time_sequence("frame", frame)
-            rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.rerun_jpeg_quality))
+            image_np = (image.numpy(force=True) * 255.).astype(np.uint8) if image.dtype != torch.uint8 else image.numpy(force=True)
+            rr.log(rerun_annotation, rr.Image(image_np).compress(jpeg_quality=self.config.rerun_jpeg_quality))
         else:
             image_np = image.numpy(force=True)
             imageio.imwrite(save_path, image_np)

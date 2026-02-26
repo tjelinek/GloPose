@@ -53,7 +53,7 @@ def tensor2numpy(image, downsample_factor=1.0):
     image = TF.resize(image.float().unsqueeze(0),
                       [int(h * downsample_factor), int(w * downsample_factor)],
                       interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
-    return image.permute(1, 2, 0).numpy(force=True) * 255.
+    return (image.permute(1, 2, 0).numpy(force=True) * 255.).astype(np.uint8)
 
 
 def add_score_overlay(image, score, similarity_metric, bounds=None):
