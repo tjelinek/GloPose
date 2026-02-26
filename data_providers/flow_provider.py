@@ -124,7 +124,29 @@ class FlowCache:
                     edge_data.src_dst_certainty_roma = certainty
 
 
-class FlowProviderDirect(ABC):
+class MatchingProvider(ABC):
+    """Base class for all matching providers (dense flow-based and sparse keypoint-based).
+
+    Defines the common interface: get_source_target_points returns matched
+    (src_pts_xy, dst_pts_xy, certainty) tensors for a pair of images.
+    """
+
+    @abstractmethod
+    def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
+                                 sample=None, source_image_segmentation: torch.Tensor = None,
+                                 target_image_segmentation: torch.Tensor = None, source_image_name: Path = None,
+                                 target_image_name: Path = None, source_image_index: int = None,
+                                 target_image_index: int = None, as_int: bool = False,
+                                 zero_certainty_outside_segmentation: bool = False, only_foreground_matches=False) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        pass
+
+
+class FlowMatchingProvider(MatchingProvider):
+    """Matching provider based on dense optical flow (RoMa, UFM).
+
+    Computes dense flow warps, then samples source/target point correspondences.
+    """
 
     def __init__(self, device: str, cache: FlowCache = None):
         self.device = device
@@ -293,10 +315,10 @@ class FlowProviderDirect(ABC):
         return certainty
 
 
-class RoMaFlowProviderDirect(FlowProviderDirect):
+class RoMaMatchingProvider(FlowMatchingProvider):
 
     def __init__(self, device, roma_config: BaseRomaConfig, cache: FlowCache = None):
-        FlowProviderDirect.__init__(self, device, cache)
+        FlowMatchingProvider.__init__(self, device, cache)
         self.device = device
 
         if roma_config.use_custom_weights:
@@ -340,10 +362,10 @@ class RoMaFlowProviderDirect(FlowProviderDirect):
         return certainty
 
 
-class UFMFlowProviderDirect(FlowProviderDirect):
+class UFMMatchingProvider(FlowMatchingProvider):
 
     def __init__(self, device, ufm_config: BaseUFMConfig, cache: FlowCache = None):
-        FlowProviderDirect.__init__(self, device, cache)
+        FlowMatchingProvider.__init__(self, device, cache)
         self.device = device
         self.ufm_config = ufm_config
 
@@ -434,8 +456,8 @@ class UFMFlowProviderDirect(FlowProviderDirect):
         return match_samples, certainty_samples
 
 
-def create_flow_provider(name: str, config, cache: FlowCache = None) -> FlowProviderDirect:
-    """Factory that maps a config string to a FlowProviderDirect instance.
+def create_matching_provider(name: str, config, cache: FlowCache = None) -> MatchingProvider:
+    """Factory that maps a config string to a MatchingProvider instance.
 
     Args:
         name: One of 'RoMa', 'UFM', 'SIFT'.
@@ -444,16 +466,28 @@ def create_flow_provider(name: str, config, cache: FlowCache = None) -> FlowProv
         cache: Optional FlowCache for caching flow results.
     """
     def _roma():
-        return RoMaFlowProviderDirect(config.device, config.roma_config, cache=cache)
+        return RoMaMatchingProvider(config.device, config.roma_config, cache=cache)
 
     def _ufm():
-        return UFMFlowProviderDirect(config.device, config.ufm_config, cache=cache)
+        return UFMMatchingProvider(config.device, config.ufm_config, cache=cache)
 
     def _sift():
-        from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
-        return SIFTMatchingProviderDirect(config.sift_matcher_config, config.device)
+        from data_providers.matching_provider_sift import (
+            SparseMatchingProvider, SIFTKeypointDetector, LightGlueKeypointMatcher)
+        detector = SIFTKeypointDetector(config.device)
+        matcher = LightGlueKeypointMatcher(config.device)
+        return SparseMatchingProvider(detector, matcher,
+                                      num_features=config.sift_matcher_config.sift_filter_num_feats,
+                                      device=config.device)
 
     providers = {'RoMa': _roma, 'UFM': _ufm, 'SIFT': _sift}
     if name not in providers:
-        raise ValueError(f"Unknown flow provider '{name}'. Options: {list(providers.keys())}")
+        raise ValueError(f"Unknown matching provider '{name}'. Options: {list(providers.keys())}")
     return providers[name]()
+
+
+# Backward-compatibility aliases — remove after all consumers are updated
+FlowProviderDirect = FlowMatchingProvider
+RoMaFlowProviderDirect = RoMaMatchingProvider
+UFMFlowProviderDirect = UFMMatchingProvider
+create_flow_provider = create_matching_provider

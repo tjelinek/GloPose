@@ -14,7 +14,7 @@ from hydra.utils import instantiate
 from tqdm import tqdm
 
 from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n, _apply_whitener
-from data_providers.flow_provider import RoMaFlowProviderDirect, UFMFlowProviderDirect, FlowProviderDirect
+from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
 
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
@@ -33,7 +33,7 @@ class BOPChallengePosePredictor:
                  experiment_folder='default', ):
 
         self.config = config
-        self.flow_provider: Optional[FlowProviderDirect] = None
+        self.flow_provider: Optional[MatchingProvider] = None
 
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation') / experiment_folder
         self.cache_folder = base_cache_folder
@@ -56,13 +56,7 @@ class BOPChallengePosePredictor:
         self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
 
     def _initialize_flow_provider(self) -> None:
-
-        if self.config.frame_filter_matcher == 'RoMa':
-            self.flow_provider = RoMaFlowProviderDirect(self.config.device, self.config.roma_config)
-        elif self.config.frame_filter_matcher == 'UFM':
-            self.flow_provider = UFMFlowProviderDirect(self.config.device, self.config.ufm_config)
-        else:
-            raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
+        self.flow_provider = create_matching_provider(self.config.frame_filter_matcher, self.config)
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         detection_templates_save_folder, onboarding_type: str, split: str,

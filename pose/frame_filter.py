@@ -7,8 +7,7 @@ import numpy as np
 import pycolmap
 import torch
 
-from data_providers.flow_provider import FlowProviderDirect
-from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
+from data_providers.flow_provider import FlowProviderDirect, MatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from tracker_config import TrackerConfig
 from pose.colmap_utils import colmap_K_params_vec
@@ -321,11 +320,11 @@ class FrameFilterPassThrough(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: TrackerConfig, data_graph: DataGraph, sift_matcher: SIFTMatchingProviderDirect):
+    def __init__(self, config: TrackerConfig, data_graph: DataGraph, sift_matcher: MatchingProvider):
 
         super().__init__(config, data_graph)
 
-        self.sift_matcher: SIFTMatchingProviderDirect = sift_matcher
+        self.sift_matcher: MatchingProvider = sift_matcher
 
     @torch.no_grad()
     def filter_frames(self, current_frame_idx: int):
@@ -420,9 +419,11 @@ class FrameFilterSift(BaseFrameFilter):
         source_seg = source_frame_observation.frame_observation.observed_segmentation
         target_seg = target_frame_observation.frame_observation.observed_segmentation
 
-        dists, idxs = self.sift_matcher.compute_flow(source_img, target_img, None, source_seg, target_seg)
+        src_pts, dst_pts, certainty = self.sift_matcher.get_source_target_points(
+            source_img, target_img, source_image_segmentation=source_seg,
+            target_image_segmentation=target_seg)
 
-        num_matches = len(idxs)
+        num_matches = len(src_pts)
 
         if not self.data_graph.G.has_edge(frame_idx1, frame_idx2):
             self.data_graph.add_new_arc(frame_idx1, frame_idx2)
@@ -467,10 +468,14 @@ def create_frame_filter(config, data_graph: DataGraph,
         return FrameFilterPassThrough(config, data_graph)
 
     def _sift():
-        from data_providers.matching_provider_sift import PrecomputedSIFTMatchingProvider
-        sift_matcher = PrecomputedSIFTMatchingProvider(
-            config.sift_matcher_config.sift_filter_num_feats, data_graph, config.device)
-        return FrameFilterSift(config, data_graph, sift_matcher)
+        from data_providers.matching_provider_sift import (
+            SparseMatchingProvider, SIFTKeypointDetector, LightGlueKeypointMatcher)
+        detector = SIFTKeypointDetector(config.device)
+        matcher = LightGlueKeypointMatcher(config.device)
+        sift_provider = SparseMatchingProvider(detector, matcher,
+                                               num_features=config.sift_matcher_config.sift_filter_num_feats,
+                                               device=config.device)
+        return FrameFilterSift(config, data_graph, sift_provider)
 
     filters = {
         'dense_matching': _dense_matching,
