@@ -27,9 +27,6 @@ class TrackerConfig:
     special_hash: str = ''
     object_id: int | str = None
 
-    # Experiments settings
-    evaluate_sam2_only: bool = False
-
     # Visualization settings
     write_to_rerun_rather_than_disk: bool = True
     rerun_jpeg_quality: int = 75
