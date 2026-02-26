@@ -61,10 +61,11 @@ class Tracker6D:
                                               config.experiment_name / config.dataset /
                                               f'{config.sequence}_{config.special_hash}')
 
-        if os.path.exists(self.write_folder):
-            shutil.rmtree(self.write_folder)
+        self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
+        self.colmap_image_path = self.colmap_base_path / 'images'
+        self.colmap_seg_path = self.colmap_base_path / 'segmentations'
 
-        self.write_folder.mkdir(exist_ok=True, parents=True)
+        self.prepare_output_folder()
 
         skip = config.skip_indices
         if skip != 1:
@@ -101,13 +102,6 @@ class Tracker6D:
         self.results_writer = None
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
-
-        self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
-        self.colmap_image_path = self.colmap_base_path / 'images'
-        self.colmap_seg_path = self.colmap_base_path / 'segmentations'
-
-        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
-        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, input_images, initial_segmentation,
                                        input_segmentations, depth_paths)
@@ -201,6 +195,14 @@ class Tracker6D:
 
         frame_data.image_save_path = copy.deepcopy(node_save_path)
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
+
+    def prepare_output_folder(self):
+        """Wipe and recreate the output folder. Call before run_pipeline."""
+        if os.path.exists(self.write_folder):
+            shutil.rmtree(self.write_folder)
+        self.write_folder.mkdir(exist_ok=True, parents=True)
+        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
+        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
     def run_pipeline(self):
 

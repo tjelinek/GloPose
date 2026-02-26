@@ -268,7 +268,7 @@ Goal: `tracker6d.py` becomes a clean onboarding pipeline that produces an `Onboa
 - [ ] Rename `Tracker6D` → `OnboardingPipeline` (or similar) to reflect its actual role
 - [ ] Remove evaluation logic from `run_pipeline` (lines 248-278) into a separate evaluation step
 - [x] ~~Remove `evaluate_sam` method — it's a separate workflow, not part of onboarding~~
-- [ ] Extract the destructive `shutil.rmtree` from `__init__` into an explicit `clean()` or `prepare()` method
+- [x] ~~Extract the destructive `shutil.rmtree` from `__init__` into `prepare_output_folder()`, called at start of `run_pipeline`~~
 - [ ] Have `run_pipeline` return an `OnboardingResult` rather than writing to disk as a side effect
 
 #### 2.2 Reduce coupling
