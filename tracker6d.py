@@ -13,9 +13,10 @@ from PIL import Image
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import FlowCache, RoMaFlowProviderDirect, UFMFlowProviderDirect
+from data_providers.flow_provider import PrecomputedRoMaFlowProviderDirect, PrecomputedUFMFlowProviderDirect, \
+    RoMaFlowProviderDirect, UFMFlowProviderDirect
 from data_providers.frame_provider import FrameProviderAll
-from data_providers.matching_provider_sift import SIFTMatchingProviderDirect, PrecomputedSIFTMatchingProvider
+from data_providers.matching_provider_sift import SIFTMatchingProviderDirect
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import view_graph_from_datagraph
 from pose.frame_filter import RoMaFrameFilter, FrameFilterSift, RoMaFrameFilterRANSAC, FrameFilterPassThrough
@@ -109,16 +110,18 @@ class Tracker6D:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        filtering_cache = FlowCache(self.matching_cache_folder, self.data_graph,
-                                    allow_disk_cache=self.config.dense_matching_allow_disk_cache,
-                                    purge_cache=self.config.purge_cache)
-
         if self.config.frame_filter_matcher == 'RoMa':
             self.match_provider_filtering = \
-                RoMaFlowProviderDirect(self.config.device, self.config.roma_config, cache=filtering_cache)
+                PrecomputedRoMaFlowProviderDirect(self.config.device, self.config.roma_config,
+                                                  self.matching_cache_folder, self.data_graph,
+                                                  allow_disk_cache=self.config.dense_matching_allow_disk_cache,
+                                                  purge_cache=self.config.purge_cache)
         elif self.config.frame_filter_matcher == 'UFM':
             self.match_provider_filtering = \
-                UFMFlowProviderDirect(self.config.device, self.config.ufm_config, cache=filtering_cache)
+                PrecomputedUFMFlowProviderDirect(self.config.device, self.config.ufm_config,
+                                                 self.matching_cache_folder, self.data_graph,
+                                                 allow_disk_cache=self.config.dense_matching_allow_disk_cache,
+                                                 purge_cache=self.config.purge_cache)
         else:
             raise ValueError(f'Unknown dense matching option {self.config.frame_filter_matcher}')
 
@@ -140,8 +143,8 @@ class Tracker6D:
         elif self.config.frame_filter == 'RoMaRANSAC':
             self.frame_filter = RoMaFrameFilterRANSAC(self.config, self.data_graph, self.match_provider_filtering)
         elif self.config.frame_filter == 'SIFT':
-            sift_matcher = PrecomputedSIFTMatchingProvider(self.config.sift_matcher_config,
-                                                           self.data_graph, self.config.device)
+            sift_matcher = PrecomputedUFMFlowProviderDirect(self.config.sift_matcher_config.sift_filter_num_feats,
+                                                            self.data_graph, self.config.device)
             self.frame_filter = FrameFilterSift(self.config, self.data_graph, sift_matcher)
         else:
             raise ValueError(f'Unknown frame_filter {self.config.frame_filter}')
@@ -195,14 +198,6 @@ class Tracker6D:
 
         frame_data.image_save_path = copy.deepcopy(node_save_path)
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
-
-    def prepare_output_folder(self):
-        """Wipe and recreate the output folder. Call before run_pipeline."""
-        if os.path.exists(self.write_folder):
-            shutil.rmtree(self.write_folder)
-        self.write_folder.mkdir(exist_ok=True, parents=True)
-        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
-        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)
 
     def run_pipeline(self):
 
@@ -386,3 +381,10 @@ class Tracker6D:
         if type(self.input_segmentations) is list:
             frame_node.segmentation_filename = Path(f'{frame_i}.png')
 
+    def prepare_output_folder(self):
+        """Wipe and recreate the output folder. Called early in __init__."""
+        if os.path.exists(self.write_folder):
+            shutil.rmtree(self.write_folder)
+        self.write_folder.mkdir(exist_ok=True, parents=True)
+        self.colmap_image_path.mkdir(exist_ok=True, parents=True)
+        self.colmap_seg_path.mkdir(exist_ok=True, parents=True)

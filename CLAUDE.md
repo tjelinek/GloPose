@@ -193,9 +193,9 @@ The RCI personal folder is sshfs-mounted locally:
 - **`results_logging.py` (~983 lines)**: `WriteResults` has 10+ responsibilities — rerun blueprint layout (282 lines in `rerun_init` alone), keyframe viz, 3D camera viz, flow matching viz, image I/O, matplotlib helpers, silhouette rendering, math utilities. Should be 4-5 classes.
 - **Duplicated visualization systems**: `results_logging.py` and `visualizations/pose_estimation_visualizations.py` have near-identical rerun init, blueprint setup, matching visualization logic, and overlapping annotation constants (`RerunAnnotations` vs `RerunAnnotationsPose`).
 
-### ~~Diamond Inheritance in Flow Providers~~ (fixed)
+### Diamond Inheritance in Flow Providers
 
-Replaced with composition: `FlowCache` standalone class handles disk + datagraph caching. `RoMaFlowProviderDirect` and `UFMFlowProviderDirect` accept an optional `FlowCache`. All `Precomputed*` diamond classes deleted.
+`PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowProviderDirect)` and `PrecomputedUFMFlowProviderDirect(UFMFlowProviderDirect, PrecomputedFlowProviderDirect)` use diamond inheritance. `PrecomputedFlowProviderDirect` duplicates `compute_flow` logic for the UFM variant. Suggested fix: replace with composition (`FlowCache` standalone class) — reverted previous attempt due to breakage, needs careful re-implementation.
 
 ### External Repo Integration
 
@@ -222,9 +222,9 @@ All external repos are integrated via `sys.path.append('./repositories/...')` sc
 ### Completed
 - [x] Move hardcoded cache paths from `tracker6d.py` into `TrackerConfig` (`default_cache_folder`)
 - [x] Fix `tracker_config.py` `similarity_transformation` type annotation
-- [x] Rename `PrecomputedUFMFlowProviderDirect` in `matching_provider_sift.py` → `PrecomputedSIFTMatchingProvider`
-- [x] Fix operator-precedence bug in `flow_provider.py`
-- [x] Replace diamond inheritance with composition (`FlowCache`)
+- [ ] Rename `PrecomputedUFMFlowProviderDirect` in `matching_provider_sift.py` → `PrecomputedSIFTMatchingProvider` (reverted)
+- [ ] Fix operator-precedence bug in `flow_provider.py` (reverted)
+- [ ] Replace diamond inheritance with composition (reverted — needs careful re-implementation)
 
 ---
 
