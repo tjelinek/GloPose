@@ -86,6 +86,12 @@ The system has three independent modules that communicate through well-defined d
 - **`DataGraph`** (`data_structures/data_graph.py`): Internal to onboarding — tracks per-frame data and cross-frame
   relationships during processing.
 
+### Dataset formats & comparison methods
+
+Detailed documentation of all dataset folder layouts, annotation schemas, image naming conventions,
+camera intrinsics formats, GT structures, and external method APIs lives in
+[`docs/dataset_formats.md`](docs/dataset_formats.md).
+
 ### Key directories
 
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
@@ -372,9 +378,9 @@ Goal: clear separation between offline representation building (B1) and online i
 
 #### 3.3 Document dataset formats
 
-- [ ] Inspect all dataset formats (HANDAL, HO3D, NAVI, BEHAVE, BOP classic datasets, GoogleScannedObjects, etc.)
+- [x] ~~Inspect all dataset formats (HANDAL, HO3D, NAVI, BEHAVE, BOP classic datasets, GoogleScannedObjects, etc.)
   and document their folder layouts, annotation schemas, image naming conventions, camera intrinsics formats,
-  and ground truth structures. Store as internal reference (e.g. `docs/dataset_formats.md`).
+  and ground truth structures. Stored at `docs/dataset_formats.md`.~~
 
 #### 3.4 Clean up BOP coupling
 
