@@ -23,11 +23,11 @@ from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, recon
 from tracker_config import TrackerConfig
 from utils.eval_reconstruction import evaluate_reconstruction, update_sequence_reconstructions_stats, \
     update_dataset_reconstruction_statistics
-from utils.results_logging import WriteResults
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
+from utils.results_logging import WriteResults
 
 
-class Tracker6D:
+class OnboardingPipeline:
 
     def __init__(self, config: TrackerConfig, write_folder: Path, input_images: Union[List[Path], Path],
                  gt_texture=None, gt_mesh=None, gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None,

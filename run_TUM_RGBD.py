@@ -1,14 +1,13 @@
 import csv
-
-import torch
 from pathlib import Path
 
+import torch
 from kornia.geometry import Quaternion, Se3
 
-from tracker6d import Tracker6D
+from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_tum_rgbd_sequences
-from utils.runtime_utils import parse_args
 from utils.general import load_config
+from utils.runtime_utils import parse_args
 
 
 def main():
@@ -85,7 +84,7 @@ def main():
         config.frame_provider = 'precomputed'
         config.large_images_results_write_frequency = 10
 
-        tracker = Tracker6D(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
+        tracker = OnboardingPipeline(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
         tracker.run_pipeline()
 
         exit()

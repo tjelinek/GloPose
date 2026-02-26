@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
-from tracker6d import Tracker6D
+from onboarding_pipeline import OnboardingPipeline
 from utils.bop_challenge import add_extrinsics_to_pinhole_params, load_gt_images, load_gt_segmentations, \
-                                 extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
+    extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
 from utils.dataset_sequences import get_handal_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
@@ -88,9 +88,10 @@ def main():
             config.frame_provider = 'precomputed'
             config.segmentation_provider = 'SAM2'
 
-            tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
-                                gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
-                                input_segmentations=gt_segs, initial_segmentation=first_segmentation)
+            tracker = OnboardingPipeline(config, write_folder, input_images=gt_images,
+                                         gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
+                                         gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
+                                         input_segmentations=gt_segs, initial_segmentation=first_segmentation)
             tracker.run_pipeline()
 
 

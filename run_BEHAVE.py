@@ -1,17 +1,16 @@
 import pickle
+from pathlib import Path
 
 import torch
 import torchvision.transforms as transforms
-from pathlib import Path
-
 from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
-from tracker6d import Tracker6D
+from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_behave_sequences
+from utils.general import load_config
 from utils.image_utils import get_nth_video_frame
 from utils.runtime_utils import parse_args
-from utils.general import load_config
 
 
 def main():
@@ -77,8 +76,9 @@ def main():
     first_segment_tensor = transform(first_segment_resized).squeeze()
     first_image_tensor = transform(first_image).squeeze()
 
-    tracker = Tracker6D(config, write_folder, video_path, gt_Se3_cam2obj=gt_Se3_cam2obj, gt_Se3_world2cam=gt_Se3_world2cam,
-                        initial_segmentation=first_segment_tensor)
+    tracker = OnboardingPipeline(config, write_folder, video_path, gt_Se3_cam2obj=gt_Se3_cam2obj,
+                                 gt_Se3_world2cam=gt_Se3_world2cam,
+                                 initial_segmentation=first_segment_tensor)
     tracker.run_pipeline()
 
 

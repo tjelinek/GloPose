@@ -10,7 +10,7 @@ from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
-from tracker6d import Tracker6D
+from onboarding_pipeline import OnboardingPipeline
 from utils.data_utils import load_texture, load_mesh
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 
@@ -104,7 +104,7 @@ def run_on_synthetic_data(config: TrackerConfig, dataset: str, sequence: str, ex
         write_folder = config.default_results_folder / experiment / dataset / sequence
 
     # Create and run tracker
-    tracker = Tracker6D(config, write_folder, input_images=images_paths, gt_texture=gt_texture, gt_mesh=gt_mesh,
+    tracker = OnboardingPipeline(config, write_folder, input_images=images_paths, gt_texture=gt_texture, gt_mesh=gt_mesh,
                         gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
     tracker.run_pipeline()
@@ -204,7 +204,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     config.segmentation_provider = 'SAM2'
 
     # Initialize and run the tracker
-    tracker = Tracker6D(config, write_folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_world2cam,
+    tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_world2cam,
                         gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
                         initial_segmentation=first_segmentation)
 

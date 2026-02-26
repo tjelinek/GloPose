@@ -1,6 +1,7 @@
 import hashlib
 import math
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -9,14 +10,13 @@ from typing import Optional, List
 
 import gradio as gr
 import pycolmap
-import shutil
 import torch
 from hloc.utils import viz_3d
 
 from data_providers.flow_provider import UFMFlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from onboarding_pipeline import OnboardingPipeline
 from pose.glomap import reconstruct_images_using_sfm
-from tracker6d import Tracker6D
 from tracker_config import TrackerConfig
 from utils.data_utils import is_video_input
 from utils.dataset_sequences import (
@@ -63,6 +63,7 @@ images_for_reconstruction_global: List[Path] = []
 segmentation_for_reconstruction_global: List[Path] = []
 matching_pairs_global: list = []
 write_folder_global: Optional[Path] = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -235,8 +236,8 @@ def stop_custom_computation():
 
 
 def get_keyframes_and_segmentations(
-    input_images, segmentations, config_file, frame_filter, matchability_slider,
-    min_certainty_slider, device_radio, progress=gr.Progress()
+        input_images, segmentations, config_file, frame_filter, matchability_slider,
+        min_certainty_slider, device_radio, progress=gr.Progress()
 ):
     global matching_pairs_global, images_for_reconstruction_global
     global segmentation_for_reconstruction_global, write_folder_global
@@ -282,10 +283,11 @@ def get_keyframes_and_segmentations(
     if segmentations is not None and is_video_input(segmentations):
         segmentations = segmentations[0]
 
-    config.input_frames = len(input_images) if isinstance(input_images, list) else get_video_length_in_frames(input_images)
+    config.input_frames = len(input_images) if isinstance(input_images, list) else get_video_length_in_frames(
+        input_images)
     config.skip_indices = math.ceil(config.input_frames / 200)
 
-    tracker = Tracker6D(
+    tracker = OnboardingPipeline(
         config, write_folder, input_images=input_images,
         input_segmentations=segmentations,
         initial_segmentation=first_segment_tensor, progress=progress,
@@ -315,7 +317,7 @@ def get_keyframes_and_segmentations(
 
 
 def on_reconstruct_click(
-    mapper, matcher_radio, num_features, device_radio, progress=gr.Progress()
+        mapper, matcher_radio, num_features, device_radio, progress=gr.Progress()
 ):
     global matching_pairs_global, images_for_reconstruction_global
     global segmentation_for_reconstruction_global, write_folder_global

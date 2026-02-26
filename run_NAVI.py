@@ -6,8 +6,7 @@ import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
-from tracker6d import Tracker6D
-
+from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_navi_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
@@ -83,9 +82,9 @@ def main():
             config.frame_provider = 'precomputed'
             config.segmentation_provider = 'SAM2'
 
-            tracker = Tracker6D(config, write_folder, input_images=gt_images, depth_paths=gt_depths,
-                                gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,
-                                input_segmentations=gt_segs, initial_segmentation=first_segmentation)
+            tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, depth_paths=gt_depths,
+                                         gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,
+                                         input_segmentations=gt_segs, initial_segmentation=first_segmentation)
             tracker.run_pipeline()
 
 
@@ -96,7 +95,6 @@ def extract_cam_data_navi(gt_path, image_downsample: float = 1.0, device: str = 
     with open(gt_path, 'r') as file:
         pose_json = json.load(file)
         for frame_data in pose_json:
-
             frame_filename = frame_data['filename']
             frame_id = int(Path(frame_filename).stem.split('_')[1])
 

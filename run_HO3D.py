@@ -1,15 +1,15 @@
-import numpy as np
-import torch
 import time
 from pathlib import Path
 
+import numpy as np
+import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_ho3d_sequences
-from utils.runtime_utils import parse_args, exception_logger
-from tracker6d import Tracker6D
 from utils.general import load_config
+from utils.runtime_utils import parse_args, exception_logger
 
 
 def main():
@@ -128,7 +128,7 @@ def main():
             config.segmentation_provider = 'SAM2'
             config.frame_provider = 'precomputed'
 
-            first_segment_tensor =\
+            first_segment_tensor = \
                 PrecomputedSegmentationProvider.get_initial_segmentation(gt_images_list, gt_segmentations_list,
                                                                          segmentation_channel=1)
 
@@ -141,10 +141,11 @@ def main():
                 cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.device)
                 gt_pinhole_params[i] = PinholeCamera(cam_K_tensor, obj2cam, image_h, image_w)
 
-            tracker = Tracker6D(config, write_folder, input_images=gt_images_list, gt_Se3_cam2obj=Se3_cam2obj_dict,
-                                gt_Se3_world2cam=Se3_obj2cam_dict, gt_pinhole_params=gt_pinhole_params,
-                                input_segmentations=gt_segmentations_list, depth_paths=gt_depths_list,
-                                initial_segmentation=first_segment_tensor)
+            tracker = OnboardingPipeline(config, write_folder, input_images=gt_images_list,
+                                         gt_Se3_cam2obj=Se3_cam2obj_dict,
+                                         gt_Se3_world2cam=Se3_obj2cam_dict, gt_pinhole_params=gt_pinhole_params,
+                                         input_segmentations=gt_segmentations_list, depth_paths=gt_depths_list,
+                                         initial_segmentation=first_segment_tensor)
             tracker.run_pipeline()
 
 

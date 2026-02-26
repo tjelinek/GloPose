@@ -1,23 +1,22 @@
 import hashlib
-
-from typing import List, Tuple, Optional
 from pathlib import Path
+from typing import List, Tuple, Optional
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from onboarding_pipeline import OnboardingPipeline
 from tracker_config import TrackerConfig
-from utils.runtime_utils import parse_args
-from tracker6d import Tracker6D
 from utils.general import load_config
+from utils.runtime_utils import parse_args
 
 
 def run_on_custom_data(images_paths: List[Path], segmentations_paths: Optional[List[Path]]):
-
     config, write_folder = prepare_config(images_paths)
 
     first_segment_tensor = PrecomputedSegmentationProvider.get_initial_segmentation(images_paths, segmentations_paths)
 
-    tracker = Tracker6D(config, write_folder, input_images=images_paths, input_segmentations=segmentations_paths,
-                        initial_segmentation=first_segment_tensor)
+    tracker = OnboardingPipeline(config, write_folder, input_images=images_paths,
+                                 input_segmentations=segmentations_paths,
+                                 initial_segmentation=first_segment_tensor)
     tracker.run_pipeline()
 
 
