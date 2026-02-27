@@ -243,12 +243,9 @@ The RCI personal folder is sshfs-mounted locally:
   near-identical rerun init, blueprint setup, matching visualization logic, and overlapping annotation constants (
   `RerunAnnotations` vs `RerunAnnotationsPose`).
 
-### Diamond Inheritance in Flow Providers
+### ~~Diamond Inheritance in Flow Providers~~
 
-`PrecomputedRoMaFlowProviderDirect(RoMaFlowProviderDirect, PrecomputedFlowProviderDirect)` and
-`PrecomputedUFMFlowProviderDirect(UFMFlowProviderDirect, PrecomputedFlowProviderDirect)` use diamond inheritance.
-`PrecomputedFlowProviderDirect` duplicates `compute_flow` logic for the UFM variant. Suggested fix: replace with
-composition (`FlowCache` standalone class) — reverted previous attempt due to breakage, needs careful re-implementation.
+~~Fixed — replaced with `FlowCache` composition. All `Precomputed*` classes deleted.~~
 
 ### External Repo Integration
 
@@ -285,6 +282,9 @@ CWD-dependent, pollutes namespaces, and provides no insulation from API changes.
 - [x] Replace diamond inheritance with `FlowCache` composition
 - [x] Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`
 - [x] Fix operator-precedence bug in `flow_provider.py` (fixed during FlowCache refactoring)
+- [x] Extract evaluation from `run_pipeline()` into `eval/` module (`eval/eval_onboarding.py`, `eval/eval_reconstruction.py`)
+- [x] `run_pipeline()` returns `ViewGraph` with onboarding metadata (success flags, timing, image mapping, GT model path)
+- [x] Per-dataset data paths in `TrackerConfig` (`bop_data_folder`, `ho3d_data_folder`, `navi_data_folder`, etc.)
 
 ---
 
@@ -333,11 +333,11 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 #### 2.1 Clean up OnboardingPipeline
 
 - [x] ~~Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`~~
-- [ ] Remove evaluation logic from `run_pipeline` (lines 248-278) into a separate evaluation step
+- [x] ~~Remove evaluation logic from `run_pipeline` into a separate evaluation step~~ (moved to `eval/eval_onboarding.py`)
 - [x] ~~Remove `evaluate_sam` method — it's a separate workflow, not part of onboarding~~
 - [x] ~~Extract the destructive `shutil.rmtree` from `__init__` into `prepare_output_folder()`, called at start
   of `run_pipeline`~~
-- [ ] Have `run_pipeline` return an `OnboardingResult` rather than writing to disk as a side effect
+- [x] ~~Have `run_pipeline` return a `ViewGraph` rather than writing to disk as a side effect~~ (returns `ViewGraph` with metadata fields; always returns, even on failure)
 
 #### 2.2 Reduce coupling
 
