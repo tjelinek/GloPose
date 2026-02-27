@@ -9,17 +9,12 @@ import networkx as nx
 import pycolmap
 import torch
 import torchvision.utils as vutils
-from einops import rearrange
 from kornia.geometry import Se3, Quaternion
-from torchvision.ops import masks_to_boxes
 from tqdm import tqdm
 
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
-
-sys.path.append('./repositories/cnos')
-from src.model.dinov2 import CustomDINOv2, descriptor_from_hydra
 
 @dataclass
 class ViewGraphNode:
@@ -49,66 +44,14 @@ class ViewGraph:
         self.gt_model_path: Path | None = None
 
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name,
-                 dino_descriptor: CustomDINOv2):
-        """Adds a node with ViewGraphNode attributes."""
-        dino_cls_descriptor, dino_dense_descriptor =\
-            self._get_descriptor_from_observation(observation.observed_image, observation.observed_segmentation,
-                                                  dino_descriptor, False)
-        dino_cls_descriptor = dino_dense_descriptor.squeeze()
+                 dino_descriptor: torch.Tensor):
+        """Adds a node with ViewGraphNode attributes.
+
+        Args:
+            dino_descriptor: Pre-computed DINOv2 descriptor tensor for this node.
+        """
         self.view_graph.add_node(node_id, data=ViewGraphNode(Se3_obj2cam, observation, colmap_db_image_id,
-                                                             colmap_db_image_name, dino_cls_descriptor))
-
-    def compute_dino_descriptors_for_nodes(self, dino_descriptor: CustomDINOv2) -> Tuple[torch.Tensor, torch.Tensor]:
-        cls_descriptors = []
-        dense_descriptors = []
-
-        images = self.get_concatenated_images()
-        segmentations = self.get_concatenated_segmentations()
-        viewgraph_nodes = sorted(self.view_graph.nodes)
-
-        for node_idx in range(len(viewgraph_nodes)):
-            img = images[[node_idx]]
-            seg = segmentations[[node_idx]]
-
-            node = self.get_node_data(viewgraph_nodes[node_idx])
-
-            viewgraph_save_path = self.colmap_db_path.parent
-            img_save_dir = viewgraph_save_path / 'images'
-            seg_save_dir = viewgraph_save_path / 'segmentations'
-
-            colmap_db_img_name = node.colmap_db_image_name
-            img_name = f'{Path(colmap_db_img_name).stem}_image.png'
-            seg_name = f'{Path(colmap_db_img_name).stem}_seg.png'
-
-            img_path = img_save_dir / img_name
-            seg_path = seg_save_dir / seg_name
-
-            dino_cls_descriptor, dino_dense_descriptor =\
-                dino_descriptor.get_detections_from_files(img_path, seg_path)
-
-            # dino_cls_descriptor, dino_dense_descriptor =\
-            #     self._get_descriptor_from_observation(img, seg, dino_descriptor, black_background)
-
-            cls_descriptors.append(dino_cls_descriptor)
-            dense_descriptors.append(dino_dense_descriptor)
-        cls_descriptors = torch.cat(cls_descriptors)
-        dense_descriptors = torch.cat(dense_descriptors)
-
-        return cls_descriptors, dense_descriptors
-
-    def _get_descriptor_from_observation(self, image_tensor, segmentation_mask, dino_descriptor: CustomDINOv2,
-                                         black_background: bool):
-        from src.model.utils import Detections
-
-        segmentation_mask = segmentation_mask.squeeze(0)
-        if black_background:
-            image_tensor *= segmentation_mask
-        segmentation_bbox = masks_to_boxes(segmentation_mask)
-        image_np = rearrange((image_tensor * 255).to(torch.uint8), '1 c h w -> h w c').numpy(force=True)
-        detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
-        dino_cls_descriptor, dino_dense_descriptor = dino_descriptor(image_np, detections)
-
-        return dino_cls_descriptor, dino_dense_descriptor
+                                                             colmap_db_image_name, dino_descriptor))
 
     def get_node_data(self, frame_idx) -> ViewGraphNode:
         """Returns the ViewGraphNode data for a given node ID."""
@@ -218,7 +161,13 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
                            data_graph.storage_device)
 
     if colmap_reconstruction is not None:
-        dino_descriptor = descriptor_from_hydra()
+        from einops import rearrange
+        from torchvision.ops import masks_to_boxes
+        sys.path.append('./repositories/cnos')
+        from src.model.dinov2 import descriptor_from_hydra
+        from src.model.utils import Detections
+
+        dino_model = descriptor_from_hydra()
 
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
@@ -231,7 +180,11 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
             frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
-            view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, dino_descriptor)
+            # Compute DINOv2 descriptor for this node
+            descriptor = _compute_dino_descriptor(
+                frame_observation.observed_image, frame_observation.observed_segmentation, dino_model)
+
+            view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, descriptor)
 
         view_graph.reconstruction_success = True
     else:
@@ -247,6 +200,63 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
         view_graph.reconstruction_success = False
 
     return view_graph
+
+
+def _compute_dino_descriptor(image_tensor: torch.Tensor, segmentation_mask: torch.Tensor,
+                             dino_model) -> torch.Tensor:
+    """Compute a DINOv2 descriptor from an image tensor and segmentation mask."""
+    from einops import rearrange
+    from torchvision.ops import masks_to_boxes
+    sys.path.append('./repositories/cnos')
+    from src.model.utils import Detections
+
+    segmentation_mask = segmentation_mask.squeeze(0)
+    segmentation_bbox = masks_to_boxes(segmentation_mask)
+    image_np = rearrange((image_tensor * 255).to(torch.uint8), '1 c h w -> h w c').numpy(force=True)
+    detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
+    _cls_descriptor, dense_descriptor = dino_model(image_np, detections)
+    return dense_descriptor.squeeze()
+
+
+def compute_dino_descriptors_for_view_graph(view_graph: ViewGraph, dino_model) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Compute DINOv2 descriptors for all nodes in a ViewGraph from saved image files.
+
+    This is a standalone function — the ViewGraph itself has no dependency on the descriptor model.
+
+    Args:
+        view_graph: The ViewGraph whose nodes need descriptors.
+        dino_model: A CustomDINOv2 model instance (from descriptor_from_hydra()).
+
+    Returns:
+        Tuple of (cls_descriptors, dense_descriptors) tensors, one row per node
+        in sorted node order.
+    """
+    cls_descriptors = []
+    dense_descriptors = []
+
+    viewgraph_save_path = view_graph.colmap_db_path.parent
+    img_save_dir = viewgraph_save_path / 'images'
+    seg_save_dir = viewgraph_save_path / 'segmentations'
+
+    for node_id in sorted(view_graph.view_graph.nodes):
+        node = view_graph.get_node_data(node_id)
+
+        colmap_db_img_name = node.colmap_db_image_name
+        img_name = f'{Path(colmap_db_img_name).stem}_image.png'
+        seg_name = f'{Path(colmap_db_img_name).stem}_seg.png'
+
+        img_path = img_save_dir / img_name
+        seg_path = seg_save_dir / seg_name
+
+        dino_cls_descriptor, dino_dense_descriptor = dino_model.get_detections_from_files(img_path, seg_path)
+
+        cls_descriptors.append(dino_cls_descriptor)
+        dense_descriptors.append(dino_dense_descriptor)
+
+    cls_descriptors = torch.cat(cls_descriptors)
+    dense_descriptors = torch.cat(dense_descriptors)
+
+    return cls_descriptors, dense_descriptors
 
 
 def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):

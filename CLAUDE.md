@@ -354,9 +354,10 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 
 #### 2.4 Decouple ViewGraph from descriptor model
 
-- [ ] `ViewGraph.add_node` currently computes DINOv2 descriptors inline (line 42-48) — the data structure should not own
-  the descriptor model
-- [ ] Pass descriptors as input to `add_node`, or compute them in a separate step after construction
+- [x] ~~`ViewGraph.add_node` now accepts a pre-computed `torch.Tensor` descriptor — no model dependency~~
+- [x] ~~Descriptor computation moved to `view_graph_from_datagraph()` (onboarding) and standalone
+  `compute_dino_descriptors_for_view_graph()` function (detection). `_get_descriptor_from_observation()`
+  and cnos imports removed from `ViewGraph` class.~~
 
 ---
 

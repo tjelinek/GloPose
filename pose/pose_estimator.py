@@ -17,7 +17,7 @@ from condensate_templates import get_descriptors_for_condensed_templates, Templa
 from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
 
-from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id
+from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
 from src.model.detector import filter_similarities_dict
 from tracker_config import TrackerConfig
 from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
@@ -86,7 +86,7 @@ class BOPChallengePosePredictor:
             view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                               self.config.device)
             template_cls_descriptors = {
-                obj_id: view_graph.compute_dino_descriptors_for_nodes(dino_descriptor)[0]
+                obj_id: compute_dino_descriptors_for_view_graph(view_graph, dino_descriptor)[0]
                 for obj_id, view_graph in view_graphs.items()
             }
             template_images = {
