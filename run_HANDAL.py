@@ -16,7 +16,7 @@ def main():
     args = parse_args()
 
     config = load_config(args.config)
-    handal_train, handal_test = get_handal_sequences(config.handal_data_folder / 'HANDAL')
+    handal_train, handal_test = get_handal_sequences(config.handal_data_folder)
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
