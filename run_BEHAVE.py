@@ -6,6 +6,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_behave_sequences
 from utils.general import load_config
@@ -21,7 +22,7 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = get_behave_sequences(config.default_data_folder / 'BEHAVE' / 'train')
+        sequences = get_behave_sequences(config.behave_data_folder / 'train')
 
     sequence = sequences[0]
     config = load_config(args.config)
@@ -43,7 +44,7 @@ def main():
     else:
         write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
-    sequence_folder = config.default_data_folder / 'BEHAVE' / 'train'
+    sequence_folder = config.behave_data_folder / 'train'
 
     video_path = sequence_folder / f'{sequence}.mp4'
     gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
@@ -79,7 +80,8 @@ def main():
     tracker = OnboardingPipeline(config, write_folder, video_path, gt_Se3_cam2obj=gt_Se3_cam2obj,
                                  gt_Se3_world2cam=gt_Se3_world2cam,
                                  initial_segmentation=first_segment_tensor)
-    tracker.run_pipeline()
+    view_graph = tracker.run_pipeline()
+    evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
 
 
 if __name__ == "__main__":

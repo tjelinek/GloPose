@@ -18,7 +18,7 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = get_tum_rgbd_sequences(config.default_data_folder / 'SLAM' / 'tum_rgbd')
+        sequences = get_tum_rgbd_sequences(config.tum_rgbd_data_folder)
 
     for sequence in sequences:
         config = load_config(args.config)
@@ -37,7 +37,7 @@ def main():
         else:
             write_folder = config.default_results_folder / experiment_name / dataset / sequence
 
-        sequence_folder = config.default_data_folder / 'SLAM' / 'tum_rgbd' / sequence
+        sequence_folder = config.tum_rgbd_data_folder / sequence
 
         image_paths = []
 
@@ -85,7 +85,7 @@ def main():
 
 
         tracker = OnboardingPipeline(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
-        tracker.run_pipeline()
+        view_graph = tracker.run_pipeline()
 
         exit()
 

@@ -10,6 +10,7 @@ from tracker_config import TrackerConfig
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.data_utils import load_texture, load_mesh
 from data_providers.frame_provider import PrecomputedSegmentationProvider
@@ -107,7 +108,8 @@ def run_on_synthetic_data(config: TrackerConfig, dataset: str, sequence: str, ex
     tracker = OnboardingPipeline(config, write_folder, input_images=images_paths, gt_texture=gt_texture, gt_mesh=gt_mesh,
                         gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
-    tracker.run_pipeline()
+    view_graph = tracker.run_pipeline()
+    evaluate_onboarding(view_graph, gt_Se3_world2cam_dict, config, write_folder)
 
     return tracker
 
@@ -127,7 +129,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     sequence = config.sequence
 
     # Path to BOP dataset
-    bop_folder = config.default_data_folder / 'bop'
+    bop_folder = config.bop_data_folder
 
     if onboarding_type == 'static':
         static_onboarding_sequence = config.bop_config.static_onboarding_sequence
@@ -208,4 +210,5 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
                         gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
                         initial_segmentation=first_segmentation)
 
-    tracker.run_pipeline()
+    view_graph = tracker.run_pipeline()
+    evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)

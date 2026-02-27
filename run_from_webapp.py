@@ -17,7 +17,7 @@ def run_on_custom_data(images_paths: List[Path], segmentations_paths: Optional[L
     tracker = OnboardingPipeline(config, write_folder, input_images=images_paths,
                                  input_segmentations=segmentations_paths,
                                  initial_segmentation=first_segment_tensor)
-    tracker.run_pipeline()
+    view_graph = tracker.run_pipeline()
 
 
 def prepare_config(images_paths) -> Tuple[TrackerConfig, Path]:

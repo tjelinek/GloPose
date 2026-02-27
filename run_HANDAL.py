@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.bop_challenge import add_extrinsics_to_pinhole_params, load_gt_images, load_gt_segmentations, \
     extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
@@ -15,7 +16,7 @@ def main():
     args = parse_args()
 
     config = load_config(args.config)
-    handal_train, handal_test = get_handal_sequences(config.default_data_folder / 'HANDAL')
+    handal_train, handal_test = get_handal_sequences(config.handal_data_folder / 'HANDAL')
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -55,7 +56,7 @@ def main():
                 write_folder = config.default_results_folder / experiment_name / dataset / \
                                f'{config.special_hash}_{sequence}'
 
-            base_folder = config.default_data_folder / 'HANDAL' / obj_name / sequence_type / sequence
+            base_folder = config.handal_data_folder / 'HANDAL' / obj_name / sequence_type / sequence
             image_folder = base_folder / 'rgb'
             segmentation_folder = base_folder / 'mask_visib'
             scene_gt_path = base_folder / 'scene_gt.json'
@@ -92,7 +93,8 @@ def main():
                                          gt_Se3_cam2obj=dict_gt_Se3_cam2obj,
                                          gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=pinhole_params,
                                          input_segmentations=gt_segs, initial_segmentation=first_segmentation)
-            tracker.run_pipeline()
+            view_graph = tracker.run_pipeline()
+            evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
 
 
 if __name__ == "__main__":

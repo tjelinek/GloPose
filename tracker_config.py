@@ -16,10 +16,18 @@ from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
 class TrackerConfig:
     # General settings
     device: str = 'cuda'
-    default_data_folder: Path = Path('/mnt/data/vrg/public_datasets/').expanduser()
     default_results_folder: Path = Path('/mnt/personal/jelint19/results/FlowTracker/').expanduser()
     default_cache_folder: Path = Path('/mnt/personal/jelint19/cache/').expanduser()
     purge_cache: bool = False
+
+    # Dataset paths — each dataset has its own root path
+    bop_data_folder: Path = Path('/mnt/data/vrg/public_datasets/bop/')
+    ho3d_data_folder: Path = Path('/mnt/personal/jelint19/data/HO3D/')
+    navi_data_folder: Path = Path('/mnt/personal/jelint19/data/NAVI/navi_v1.5/')
+    behave_data_folder: Path = Path('/mnt/personal/jelint19/data/BEHAVE/')
+    tum_rgbd_data_folder: Path = Path('/mnt/personal/jelint19/data/SLAM/tum_rgbd/')
+    google_scanned_objects_data_folder: Path = Path('/mnt/personal/jelint19/data/GoogleScannedObjects/')
+    handal_data_folder: Path = Path('/mnt/personal/jelint19/data/HANDAL/')
 
     dataset: str = None
     sequence: str = None

@@ -6,6 +6,7 @@ import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_navi_sequences
 from utils.experiment_runners import reindex_frame_dict
@@ -18,7 +19,7 @@ def main():
     args = parse_args()
 
     config = load_config(args.config)
-    navi_sequences = get_navi_sequences(config.default_data_folder / 'NAVI' / 'navi_v1.5')
+    navi_sequences = get_navi_sequences(config.navi_data_folder)
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -51,7 +52,7 @@ def main():
             else:
                 write_folder = config.default_results_folder / experiment_name / dataset / config.sequence
 
-            base_folder = config.default_data_folder / 'NAVI' / 'navi_v1.5' / obj_name / sequence
+            base_folder = config.navi_data_folder / obj_name / sequence
             image_folder = base_folder / 'images'
             segmentation_folder = base_folder / 'masks'
             depths_folder = base_folder / 'depth'
@@ -85,7 +86,8 @@ def main():
             tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, depth_paths=gt_depths,
                                          gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,
                                          input_segmentations=gt_segs, initial_segmentation=first_segmentation)
-            tracker.run_pipeline()
+            view_graph = tracker.run_pipeline()
+            evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
 
 
 def extract_cam_data_navi(gt_path, image_downsample: float = 1.0, device: str = 'cpu') -> Dict[int, PinholeCamera]:

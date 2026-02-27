@@ -17,7 +17,7 @@ def main():
         sequences = args.sequences
     else:
         sequences = get_google_scanned_objects_sequences(
-            config.default_data_folder / 'GoogleScannedObjects' / 'models')[:1]
+            config.google_scanned_objects_data_folder / 'models')[:1]
 
     for sequence in sequences:
 
@@ -27,7 +27,7 @@ def main():
             config.camera_up = (0, 0, 1)
 
             # Construct paths specific to GoogleScannedObjects
-            gt_model_path = config.default_data_folder / Path(dataset) / Path('models') / Path(sequence)
+            gt_model_path = config.google_scanned_objects_data_folder / Path('models') / Path(sequence)
             gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
             gt_mesh_path = gt_model_path / Path('meshes/model.obj')
 

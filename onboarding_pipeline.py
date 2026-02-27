@@ -16,12 +16,11 @@ from pycolmap import Reconstruction
 from data_providers.flow_provider import FlowCache, create_flow_provider
 from data_providers.frame_provider import FrameProviderAll
 from data_structures.data_graph import DataGraph
-from data_structures.view_graph import view_graph_from_datagraph
+from data_structures.view_graph import ViewGraph, view_graph_from_datagraph
+from eval.eval_onboarding import resolve_gt_model_path
 from pose.frame_filter import create_frame_filter
 from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
 from tracker_config import TrackerConfig
-from utils.eval_reconstruction import evaluate_reconstruction, update_sequence_reconstructions_stats, \
-    update_dataset_reconstruction_statistics
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.results_logging import WriteResults
 
@@ -168,7 +167,7 @@ class OnboardingPipeline:
         frame_data.image_save_path = copy.deepcopy(node_save_path)
         frame_data.segmentation_save_path = copy.deepcopy(segmentation_save_path)
 
-    def run_pipeline(self):
+    def run_pipeline(self) -> ViewGraph:
 
         start_time = time.time()
         keyframe_graph = self.filter_frames()
@@ -177,7 +176,6 @@ class OnboardingPipeline:
         images_paths, segmentation_paths, matching_pairs = self.prepare_input_for_colmap(keyframe_graph)
 
         end_time = time.time()
-
         frame_filtering_time = end_time - start_time
 
         start_time = time.time()
@@ -185,59 +183,43 @@ class OnboardingPipeline:
         end_time = time.time()
         reconstruction_time = end_time - start_time
 
+        # Always create a ViewGraph (even if reconstruction failed)
+        colmap_db_path = self.colmap_base_path / 'database.db'
+        colmap_output_path = self.colmap_base_path / 'output'
+        view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
+                                               colmap_output_path, self.config.object_id)
+
+        # Populate metadata on the ViewGraph
+        view_graph.alignment_success = alignment_success and reconstruction is not None
+        view_graph.frame_filtering_time = frame_filtering_time
+        view_graph.reconstruction_time = reconstruction_time
+        view_graph.num_input_frames = self.config.input_frames
+        view_graph.gt_model_path = resolve_gt_model_path(self.config)
+
+        # Build image_name_to_frame_id mapping
+        image_name_to_frame_id = {}
+        for i in range(self.config.input_frames):
+            frame_data = self.data_graph.get_frame_data(i)
+            image_name_to_frame_id[str(frame_data.image_filename.name)] = i
+        view_graph.image_name_to_frame_id = image_name_to_frame_id
+
+        # Determine GT pose availability for visualization
         if self.gt_Se3_world2cam is not None and len(self.gt_Se3_world2cam.keys()) > 0:
             known_gt_poses = all(frm_idx in self.gt_Se3_world2cam.keys() for frm_idx in keyframe_nodes_idxs)
         else:
             known_gt_poses = None
+
+        # Save ViewGraph and visualize
         if reconstruction is not None and alignment_success:
-            colmap_db_path = self.colmap_base_path / 'database.db'
-            colmap_output_path = self.colmap_base_path / 'output'
-            view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
-                                                   colmap_output_path, self.config.object_id)
             view_graph.save_viewgraph(self.cache_folder_view_graph, reconstruction, save_images=True,
                                       overwrite=True, to_cpu=True)
-
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, known_gt_poses)
         elif reconstruction is not None:
             self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, False)
         else:
-            if reconstruction is None:
-                print("!!!Reconstruction failed")
-            if not alignment_success:
-                print("!!!Alignment failed")
+            print("!!!Reconstruction failed")
 
-        rec_csv_detailed_stats = self.write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
-        rec_csv_per_sequence_stats = self.write_folder.parent.parent / 'reconstruction_sequence_stats.csv'
-        dataset_name_for_eval = self.config.dataset
-        if self.config.bop_config.onboarding_type is not None:
-            dataset_name_for_eval = f'{dataset_name_for_eval}_{self.config.bop_config.onboarding_type}_onboarding'
-
-        sequence_name = self.config.sequence
-        if self.config.special_hash is not None and len(self.config.special_hash) > 0:
-            sequence_name = f'{sequence_name}_{self.config.special_hash}'
-
-        if reconstruction is not None:
-            image_name_to_frame_id = {}
-
-            for i in range(self.config.input_frames):
-                frame_data = self.data_graph.get_frame_data(i)
-                image_name_to_frame_id[str(frame_data.image_filename.name)] = i
-
-            if known_gt_poses:
-                evaluate_reconstruction(reconstruction, self.gt_Se3_world2cam, image_name_to_frame_id,
-                                        rec_csv_detailed_stats, dataset_name_for_eval, sequence_name)
-
-        num_keyframes = len(keyframe_graph.nodes)
-        reconstruction_success = reconstruction is not None
-
-        if known_gt_poses:
-            update_sequence_reconstructions_stats(rec_csv_detailed_stats, rec_csv_per_sequence_stats, num_keyframes,
-                                                  self.config.input_frames, reconstruction, dataset_name_for_eval,
-                                                  sequence_name, reconstruction_success, alignment_success,
-                                                  frame_filtering_time, reconstruction_time)
-            update_dataset_reconstruction_statistics(rec_csv_per_sequence_stats, dataset_name_for_eval)
-
-        return
+        return view_graph
 
     def prepare_input_for_colmap(self, keyframe_graph: nx.DiGraph) -> \
             Tuple[List[Path], List[Path], List[Tuple[int, int]]]:

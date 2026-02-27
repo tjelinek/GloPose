@@ -158,21 +158,21 @@ def main():
         # 'matchability_thresholds/ufm_c099r099',
     ]
 
-    data_folder = TrackerConfig().default_data_folder
-    bop_path = data_folder / 'bop'
+    cfg = TrackerConfig()
+    bop_path = cfg.bop_data_folder
 
-    handal_train, handal_test = get_handal_sequences(data_folder / 'HANDAL')
-    ho3d_train, ho3d_eval = get_ho3d_sequences(data_folder / 'HO3D')
+    handal_train, handal_test = get_handal_sequences(cfg.handal_data_folder / 'HANDAL')
+    ho3d_train, ho3d_eval = get_ho3d_sequences(cfg.ho3d_data_folder)
     handal_dynamic, handal_up, handal_down, handal_both = get_bop_onboarding_sequences(bop_path, 'handal')
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(bop_path, 'hope')
 
     sequences = {
         Datasets.SyntheticObjects: [],
         Datasets.GoogleScannedObjects: get_google_scanned_objects_sequences(
-            data_folder / 'GoogleScannedObjects' / 'models'),
+            cfg.google_scanned_objects_data_folder / 'models'),
         Datasets.HO3D_eval: ho3d_eval,
         Datasets.HO3D_train: ho3d_train,
-        Datasets.NAVI: get_navi_sequences(data_folder / 'NAVI' / 'navi_v1.5'),
+        Datasets.NAVI: get_navi_sequences(cfg.navi_data_folder),
         Datasets.HANDAL: handal_train + handal_test,
         Datasets.BOP_HANDAL: get_bop_val_sequences(bop_path / 'handal' / 'val'),
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_both,
@@ -184,7 +184,7 @@ def main():
             get_bop_classic_sequences(bop_path, 'lmo', 'train') +
             get_bop_classic_sequences(bop_path, 'icbin', 'train')
         ),
-        Datasets.BEHAVE: get_behave_sequences(data_folder / 'BEHAVE' / 'train'),
+        Datasets.BEHAVE: get_behave_sequences(cfg.behave_data_folder / 'train'),
         Datasets.TUM_RGBD: get_tum_rgbd_sequences(data_folder / 'SLAM' / 'tum_rgbd'),
     }
 

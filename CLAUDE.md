@@ -144,6 +144,14 @@ NetworkX, Gradio, Rerun SDK, wandb
 - Hardcoded RCI paths are scattered across many files beyond `onboarding_pipeline.py` (scripts, dataset generators, pose
   estimator, etc.). The `TrackerConfig` defaults (`default_data_folder`, `default_results_folder`,
   `default_cache_folder`) centralize the main ones.
+- **Per-dataset data paths** are explicit fields in `TrackerConfig`:
+  - `bop_data_folder` → `/mnt/data/vrg/public_datasets/bop/` (handal, hope, tless, lmo, icbin, etc.)
+  - `ho3d_data_folder` → `/mnt/personal/jelint19/data/HO3D/`
+  - `navi_data_folder` → `/mnt/personal/jelint19/data/NAVI/navi_v1.5/`
+  - `behave_data_folder` → `/mnt/personal/jelint19/data/BEHAVE/`
+  - `tum_rgbd_data_folder` → `/mnt/personal/jelint19/data/SLAM/tum_rgbd/`
+  - `google_scanned_objects_data_folder` → `/mnt/personal/jelint19/data/GoogleScannedObjects/`
+  - `default_data_folder` → legacy fallback, still used by `run_HANDAL.py` (native format, not on RCI)
 - **Test sequence selection:** When proposing RCI test commands, pick ~5 sequences uniformly spaced across the full
   dataset — not just the first few. For HANDAL (40 objects): `obj_000001`, `obj_000009`, `obj_000017`, `obj_000025`,
   `obj_000033`. This catches issues that only appear on specific object geometries or sequence lengths.

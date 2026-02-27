@@ -6,6 +6,7 @@ import torch
 from kornia.geometry import Quaternion, Se3, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_ho3d_sequences
 from utils.general import load_config
@@ -18,7 +19,7 @@ def main():
 
     args = parse_args()
     config = load_config(args.config)
-    train_sequences, test_sequences = get_ho3d_sequences(config.default_data_folder / 'HO3D')
+    train_sequences, test_sequences = get_ho3d_sequences(config.ho3d_data_folder)
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
@@ -58,7 +59,7 @@ def main():
 
             t0 = time.time()
 
-            sequence_folder = config.default_data_folder / 'HO3D' / split / sequence
+            sequence_folder = config.ho3d_data_folder / split / sequence
             image_folder = sequence_folder / 'rgb'
             segmentation_folder = sequence_folder / 'seg'
             if not segmentation_folder.exists():
@@ -146,7 +147,8 @@ def main():
                                          gt_Se3_world2cam=Se3_obj2cam_dict, gt_pinhole_params=gt_pinhole_params,
                                          input_segmentations=gt_segmentations_list, depth_paths=gt_depths_list,
                                          initial_segmentation=first_segment_tensor)
-            tracker.run_pipeline()
+            view_graph = tracker.run_pipeline()
+            evaluate_onboarding(view_graph, Se3_obj2cam_dict, config, write_folder)
 
 
 if __name__ == "__main__":

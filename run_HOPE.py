@@ -11,7 +11,7 @@ def main():
 
     config = load_config(args.config)
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(
-        config.default_data_folder / 'bop', dataset)
+        config.bop_data_folder, dataset)
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences

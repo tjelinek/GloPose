@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from eval.eval_onboarding import evaluate_onboarding
 from onboarding_pipeline import OnboardingPipeline
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_object_id, read_pinhole_params
@@ -14,7 +15,7 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    bop_path = config.default_data_folder / 'bop'
+    bop_path = config.bop_data_folder
     tless_seqs = get_bop_classic_sequences(bop_path, 'tless', 'train_primesense')
     lmo_seqs = get_bop_classic_sequences(bop_path, 'lmo', 'train')
     icbin_seqs = get_bop_classic_sequences(bop_path, 'icbin', 'train')
@@ -42,7 +43,7 @@ def main():
             config.skip_indices *= 4
 
             # Path to BOP dataset
-            bop_folder = config.default_data_folder / 'bop'
+            bop_folder = config.bop_data_folder
             # Determine output folder
             if args.output_folder is not None:
                 folder = Path(args.output_folder) / dataset / f'{sequence_name}'
@@ -89,7 +90,8 @@ def main():
                                          gt_pinhole_params=pinhole_params, input_segmentations=gt_segs,
                                          depth_paths=gt_depths,
                                          initial_segmentation=first_segmentation)
-            tracker.run_pipeline()
+            view_graph = tracker.run_pipeline()
+            evaluate_onboarding(view_graph, gt_Se3_obj2cam, config, folder)
 
 
 if __name__ == "__main__":

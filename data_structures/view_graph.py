@@ -39,6 +39,15 @@ class ViewGraph:
         self.colmap_reconstruction_path: Path = colmap_output_path
         self.device: str = device
 
+        # Onboarding metadata (runtime-only, not persisted in pickle by default)
+        self.reconstruction_success: bool = False
+        self.alignment_success: bool = False
+        self.frame_filtering_time: float = 0.0
+        self.reconstruction_time: float = 0.0
+        self.num_input_frames: int = 0
+        self.image_name_to_frame_id: dict[str, int] = {}
+        self.gt_model_path: Path | None = None
+
     def add_node(self, node_id, Se3_obj2cam, observation, colmap_db_image_id, colmap_db_image_name,
                  dino_descriptor: CustomDINOv2):
         """Adds a node with ViewGraphNode attributes."""
@@ -195,33 +204,47 @@ def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
 
 
 def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
-                              colmap_reconstruction: pycolmap.Reconstruction, colmap_db_path,
+                              colmap_reconstruction: pycolmap.Reconstruction | None, colmap_db_path,
                               colmap_output_path, object_id: int | str) -> ViewGraph:
+    """Create a ViewGraph from the keyframe graph and data graph.
+
+    Always creates a ViewGraph with nodes for all keyframes. If colmap_reconstruction
+    is provided, populates COLMAP poses and DINOv2 descriptors on the nodes.
+    """
     all_image_names = [str(data_graph.get_frame_data(i).image_filename)
                        for i in range(len(data_graph.G.nodes))]
 
     view_graph = ViewGraph(object_id, colmap_db_path, colmap_output_path,
                            data_graph.storage_device)
 
-    dino_descriptor = descriptor_from_hydra()
+    if colmap_reconstruction is not None:
+        dino_descriptor = descriptor_from_hydra()
 
-    for image_id, image in colmap_reconstruction.images.items():
-        frame_index = all_image_names.index(image.name)
+        for image_id, image in colmap_reconstruction.images.items():
+            frame_index = all_image_names.index(image.name)
 
-        image_t_obj2cam = torch.tensor(image.cam_from_world.translation)[None]
-        image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)[None]
-        image_q_obj2cam_wxyz = image_q_obj2cam_xyzw[:, [3, 0, 1, 2]]
+            image_t_obj2cam = torch.tensor(image.cam_from_world.translation)[None]
+            image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)[None]
+            image_q_obj2cam_wxyz = image_q_obj2cam_xyzw[:, [3, 0, 1, 2]]
 
-        Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
+            Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
 
-        frame_observation = data_graph.get_frame_data(frame_index).frame_observation
+            frame_observation = data_graph.get_frame_data(frame_index).frame_observation
 
-        view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, dino_descriptor)
+            view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, dino_descriptor)
 
-    # TODO this causes errors when COLMAP does not register an image
-    # for u, v in structure.edges:
-    #     if u not in view_graph.view_graph.nodes and v not in view_graph.view_graph.nodes:
-    #         view_graph.view_graph.add_edge(u, v)
+        view_graph.reconstruction_success = True
+    else:
+        # No reconstruction — add keyframe nodes without COLMAP poses or descriptors
+        for frame_index in sorted(structure.nodes()):
+            frame_observation = data_graph.get_frame_data(frame_index).frame_observation
+            image_name = all_image_names[frame_index]
+            Se3_identity = Se3.identity(1)
+            view_graph.view_graph.add_node(
+                frame_index,
+                data=ViewGraphNode(Se3_identity, frame_observation, -1, image_name, torch.empty(0))
+            )
+        view_graph.reconstruction_success = False
 
     return view_graph
 

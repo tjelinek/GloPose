@@ -13,7 +13,7 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = get_bop_val_sequences(config.default_data_folder / 'bop' / dataset / 'val')[4:5]
+        sequences = get_bop_val_sequences(config.bop_data_folder / dataset / 'val')[4:5]
 
     for sequence_obj in sequences:
 
