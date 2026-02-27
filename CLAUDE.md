@@ -113,8 +113,9 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ### Cross-cutting concerns
 
-- **DINOv2 descriptors** are computed in 3 places: `view_graph.py` (onboarding), `condensate_templates.py` (
-  representation), `pose_estimator.py` (detection). Should be behind a single descriptor service / adapter.
+- **DINOv2 descriptors** are computed in `view_graph.py` (standalone functions, no longer in `ViewGraph` class),
+  `condensate_templates.py` (representation), and `pose_estimator.py` (detection). Still scattered — should be
+  behind a single descriptor service / adapter.
 - **BOP dataset conventions** (folder layout, splits, annotations) are known by `pose_estimator.py`,
   `condensate_templates.py`, and many `run_*.py` scripts. Should be encapsulated in a BOP data adapter.
 - **`Detections` type** is imported from the external cnos repo. Should be our own type at the module boundary.
@@ -224,14 +225,13 @@ The RCI personal folder is sshfs-mounted locally:
 
 - ~~**Hardcoded user paths**~~: Fixed — `onboarding_pipeline.py` now derives cache paths from
   `TrackerConfig.default_cache_folder`.
-- ~~**Class name collision**~~: Fixed — renamed to `PrecomputedSIFTMatchingProvider` in `matching_provider_sift.py`.
+- ~~**Class name collision**~~: Fixed — `PrecomputedSIFTMatchingProvider` replaced by unified `SparseMatchingProvider`.
 - ~~**Config bug**~~: Fixed — `similarity_transformation: str = 'kabsch'` now uses proper type annotation.
 
 ### Structural
 
-- **`OnboardingPipeline` tight coupling**: Constructor imports and instantiates 14+ concrete classes via `if/elif/else`
-  chains. No dependency injection or factory pattern. Adding a new matcher/filter requires editing
-  `onboarding_pipeline.py`.
+- ~~**`OnboardingPipeline` tight coupling**~~: Mostly fixed — provider creation uses `create_matching_provider()` factory.
+  Some non-provider `if/elif/else` chains remain (frame filter selection, depth provider selection).
 - **`TrackerConfig` god-object**: ~47 flat fields spanning 8+ concerns (viz, input, rendering, mesh, filtering,
   matching, reconstruction, SIFT). Sub-configs exist (`BaseRomaConfig`, etc.) but most fields remain top-level.
 - **`CommonFrameData` god-class** (`data_graph.py:32-72`): 20+ fields mixing input data, SIFT features, ground truth,
@@ -273,20 +273,6 @@ CWD-dependent, pollutes namespaces, and provides no insulation from API changes.
 ---
 
 ## TODO
-
-### Completed
-
-- [x] Move hardcoded cache paths from `onboarding_pipeline.py` into `TrackerConfig` (`default_cache_folder`)
-- [x] Fix `tracker_config.py` `similarity_transformation` type annotation
-- [x] Rename `PrecomputedUFMFlowProviderDirect` in `matching_provider_sift.py` → `PrecomputedSIFTMatchingProvider`
-- [x] Replace diamond inheritance with `FlowCache` composition
-- [x] Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`
-- [x] Fix operator-precedence bug in `flow_provider.py` (fixed during FlowCache refactoring)
-- [x] Extract evaluation from `run_pipeline()` into `eval/` module (`eval/eval_onboarding.py`, `eval/eval_reconstruction.py`)
-- [x] `run_pipeline()` returns `ViewGraph` with onboarding metadata (success flags, timing, image mapping, GT model path)
-- [x] Per-dataset data paths in `TrackerConfig` (`bop_data_folder`, `ho3d_data_folder`, `navi_data_folder`, etc.)
-
----
 
 ### Phase 1: Define module boundaries and shared types
 
@@ -335,9 +321,9 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 - [x] ~~Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`~~
 - [x] ~~Remove evaluation logic from `run_pipeline` into a separate evaluation step~~ (moved to `eval/eval_onboarding.py`)
 - [x] ~~Remove `evaluate_sam` method — it's a separate workflow, not part of onboarding~~
-- [x] ~~Extract the destructive `shutil.rmtree` from `__init__` into `prepare_output_folder()`, called at start
-  of `run_pipeline`~~
+- [x] ~~Extract the destructive `shutil.rmtree` from `__init__` into `prepare_output_folder()`~~
 - [x] ~~Have `run_pipeline` return a `ViewGraph` rather than writing to disk as a side effect~~ (returns `ViewGraph` with metadata fields; always returns, even on failure)
+- [x] ~~Per-dataset data paths in `TrackerConfig`~~ (`bop_data_folder`, `ho3d_data_folder`, `navi_data_folder`, etc.)
 
 #### 2.2 Reduce coupling
 
