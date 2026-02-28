@@ -56,13 +56,21 @@ DEFAULT_RESULTS_ROOT = Path("/mnt/personal/jelint19/results/FlowTracker/")
 DEFAULT_DATA_FOLDER = Path("/mnt/data/vrg/public_datasets/")
 
 # ---------------------------------------------------------------------------
-# Global state for Custom Input tab
+# Shared state for Custom Input tab
 # ---------------------------------------------------------------------------
 
-images_for_reconstruction_global: List[Path] = []
-segmentation_for_reconstruction_global: List[Path] = []
-matching_pairs_global: list = []
-write_folder_global: Optional[Path] = None
+
+class CustomInputState:
+    """Holds intermediate results between keyframe filtering and reconstruction steps."""
+
+    def __init__(self):
+        self.images_for_reconstruction: List[Path] = []
+        self.segmentation_for_reconstruction: List[Path] = []
+        self.matching_pairs: list = []
+        self.write_folder: Optional[Path] = None
+
+
+_custom_state = CustomInputState()
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +247,6 @@ def get_keyframes_and_segmentations(
         input_images, segmentations, config_file, frame_filter, matchability_slider,
         min_certainty_slider, device_radio, progress=gr.Progress()
 ):
-    global matching_pairs_global, images_for_reconstruction_global
-    global segmentation_for_reconstruction_global, write_folder_global
-
     _custom_stop_event.clear()
 
     input_images = [Path(img) for (img, _) in input_images]
@@ -268,7 +273,7 @@ def get_keyframes_and_segmentations(
     config.onboarding.flow_reliability_threshold = matchability_slider
 
     write_folder = config.paths.results_folder / "webapp" / "custom_input" / sequence_hash
-    write_folder_global = write_folder
+    _custom_state.write_folder = write_folder
 
     if segmentations is not None:
         first_segment_tensor = PrecomputedSegmentationProvider.get_initial_segmentation(
@@ -295,9 +300,9 @@ def get_keyframes_and_segmentations(
     keyframe_graph = tracker.filter_frames(progress, _custom_stop_event)
     images_paths, segmentation_paths, matching_pairs = tracker.prepare_input_for_colmap(keyframe_graph)
 
-    matching_pairs_global = matching_pairs
-    images_for_reconstruction_global = images_paths
-    segmentation_for_reconstruction_global = segmentation_paths
+    _custom_state.matching_pairs = matching_pairs
+    _custom_state.images_for_reconstruction = images_paths
+    _custom_state.segmentation_for_reconstruction = segmentation_paths
 
     temp_dir = Path("/tmp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -319,9 +324,6 @@ def get_keyframes_and_segmentations(
 def on_reconstruct_click(
         mapper, matcher_radio, num_features, device_radio, progress=gr.Progress()
 ):
-    global matching_pairs_global, images_for_reconstruction_global
-    global segmentation_for_reconstruction_global, write_folder_global
-
     config = GloPoseConfig()
     if matcher_radio == "UFM":
         match_provider = UFMFlowProviderDirect(device_radio, config.onboarding.ufm)
@@ -330,14 +332,14 @@ def on_reconstruct_click(
     else:
         raise ValueError(f"Unknown matching provider {matcher_radio}")
 
-    colmap_base_path = write_folder_global / f"glomap_{write_folder_global.stem}"
+    colmap_base_path = _custom_state.write_folder / f"glomap_{_custom_state.write_folder.stem}"
     colmap_base_path.mkdir(parents=True, exist_ok=True)
 
     with torch.inference_mode():
         colmap_rec = reconstruct_images_using_sfm(
-            images_for_reconstruction_global,
-            segmentation_for_reconstruction_global,
-            matching_pairs_global,
+            _custom_state.images_for_reconstruction,
+            _custom_state.segmentation_for_reconstruction,
+            _custom_state.matching_pairs,
             config.onboarding.init_with_first_two_images,
             mapper,
             match_provider,
