@@ -13,9 +13,17 @@ def parse_args():
 
 
 @contextmanager
-def exception_logger(ignore_exceptions=(Exception,)):
+def exception_logger(context: str = '', ignore_exceptions=(Exception,)):
+    """Catch and log exceptions without crashing the batch run.
+
+    Args:
+        context: Identifies what was running when the exception occurred
+                 (e.g. sequence name, dataset/object pair). Printed in the log.
+        ignore_exceptions: Exception types to catch. Defaults to (Exception,).
+    """
     try:
         yield
     except ignore_exceptions as e:
-        print(f"Exception caught: {type(e).__name__}: {e}")
+        prefix = f"[{context}] " if context else ""
+        print(f"{prefix}Exception caught: {type(e).__name__}: {e}")
         traceback.print_exc()

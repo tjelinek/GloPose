@@ -21,7 +21,7 @@ def main():
             config.paths.google_scanned_objects_data_folder / 'models')[:1]
 
     for sequence in sequences:
-        with exception_logger():
+        with exception_logger(sequence):
             # Set camera parameters specific to GoogleScannedObjects
             config.renderer.camera_position = (0, -5.0, 0)
             config.renderer.camera_up = (0, 0, 1)

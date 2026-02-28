@@ -1,4 +1,5 @@
 import copy
+import logging
 import os
 import shutil
 import threading
@@ -23,6 +24,9 @@ from pose.frame_filter import create_frame_filter
 from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.results_logging import WriteResults
+
+
+logger = logging.getLogger(__name__)
 
 
 class OnboardingPipeline:
@@ -217,8 +221,12 @@ class OnboardingPipeline:
                                                        known_gt_poses)
         elif reconstruction is not None:
             self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction, False)
+            logger.warning("Reconstruction succeeded but alignment failed for %s/%s",
+                           self.config.run.dataset, self.config.run.sequence)
         else:
-            print("!!!Reconstruction failed")
+            logger.warning("Reconstruction failed for %s/%s (%d keyframes from %d input frames)",
+                           self.config.run.dataset, self.config.run.sequence,
+                           len(keyframe_nodes_idxs), self.config.input.input_frames)
 
         return view_graph
 

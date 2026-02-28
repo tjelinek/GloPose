@@ -112,7 +112,8 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, scale_factor: float, scene_obje
                            object_id: int = None, device: str = 'cpu') -> Dict[int, Se3]:
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, device)
 
-    assert not (scene_object_object_id is not None and object_id is not None)
+    if scene_object_object_id is not None and object_id is not None:
+        raise ValueError("Specify either scene_object_object_id or object_id, not both")
     obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
 
     if scene_object_object_id is None and object_id is None:
@@ -120,7 +121,8 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, scale_factor: float, scene_obje
     elif scene_object_object_id is not None and object_id is None:
         object_id = obj_ids[scene_object_object_id]
     else:
-        assert object_id in obj_ids
+        if object_id not in obj_ids:
+            raise ValueError(f"object_id {object_id} not found in GT poses (available: {obj_ids})")
 
     dict_gt_Se3_obj2cam = dict_gt_Se3_obj2cam[object_id]
     gt_Se3_obj2cam_frames = dict_gt_Se3_obj2cam.keys()

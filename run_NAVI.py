@@ -27,7 +27,7 @@ def main():
         sequences = navi_sequences[4:5]
 
     for obj_type_sequence in sequences:
-        with (exception_logger()):
+        with exception_logger(obj_type_sequence):
 
             if obj_type_sequence not in navi_sequences:
                 raise ValueError(f"Unknown sequence {obj_type_sequence}")

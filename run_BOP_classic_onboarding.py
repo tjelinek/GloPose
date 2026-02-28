@@ -29,7 +29,7 @@ def main():
         sequence_code_split = sequence_code.split('@')
         dataset, onboarding_folder, sequence_name = sequence_code_split
 
-        with exception_logger():
+        with exception_logger(sequence_code):
             config = load_config(args.config)
 
             experiment_name = args.experiment

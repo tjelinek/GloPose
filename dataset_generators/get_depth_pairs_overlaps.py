@@ -297,7 +297,7 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
                 cam2worlds[i] = Se3_world2cams[i].inverse().matrix().squeeze()
                 intrinsics[i] = camera_K[i].camera_matrix.squeeze()
                 depths[i] = depth_provider.next_depth(i).squeeze()
-            except:
+            except Exception:
                 invalid_ids.add(i)
 
         valid_ids = sorted(set(range(N_frames)) - invalid_ids)

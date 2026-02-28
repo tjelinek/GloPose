@@ -104,7 +104,8 @@ def get_scales():
 
 def get_scale_from_meter(output_scale):
     scales = get_scales()
-    assert output_scale in scales, f"Unknown unit: {output_scale}"
+    if output_scale not in scales:
+        raise ValueError(f"Unknown unit: {output_scale}")
     return scales[output_scale]
 
 

@@ -19,7 +19,7 @@ def main():
         sequences = (hope_both + hope_up + hope_down + hope_dynamic)[4:5]
 
     for sequence in sequences:
-        with exception_logger():
+        with exception_logger(sequence):
             config = load_config(args.config)
 
             experiment_name = args.experiment

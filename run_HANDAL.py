@@ -24,7 +24,7 @@ def main():
         sequences = handal_test[4:5]
 
     for obj_type_sequence in sequences:
-        with (exception_logger()):
+        with exception_logger(obj_type_sequence):
 
             if obj_type_sequence in handal_train:
                 sequence_type = 'train'

@@ -36,7 +36,7 @@ def main():
             else:
                 split = 'evaluation'
 
-        with exception_logger():
+        with exception_logger(sequence):
             config = load_config(args.config)
 
             config.input.skip_indices *= 10

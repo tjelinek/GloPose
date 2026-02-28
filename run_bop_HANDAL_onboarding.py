@@ -19,7 +19,7 @@ def main():
         sequences = (handal_both + handal_up + handal_down + handal_dynamic)[31:32]
 
     for sequence in sequences:
-        with exception_logger():
+        with exception_logger(sequence):
             config = load_config(args.config)
 
             experiment_name = args.experiment

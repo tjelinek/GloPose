@@ -114,24 +114,28 @@ class DataGraph:
         self.storage_device: str = storage_device
 
     def add_new_frame(self, frame_idx: int) -> None:
-        assert not self.G.has_node(frame_idx)
+        if self.G.has_node(frame_idx):
+            raise ValueError(f"Frame {frame_idx} already exists in DataGraph")
 
         self.G.add_node(frame_idx, frame_data=CommonFrameData(_storage_device=self.storage_device,
                                                               _out_device=self.out_device))
 
     def add_new_arc(self, source_frame_idx: int, target_frame_idx: int) -> None:
-        assert not self.G.has_edge(source_frame_idx, target_frame_idx)
+        if self.G.has_edge(source_frame_idx, target_frame_idx):
+            raise ValueError(f"Edge ({source_frame_idx}, {target_frame_idx}) already exists in DataGraph")
 
         self.G.add_edge(source_frame_idx, target_frame_idx,
                         edge_observations=CrossFrameData(_storage_device=self.storage_device,
                                                          _out_device=self.out_device))
 
     def get_frame_data(self, frame_idx: int) -> CommonFrameData:
-        assert self.G.has_node(frame_idx)
+        if not self.G.has_node(frame_idx):
+            raise KeyError(f"Frame {frame_idx} not found in DataGraph")
 
         return self.G.nodes[frame_idx]['frame_data']
 
     def get_edge_observations(self, source_frame_idx: int, target_frame_idx) -> CrossFrameData:
-        assert self.G.has_edge(source_frame_idx, target_frame_idx)
+        if not self.G.has_edge(source_frame_idx, target_frame_idx):
+            raise KeyError(f"Edge ({source_frame_idx}, {target_frame_idx}) not found in DataGraph")
 
         return self.G.get_edge_data(source_frame_idx, target_frame_idx)['edge_observations']

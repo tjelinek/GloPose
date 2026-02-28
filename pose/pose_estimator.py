@@ -329,7 +329,8 @@ class BOPChallengePosePredictor:
             else:
                 path_to_image = path_to_scene / 'rgb' / image_filename
 
-            assert path_to_image.exists(), f"Image file not found: {path_to_image}"
+            if not path_to_image.exists():
+                raise FileNotFoundError(f"Image file not found: {path_to_image}")
 
         return path_to_image
 
@@ -415,7 +416,8 @@ def main():
             targets_year = 'bop19'
             if dataset == 'tless':
                 data_type = '_primesense'
-            assert split != 'val'
+            if split == 'val':
+                raise ValueError(f"Dataset '{dataset}' does not support val split")
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
 

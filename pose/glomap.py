@@ -43,10 +43,12 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     image_pairs = [(images[i1], images[i2]) for i1, i2 in matching_pairs]
     segmentation_pairs = [(segmentations[i1], segmentations[i2]) for i1, i2 in matching_pairs]
 
-    assert not database_path.exists()
+    if database_path.exists():
+        raise FileExistsError(f"COLMAP database already exists: {database_path}")
 
     single_camera = True
-    assert len(images) > 0
+    if len(images) == 0:
+        raise ValueError("No images provided for SfM reconstruction")
 
     matching_edges: Dict[Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]] = {}
     matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor] = {}
@@ -60,7 +62,8 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         img1_id = images.index(img1_pth) + 1
         img2_id = images.index(img2_pth) + 1
 
-        assert img1_pth.parent == img2_pth.parent
+        if img1_pth.parent != img2_pth.parent:
+            raise ValueError(f"Image pair must be in the same directory: {img1_pth} vs {img2_pth}")
 
         if progress is not None:
             progress(0.5 * pair_idx / float(len(matching_pairs)), desc="Matching image pairs for reconstruction")

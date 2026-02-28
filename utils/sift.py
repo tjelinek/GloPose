@@ -63,7 +63,8 @@ def match_features(img_fnames: List[Path],
                    min_matches=15,
                    verbose=False, progress=None):
     alg = alg.lower()
-    assert alg in ['lightglue', 'adalam']
+    if alg not in ['lightglue', 'adalam']:
+        raise ValueError(f"Unknown matching algorithm '{alg}', expected 'lightglue' or 'adalam'")
     if alg == 'lightglue':
         matcher = K.feature.LightGlueMatcher('sift').eval().to(device)
     elif alg == 'adalam':

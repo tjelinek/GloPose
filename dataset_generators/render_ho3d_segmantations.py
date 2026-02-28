@@ -104,7 +104,7 @@ def render_sequence(seq_path: Path, mesh_root: Path, evaluation_verts, evaluatio
         # correct transform: object->camera rotation and translation
         try:
             R_co, _ = cv2.Rodrigues(aa.astype(np.float64))
-        except:
+        except Exception:
             print(f'Frame {idx} corrupted')
             continue
 

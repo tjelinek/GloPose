@@ -153,14 +153,16 @@ class PrecomputedFrameProvider(FrameProvider):
                  image_downsample: float = 1.0, skip_indices: int = 1, device: str = 'cpu', **kwargs):
         super().__init__(image_downsample, num_frames, skip_indices, device)
 
-        assert type(input_images) is list or isinstance(input_images, Path)
+        if not (type(input_images) is list or isinstance(input_images, Path)):
+            raise TypeError(f"input_images must be a list of Paths or a Path, got {type(input_images)}")
 
         self.input_are_images: bool = type(input_images) is list
         if self.sequence_length is None:
             if self.input_are_images:
                 self.sequence_length = len(input_images)
             else:
-                assert is_video_input(input_images)
+                if not is_video_input(input_images):
+                    raise ValueError(f"Expected a video file, got: {input_images}")
                 self.sequence_length = get_video_length(input_images)
 
         ref_path = input_images[0] if self.input_are_images else input_images
@@ -334,7 +336,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
                  sam2_cache_folder: Path, progress=None, **kwargs):
         super().__init__(image_shape, config.run.device)
 
-        assert initial_segmentation is not None
+        if initial_segmentation is None:
+            raise ValueError("SAM2 segmentation provider requires an initial_segmentation")
 
         self.sequence_length = image_provider.sequence_length
         self.skip_indices = config.input.skip_indices
@@ -485,7 +488,8 @@ class FrameProviderAll:
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
             else:
-                assert 'initial_segmentation' in kwargs and kwargs['initial_segmentation'] is not None
+                if 'initial_segmentation' not in kwargs or kwargs['initial_segmentation'] is None:
+                    raise ValueError("SAM2 segmentation provider requires 'initial_segmentation' in kwargs")
             initial_segmentation = kwargs['initial_segmentation']
             del kwargs['initial_segmentation']
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,

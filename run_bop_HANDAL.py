@@ -16,7 +16,7 @@ def main():
         sequences = get_bop_val_sequences(config.paths.bop_data_folder / dataset / 'val')[4:5]
 
     for sequence_obj in sequences:
-        with exception_logger():
+        with exception_logger(sequence_obj):
             sequence, obj = sequence_obj.split('_')
             obj_id = int(obj)
             config = load_config(args.config)

@@ -403,10 +403,19 @@ These can be done in parallel with the module work.
 
 #### 5.2 Error handling
 
-- [ ] Replace `assert` with `raise ValueError`/`RuntimeError` for runtime validation
-- [ ] Replace bare `except:` with `except Exception:` in `render_ho3d_segmantations.py:107`
-- [ ] Add structured error handling for COLMAP reconstruction failures in `onboarding_pipeline.py`
-- [ ] Review `exception_logger` — at minimum log the sequence that failed
+- [x] Replace `assert` with `raise ValueError`/`RuntimeError` for runtime validation in key pipeline files:
+    - [x] `data_structures/data_graph.py` — `add_new_frame`, `add_new_arc`, `get_frame_data`, `get_edge_observations`
+    - [x] `pose/glomap.py` — database existence, empty images, image pair directory
+    - [x] `pose/pose_estimator.py` — image path existence, invalid split
+    - [x] `data_providers/frame_provider.py` — input type, video input, initial segmentation
+    - [x] `utils/sift.py` — matching algorithm validation
+    - [x] `utils/data_utils.py` — scale unit validation
+    - [x] `utils/bop_challenge.py` — object ID parameter conflicts
+- [x] Replace bare `except:` with `except Exception:` in `render_ho3d_segmantations.py:107`
+      and `get_depth_pairs_overlaps.py:300`
+- [x] Add structured error handling for COLMAP reconstruction failures in `onboarding_pipeline.py`:
+      `logging.warning` with dataset/sequence/keyframe count on failure and alignment failure
+- [x] `exception_logger` now accepts `context: str` param, all 9 callers pass sequence name
 
 #### 5.3 State management
 
