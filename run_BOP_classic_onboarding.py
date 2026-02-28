@@ -91,7 +91,7 @@ def main():
                                          depth_paths=gt_depths,
                                          initial_segmentation=first_segmentation)
             view_graph = tracker.run_pipeline()
-            evaluate_onboarding(view_graph, gt_Se3_obj2cam, config, folder)
+            evaluate_onboarding(view_graph, gt_Se3_obj2cam, config.run, config.bop, folder)
 
 
 if __name__ == "__main__":

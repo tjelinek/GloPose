@@ -110,7 +110,7 @@ def run_on_synthetic_data(config: GloPoseConfig, dataset: str, sequence: str, ex
                                  gt_Se3_cam2obj=gt_Se3_cam2obj_dict, gt_Se3_world2cam=gt_Se3_world2cam_dict)
 
     view_graph = tracker.run_pipeline()
-    evaluate_onboarding(view_graph, gt_Se3_world2cam_dict, config, write_folder)
+    evaluate_onboarding(view_graph, gt_Se3_world2cam_dict, config.run, config.bop, write_folder)
 
     return tracker
 
@@ -212,4 +212,4 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
                                  initial_segmentation=first_segmentation)
 
     view_graph = tracker.run_pipeline()
-    evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
+    evaluate_onboarding(view_graph, gt_Se3_world2cam, config.run, config.bop, write_folder)

@@ -87,7 +87,7 @@ def main():
                                          gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,
                                          input_segmentations=gt_segs, initial_segmentation=first_segmentation)
             view_graph = tracker.run_pipeline()
-            evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
+            evaluate_onboarding(view_graph, gt_Se3_world2cam, config.run, config.bop, write_folder)
 
 
 def extract_cam_data_navi(gt_path, image_downsample: float = 1.0, device: str = 'cpu') -> Dict[int, PinholeCamera]:

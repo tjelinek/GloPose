@@ -115,11 +115,12 @@ class OnboardingPipeline:
                                     allow_disk_cache=self.config.onboarding.allow_disk_cache,
                                     purge_cache=self.config.paths.purge_cache)
         self.match_provider_filtering = create_flow_provider(
-            self.config.onboarding.filter_matcher, self.config, cache=filtering_cache)
+            self.config.onboarding.filter_matcher, self.config.onboarding, self.config.run.device, cache=filtering_cache)
         self.match_provider_reconstruction = create_flow_provider(
-            self.config.onboarding.reconstruction_matcher, self.config)
+            self.config.onboarding.reconstruction_matcher, self.config.onboarding, self.config.run.device)
         self.frame_filter = create_frame_filter(
-            self.config, self.data_graph, self.match_provider_filtering)
+            self.config.onboarding, self.config.run.device, self.config.input.input_frames,
+            self.data_graph, self.match_provider_filtering)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor,
                                   images_paths: List[Path] | Path, initial_segmentation: torch.Tensor,
@@ -198,7 +199,7 @@ class OnboardingPipeline:
         view_graph.frame_filtering_time = frame_filtering_time
         view_graph.reconstruction_time = reconstruction_time
         view_graph.num_input_frames = self.config.input.input_frames
-        view_graph.gt_model_path = resolve_gt_model_path(self.config)
+        view_graph.gt_model_path = resolve_gt_model_path(self.config.run, self.config.paths)
 
         # Build image_name_to_frame_id mapping
         image_name_to_frame_id = {}

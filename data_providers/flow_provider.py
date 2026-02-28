@@ -10,6 +10,7 @@ from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 from romatch.utils.kde import kde
 
+from configs.glopose_config import OnboardingConfig
 from configs.matching.roma_configs.base_roma_config import BaseRomaConfig
 from configs.matching.ufm_configs.base_ufm_config import BaseUFMConfig
 from data_structures.data_graph import DataGraph
@@ -456,30 +457,31 @@ class UFMMatchingProvider(FlowMatchingProvider):
         return match_samples, certainty_samples
 
 
-def create_matching_provider(name: str, config, cache: FlowCache = None) -> MatchingProvider:
+def create_matching_provider(name: str, onboarding: OnboardingConfig, device: str,
+                             cache: FlowCache = None) -> MatchingProvider:
     """Factory that maps a config string to a MatchingProvider instance.
 
     Args:
         name: One of 'RoMa', 'UFM', 'SIFT'.
-        config: GloPoseConfig (or duck-typed equivalent) — uses config.run.device,
-                config.onboarding.roma, config.onboarding.ufm, config.onboarding.sift.
+        onboarding: OnboardingConfig with roma, ufm, sift sub-configs.
+        device: PyTorch device string (e.g. 'cuda').
         cache: Optional FlowCache for caching flow results.
     """
 
     def _roma():
-        return RoMaMatchingProvider(config.run.device, config.onboarding.roma, cache=cache)
+        return RoMaMatchingProvider(device, onboarding.roma, cache=cache)
 
     def _ufm():
-        return UFMMatchingProvider(config.run.device, config.onboarding.ufm, cache=cache)
+        return UFMMatchingProvider(device, onboarding.ufm, cache=cache)
 
     def _sift():
         from data_providers.matching_provider_sift import (
             SparseMatchingProvider, SIFTKeypointDetector, LightGlueKeypointMatcher)
-        detector = SIFTKeypointDetector(config.run.device)
-        matcher = LightGlueKeypointMatcher(config.run.device)
+        detector = SIFTKeypointDetector(device)
+        matcher = LightGlueKeypointMatcher(device)
         return SparseMatchingProvider(detector, matcher,
-                                      num_features=config.onboarding.sift.sift_filter_num_feats,
-                                      device=config.run.device)
+                                      num_features=onboarding.sift.sift_filter_num_feats,
+                                      device=device)
 
     providers = {'RoMa': _roma, 'UFM': _ufm, 'SIFT': _sift}
     if name not in providers:

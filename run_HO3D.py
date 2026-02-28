@@ -147,7 +147,7 @@ def main():
                                          input_segmentations=gt_segmentations_list, depth_paths=gt_depths_list,
                                          initial_segmentation=first_segment_tensor)
             view_graph = tracker.run_pipeline()
-            evaluate_onboarding(view_graph, Se3_obj2cam_dict, config, write_folder)
+            evaluate_onboarding(view_graph, Se3_obj2cam_dict, config.run, config.bop, write_folder)
 
 
 if __name__ == "__main__":

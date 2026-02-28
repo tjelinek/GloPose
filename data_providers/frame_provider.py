@@ -35,10 +35,10 @@ class SyntheticDataProvider:
         faces = gt_mesh.faces
         self.gt_texture = gt_texture
 
-        self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, gt_Se3_obj1_to_obj_i, self.image_shape, config,
-                                          self.device)
+        self.gt_encoder = init_gt_encoder(gt_mesh, self.gt_texture, gt_Se3_obj1_to_obj_i, self.image_shape,
+                                          config.renderer, config.input.input_frames, self.device)
 
-        self.renderer = RenderingKaolin(config, faces, self.image_shape.width,
+        self.renderer = RenderingKaolin(config.renderer, faces, self.image_shape.width,
                                         self.image_shape.height).to(self.device)
 
     def next_synthetic_observation(self, frame_id) -> FrameObservation:

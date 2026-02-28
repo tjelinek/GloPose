@@ -60,7 +60,7 @@ class BOPChallengePosePredictor:
         self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
 
     def _initialize_flow_provider(self) -> None:
-        self.flow_provider = create_matching_provider(self.config.onboarding.filter_matcher, self.config)
+        self.flow_provider = create_matching_provider(self.config.onboarding.filter_matcher, self.config.onboarding, self.config.run.device)
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         detection_templates_save_folder, onboarding_type: str, split: str,

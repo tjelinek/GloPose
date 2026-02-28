@@ -9,7 +9,7 @@ from kornia.geometry.conversions import quaternion_to_rotation_matrix
 
 from data_structures.keyframe_buffer import SyntheticFlowObservation
 from models.encoder import EncoderResult, Encoder
-from configs.glopose_config import GloPoseConfig
+from configs.glopose_config import RendererConfig
 from utils.flow import normalize_rendered_flows
 
 MeshRenderResult = namedtuple('MeshRenderResult', ['face_normals',
@@ -34,10 +34,10 @@ RenderingResult = namedtuple('RenderingResult', ['rendered_image',
 
 
 class RenderingKaolin(nn.Module):
-    def __init__(self, config: GloPoseConfig, faces: torch.Tensor, width: int, height: int):
+    def __init__(self, renderer: RendererConfig, faces: torch.Tensor, width: int, height: int):
         super().__init__()
 
-        self.config = config
+        self.renderer = renderer
         self.height = height
         self.width = width
 
@@ -45,11 +45,11 @@ class RenderingKaolin(nn.Module):
         camera_proj = kaolin.render.camera.generate_perspective_projection(self.fov, self.width / self.height)
         self.register_buffer('camera_proj', camera_proj)
 
-        camera_position = torch.Tensor(self.config.renderer.camera_position)[None]
+        camera_position = torch.Tensor(self.renderer.camera_position)[None]
         # camera_position[:, 2] *= -1.  # Compensating for different kaolin coordinate system
         self.register_buffer('camera_trans', camera_position)
-        self.register_buffer('obj_center', torch.Tensor(self.config.renderer.obj_center)[None])
-        camera_up_direction = torch.Tensor(self.config.renderer.camera_up)[None]
+        self.register_buffer('obj_center', torch.Tensor(self.renderer.obj_center)[None])
+        camera_up_direction = torch.Tensor(self.renderer.camera_up)[None]
         self.register_buffer('camera_up', camera_up_direction)
 
         camera_rot, _ = kaolin.render.camera.generate_rotate_translate_matrices(self.camera_trans, self.obj_center,
@@ -197,7 +197,7 @@ class RenderingKaolin(nn.Module):
                                                                                        face_vertices_image_1,
                                                                                        features_for_rendering,
                                                                                        face_normals_z_1,
-                                                                                       sigmainv=self.config.renderer.sigmainv,
+                                                                                       sigmainv=self.renderer.sigmainv,
                                                                                        boxlen=0.02, knum=30,
                                                                                        multiplier=1000)
 
@@ -435,7 +435,7 @@ class RenderingKaolin(nn.Module):
                                                                                  face_vertices_image,
                                                                                  features_for_rendering,
                                                                                  face_normals_z,
-                                                                                 sigmainv=self.config.renderer.sigmainv,
+                                                                                 sigmainv=self.renderer.sigmainv,
                                                                                  boxlen=0.02, knum=30, multiplier=1000)
 
         # Extract ren_mesh_vertices_features and ren_mesh_vertices_coords from the combined output tensor
@@ -456,8 +456,8 @@ class RenderingKaolin(nn.Module):
                                 ren_face_normals_features)
 
     def get_rgb_texture(self, translation, quaternion, unit_vertices, face_features, input_batch):
-        tex = torch.zeros(1, 3, self.config.renderer.texture_size, self.config.renderer.texture_size)
-        cnt = torch.zeros(self.config.renderer.texture_size, self.config.renderer.texture_size)
+        tex = torch.zeros(1, 3, self.renderer.texture_size, self.renderer.texture_size)
+        cnt = torch.zeros(self.renderer.texture_size, self.renderer.texture_size)
         for frmi in range(quaternion.shape[1]):
             translation_vector = translation[:, :, frmi]
             rotation_matrix = quaternion_to_rotation_matrix(quaternion[:, frmi])
@@ -465,11 +465,11 @@ class RenderingKaolin(nn.Module):
             rendering_result = self.render_mesh_with_dibr(face_features, rotation_matrix, translation_vector,
                                                           unit_vertices)
 
-            coord = torch.round((1 - rendering_result.ren_mesh_vertices_features) * self.config.renderer.texture_size).to(int)
-            coord[coord >= self.config.renderer.texture_size] = self.config.renderer.texture_size - 1
+            coord = torch.round((1 - rendering_result.ren_mesh_vertices_features) * self.renderer.texture_size).to(int)
+            coord[coord >= self.renderer.texture_size] = self.renderer.texture_size - 1
             coord[coord < 0] = 0
             xc = coord[0, :, :, 1].reshape([coord.shape[1] * coord.shape[2]])
-            yc = (self.config.renderer.texture_size - 1 - coord[0, :, :, 0]).reshape([coord.shape[1] * coord.shape[2]])
+            yc = (self.renderer.texture_size - 1 - coord[0, :, :, 0]).reshape([coord.shape[1] * coord.shape[2]])
             cr = input_batch[0, frmi, 0].reshape([coord.shape[1] * coord.shape[2]])
             cg = input_batch[0, frmi, 1].reshape([coord.shape[1] * coord.shape[2]])
             cb = input_batch[0, frmi, 2].reshape([coord.shape[1] * coord.shape[2]])

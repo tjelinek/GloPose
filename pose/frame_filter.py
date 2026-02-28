@@ -9,18 +9,18 @@ import torch
 
 from data_providers.flow_provider import FlowProviderDirect, MatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
-from configs.glopose_config import GloPoseConfig
+from configs.glopose_config import OnboardingConfig
 from pose.colmap_utils import colmap_K_params_vec
 from utils.image_utils import otsu_threshold
 
 
 class BaseFrameFilter:
-    def __init__(self, config: GloPoseConfig, data_graph: DataGraph):
-        self.config: GloPoseConfig = config
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, device: str = 'cuda'):
+        self.onboarding: OnboardingConfig = onboarding
+        self.n_frames: int = n_frames
+        self.device: str = device
         self.data_graph: DataGraph = data_graph
         self.keyframe_graph: nx.DiGraph = nx.DiGraph()
-
-        self.n_frames = self.config.input.input_frames
 
     def get_keyframe_graph(self) -> nx.DiGraph:
         # if len(self.keyframe_graph.nodes) <= 2:
@@ -30,14 +30,14 @@ class BaseFrameFilter:
         #         self.keyframe_graph.add_edge(nodes_list[0], middle_node)
         #         self.keyframe_graph.add_edge(middle_node, nodes_list[-1])
 
-        if self.config.onboarding.view_graph_strategy == 'dense':
+        if self.onboarding.view_graph_strategy == 'dense':
             nodes_list = list(self.keyframe_graph.nodes)
             for i in range(len(nodes_list)):
                 for j in range(len(nodes_list)):
                     if i != j:  # Don't add self-loops
                         self.keyframe_graph.add_edge(nodes_list[i], nodes_list[j])
         else:
-            assert self.config.onboarding.view_graph_strategy == 'from_matching'
+            assert self.onboarding.view_graph_strategy == 'from_matching'
 
         return self.keyframe_graph
 
@@ -52,13 +52,13 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, config: GloPoseConfig, data_graph: DataGraph, flow_provider: FlowProviderDirect):
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, flow_provider: FlowProviderDirect, device: str = 'cuda'):
 
-        super().__init__(config, data_graph)
+        super().__init__(onboarding, n_frames, data_graph, device)
 
         self.flow_provider: FlowProviderDirect = flow_provider
 
-        self.current_flow_reliability_threshold = self.config.onboarding.flow_reliability_threshold
+        self.current_flow_reliability_threshold = self.onboarding.flow_reliability_threshold
 
     def update_flow_reliability_threshold(self):
         all_frames = self.data_graph.G.nodes
@@ -81,7 +81,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         src_pts_xy_int, dst_pts_xy_int, certainty = (
             self.flow_provider.get_source_target_points_datagraph(frame_i, frame_i,
-                                                                  self.config.onboarding.sample_size, as_int=True,
+                                                                  self.onboarding.sample_size, as_int=True,
                                                                   zero_certainty_outside_segmentation=True,
                                                                   only_foreground_matches=True))
 
@@ -91,10 +91,10 @@ class RoMaFrameFilter(BaseFrameFilter):
             prev_kf = kf_data.matching_source_keyframe
             certainty_threshold = self.data_graph.get_frame_data(prev_kf).roma_certainty_threshold
         else:
-            certainty_threshold = self.config.onboarding.min_certainty_threshold
+            certainty_threshold = self.onboarding.min_certainty_threshold
         kf_data.roma_certainty_threshold = certainty_threshold
 
-        if self.config.onboarding.matchability_based_reliability:
+        if self.onboarding.matchability_based_reliability:
             image_shape = self.data_graph.get_frame_data(frame_i).image_shape
             img_h, img_w = image_shape.height, image_shape.width
             arc_data = self.data_graph.get_edge_observations(frame_i, frame_i)
@@ -209,7 +209,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         return reliable_flows, source
 
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
-        dev = self.config.run.device
+        dev = self.device
         source_datagraph_node = self.data_graph.get_frame_data(source_frame)
         source_segmentation_mask = source_datagraph_node.frame_observation.observed_segmentation.squeeze().to(dev)
 
@@ -218,7 +218,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         src_pts_xy_int, dst_pts_xy_int, certainty = (
             self.flow_provider.get_source_target_points_datagraph(source_frame, target_frame,
-                                                                  self.config.onboarding.sample_size, as_int=True,
+                                                                  self.onboarding.sample_size, as_int=True,
                                                                   zero_certainty_outside_segmentation=True,
                                                                   only_foreground_matches=True))
 
@@ -228,7 +228,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         assert ((src_pts_xy_int[:, 1] >= 0) & (src_pts_xy_int[:, 1] < H_A)).all()
         assert certainty.shape[0] == src_pts_xy_int.shape[0] and certainty.shape[0] == dst_pts_xy_int.shape[0]
 
-        if self.config.onboarding.matchability_based_reliability:
+        if self.onboarding.matchability_based_reliability:
             matchability_mask = source_datagraph_node.matchability_mask
             source_segmentation_mask = source_segmentation_mask * matchability_mask
             matchable_fg_matches_mask = source_segmentation_mask[src_pts_xy_int[:, 1], src_pts_xy_int[:, 0]].bool()
@@ -242,7 +242,7 @@ class RoMaFrameFilter(BaseFrameFilter):
             edge_data.src_dst_certainty_roma_matchable = certainty[matchable_fg_matches_mask]
             source_datagraph_node.relative_area_matchable = relative_area_matchable
 
-        min_num_of_certain_matches = self.config.onboarding.min_number_of_reliable_matches
+        min_num_of_certain_matches = self.onboarding.min_number_of_reliable_matches
         certain_matches_share_threshold = self.current_flow_reliability_threshold
         match_certainty_threshold = source_datagraph_node.roma_certainty_threshold
 
@@ -260,7 +260,7 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         src_pts_xy, dst_pts_xy, certainty = (
             self.flow_provider.get_source_target_points_datagraph(source_frame, target_frame,
-                                                                  self.config.onboarding.sample_size, as_int=False,
+                                                                  self.onboarding.sample_size, as_int=False,
                                                                   zero_certainty_outside_segmentation=True,
                                                                   only_foreground_matches=True))
         src_pts_xy_np = src_pts_xy.numpy(force=True)
@@ -303,7 +303,7 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
 class FrameFilterPassThrough(BaseFrameFilter):
 
     def filter_frames(self, frame_i: int):
-        if frame_i % self.config.onboarding.passthrough_skip == 0:
+        if frame_i % self.onboarding.passthrough_skip == 0:
             self.add_keyframe(frame_i)
 
     def add_keyframe(self, frame_i: int):
@@ -319,9 +319,9 @@ class FrameFilterPassThrough(BaseFrameFilter):
 
 class FrameFilterSift(BaseFrameFilter):
 
-    def __init__(self, config: GloPoseConfig, data_graph: DataGraph, sift_matcher: MatchingProvider):
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, sift_matcher: MatchingProvider):
 
-        super().__init__(config, data_graph)
+        super().__init__(onboarding, n_frames, data_graph)
 
         self.sift_matcher: MatchingProvider = sift_matcher
 
@@ -355,8 +355,8 @@ class FrameFilterSift(BaseFrameFilter):
 
         selected_keyframe_idxs = list(self.keyframe_graph.nodes())
 
-        more_than_enough_matches = self.config.onboarding.sift_filter_good_to_add_matches
-        min_matches = self.config.onboarding.sift_filter_min_matches
+        more_than_enough_matches = self.onboarding.sift_filter_good_to_add_matches
+        min_matches = self.onboarding.sift_filter_min_matches
 
         reliable_keyframe_found = False
         we_stepped_back = False
@@ -366,7 +366,7 @@ class FrameFilterSift(BaseFrameFilter):
             num_matches = self.compute_sift_reliability(keyframe_idx, current_frame_idx)
             print(f'{num_matches}, {min_matches}, {more_than_enough_matches}')
 
-            if num_matches >= self.config.onboarding.sift_filter_min_matches:
+            if num_matches >= self.onboarding.sift_filter_min_matches:
                 self.keyframe_graph.add_edge(keyframe_idx, current_frame_idx)
 
             if num_matches >= more_than_enough_matches:
@@ -434,7 +434,7 @@ class FrameFilterSift(BaseFrameFilter):
         edge_data = self.data_graph.get_edge_observations(frame_idx1, frame_idx2)
 
         edge_data.num_matches = num_matches
-        edge_data.is_match_reliable = num_matches >= self.config.onboarding.sift_filter_min_matches
+        edge_data.is_match_reliable = num_matches >= self.onboarding.sift_filter_min_matches
         edge_data.src_pts_xy_roma = src_pts
         edge_data.dst_pts_xy_roma = dst_pts
         edge_data.src_dst_certainty_roma = certainty
@@ -455,35 +455,37 @@ def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.
     return reliability
 
 
-def create_frame_filter(config, data_graph: DataGraph,
+def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int,
+                        data_graph: DataGraph,
                         flow_provider: FlowProviderDirect = None) -> BaseFrameFilter:
     """Factory that maps a config string to a BaseFrameFilter instance.
 
     Args:
-        config: GloPoseConfig with onboarding.frame_filter,
-                onboarding.sift, run.device attributes.
+        onboarding: OnboardingConfig with frame_filter, sift sub-configs.
+        device: PyTorch device string (e.g. 'cuda').
+        n_frames: Total number of input frames.
         data_graph: The shared DataGraph.
         flow_provider: Flow provider for dense-matching-based filters.
     """
 
     def _dense_matching():
-        return RoMaFrameFilter(config, data_graph, flow_provider)
+        return RoMaFrameFilter(onboarding, n_frames, data_graph, flow_provider, device)
 
     def _ransac():
-        return RoMaFrameFilterRANSAC(config, data_graph, flow_provider)
+        return RoMaFrameFilterRANSAC(onboarding, n_frames, data_graph, flow_provider, device)
 
     def _passthrough():
-        return FrameFilterPassThrough(config, data_graph)
+        return FrameFilterPassThrough(onboarding, n_frames, data_graph)
 
     def _sift():
         from data_providers.matching_provider_sift import (
             SparseMatchingProvider, SIFTKeypointDetector, LightGlueKeypointMatcher)
-        detector = SIFTKeypointDetector(config.run.device)
-        matcher = LightGlueKeypointMatcher(config.run.device)
+        detector = SIFTKeypointDetector(device)
+        matcher = LightGlueKeypointMatcher(device)
         sift_provider = SparseMatchingProvider(detector, matcher,
-                                               num_features=config.onboarding.sift.sift_filter_num_feats,
-                                               device=config.run.device)
-        return FrameFilterSift(config, data_graph, sift_provider)
+                                               num_features=onboarding.sift.sift_filter_num_feats,
+                                               device=device)
+        return FrameFilterSift(onboarding, n_frames, data_graph, sift_provider)
 
     filters = {
         'dense_matching': _dense_matching,
@@ -491,6 +493,6 @@ def create_frame_filter(config, data_graph: DataGraph,
         'passthrough': _passthrough,
         'SIFT': _sift,
     }
-    if config.onboarding.frame_filter not in filters:
-        raise ValueError(f"Unknown frame filter '{config.onboarding.frame_filter}'. Options: {list(filters.keys())}")
-    return filters[config.onboarding.frame_filter]()
+    if onboarding.frame_filter not in filters:
+        raise ValueError(f"Unknown frame filter '{onboarding.frame_filter}'. Options: {list(filters.keys())}")
+    return filters[onboarding.frame_filter]()

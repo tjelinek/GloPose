@@ -79,7 +79,7 @@ def setup_renderer(config, faces, height, width, device):
         RenderingKaolin: An instance of the RenderingKaolin class with the specified configuration and parameters,
                          and its properties moved to the DEVICE
     """
-    rendering = RenderingKaolin(config, faces, width, height)
+    rendering = RenderingKaolin(config.renderer, faces, width, height)
     rendering.obj_center = rendering.obj_center.to(device)
     rendering.faces = rendering.faces.to(device)
     rendering.camera_rot = rendering.camera_rot.to(device)

@@ -80,7 +80,7 @@ def main():
                                  gt_Se3_world2cam=gt_Se3_world2cam,
                                  initial_segmentation=first_segment_tensor)
     view_graph = tracker.run_pipeline()
-    evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)
+    evaluate_onboarding(view_graph, gt_Se3_world2cam, config.run, config.bop, write_folder)
 
 
 if __name__ == "__main__":
