@@ -16,13 +16,16 @@ sys.path.append('./repositories/cnos')
 from src.model.detector import filter_similarities_dict
 from tqdm import tqdm
 
-from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n, _apply_whitener
+from condensate_templates import get_descriptors_for_condensed_templates, _l2n, _apply_whitener
 from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
+from data_structures.template_bank import TemplateBank
+from data_structures.types import Detection
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
 from configs.glopose_config import GloPoseConfig
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
+from utils.bop_io import detection_to_bop_record
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
@@ -193,15 +196,15 @@ class BOPChallengePosePredictor:
                 x0, y0, x1, y1 = torchvision_bbox.tolist()
                 coco_bbox = [x0, y0, x1 - x0, y1 - y0]
 
-                detection_result = {
-                    'scene_id': scene_id,
-                    'image_id': im_id,
-                    'category_id': corresponding_obj_id,
-                    'bbox': coco_bbox,
-                    'time': detections_duration,
-                    'score': detections.scores[detection_mask_idx].item(),
-                }
-                json_2d_detection_results.append(detection_result)
+                det = Detection(
+                    object_id=corresponding_obj_id,
+                    score=detections.scores[detection_mask_idx].item(),
+                    bbox_xywh=coco_bbox,
+                    mask=proposal_mask,
+                )
+                json_2d_detection_results.append(
+                    detection_to_bop_record(det, scene_id, im_id, detections_duration)
+                )
 
                 # self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
                 #                    self.config.roma_sample_size,

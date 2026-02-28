@@ -264,13 +264,19 @@ These are prerequisites for working on modules A/B/C independently.
 
 #### 1.1 Define shared data types
 
-- [ ] Create `glopose/types.py` (or `data_structures/types.py`) with the interface types:
-    - [ ] `OnboardingResult`: wraps `ViewGraph` + 3D model path + `object_id`. Output of module A, input to B1 and C.
-    - [ ] `DetectionModel`: wraps `TemplateBank` + `object_id`. Output of B1, input to B2.
-    - [ ] `Detection`: our own type (bbox, mask, score, object_id, matched_template_id). Replace dependency on cnos
-      `Detections`. Output of B2, input to C.
-    - [ ] `PoseEstimate`: Se3 + confidence + object_id. Output of C.
-- [ ] Move `TemplateBank` from `condensate_templates.py` into the shared types module
+- [x] Create `data_structures/types.py` with the interface types:
+    - [x] `ObjectId` type alias (`int | str`) — BOP uses int, NAVI uses string
+    - [x] `Detection`: our own type (bbox_xywh, mask, score, object_id, matched_template_idx). Output of B2, input to C.
+    - [x] `PoseEstimate`: Se3_obj2cam + score + object_id, with `R` and `t_meters` properties. Output of C.
+- [x] Move `TemplateBank` from `condensate_templates.py` to `data_structures/template_bank.py`
+    - [x] Dict keys widened from `Dict[int, ...]` to `Dict[ObjectId, ...]`
+    - [x] Re-export kept in `condensate_templates.py` for backward compat (covers `repositories/cnos/`)
+- [x] Create `utils/bop_io.py` — BOP serialization:
+    - [x] `detection_to_bop_record()` — Detection → BOP COCO JSON dict (enforces `int(object_id)`)
+    - [x] `pose_to_bop_record()` — PoseEstimate → BOP CSV dict (m→mm conversion)
+    - [x] `write_bop_detection_json()`, `write_bop_pose_csv()`
+- [x] Update `pose/pose_estimator.py` to produce `Detection` objects at the module boundary
+- **Not created**: `OnboardingResult` (ViewGraph stays as-is), `DetectionModel` (TemplateBank is sufficient)
 
 #### 1.2 External repo adapters
 

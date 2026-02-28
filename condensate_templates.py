@@ -14,7 +14,6 @@ import sys
 import argparse
 import warnings
 from collections import defaultdict, Counter
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, List
 
@@ -34,6 +33,7 @@ from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
 from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
+from data_structures.template_bank import TemplateBank  # noqa: F401 — re-exported for backward compat
 from utils.bop_challenge import extract_object_id
 from utils.detection_utils import average_patch_similarity
 
@@ -41,25 +41,6 @@ sys.path.append('./repositories/cnos')
 from src.model.dinov2 import descriptor_from_hydra
 
 warnings.filterwarnings('ignore', message='The number of unique classes is greater than 50%', category=UserWarning)
-
-
-@dataclass
-class TemplateBank:
-    images: Dict[int, List[torch.Tensor]] = None
-    masks: Dict[int, List[torch.Tensor]] = None
-    cls_desc: Dict[int, torch.Tensor] = None
-    patch_desc: Dict[int, torch.Tensor] = None
-    template_thresholds: Dict[int, torch.Tensor] = None
-    whitening_mean: Optional[torch.Tensor] = None
-    whitening_W: Optional[torch.Tensor] = None
-    sigma_inv: Optional[torch.Tensor] = None
-    class_means: Optional[Dict[int, torch.Tensor]] = None
-    maha_thresh_per_class: Optional[torch.Tensor] = None
-    maha_thresh_global: Optional[torch.Tensor] = None
-    template_csls_avg: Optional[Dict[int, torch.Tensor]] = None
-    orig_onboarding_images: int = None
-    orig_pbr_images: int = None
-    orig_onboarding_sam_detections: int = None
 
 
 def _to_np_f32(X):
