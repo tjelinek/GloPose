@@ -220,20 +220,8 @@ The RCI personal folder is sshfs-mounted locally:
 
 ## Known Issues & Architectural Notes
 
-### Critical (all fixed)
-
-- ~~**Hardcoded user paths**~~: Fixed — `onboarding_pipeline.py` now derives cache paths from
-  `GloPoseConfig.paths.cache_folder`.
-- ~~**Class name collision**~~: Fixed — `PrecomputedSIFTMatchingProvider` replaced by unified `SparseMatchingProvider`.
-- ~~**Config bug**~~: Fixed — `similarity_transformation: str = 'kabsch'` now uses proper type annotation.
-
 ### Structural
 
-- ~~**`OnboardingPipeline` tight coupling**~~: Mostly fixed — provider creation uses `create_matching_provider()` factory.
-  Some non-provider `if/elif/else` chains remain (frame filter selection, depth provider selection).
-- ~~**`TrackerConfig` god-object**~~: Decomposed into `GloPoseConfig` with 8 sub-configs (`PathsConfig`, `RunConfig`,
-  `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `VisualizationConfig`, `RendererConfig`).
-  All field access is max 2 levels deep: `config.sub.field`.
 - **`CommonFrameData` god-class** (`data_graph.py:32-72`): 20+ fields mixing input data, SIFT features, ground truth,
   filtering state, file paths, predictions, and timing.
 - **`results_logging.py` (~983 lines)**: `WriteResults` has 10+ responsibilities — rerun blueprint layout (282 lines in
@@ -242,10 +230,6 @@ The RCI personal folder is sshfs-mounted locally:
 - **Duplicated visualization systems**: `results_logging.py` and `visualizations/pose_estimation_visualizations.py` have
   near-identical rerun init, blueprint setup, matching visualization logic, and overlapping annotation constants (
   `RerunAnnotations` vs `RerunAnnotationsPose`).
-
-### ~~Diamond Inheritance in Flow Providers~~
-
-~~Fixed — replaced with `FlowCache` composition. All `Precomputed*` classes deleted.~~
 
 ### External Repo Integration
 
@@ -299,37 +283,12 @@ These are prerequisites for working on modules A/B/C independently.
 - [ ] Create `adapters/sam2_adapter.py` for SAM2 (currently inline in `frame_provider.py:341`)
 - [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
 
-#### 1.3 Config decomposition
-
-- [x] ~~Split `TrackerConfig` (~47 flat fields) into per-module configs~~:
-    - [x] ~~`OnboardingConfig` (frame filtering, dense matching, reconstruction, input data, SfM settings)~~
-    - [x] ~~`DetectionConfig` (condensation params, descriptor model, similarity metric)~~
-    - [x] ~~`CondensationConfig` (method, descriptor, whitening, augmentation)~~
-    - [x] ~~`VisualizationConfig` (rerun settings, write frequency, jpeg quality)~~
-    - [x] ~~Sub-configs for providers: keep existing `BaseRomaConfig`, `BaseUFMConfig`, `BaseSiftConfig`, `BaseBOPConfig`~~
-- [x] ~~Keep a top-level `GloPoseConfig` that composes all sub-configs~~
-- [x] ~~All consumers migrated, `tracker_config.py` deleted~~
-
----
-
 ### Phase 2: Module A — Onboarding
 
 Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces an `OnboardingResult`.
 
-#### 2.1 Clean up OnboardingPipeline
-
-- [x] ~~Rename `Tracker6D` → `OnboardingPipeline`, `tracker6d.py` → `onboarding_pipeline.py`~~
-- [x] ~~Remove evaluation logic from `run_pipeline` into a separate evaluation step~~ (moved to `eval/eval_onboarding.py`)
-- [x] ~~Remove `evaluate_sam` method — it's a separate workflow, not part of onboarding~~
-- [x] ~~Extract the destructive `shutil.rmtree` from `__init__` into `prepare_output_folder()`~~
-- [x] ~~Have `run_pipeline` return a `ViewGraph` rather than writing to disk as a side effect~~ (returns `ViewGraph` with metadata fields; always returns, even on failure)
-- [x] ~~Per-dataset data paths in `TrackerConfig`~~ (`bop_data_folder`, `ho3d_data_folder`, `navi_data_folder`, etc.)
-
 #### 2.2 Reduce coupling
 
-- [x] ~~Introduce a provider factory/registry: map config strings (`'RoMa'`, `'UFM'`, `'SIFT'`) to classes. Eliminates the
-  `if/elif/else` chains in the constructor.~~
-- [x] ~~Unify SIFT matching provider and RoMa/UFM flow providers under a single `MatchingProvider` interface~~
 - [ ] `DataGraph` should be internal to onboarding — not exposed to detection or pose modules
 
 #### 2.3 Break up CommonFrameData
@@ -337,15 +296,6 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 - [ ] Split into per-concern structs: `FrameInput`, `SIFTFeatures`, `GroundTruth`, `FilteringState`, `FramePaths`,
   `FramePrediction`
 - [ ] `CommonFrameData` can hold references to these if a single access point is still needed
-
-#### 2.4 Decouple ViewGraph from descriptor model
-
-- [x] ~~`ViewGraph.add_node` now accepts a pre-computed `torch.Tensor` descriptor — no model dependency~~
-- [x] ~~Descriptor computation moved to `view_graph_from_datagraph()` (onboarding) and standalone
-  `compute_dino_descriptors_for_view_graph()` function (detection). `_get_descriptor_from_observation()`
-  and cnos imports removed from `ViewGraph` class.~~
-
----
 
 ### Phase 3: Module B — Detection
 
@@ -382,12 +332,6 @@ Split into two modules:
 - [ ] Decide integration strategy: either (a) reliably integrate CNOS as a dependency with a clean adapter, or
   (b) vendor the specific pieces we need (descriptor matching, similarity scoring) into our own codebase and
   drop the CNOS dependency. Document the decision and rationale.
-
-#### 3.3 Document dataset formats
-
-- [x] ~~Inspect all dataset formats (HANDAL, HO3D, NAVI, BEHAVE, BOP classic datasets, GoogleScannedObjects, etc.)
-  and document their folder layouts, annotation schemas, image naming conventions, camera intrinsics formats,
-  and ground truth structures. Stored at `docs/dataset_formats.md`.~~
 
 #### 3.4 Clean up BOP coupling
 
