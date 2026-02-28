@@ -109,6 +109,11 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - **Provider pattern:** Abstract base classes (FrameProvider, FlowProvider, MatchingProvider) with multiple backends
 - **Graph-based data:** DataGraph (frames + temporal edges), ViewGraph (3D template library)
 - **Dataclass configs:** `GloPoseConfig` in `configs/glopose_config.py` is the top-level config, composed of sub-configs: `PathsConfig`, `RunConfig`, `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `VisualizationConfig`, `RendererConfig`
+- **Narrowed config passing:** Lower-level components receive only the sub-config(s) they need, not the full
+  `GloPoseConfig`. For example: `RenderingKaolin` and `Encoder` take `RendererConfig`; frame filters and matching
+  providers take `OnboardingConfig` + `device`; evaluation functions take `RunConfig` + `BaseBOPConfig`.
+  Orchestrators (`OnboardingPipeline`, `FrameProviderAll`, `BOPChallengePosePredictor`, `run_*.py` scripts) still
+  hold the full `GloPoseConfig` and pass the relevant sub-configs down.
 - **Observation types:** FrameObservation, FlowObservation encapsulate per-frame and cross-frame data
 
 ### Cross-cutting concerns
@@ -124,7 +129,8 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 - **Type hints:** Used extensively, modern union syntax (`X | Y`)
 - **Naming:** snake_case for functions/variables, PascalCase for classes
-- **Imports:** Relative within package (`from configs.glopose_config import GloPoseConfig`), absolute for externals
+- **Imports:** Relative within package (`from configs.glopose_config import GloPoseConfig`; or specific sub-configs
+  like `from configs.glopose_config import RendererConfig, OnboardingConfig`), absolute for externals
 - **Strings:** f-strings preferred
 - **No linter/formatter configured** — match existing code style when making changes
 - **Dataclasses** over plain dicts for structured data
@@ -222,8 +228,6 @@ The RCI personal folder is sshfs-mounted locally:
 
 ### Structural
 
-- **`CommonFrameData` god-class** (`data_graph.py:32-72`): 20+ fields mixing input data, SIFT features, ground truth,
-  filtering state, file paths, predictions, and timing.
 - **`results_logging.py` (~983 lines)**: `WriteResults` has 10+ responsibilities — rerun blueprint layout (282 lines in
   `rerun_init` alone), keyframe viz, 3D camera viz, flow matching viz, image I/O, matplotlib helpers, silhouette
   rendering, math utilities. Should be 4-5 classes.
@@ -237,22 +241,9 @@ All external repos are integrated via `sys.path.append('./repositories/...')` sc
 CWD-dependent, pollutes namespaces, and provides no insulation from API changes. Files that touch cnos internals:
 `view_graph.py`, `pose_estimation_visualizations.py`, `condensate_templates.py`, `bop_challenge.py`, `cnos_utils.py`.
 
-### State Management
-
-- `DataGraph` is a shared mutable hub — every pipeline stage freely mutates nodes and edges with no access control.
-- `DataGraphStorage.__setattr__` silently moves tensors between devices on every assignment (action-at-a-distance).
-- `app.py:62-65,151-152` has 5 module-level mutable globals shared between Gradio callbacks with no synchronization (
-  except `_dataset_process_lock`).
-
 ### Error Handling
 
-- `assert` used as runtime validation throughout (stripped with `python -O`).
-- `runtime_utils.py:15-21` `exception_logger` catches `Exception` and silently continues.
 - `app.py:113` has `except Exception: pass`.
-- `onboarding_pipeline.py` has zero try/except — COLMAP failure is communicated only via `reconstruction is None` and
-  print statements.
-- `render_ho3d_segmantations.py:107` has bare `except:` catching even `SystemExit`/
-  `KeyboardInterrupt`.
 
 ---
 
@@ -262,23 +253,7 @@ CWD-dependent, pollutes namespaces, and provides no insulation from API changes.
 
 These are prerequisites for working on modules A/B/C independently.
 
-#### 1.1 Define shared data types
-
-- [x] Create `data_structures/types.py` with the interface types:
-    - [x] `ObjectId` type alias (`int | str`) — BOP uses int, NAVI uses string
-    - [x] `Detection`: our own type (bbox_xywh, mask, score, object_id, matched_template_idx). Output of B2, input to C.
-    - [x] `PoseEstimate`: Se3_obj2cam + score + object_id, with `R` and `t_meters` properties. Output of C.
-- [x] Move `TemplateBank` from `condensate_templates.py` to `data_structures/template_bank.py`
-    - [x] Dict keys widened from `Dict[int, ...]` to `Dict[ObjectId, ...]`
-    - [x] Re-export kept in `condensate_templates.py` for backward compat (covers `repositories/cnos/`)
-- [x] Create `utils/bop_io.py` — BOP serialization:
-    - [x] `detection_to_bop_record()` — Detection → BOP COCO JSON dict (enforces `int(object_id)`)
-    - [x] `pose_to_bop_record()` — PoseEstimate → BOP CSV dict (m→mm conversion)
-    - [x] `write_bop_detection_json()`, `write_bop_pose_csv()`
-- [x] Update `pose/pose_estimator.py` to produce `Detection` objects at the module boundary
-- **Not created**: `OnboardingResult` (ViewGraph stays as-is), `DetectionModel` (TemplateBank is sufficient)
-
-#### 1.2 External repo adapters
+#### 1.1 External repo adapters
 
 - [ ] Create `adapters/cnos_adapter.py` — single location for `sys.path` manipulation and cnos imports (DINOv2
   descriptors, `Detections` type, Hydra configs). All other files import from the adapter.
@@ -288,25 +263,11 @@ These are prerequisites for working on modules A/B/C independently.
 - [ ] Create `adapters/sam2_adapter.py` for SAM2 (currently inline in `frame_provider.py:341`)
 - [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
 
-### Phase 2: Module A — Onboarding
-
-Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces an `OnboardingResult`.
-
-#### 2.2 Reduce coupling
-
-- [ ] `DataGraph` should be internal to onboarding — not exposed to detection or pose modules
-
-#### 2.3 Break up CommonFrameData
-
-- [ ] Split into per-concern structs: `FrameInput`, `SIFTFeatures`, `GroundTruth`, `FilteringState`, `FramePaths`,
-  `FramePrediction`
-- [ ] `CommonFrameData` can hold references to these if a single access point is still needed
-
-### Phase 3: Module B — Detection
+### Phase 2: Module B — Detection
 
 Goal: clear separation between offline representation building (B1) and online inference (B2).
 
-#### 3.1 Split `pose/pose_estimator.py` into detection and pose estimation modules
+#### 2.1 Split `pose/pose_estimator.py` into detection and pose estimation modules
 
 `BOPChallengePosePredictor` currently only does detection (the pose call is commented out at lines 211-216).
 Split into two modules:
@@ -322,14 +283,14 @@ Split into two modules:
 - [ ] Define shared types at the boundary: `Detection`, `PoseEstimate`
 - [ ] Keep `pose/pose_estimator.py` as a thin wrapper or delete once consumers are migrated
 
-#### 3.2 Separate representation building from inference
+#### 2.2 Separate representation building from inference
 
 - [ ] Extract condensation logic from `condensate_templates.py` into a `detection/representation.py` (or similar):
     - [ ] `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel`
     - [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
     - [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
 
-#### 3.2 CNOS integration investigation
+#### 2.3 CNOS integration investigation
 
 - [ ] Inspect original CNOS detector pipeline end-to-end to understand where our detection results diverge (some
   datasets show significantly worse performance). Compare: descriptor extraction, proposal generation, similarity
@@ -338,7 +299,7 @@ Split into two modules:
   (b) vendor the specific pieces we need (descriptor matching, similarity scoring) into our own codebase and
   drop the CNOS dependency. Document the decision and rationale.
 
-#### 3.4 Clean up BOP coupling
+#### 2.4 Clean up BOP coupling
 
 - [ ] BOP folder conventions (scene/image path construction, annotation loading) are scattered across
   `pose_estimator.py`, `condensate_templates.py`, and `run_*.py` scripts
@@ -347,11 +308,11 @@ Split into two modules:
 
 ---
 
-### Phase 4: Module C — Pose estimation
+### Phase 3: Module C — Pose estimation
 
 Goal: given detections and an onboarding result, produce 6DoF poses.
 
-#### 4.1 Implement/reconnect pose estimation
+#### 3.1 Implement/reconnect pose estimation
 
 - [ ] Uncomment and refactor the pose estimation call in `pose_estimator.py` (lines 211-216)
 - [ ] Create `pose_estimation/estimator.py`:
@@ -360,7 +321,7 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
     - [ ] Template matching → PnP or flow-based alignment
 - [ ] The flow provider (RoMa/UFM) is already initialized in `BOPChallengePosePredictor.__init__` — wire it up
 
-#### 4.2 Evaluation
+#### 3.2 Evaluation
 
 - [ ] Separate evaluation from pipeline execution
 - [ ] Create `evaluation/` module:
@@ -374,11 +335,11 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 
 ---
 
-### Phase 5: Infrastructure improvements
+### Phase 4: Infrastructure improvements
 
 These can be done in parallel with the module work.
 
-#### 5.0 Reorganize file structure
+#### 4.1 Reorganize file structure
 
 - [ ] Reorganize project layout to reflect the three-module architecture:
     - [ ] `onboarding/` — OnboardingPipeline, frame filtering, SfM, DataGraph
@@ -390,7 +351,7 @@ These can be done in parallel with the module work.
 - [ ] Update all imports across the codebase
 - [ ] Verify all entry points (`run_*.py`, `app.py`) still work
 
-#### 5.1 Visualization
+#### 4.2 Visualization
 
 - [ ] **Update Rerun SDK from ~0.22 to 0.30** — review breaking API changes (blueprint API, logging API,
   annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
@@ -401,28 +362,7 @@ These can be done in parallel with the module work.
 - [ ] Decompose `results_logging.py` (~983 lines) into focused classes: `KeyframeVisualizer`, `Scene3DVisualizer`,
   `MatchingVisualizer`, `ImageLogger`
 
-#### 5.2 Error handling
-
-- [x] Replace `assert` with `raise ValueError`/`RuntimeError` for runtime validation in key pipeline files:
-    - [x] `data_structures/data_graph.py` — `add_new_frame`, `add_new_arc`, `get_frame_data`, `get_edge_observations`
-    - [x] `pose/glomap.py` — database existence, empty images, image pair directory
-    - [x] `pose/pose_estimator.py` — image path existence, invalid split
-    - [x] `data_providers/frame_provider.py` — input type, video input, initial segmentation
-    - [x] `utils/sift.py` — matching algorithm validation
-    - [x] `utils/data_utils.py` — scale unit validation
-    - [x] `utils/bop_challenge.py` — object ID parameter conflicts
-- [x] Replace bare `except:` with `except Exception:` in `render_ho3d_segmantations.py:107`
-      and `get_depth_pairs_overlaps.py:300`
-- [x] Add structured error handling for COLMAP reconstruction failures in `onboarding_pipeline.py`:
-      `logging.warning` with dataset/sequence/keyframe count on failure and alignment failure
-- [x] `exception_logger` now accepts `context: str` param, all 9 callers pass sequence name
-
-#### 5.3 State management
-
-- [ ] Review `DataGraphStorage.__setattr__` device-transfer magic — consider making it explicit
-- [ ] Add synchronization to `app.py` module-level globals or refactor into a state class
-
-#### 5.4 Web UI
+#### 4.3 Web UI
 
 - [ ] Update `app.py` to reflect the three-module architecture:
     - [ ] Tab 1: Onboarding (existing "Run on Dataset" + "Custom Input")
