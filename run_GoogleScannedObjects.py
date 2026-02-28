@@ -1,9 +1,10 @@
 from pathlib import Path
+
 from dataset_generators import scenarios
 from utils.dataset_sequences import get_google_scanned_objects_sequences
 from utils.experiment_runners import run_on_synthetic_data
-from utils.runtime_utils import parse_args, exception_logger
 from utils.general import load_config
+from utils.runtime_utils import parse_args, exception_logger
 
 
 def main():
@@ -17,17 +18,16 @@ def main():
         sequences = args.sequences
     else:
         sequences = get_google_scanned_objects_sequences(
-            config.google_scanned_objects_data_folder / 'models')[:1]
+            config.paths.google_scanned_objects_data_folder / 'models')[:1]
 
     for sequence in sequences:
-
         with exception_logger():
             # Set camera parameters specific to GoogleScannedObjects
-            config.camera_position = (0, -5.0, 0)
-            config.camera_up = (0, 0, 1)
+            config.renderer.camera_position = (0, -5.0, 0)
+            config.renderer.camera_up = (0, 0, 1)
 
             # Construct paths specific to GoogleScannedObjects
-            gt_model_path = config.google_scanned_objects_data_folder / Path('models') / Path(sequence)
+            gt_model_path = config.paths.google_scanned_objects_data_folder / Path('models') / Path(sequence)
             gt_texture_path = gt_model_path / Path('materials/textures/texture.png')
             gt_mesh_path = gt_model_path / Path('meshes/model.obj')
 

@@ -1,6 +1,3 @@
-from tracker_config import TrackerConfig
-
-import os
 from pathlib import Path
 
 
@@ -23,17 +20,17 @@ def generate_configs():
                 config_paths.append(config_folder / config_name)
 
                 with open(config_base_folder / config_path, 'w') as f:
-                    f.write(f"""from tracker_config import TrackerConfig
+                    f.write(f"""from glopose_config import GloPoseConfig
 
 
-def get_config() -> TrackerConfig:
-    cfg = TrackerConfig()
+def get_config() -> GloPoseConfig:
+    cfg = GloPoseConfig()
 
-    cfg.frame_filter = 'RoMa'
+    cfg.onboarding.frame_filter = 'RoMa'
 
-    cfg.min_roma_certainty_threshold = {certainty}
-    cfg.flow_reliability_threshold = {threshold}
-    cfg.min_number_of_reliable_matches = {match}
+    cfg.onboarding.min_certainty_threshold = {certainty}
+    cfg.onboarding.flow_reliability_threshold = {threshold}
+    cfg.onboarding.min_number_of_reliable_matches = {match}
 
     return cfg
 """)

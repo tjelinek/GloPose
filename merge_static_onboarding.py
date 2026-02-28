@@ -28,7 +28,6 @@ def merge_reconstructions_for_experiment(experiment_name: str, datasets: List[st
                     pairs.append((i, j))
 
         for pair_down_i, pair_up_j in pairs:
-
             down_sequence_folder = down_sequences[pair_down_i]
             up_sequences_folder = up_sequences[pair_up_j]
 

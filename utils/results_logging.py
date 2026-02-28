@@ -18,24 +18,24 @@ from matplotlib.colors import Normalize
 
 from data_structures.data_graph import DataGraph
 from data_structures.rerun_annotations import RerunAnnotations
-from utils.flow import source_coords_to_target_coords_image
+from configs.glopose_config import GloPoseConfig
 from pose.colmap_utils import world2cam_from_reconstruction
-from tracker_config import TrackerConfig
 from utils.data_utils import load_texture, load_mesh_using_trimesh
+from utils.flow import source_coords_to_target_coords_image
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
 from utils.image_utils import overlay_mask
 
 
 class WriteResults:
 
-    def __init__(self, write_folder, tracking_config: TrackerConfig, data_graph: DataGraph):
+    def __init__(self, write_folder, tracking_config: GloPoseConfig, data_graph: DataGraph):
 
         self.data_graph: DataGraph = data_graph
 
         self.logged_templates_3d_space: List = list()
         self.logged_keyframe_graph: nx.DiGraph = nx.DiGraph()
 
-        self.config: TrackerConfig = tracking_config
+        self.config: GloPoseConfig = tracking_config
 
         self.write_folder = Path(write_folder)
 
@@ -51,16 +51,16 @@ class WriteResults:
         self.rerun_init()
 
     def init_directories(self):
-        if not self.config.write_to_rerun_rather_than_disk:
+        if not self.config.visualization.write_to_rerun:
             self.observations_path.mkdir(exist_ok=True, parents=True)
             self.segmentation_path.mkdir(exist_ok=True, parents=True)
             self.ransac_path.mkdir(exist_ok=True, parents=True)
             self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
-        rr.init(f'{self.config.sequence}-{self.config.experiment_name}')
+        rr.init(f'{self.config.run.sequence}-{self.config.run.experiment_name}')
         rerun_file = (self.write_folder /
-                      f'rerun_{self.config.experiment_name}_{self.config.sequence}_{self.config.special_hash}.rrd')
+                      f'rerun_{self.config.run.experiment_name}_{self.config.run.sequence}_{self.config.run.special_hash}.rrd')
         rr.save(rerun_file)
 
         self.template_fields = {
@@ -83,14 +83,15 @@ class WriteResults:
             RerunAnnotations.translation_scale
         }
 
-        if self.config.frame_filter == 'dense_matching':
-            match_reliability_statistics = rrb.TimeSeriesView(name=f"{self.config.frame_filter} Matching Reliability",
-                                                              origin=RerunAnnotations.matching_reliability_plot,
-                                                              axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
-                                                                                    zoom_lock=True),
-                                                              plot_legend=rrb.PlotLegend(visible=True))
+        if self.config.onboarding.frame_filter == 'dense_matching':
+            match_reliability_statistics = rrb.TimeSeriesView(
+                name=f"{self.config.onboarding.frame_filter} Matching Reliability",
+                origin=RerunAnnotations.matching_reliability_plot,
+                axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
+                                      zoom_lock=True),
+                plot_legend=rrb.PlotLegend(visible=True))
         else:
-            max_range = 3.0 * self.config.sift_filter_good_to_add_matches
+            max_range = 3.0 * self.config.onboarding.sift_filter_good_to_add_matches
             match_reliability_statistics = rrb.TimeSeriesView(name="SIFT Num of Matches",
                                                               origin=RerunAnnotations.matching_reliability_plot,
                                                               axis_y=rrb.ScalarAxis(range=(0.0, max_range),
@@ -170,13 +171,16 @@ class WriteResults:
                                 contents=[
                                     rrb.Horizontal(
                                         contents=[
-                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches High Certainty",
-                                                              origin=RerunAnnotations.matches_high_certainty),
-                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches Low Certainty",
-                                                              origin=RerunAnnotations.matches_low_certainty),
-                                            *([rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matching Certainty",
-                                                                 origin=RerunAnnotations.matching_certainty)]
-                                              if self.config.frame_filter == 'dense_matching' else [])
+                                            rrb.Spatial2DView(
+                                                name=f"{self.config.onboarding.filter_matcher} Matches High Certainty",
+                                                origin=RerunAnnotations.matches_high_certainty),
+                                            rrb.Spatial2DView(
+                                                name=f"{self.config.onboarding.filter_matcher} Matches Low Certainty",
+                                                origin=RerunAnnotations.matches_low_certainty),
+                                            *([rrb.Spatial2DView(
+                                                name=f"{self.config.onboarding.filter_matcher} Matching Certainty",
+                                                origin=RerunAnnotations.matching_certainty)]
+                                              if self.config.onboarding.frame_filter == 'dense_matching' else [])
                                         ],
                                         name='Matching'
                                     ),
@@ -189,10 +193,12 @@ class WriteResults:
                                 contents=[
                                     rrb.Horizontal(
                                         contents=[
-                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches High Certainty",
-                                                              origin=RerunAnnotations.matches_high_certainty_matchable),
-                                            rrb.Spatial2DView(name=f"{self.config.frame_filter_matcher} Matches Low Certainty",
-                                                              origin=RerunAnnotations.matches_low_certainty_matchable),
+                                            rrb.Spatial2DView(
+                                                name=f"{self.config.onboarding.filter_matcher} Matches High Certainty",
+                                                origin=RerunAnnotations.matches_high_certainty_matchable),
+                                            rrb.Spatial2DView(
+                                                name=f"{self.config.onboarding.filter_matcher} Matches Low Certainty",
+                                                origin=RerunAnnotations.matches_low_certainty_matchable),
                                             rrb.Spatial2DView(name="Template",
                                                               origin=RerunAnnotations.matchability)
 
@@ -204,7 +210,7 @@ class WriteResults:
                                                        axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                              zoom_lock=True),
                                                        plot_legend=rrb.PlotLegend(visible=True)),
-                                    rrb.TimeSeriesView(name=f"{self.config.frame_filter_matcher} Min Certainty",
+                                    rrb.TimeSeriesView(name=f"{self.config.onboarding.filter_matcher} Min Certainty",
                                                        origin=RerunAnnotations.matching_min_roma_certainty_plot,
                                                        axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                              zoom_lock=True),
@@ -212,7 +218,7 @@ class WriteResults:
                                 ],
                                 row_shares=[4, 1, 1],
                                 name='Matchability'
-                            )] if self.config.frame_filter == 'dense_matching' and self.config.matchability_based_reliability
+                            )] if self.config.onboarding.frame_filter == 'dense_matching' and self.config.onboarding.matchability_based_reliability
                               else []),
                         ],
                         name='Matching'
@@ -256,7 +262,7 @@ class WriteResults:
                         name='Pose'
                     ),
                 ],
-                name=f'Results - {self.config.sequence}'
+                name=f'Results - {self.config.run.sequence}'
             )
         )
 
@@ -272,7 +278,7 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
-        if self.config.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter == 'dense_matching':
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                    rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
             rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
@@ -280,9 +286,9 @@ class WriteResults:
             rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
                    rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
             rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
-                   rr.SeriesLine(color=[0, 0, 255], name=f"min {self.config.frame_filter_matcher} certainty"),
+                   rr.SeriesLine(color=[0, 0, 255], name=f"min {self.config.onboarding.filter_matcher} certainty"),
                    static=True)
-        elif self.config.frame_filter == 'SIFT':
+        elif self.config.onboarding.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
                    rr.SeriesLine(color=[255, 0, 0], name="min matches"), static=True)
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
@@ -356,12 +362,13 @@ class WriteResults:
             self.log_image(frame_i, template, annotation, template_path)
 
             # Matchability logging
-            if self.config.matchability_based_reliability:
+            if self.config.onboarding.matchability_based_reliability:
                 matchability_mask = keyframe_node.matchability_mask
-                matchability_image = (~matchability_mask.unsqueeze(0).permute(1, 2, 0)).to(torch.float).numpy(force=True)
+                matchability_image = (~matchability_mask.unsqueeze(0).permute(1, 2, 0)).to(torch.float).numpy(
+                    force=True)
                 template = (template.numpy(force=True) * 255.0).astype(np.uint8)
                 matchability_image_overlay = overlay_mask(template, matchability_image, 1.0, color=(0, 0, 0))
-                rr_matchability_image = rr.Image(template).compress(jpeg_quality=self.config.rerun_jpeg_quality)
+                rr_matchability_image = rr.Image(template).compress(jpeg_quality=self.config.visualization.jpeg_quality)
                 rr.log(RerunAnnotations.matchability, rr_matchability_image)
 
             self.logged_keyframe_graph.add_node(kf_idx)
@@ -477,7 +484,7 @@ class WriteResults:
 
             cmap_gt = plt.get_cmap('Reds')
             cmap_pred = plt.get_cmap('Blues')
-            gradient = np.linspace(1., 0.5, self.config.input_frames)
+            gradient = np.linspace(1., 0.5, self.config.input.input_frames)
             colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
             colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(len(pred_t_world2cam))]) * 255).astype(
                 np.uint8)
@@ -559,13 +566,13 @@ class WriteResults:
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
 
-        if (frame_i == 1 and self.config.gt_mesh_path is not None
-                and self.config.gt_texture_path is not None):
-            gt_texture = load_texture(Path(self.config.gt_texture_path),
-                                      self.config.texture_size)
+        if (frame_i == 1 and self.config.renderer.gt_mesh_path is not None
+                and self.config.renderer.gt_texture_path is not None):
+            gt_texture = load_texture(Path(self.config.renderer.gt_texture_path),
+                                      self.config.renderer.texture_size)
             gt_texture_int = (gt_texture[0].permute(1, 2, 0) * 255).to(torch.uint8)
 
-            gt_mesh = load_mesh_using_trimesh(Path(self.config.gt_mesh_path))
+            gt_mesh = load_mesh_using_trimesh(Path(self.config.renderer.gt_mesh_path))
 
             normalized_vertices = normalize_vertices(torch.Tensor(gt_mesh.vertices))
 
@@ -607,7 +614,7 @@ class WriteResults:
 
         cmap_gt = plt.get_cmap('Greens')
         cmap_pred = plt.get_cmap('Blues')
-        gradient = np.linspace(1., 0., self.config.input_frames)
+        gradient = np.linspace(1., 0., self.config.input.input_frames)
         colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
         colors_pred = (np.asarray([cmap_pred(gradient[i])[:3] for i in range(n_poses)]) * 255).astype(np.uint8)
 
@@ -659,12 +666,14 @@ class WriteResults:
                 template_idx = len(self.logged_templates_3d_space)
 
                 keyframe_node = self.data_graph.get_frame_data(keyframe_node_idx)
-                template = (keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).numpy(force=True) * 255.).astype(np.uint8)
+                template = (keyframe_node.frame_observation.observed_image[0].permute(1, 2, 0).numpy(
+                    force=True) * 255.).astype(np.uint8)
 
                 self.logged_templates_3d_space.append(keyframe_node_idx)
                 template_image_grid_annotation = (f'{RerunAnnotations.space_predicted_camera_keypoints}/'
                                                   f'{template_idx}')
-                rr.log(template_image_grid_annotation, rr.Image(template).compress(jpeg_quality=self.config.rerun_jpeg_quality))
+                rr.log(template_image_grid_annotation,
+                       rr.Image(template).compress(jpeg_quality=self.config.visualization.jpeg_quality))
 
                 for template_annotation in self.template_fields:
                     rr.log(template_annotation, rr.Scalar(0.0))
@@ -702,31 +711,31 @@ class WriteResults:
         new_flow_arc = (datagraph_camera_data.matching_source_keyframe, frame_i)
         flow_arc_source, flow_arc_target = new_flow_arc
 
-        if self.config.frame_filter == 'passthrough':
+        if self.config.onboarding.frame_filter == 'passthrough':
             return
 
         arc_observation = self.data_graph.get_edge_observations(flow_arc_source, flow_arc_target)
 
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
-        
-        if self.config.frame_filter == 'dense_matching':
+
+        if self.config.onboarding.frame_filter == 'dense_matching':
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                    rr.Scalar(target_data.current_flow_reliability_threshold))
-            if self.config.matchability_based_reliability:
+            if self.config.onboarding.matchability_based_reliability:
                 matchability_share = template_data.relative_area_matchable
                 min_roma_certainty = template_data.roma_certainty_threshold
                 rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalar(matchability_share))
                 rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalar(min_roma_certainty))
-        elif self.config.frame_filter == 'SIFT':
+        elif self.config.onboarding.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
-            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.sift_filter_min_matches))
+            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.onboarding.sift_filter_min_matches))
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
-                   rr.Scalar(self.config.sift_filter_good_to_add_matches))
+                   rr.Scalar(self.config.onboarding.sift_filter_good_to_add_matches))
 
-        if frame_i == 0 or (frame_i % self.config.large_images_results_write_frequency != 0):
+        if frame_i == 0 or (frame_i % self.config.visualization.large_images_write_frequency != 0):
             return
 
         template_image = template_data.frame_observation.observed_image.squeeze()
@@ -734,28 +743,29 @@ class WriteResults:
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
         template_target_image_np = (template_target_image.permute(1, 2, 0).numpy(force=True) * 255.).astype(np.uint8)
-        rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
+        rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.config.visualization.jpeg_quality)
         rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
         rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
 
         # Matchability visualization
-        if self.config.matchability_based_reliability:
+        if self.config.onboarding.matchability_based_reliability:
             matchability_mask = template_data.matchability_mask
             matchability_mask_padding = torch.ones_like(matchability_mask)
             matchability_mask_pad = torch.cat([matchability_mask, matchability_mask_padding], dim=0)
             matchability_mask_pad_np = matchability_mask_pad.numpy(force=True)
             template_target_image_matchable_np = overlay_mask(template_target_image_np * 255.,
-                                                              ~matchability_mask_pad_np,  1.0, (0, 0, 0))
+                                                              ~matchability_mask_pad_np, 1.0, (0, 0, 0))
 
-            mathability_image_rerun = rr.Image(template_target_image_matchable_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
+            mathability_image_rerun = rr.Image(template_target_image_matchable_np).compress(
+                jpeg_quality=self.config.visualization.jpeg_quality)
             rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
             rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
-        if self.config.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter == 'dense_matching':
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
             threshold = template_data.roma_certainty_threshold
             if threshold is None:
-                threshold = self.config.min_roma_certainty_threshold
+                threshold = self.config.onboarding.min_certainty_threshold
 
             above_threshold_mask = certainties >= threshold
             src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
@@ -766,7 +776,7 @@ class WriteResults:
             outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
             outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
 
-            if self.config.matchability_based_reliability:
+            if self.config.onboarding.matchability_based_reliability:
                 certainties_matchable = arc_observation.src_dst_certainty_roma_matchable.numpy(force=True)
                 above_threshold_mask_matchable = certainties_matchable >= threshold
                 src_pts_xy_roma_matchable = arc_observation.src_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
@@ -789,9 +799,10 @@ class WriteResults:
             template_target_blacks = np.ones_like(template_target_image_np)
             template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
 
-            rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(jpeg_quality=self.config.rerun_jpeg_quality)
+            rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(
+                jpeg_quality=self.config.visualization.jpeg_quality)
             rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
-        elif self.config.frame_filter == 'SIFT':
+        elif self.config.onboarding.frame_filter == 'SIFT':
             src_pts_xy = arc_observation.src_pts_xy_roma
             dst_pts_xy = arc_observation.dst_pts_xy_roma
 
@@ -814,12 +825,11 @@ class WriteResults:
         log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                                   RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
 
-        if self.config.matchability_based_reliability and self.config.frame_filter == 'dense_matching':
+        if self.config.onboarding.matchability_based_reliability and self.config.onboarding.frame_filter == 'dense_matching':
             log_correspondences_rerun(cmap_inliers, inliers_source_yx_matchable, inliers_target_yx_matchable,
                                       RerunAnnotations.matches_high_certainty_matchable, template_image_size.height, 20)
             log_correspondences_rerun(cmap_outliers, outliers_source_yx_matchable, outliers_target_yx_matchable,
                                       RerunAnnotations.matches_low_certainty_matchable, template_image_size.height, 20)
-
 
     def accumulate_Se3_attributes(self, frame_indices, attr_name: str) -> Se3:
 
@@ -829,7 +839,7 @@ class WriteResults:
             frame_data = self.data_graph.get_frame_data(frame)
             Ts_cam2obj.append(getattr(frame_data, attr_name).matrix().squeeze())
 
-        T_cam2obj = torch.stack(Ts_cam2obj, dim=0).to(self.config.device)
+        T_cam2obj = torch.stack(Ts_cam2obj, dim=0).to(self.config.run.device)
         Se3_cam2obj = Se3.from_matrix(T_cam2obj)
 
         return Se3_cam2obj
@@ -897,13 +907,13 @@ class WriteResults:
 
     def visualize_observed_data(self, frame_i):
 
-        if frame_i % self.config.large_images_results_write_frequency != 0:
+        if frame_i % self.config.visualization.large_images_write_frequency != 0:
             return
 
         observed_image_annotation = RerunAnnotations.observed_image
         observed_image_segmentation_annotation = RerunAnnotations.observed_image_segmentation
 
-        prev_visualized_frame_idx = self.config.large_images_results_write_frequency
+        prev_visualized_frame_idx = self.config.visualization.large_images_write_frequency
         # Save the images to disk
         prev_frame = self.data_graph.get_frame_data(frame_i - prev_visualized_frame_idx) \
             if frame_i >= prev_visualized_frame_idx else None
@@ -934,28 +944,30 @@ class WriteResults:
         if not ignore_dimensions:
             assert len(image.shape) == 3 and image.shape[-1] == 3
 
-        if self.config.write_to_rerun_rather_than_disk:
+        if self.config.visualization.write_to_rerun:
             rr.set_time_sequence("frame", frame)
-            image_np = (image.numpy(force=True) * 255.).astype(np.uint8) if image.dtype != torch.uint8 else image.numpy(force=True)
-            rr.log(rerun_annotation, rr.Image(image_np).compress(jpeg_quality=self.config.rerun_jpeg_quality))
+            image_np = (image.numpy(force=True) * 255.).astype(np.uint8) if image.dtype != torch.uint8 else image.numpy(
+                force=True)
+            rr.log(rerun_annotation, rr.Image(image_np).compress(jpeg_quality=self.config.visualization.jpeg_quality))
         else:
             image_np = image.numpy(force=True)
             imageio.imwrite(save_path, image_np)
 
     def log_pyplot(self, frame: int, fig: plt.plot, save_path: Path, rerun_annotation: str, **kwargs):
 
-        if self.config.write_to_rerun_rather_than_disk:
+        if self.config.visualization.write_to_rerun:
             fig.canvas.draw()
 
             image_bytes_np = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
             image_np = image_bytes_np.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             image = Image.fromarray(image_np)
             rr.set_time_sequence("frame", frame)
-            rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.rerun_jpeg_quality))
+            rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.visualization.jpeg_quality))
         else:
             plt.savefig(str(save_path), **kwargs)
 
         plt.close()
+
 
 def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, source_image_height, sample_size=None):
     if sample_size is not None:

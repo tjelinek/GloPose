@@ -1,4 +1,3 @@
-import math
 import sys
 from pathlib import Path
 from typing import List
@@ -8,7 +7,7 @@ import torchvision.transforms.v2.functional as TF
 from kornia.image import ImageSize
 
 from data_providers.frame_provider import DepthProvider, FrameProvider
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 
 try:
     from mmcv.utils import Config, DictAction
@@ -157,13 +156,13 @@ def metric3d_vit_giant2(pretrain=False, **kwargs):
 
 class Metric3DDepthProvider(DepthProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape: ImageSize, frame_provider: FrameProvider,
+    def __init__(self, config: GloPoseConfig, image_shape: ImageSize, frame_provider: FrameProvider,
                  cam_K: List[torch.Tensor], **kwargs):
         super().__init__(image_shape, config)
 
         self.image_shape: ImageSize = image_shape
         self.frame_provider: FrameProvider = frame_provider
-        self.skip_indices = config.skip_indices
+        self.skip_indices = config.input.skip_indices
         self.cam_K: List[torch.Tensor] = cam_K
         assert frame_provider.skip_indices == self.skip_indices
         self.metric3d = metric3d_vit_large(pretrain=True).cuda().eval()

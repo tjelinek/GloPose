@@ -5,10 +5,10 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from kornia.morphology import erosion, dilation
 import torch.nn.functional as F
+from kornia.morphology import erosion, dilation
 
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 
 
 def erode_segment_mask2(erosion_iterations, segment_masks):
@@ -98,7 +98,7 @@ def get_not_occluded_foreground_points(observed_occlusion: torch.Tensor, observe
     return src_pts_yx, not_occluded_foreground_mask
 
 
-def load_config(config_path: Path) -> TrackerConfig:
+def load_config(config_path: Path) -> GloPoseConfig:
     config_path = Path(config_path)
 
     spec = importlib.util.spec_from_file_location("module.name", config_path)
@@ -106,7 +106,7 @@ def load_config(config_path: Path) -> TrackerConfig:
     sys.modules["module.name"] = config_module
     spec.loader.exec_module(config_module)
 
-    config_instance: TrackerConfig = config_module.get_config()
+    config_instance: GloPoseConfig = config_module.get_config()
 
     return config_instance
 
@@ -160,7 +160,7 @@ def pad_to_multiple(image, multiple):
     return padded_image, pad_h, pad_w
 
 
-def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) ->\
+def extract_intrinsics_from_tensor(intrinsics: torch.Tensor) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Extracts fx, fy, cx, cy from a 3x3 camera intrinsics matrix.

@@ -1,7 +1,7 @@
 import shutil
 from abc import abstractmethod, ABC
 from pathlib import Path
-from typing import Union, Tuple, Optional
+from typing import Tuple, Optional
 
 import torch
 import torchvision
@@ -10,8 +10,8 @@ from romatch import roma_outdoor
 from romatch.models.model_zoo import roma_model
 from romatch.utils.kde import kde
 
-from configs.matching_configs.roma_configs.base_roma_config import BaseRomaConfig
-from configs.matching_configs.ufm_configs.base_ufm_config import BaseUFMConfig
+from configs.matching.roma_configs.base_roma_config import BaseRomaConfig
+from configs.matching.ufm_configs.base_ufm_config import BaseUFMConfig
 from data_structures.data_graph import DataGraph
 from utils.flow import roma_warp_to_pixel_coordinates, convert_to_roma_warp, convert_certainty_to_roma_format
 
@@ -186,7 +186,7 @@ class FlowMatchingProvider(MatchingProvider):
 
         if sample:
             if (((source_image_segmentation is not None and source_image_segmentation.sum() <= 5) or
-                    (target_image_segmentation is not None and target_image_segmentation.sum() <= 5)) and
+                 (target_image_segmentation is not None and target_image_segmentation.sum() <= 5)) and
                     zero_certainty_outside_segmentation):
                 warp = torch.zeros(0, 4).to(warp.device).to(warp.dtype)
                 certainty = torch.zeros(0, ).to(certainty.device).to(certainty.dtype)
@@ -268,7 +268,7 @@ class FlowMatchingProvider(MatchingProvider):
 
             if self.cache is not None:
                 self.cache.save_points_to_datagraph(source_image_index, target_image_index,
-                                                     src_pts_xy, dst_pts_xy, certainty)
+                                                    src_pts_xy, dst_pts_xy, certainty)
         else:
             if as_int:
                 src_pts_xy, dst_pts_xy = self.keypoints_to_int(src_pts_xy, dst_pts_xy, source_image, target_image)
@@ -397,7 +397,7 @@ class UFMMatchingProvider(FlowMatchingProvider):
 
         result = self.model.predict_correspondences_batched(source_image=source_tensor_bhwc,
                                                             target_image=target_tensor_bhwc,
-                                                            data_norm_type='identity',)
+                                                            data_norm_type='identity', )
 
         flow_forward = result.flow.flow_output[0]
         covisibility_forward = result.covisibility.mask[0]
@@ -461,24 +461,25 @@ def create_matching_provider(name: str, config, cache: FlowCache = None) -> Matc
 
     Args:
         name: One of 'RoMa', 'UFM', 'SIFT'.
-        config: TrackerConfig (or duck-typed equivalent) with device, roma_config,
-                ufm_config, sift_matcher_config attributes.
+        config: GloPoseConfig (or duck-typed equivalent) — uses config.run.device,
+                config.onboarding.roma, config.onboarding.ufm, config.onboarding.sift.
         cache: Optional FlowCache for caching flow results.
     """
+
     def _roma():
-        return RoMaMatchingProvider(config.device, config.roma_config, cache=cache)
+        return RoMaMatchingProvider(config.run.device, config.onboarding.roma, cache=cache)
 
     def _ufm():
-        return UFMMatchingProvider(config.device, config.ufm_config, cache=cache)
+        return UFMMatchingProvider(config.run.device, config.onboarding.ufm, cache=cache)
 
     def _sift():
         from data_providers.matching_provider_sift import (
             SparseMatchingProvider, SIFTKeypointDetector, LightGlueKeypointMatcher)
-        detector = SIFTKeypointDetector(config.device)
-        matcher = LightGlueKeypointMatcher(config.device)
+        detector = SIFTKeypointDetector(config.run.device)
+        matcher = LightGlueKeypointMatcher(config.run.device)
         return SparseMatchingProvider(detector, matcher,
-                                      num_features=config.sift_matcher_config.sift_filter_num_feats,
-                                      device=config.device)
+                                      num_features=config.onboarding.sift.sift_filter_num_feats,
+                                      device=config.run.device)
 
     providers = {'RoMa': _roma, 'UFM': _ufm, 'SIFT': _sift}
     if name not in providers:

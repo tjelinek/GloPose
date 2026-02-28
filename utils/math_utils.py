@@ -1,6 +1,5 @@
-import numpy as np
 import torch
-from kornia.geometry import Rt_to_matrix4x4, matrix4x4_to_Rt, Se3, Quaternion, So3
+from kornia.geometry import Se3
 
 
 def Se3_obj_from_epipolar_Se3_cam(Se3_cam: Se3, Se3_world_to_cam: Se3) -> Se3:
@@ -17,7 +16,7 @@ def Se3_last_cam_to_world_from_Se3_obj(Se3_obj: Se3, Se3_world_to_cam: Se3) -> S
     return Se3_cam
 
 
-def pixel_coords_to_unit_coords(image_width: int, image_height: int, pts_yx: torch.Tensor, dtype=torch.float32)\
+def pixel_coords_to_unit_coords(image_width: int, image_height: int, pts_yx: torch.Tensor, dtype=torch.float32) \
         -> torch.Tensor:
     return pts_yx.to(dtype) / torch.Tensor([image_height, image_width]).to(pts_yx.device)
 

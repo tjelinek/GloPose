@@ -22,29 +22,28 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = get_behave_sequences(config.behave_data_folder / 'train')
+        sequences = get_behave_sequences(config.paths.behave_data_folder / 'train')
 
     sequence = sequences[0]
     config = load_config(args.config)
 
-    if config.gt_flow_source == 'GenerateSynthetic':
+    if config.input.gt_flow_source == 'GenerateSynthetic':
         exit()
 
     experiment_name = args.experiment
-    config.experiment_name = experiment_name
-    config.sequence = sequence
-    config.dataset = dataset
-    config.image_downsample = 1.0
+    config.run.experiment_name = experiment_name
+    config.run.sequence = sequence
+    config.run.dataset = dataset
+    config.input.image_downsample = 1.0
 
-
-    config.skip_indices *= 10
+    config.input.skip_indices *= 10
 
     if args.output_folder is not None:
         write_folder = Path(args.output_folder) / dataset / sequence
     else:
-        write_folder = config.default_results_folder / experiment_name / dataset / sequence
+        write_folder = config.paths.results_folder / experiment_name / dataset / sequence
 
-    sequence_folder = config.behave_data_folder / 'train'
+    sequence_folder = config.paths.behave_data_folder / 'train'
 
     video_path = sequence_folder / f'{sequence}.mp4'
     gt_pkl_name = sequence_folder / f'{sequence}_gt.pkl'
@@ -52,8 +51,8 @@ def main():
 
     with open(gt_pkl_name, "rb") as f:
         gt_annotations = pickle.load(f)
-        cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_rot']).to(config.device)
-        cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_trans']).to(config.device)
+        cam_to_obj_rotations = torch.from_numpy(gt_annotations['obj_rot']).to(config.run.device)
+        cam_to_obj_translations = torch.from_numpy(gt_annotations['obj_trans']).to(config.run.device)
         sequence_length = cam_to_obj_rotations.shape[0]
 
     gt_Se3_cam2obj = Se3(Quaternion.from_matrix(cam_to_obj_rotations), cam_to_obj_translations)
@@ -64,9 +63,9 @@ def main():
     Se3_obj_1_to_cam = gt_Se3_cam2obj[0].inverse()
 
     config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().numpy(force=True)
-    config.input_frames = sequence_length
-    config.segmentation_provider = 'SAM2'
-    config.frame_provider = 'precomputed'
+    config.input.input_frames = sequence_length
+    config.input.segmentation_provider = 'SAM2'
+    config.input.frame_provider = 'precomputed'
 
     first_image = get_nth_video_frame(video_path, 0, mode='rgb')
     first_segment = get_nth_video_frame(object_seg_video_path, 0, mode='grayscale')

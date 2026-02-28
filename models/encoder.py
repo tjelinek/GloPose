@@ -8,7 +8,7 @@ from kornia.geometry.conversions import axis_angle_to_quaternion
 from kornia.geometry.quaternion import Quaternion
 from kornia.image import ImageSize
 
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 from utils.general import mesh_normalize, normalize_vertices
 
 EncoderResult = namedtuple('EncoderResult', ['translations', 'quaternions', 'vertices', 'texture_maps',
@@ -21,37 +21,37 @@ class Encoder(nn.Module):
         self.config = config
 
         # Translation initialization
-        translation_init = torch.Tensor(self.config.tran_init).repeat(config.input_frames, 1)
+        translation_init = torch.Tensor(self.config.renderer.tran_init).repeat(config.input.input_frames, 1)
 
         # Quaternion initialization
-        qinit = Quaternion.from_axis_angle(torch.Tensor(self.config.rot_init).repeat(config.input_frames, 1)).q
+        qinit = Quaternion.from_axis_angle(torch.Tensor(self.config.renderer.rot_init).repeat(config.input.input_frames, 1)).q
 
         # Initial rotations and translations
         self.register_buffer('initial_translation', translation_init.clone())
         self.register_buffer('initial_quaternion', qinit.clone())
 
         # Offsets initialization
-        quaternion_offsets = Quaternion.identity(config.input_frames)
+        quaternion_offsets = Quaternion.identity(config.input.input_frames)
         self.register_buffer('quaternion_offsets', qinit)
 
-        translation_offsets = torch.zeros(config.input_frames, 3)
+        translation_offsets = torch.zeros(config.input.input_frames, 3)
         self.register_buffer('translation_offsets', translation_init)
 
         self.translation = nn.Parameter(torch.zeros_like(translation_offsets))
-        quat = Quaternion.identity(config.input_frames)
+        quat = Quaternion.identity(config.input.input_frames)
 
         self.quaternion = nn.Parameter(quat.q)
 
         self.lights = None
 
         # Vertices initialization
-        if self.config.optimize_shape:
+        if self.config.renderer.optimize_shape:
             self.vertices = nn.Parameter(torch.zeros(1, ivertices.shape[0], 3))
 
         # Face features and texture map
         self.register_buffer('face_features', torch.from_numpy(face_features).unsqueeze(0).type(self.translation.dtype))
         if texture_maps_init is None:
-            self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.texture_size, self.config.texture_size))
+            self.texture_map = nn.Parameter(torch.ones(1, n_feat, self.config.renderer.texture_size, self.config.renderer.texture_size))
         else:
             self.texture_map = nn.Parameter(texture_maps_init.clone())
 
@@ -65,9 +65,9 @@ class Encoder(nn.Module):
 
     def forward(self, opt_frames):
 
-        if self.config.optimize_shape:
+        if self.config.renderer.optimize_shape:
             vertices = self.ivertices + self.vertices
-            if self.config.mesh_normalize:
+            if self.config.renderer.mesh_normalize:
                 vertices = mesh_normalize(vertices)
             else:
                 vertices = vertices - vertices.mean(1)[:, None, :]  # make center of mass in origin
@@ -79,7 +79,7 @@ class Encoder(nn.Module):
         translation[0] = translation[0].detach()
         quaternion[0] = quaternion[0].detach()
 
-        noopt = list(set(range(self.config.input_frames)) - set(opt_frames))
+        noopt = list(set(range(self.config.input.input_frames)) - set(opt_frames))
 
         translation[noopt] = translation[noopt].detach()
         quaternion[noopt] = quaternion[noopt].detach()
@@ -173,7 +173,7 @@ class Encoder(nn.Module):
 
 
 def init_gt_encoder(gt_mesh: 'kaolin.rep.SurfaceMesh', gt_texture: torch.Tensor, gt_Se3_obj1_to_obj_i: Se3,
-                    image_shape: ImageSize, tracker_config: TrackerConfig, device: str) -> Encoder:
+                    image_shape: ImageSize, tracker_config: GloPoseConfig, device: str) -> Encoder:
     from kaolin.rep import SurfaceMesh
     assert type(gt_mesh) is SurfaceMesh
     gt_rotations = gt_Se3_obj1_to_obj_i.quaternion.to_axis_angle()

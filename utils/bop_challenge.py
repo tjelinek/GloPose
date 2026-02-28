@@ -8,11 +8,9 @@ from typing import List, Dict, Optional, Callable, Tuple, OrderedDict, Any
 import numpy as np
 import torch
 from kornia.geometry import Se3, Quaternion, PinholeCamera
-from torchvision import transforms
-from PIL import Image
 from tqdm import tqdm
 
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.math_utils import scale_Se3
 
@@ -133,7 +131,6 @@ def extract_gt_Se3_cam2obj(pose_json_path: Path, scale_factor: float, scene_obje
 
 
 def extract_object_id(pose_json_path: Path, scene_object_object_id: int = None) -> Dict[int, int]:
-
     dict_gt_Se3_obj2cam = read_obj2cam_Se3_from_gt(pose_json_path, 'cpu')
 
     obj_ids = sorted(dict_gt_Se3_obj2cam.keys())
@@ -386,32 +383,31 @@ def read_dynamic_onboarding_depth_scales(
     return read_depth_scales(pose_json_path)
 
 
-def set_config_for_bop_onboarding(config: TrackerConfig, sequence: str):
+def set_config_for_bop_onboarding(config: GloPoseConfig, sequence: str):
     sequence_name_split = sequence.split('_')
     if len(sequence_name_split) == 3:
         if sequence_name_split[2] == 'down':
-            config.bop_config.onboarding_type = 'static'
-            config.bop_config.static_onboarding_sequence = 'down'
-            config.similarity_transformation = 'kabsch'
+            config.bop.onboarding_type = 'static'
+            config.bop.static_onboarding_sequence = 'down'
+            config.onboarding.similarity_transformation = 'kabsch'
         elif sequence_name_split[2] == 'up':
-            config.bop_config.onboarding_type = 'static'
-            config.bop_config.static_onboarding_sequence = 'up'
-            config.similarity_transformation = 'kabsch'
+            config.bop.onboarding_type = 'static'
+            config.bop.static_onboarding_sequence = 'up'
+            config.onboarding.similarity_transformation = 'kabsch'
         elif sequence_name_split[2] == 'dynamic':
-            config.bop_config.onboarding_type = 'dynamic'
-            config.similarity_transformation = 'depths'
-            config.frame_provider_config.erode_segmentation = True
-            config.run_only_on_frames_with_known_pose = False
-            config.skip_indices *= 4
+            config.bop.onboarding_type = 'dynamic'
+            config.onboarding.similarity_transformation = 'depths'
+            config.input.frame_provider_config.erode_segmentation = True
+            config.input.run_only_on_frames_with_known_pose = False
+            config.input.skip_indices *= 4
         elif sequence_name_split[2] == 'both':
-            config.bop_config.onboarding_type = 'static'
-            config.bop_config.static_onboarding_sequence = 'both'
-            config.similarity_transformation = 'kabsch'
-        config.sequence = '_'.join(sequence_name_split[:2])
+            config.bop.onboarding_type = 'static'
+            config.bop.static_onboarding_sequence = 'both'
+            config.onboarding.similarity_transformation = 'kabsch'
+        config.run.sequence = '_'.join(sequence_name_split[:2])
 
 
 def group_test_targets_by_image(test_annotations):
-
     grouped = OrderedDict()
 
     for item in test_annotations:

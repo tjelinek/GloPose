@@ -9,13 +9,13 @@ from eval.eval_reconstruction import (
     update_sequence_reconstructions_stats,
     update_dataset_reconstruction_statistics,
 )
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 
 
 def evaluate_onboarding(
     view_graph: ViewGraph,
     gt_Se3_world2cam: Dict[int, Se3] | None,
-    config: TrackerConfig,
+    config: GloPoseConfig,
     write_folder: Path,
 ) -> None:
     """Evaluate an onboarding result and write CSV statistics.
@@ -28,7 +28,7 @@ def evaluate_onboarding(
         view_graph: The ViewGraph returned by run_pipeline(), carrying metadata.
         gt_Se3_world2cam: Ground-truth world-to-camera poses keyed by frame index,
             or None if GT is unavailable.
-        config: The TrackerConfig used for this run.
+        config: The GloPoseConfig used for this run.
         write_folder: The per-sequence output folder (e.g. results/exp/dataset/seq/).
     """
     keyframe_nodes = sorted(view_graph.view_graph.nodes)
@@ -44,13 +44,13 @@ def evaluate_onboarding(
         return
 
     # Build dataset/sequence names for CSV columns
-    dataset_name_for_eval = config.dataset
-    if config.bop_config.onboarding_type is not None:
-        dataset_name_for_eval = f'{dataset_name_for_eval}_{config.bop_config.onboarding_type}_onboarding'
+    dataset_name_for_eval = config.run.dataset
+    if config.bop.onboarding_type is not None:
+        dataset_name_for_eval = f'{dataset_name_for_eval}_{config.bop.onboarding_type}_onboarding'
 
-    sequence_name = config.sequence
-    if config.special_hash is not None and len(config.special_hash) > 0:
-        sequence_name = f'{sequence_name}_{config.special_hash}'
+    sequence_name = config.run.sequence
+    if config.run.special_hash is not None and len(config.run.special_hash) > 0:
+        sequence_name = f'{sequence_name}_{config.run.special_hash}'
 
     # CSV paths live two levels above write_folder (experiment root / dataset level)
     rec_csv_detailed_stats = write_folder.parent.parent / 'reconstruction_keyframe_stats.csv'
@@ -86,13 +86,13 @@ def evaluate_onboarding(
     update_dataset_reconstruction_statistics(rec_csv_per_sequence_stats, dataset_name_for_eval)
 
 
-def resolve_gt_model_path(config: TrackerConfig) -> Path | None:
+def resolve_gt_model_path(config: GloPoseConfig) -> Path | None:
     """Resolve the path to the GT 3D model for the current dataset/object.
 
     Returns None if no GT model is available for the dataset.
     """
-    dataset = config.dataset
-    object_id = config.object_id
+    dataset = config.run.dataset
+    object_id = config.run.object_id
 
     # BOP datasets (handal, hope, tless, lmo, icbin, etc.)
     bop_datasets = {'handal', 'handal_native', 'hope', 'tless', 'lmo', 'icbin', 'itodd', 'tudl', 'ycbv', 'hb'}
@@ -106,20 +106,20 @@ def resolve_gt_model_path(config: TrackerConfig) -> Path | None:
             bop_dataset_name = bop_name
             if bop_dataset_name == 'handal_native':
                 bop_dataset_name = 'handal'
-            model_path = config.bop_data_folder / bop_dataset_name / 'models' / f'obj_{obj_int:06d}.ply'
+            model_path = config.paths.bop_data_folder / bop_dataset_name / 'models' / f'obj_{obj_int:06d}.ply'
             return model_path if model_path.exists() else None
 
     # NAVI
     if 'navi' in dataset_lower:
         if object_id is not None:
             obj_name = str(object_id)
-            model_path = config.navi_data_folder / obj_name / '3d_scan' / f'{obj_name}.obj'
+            model_path = config.paths.navi_data_folder / obj_name / '3d_scan' / f'{obj_name}.obj'
             return model_path if model_path.exists() else None
 
     # HO3D
     if 'ho3d' in dataset_lower:
         if object_id is not None:
-            model_path = config.ho3d_data_folder / 'models' / str(object_id) / 'textured_simple.obj'
+            model_path = config.paths.ho3d_data_folder / 'models' / str(object_id) / 'textured_simple.obj'
             return model_path if model_path.exists() else None
 
     return None

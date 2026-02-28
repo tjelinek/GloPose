@@ -1,9 +1,11 @@
 import os
+
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 from threadpoolctl import threadpool_limits
+
 threadpool_limits(limits=1)
 
 import pickle
@@ -148,18 +150,17 @@ def imblearn_fitresample_adapted(X, y, n_seeds_S=1, random_state=None):
 
 
 def harts_cnn_original(
-    X: torch.Tensor,
-    y: torch.Tensor,
-    X_patch: Optional[torch.Tensor] = None,
-    min_cls_cosine_similarity: float = 0.15,
-    min_avg_patch_cosine_similarity: float = 0.15,
-    patch_descriptor_filtering: bool = True,
-    use_segmentation: bool = True,
-    segmentation_masks: Optional[List[torch.Tensor]] = None,
-    random_state: Optional[int] = 42,
-    max_iterations: int = 100,
+        X: torch.Tensor,
+        y: torch.Tensor,
+        X_patch: Optional[torch.Tensor] = None,
+        min_cls_cosine_similarity: float = 0.15,
+        min_avg_patch_cosine_similarity: float = 0.15,
+        patch_descriptor_filtering: bool = True,
+        use_segmentation: bool = True,
+        segmentation_masks: Optional[List[torch.Tensor]] = None,
+        random_state: Optional[int] = 42,
+        max_iterations: int = 100,
 ) -> torch.Tensor:
-
     n, d = X.shape
     device = X.device
 
@@ -182,13 +183,12 @@ def harts_cnn_original(
         it += 1
         for i in range(n):
 
-            cosine_sim = X[i:i + 1] @  X[S].T
+            cosine_sim = X[i:i + 1] @ X[S].T
             topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
             y_pred = y[S][topk_idx.squeeze(1)]
 
             patchwise_similar = True
             if patch_descriptor_filtering:
-
                 S_pred = S[topk_idx]
                 X_patch_C_topk = X_patch[S_pred.cpu().item()].unsqueeze(0) if X_patch is not None else None
                 segmentation_C_topk = segmentation_masks[S_pred.item()].unsqueeze(0) if use_segmentation else None
@@ -224,7 +224,6 @@ def harts_cnn_symmetric(
         random_state: Optional[int] = 42,
         max_iterations: int = 100,
 ) -> torch.Tensor:
-
     device = X.device
 
     generator = torch.Generator(device=device).manual_seed(random_state)
@@ -249,7 +248,7 @@ def harts_cnn_symmetric(
             X_C_norm = X_norm[C]
             y_C = y[C]
             for s in S_cls:
-                cosine_sim = X_norm[s:s+1] @ X_C_norm.T
+                cosine_sim = X_norm[s:s + 1] @ X_C_norm.T
                 topk_vals, topk_idx = torch.topk(cosine_sim, k=1, dim=1)
                 topk_idx = topk_idx.squeeze(1)
                 y_pred = y_C[topk_idx]
@@ -335,7 +334,7 @@ def _csls_avg(X, k=10):
     S = X @ X.T  # Pairwise cosine similarities
     np.fill_diagonal(S, -np.inf)  # Ignore self-similarity
     # Find indices of top-k neighbors per sample
-    idx = np.argpartition(-S, kth=min(k, S.shape[1]-1)-1, axis=1)[:, :k]
+    idx = np.argpartition(-S, kth=min(k, S.shape[1] - 1) - 1, axis=1)[:, :k]
     # Average their similarities
     avgs = (S[np.arange(S.shape[0])[:, None], idx]).mean(axis=1)
     return avgs.astype(np.float32)
@@ -557,7 +556,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         new_seg_name = Path(f'{image_path.stem}_{index}.png')
         descriptor_name = f'{new_image_name.stem}.pt'
         shutil.copy2(image_path, images_save_dir / new_image_name)
-        torchvision.utils.save_image(segmentation_tensor.float(), segmentation_save_dir / new_seg_name,)
+        torchvision.utils.save_image(segmentation_tensor.float(), segmentation_save_dir / new_seg_name, )
 
         cls_descriptor_to_save = dino_cls_descriptors[index].detach().cpu().clone()
         torch.save(cls_descriptor_to_save, descriptors_save_dir / descriptor_name)
@@ -731,7 +730,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
         diag = torch.eye(S.shape[0], device=S.device, dtype=S.dtype)
         S = S - 1e9 * diag
         vals, _ = torch.sort(S, dim=1, descending=True)
-        per_template_vals = vals[:, 0: max(1, min(vals.shape[1]-1, X.shape[0]-1))]
+        per_template_vals = vals[:, 0: max(1, min(vals.shape[1] - 1, X.shape[0] - 1))]
         q = torch.quantile(per_template_vals, q=cosine_similarity_quantile, dim=1, keepdim=False)
         template_thresholds[obj_id] = q
 

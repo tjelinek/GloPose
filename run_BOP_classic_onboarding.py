@@ -15,7 +15,7 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    bop_path = config.bop_data_folder
+    bop_path = config.paths.bop_data_folder
     tless_seqs = get_bop_classic_sequences(bop_path, 'tless', 'train_primesense')
     lmo_seqs = get_bop_classic_sequences(bop_path, 'lmo', 'train')
     icbin_seqs = get_bop_classic_sequences(bop_path, 'icbin', 'train')
@@ -34,21 +34,21 @@ def main():
 
             experiment_name = args.experiment
 
-            config.experiment_name = experiment_name
-            config.dataset = dataset
-            config.sequence = sequence_name
-            config.image_downsample = 1.
+            config.run.experiment_name = experiment_name
+            config.run.dataset = dataset
+            config.run.sequence = sequence_name
+            config.input.image_downsample = 1.
 
-            config.depth_scale_to_meter = 0.001
-            config.skip_indices *= 4
+            config.input.depth_scale_to_meter = 0.001
+            config.input.skip_indices *= 4
 
             # Path to BOP dataset
-            bop_folder = config.bop_data_folder
+            bop_folder = config.paths.bop_data_folder
             # Determine output folder
             if args.output_folder is not None:
                 folder = Path(args.output_folder) / dataset / f'{sequence_name}'
             else:
-                folder = config.default_results_folder / experiment_name / dataset / f'{sequence_name}'
+                folder = config.paths.results_folder / experiment_name / dataset / f'{sequence_name}'
 
             # Load images and segmentations
             gt_images, gt_segs, gt_depths, sequence_starts = \
@@ -56,12 +56,12 @@ def main():
             # Get camera-to-object transformations
             dict_gt_Se3_cam2obj = \
                 read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence_name, onboarding_folder, 1.0,
-                                                    device=config.device)
+                                                    device=config.run.device)
 
             object_id = read_object_id(bop_folder, dataset, sequence_name, onboarding_folder)
-            config.object_id = object_id
+            config.run.object_id = object_id
             # Apply frame skipping
-            if config.run_only_on_frames_with_known_pose:
+            if config.input.run_only_on_frames_with_known_pose:
                 valid_frames = sorted(dict_gt_Se3_cam2obj.keys())
             else:
                 valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
@@ -75,16 +75,16 @@ def main():
                                                                                           segmentation_channel=0)
             # Get camera parameters
             pinhole_params = read_pinhole_params(bop_folder, dataset, sequence_name, onboarding_folder,
-                                                 config.image_downsample, device=config.device)
+                                                 config.input.image_downsample, device=config.run.device)
 
             pinhole_params = reindex_frame_dict(pinhole_params, valid_frames)
 
             gt_Se3_obj2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
 
             # Update config with frame information
-            config.input_frames = len(gt_images)
-            config.frame_provider = 'precomputed'
-            config.segmentation_provider = 'SAM2'
+            config.input.input_frames = len(gt_images)
+            config.input.frame_provider = 'precomputed'
+            config.input.segmentation_provider = 'SAM2'
             # Initialize and run the tracker
             tracker = OnboardingPipeline(config, folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_obj2cam,
                                          gt_pinhole_params=pinhole_params, input_segmentations=gt_segs,

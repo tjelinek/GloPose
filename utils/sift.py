@@ -23,7 +23,7 @@ def sift_to_rootsift(x: torch.Tensor, eps=1e-6) -> torch.Tensor:
 
 
 def detect_sift(img_fnames: List[Path],
-                segmentations: Optional[List[Path]]=None,
+                segmentations: Optional[List[Path]] = None,
                 num_feats=2048,
                 device=torch.device('cpu'),
                 feature_dir='.featureout'):
@@ -106,6 +106,7 @@ def get_exhaustive_image_pairs(img_fnames):
         for j in range(i + 1, len(img_fnames)):
             index_pairs.append((i, j))
     return index_pairs
+
 
 def default_opts():
     opts = {"feature_dir": '.featureout',

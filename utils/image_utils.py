@@ -5,11 +5,11 @@ import cv2
 import imageio
 import numpy as np
 import torch
+from PIL import Image, ExifTags
 from kornia.image import ImageSize
 from scipy.ndimage import uniform_filter
 from torch.nn import functional as F
 from torchvision import transforms
-from PIL import Image, ExifTags
 
 
 def get_target_shape(image_path: Path, image_downsample: float = 1.0) -> ImageSize:

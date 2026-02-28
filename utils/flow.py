@@ -1,7 +1,7 @@
 import numpy as np
-from PIL import Image, ImageDraw
 import torch
 import torchvision.transforms as T
+from PIL import Image, ImageDraw
 
 from utils.general import get_not_occluded_foreground_points, tensor_index_to_coordinates_xy
 from visualizations import flow_viz
@@ -270,7 +270,6 @@ def _roma_warp_to_pixel_coordinates(coords, H, W):
 
 
 def convert_to_roma_warp(dst_pts_xy_forward: torch.Tensor, dst_pts_xy_backward: torch.Tensor = None) -> torch.Tensor:
-
     _, H, W = dst_pts_xy_forward.shape
 
     # Create source pixel grid
@@ -316,9 +315,8 @@ def convert_to_roma_warp(dst_pts_xy_forward: torch.Tensor, dst_pts_xy_backward: 
     return warp
 
 
-def convert_certainty_to_roma_format(certainty_forward: torch.Tensor, certainty_backward: torch.Tensor = None) ->\
+def convert_certainty_to_roma_format(certainty_forward: torch.Tensor, certainty_backward: torch.Tensor = None) -> \
         torch.Tensor:
-
     H, W = certainty_forward.shape
     roma_certainty = torch.zeros(H, 2 * W, dtype=certainty_forward.dtype, device=certainty_forward.device)
     roma_certainty[:, :W] = certainty_forward

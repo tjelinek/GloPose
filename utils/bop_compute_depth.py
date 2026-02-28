@@ -3,14 +3,14 @@ from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_providers.metric3d import *
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 from utils.bop_challenge import get_pinhole_params
 
 
 @torch.no_grad()
 def compute_missing_depths_metric3d(base_bop_folder: Path, relevant_datasets: List[str], batch_size: int = 8):
     metric3d = metric3d_vit_large(pretrain=True).cuda().eval()
-    config = TrackerConfig()
+    config = GloPoseConfig()
 
     datasets = [d for d in base_bop_folder.iterdir() if d.name in relevant_datasets]
     for dataset in tqdm(datasets, desc='Datasets'):
@@ -38,8 +38,9 @@ def compute_missing_depths_metric3d(base_bop_folder: Path, relevant_datasets: Li
                 new_depth_folder.mkdir(exist_ok=True)
 
                 all_images = sorted(rgb_folder.iterdir())
-                frame_provider = PrecomputedFrameProvider(all_images, config.input_frames,
-                                                          config.image_downsample, config.skip_indices, config.device)
+                frame_provider = PrecomputedFrameProvider(all_images, config.input.input_frames,
+                                                          config.input.image_downsample, config.input.skip_indices,
+                                                          config.run.device)
 
                 batch_imgs = []
                 batch_K = []
@@ -79,7 +80,6 @@ def compute_missing_depths_metric3d(base_bop_folder: Path, relevant_datasets: Li
 
 
 if __name__ == '__main__':
-
     _relevant_datasets = ['handal', 'hope']
     _base_bop_folder = Path('/mnt/personal/jelint19/data/bop')
     compute_missing_depths_metric3d(_base_bop_folder, _relevant_datasets)

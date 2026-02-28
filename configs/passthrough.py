@@ -1,10 +1,10 @@
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 
 
-def get_config() -> TrackerConfig:
-    cfg = TrackerConfig()
+def get_config() -> GloPoseConfig:
+    cfg = GloPoseConfig()
 
-    cfg.frame_filter = 'passthrough'
-    cfg.dense_matching_allow_disk_cache = False
+    cfg.onboarding.frame_filter = 'passthrough'
+    cfg.onboarding.allow_disk_cache = False
 
     return cfg

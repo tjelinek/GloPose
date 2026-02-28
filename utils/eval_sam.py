@@ -233,7 +233,6 @@ def compute_dataset_iou_statistics(csv_iou_sequence_stats: Path, csv_iou_dataset
 
 
 if __name__ == '__main__':
-
     data_root = Path('/mnt/personal/jelint19/results/FlowTracker/sam2_eval')
     csv_per_frame_results_folder = data_root / 'sam_stats'
     csv_per_sequence_iou_stats = data_root / 'stats_iou_per_sequence.csv'

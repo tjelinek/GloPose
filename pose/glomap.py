@@ -19,9 +19,9 @@ from tqdm import tqdm
 from data_providers.flow_provider import FlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from data_structures.view_graph import ViewGraph
+from pose.colmap_utils import colmap_K_params_vec
 from pose.frame_filter import compute_matching_reliability
 from utils.conversions import Se3_to_Rigid3d
-from pose.colmap_utils import colmap_K_params_vec
 from utils.image_utils import get_intrinsics_from_exif
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 
@@ -78,7 +78,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         img1_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg1_pth, seg1_size, device=device)
         img2_seg = PrecomputedSegmentationProvider.load_and_downsample_segmentation(seg2_pth, seg2_size, device=device)
 
-        src_pts_xy_int, dst_pts_xy_int, certainty =\
+        src_pts_xy_int, dst_pts_xy_int, certainty = \
             match_provider.get_source_target_points(img1, img2, match_sample_size, img1_seg.squeeze(),
                                                     img2_seg.squeeze(), Path(img1_pth.name),
                                                     Path(img2_pth.name), as_int=True,
@@ -117,8 +117,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
             dst_pts_xy_roma_int_can_be_added = []
             certainties_can_be_added = []
             for (edge_u, edge_v) in previous_matching_pairs:
-
-                src_pts_xy_int_nonsampled, dst_pts_xy_int_nonsampled, certainty_nonsampled =\
+                src_pts_xy_int_nonsampled, dst_pts_xy_int_nonsampled, certainty_nonsampled = \
                     match_provider.get_source_target_points(img1, img2, None, img1_seg.squeeze(),
                                                             img2_seg.squeeze(), Path(img1_pth.name),
                                                             Path(img2_pth.name), as_int=True,
@@ -217,9 +216,8 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     return reconstruction
 
 
-def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3])\
+def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3]) \
         -> Tuple[pycolmap.Reconstruction, bool]:
-
     reconstruction = copy.deepcopy(reconstruction)
 
     gt_camera_centers = []
@@ -260,7 +258,6 @@ def two_view_geometry(colmap_db_path: Path):
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
                first_image_id: Optional[int] = None, second_image_id: Optional[int] = None,
                ignore_two_view_tracks: bool = True):
-
     colmap_output_path.mkdir(exist_ok=True, parents=True)
 
     initial_pair_provided = first_image_id is not None and second_image_id is not None
@@ -358,7 +355,6 @@ def get_match_points_indices(keypoints, match_pts):
 
 
 def keypoints_unique_preserve_order(keypoints: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-
     first_kpt_idx_occurrence, inverse_indices = get_first_occurrence_indices(keypoints, dim=0)
     first_kpt_idx_occurrence_sorted, index_sort_permutation = torch.sort(first_kpt_idx_occurrence)
     unique_order_preserving = keypoints[first_kpt_idx_occurrence_sorted]
@@ -630,7 +626,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
     colmap_world_from_cam = colmap_cam_from_world.inverse()  # world_from_cam
 
     gt_world_from_cam_scaled = pycolmap.Sim3d(
-        scale=1.0/scale,
+        scale=1.0 / scale,
         rotation=gt_world_from_cam.rotation,
         translation=gt_world_from_cam.translation
     )

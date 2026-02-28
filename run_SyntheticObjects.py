@@ -1,8 +1,9 @@
 from pathlib import Path
+
 from dataset_generators import scenarios
 from utils.experiment_runners import run_on_synthetic_data
-from utils.runtime_utils import parse_args
 from utils.general import load_config
+from utils.runtime_utils import parse_args
 
 
 def main():

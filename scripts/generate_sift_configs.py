@@ -1,6 +1,3 @@
-from tracker_config import TrackerConfig
-
-import os
 from pathlib import Path
 
 
@@ -20,16 +17,16 @@ def generate_configs():
                 config_paths.append(config_folder / config_name)
 
                 with open(config_base_folder / config_path, 'w') as f:
-                    f.write(f"""from tracker_config import TrackerConfig
+                    f.write(f"""from glopose_config import GloPoseConfig
 
 
-def get_config() -> TrackerConfig:
-    cfg = TrackerConfig()
+def get_config() -> GloPoseConfig:
+    cfg = GloPoseConfig()
 
-    cfg.frame_filter = 'SIFT'
+    cfg.onboarding.frame_filter = 'SIFT'
 
-    cfg.sift_filter_min_matches = 100
-    cfg.sift_filter_good_to_add_matches = 450
+    cfg.onboarding.sift_filter_min_matches = 100
+    cfg.onboarding.sift_filter_good_to_add_matches = 450
 
     return cfg
 """)

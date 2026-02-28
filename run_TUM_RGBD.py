@@ -18,26 +18,26 @@ def main():
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
-        sequences = get_tum_rgbd_sequences(config.tum_rgbd_data_folder)
+        sequences = get_tum_rgbd_sequences(config.paths.tum_rgbd_data_folder)
 
     for sequence in sequences:
         config = load_config(args.config)
 
-        if config.gt_flow_source == 'GenerateSynthetic':
+        if config.input.gt_flow_source == 'GenerateSynthetic':
             exit()
 
         experiment_name = args.experiment
-        config.experiment_name = experiment_name
-        config.sequence = sequence
-        config.dataset = dataset
-        config.image_downsample = 1.0
+        config.run.experiment_name = experiment_name
+        config.run.sequence = sequence
+        config.run.dataset = dataset
+        config.input.image_downsample = 1.0
 
         if args.output_folder is not None:
             write_folder = Path(args.output_folder) / dataset / sequence
         else:
-            write_folder = config.default_results_folder / experiment_name / dataset / sequence
+            write_folder = config.paths.results_folder / experiment_name / dataset / sequence
 
-        sequence_folder = config.tum_rgbd_data_folder / sequence
+        sequence_folder = config.paths.tum_rgbd_data_folder / sequence
 
         image_paths = []
 
@@ -66,8 +66,8 @@ def main():
                 tx, ty, tz = [float(x) for x in row[1:4]]
                 qx, qy, qz, qw = [float(x) for x in row[4:]]
 
-                gt_cam_ts.append(torch.tensor([tx, ty, tz]).to(config.device))
-                gt_cam_quats.append(torch.tensor([qw, qx, qy, qz]).to(config.device))
+                gt_cam_ts.append(torch.tensor([tx, ty, tz]).to(config.run.device))
+                gt_cam_quats.append(torch.tensor([qw, qx, qy, qz]).to(config.run.device))
 
         gt_cam_t = torch.stack(gt_cam_ts)
         gt_cam_quat = torch.stack(gt_cam_quats)
@@ -79,10 +79,9 @@ def main():
         Se3_obj_1_to_cam = gt_Se3_cam_to_world[[0]].inverse()
 
         config.camera_extrinsics = Se3_obj_1_to_cam.inverse().matrix().squeeze().numpy(force=True)
-        config.input_frames = sequence_length
-        config.segmentation_provider = 'whites'
-        config.frame_provider = 'precomputed'
-
+        config.input.input_frames = sequence_length
+        config.input.segmentation_provider = 'whites'
+        config.input.frame_provider = 'precomputed'
 
         tracker = OnboardingPipeline(config, write_folder, input_images=image_paths, gt_Se3_cam2obj=gt_Se3_cam_to_world)
         view_graph = tracker.run_pipeline()

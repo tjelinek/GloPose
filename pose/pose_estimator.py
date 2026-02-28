@@ -1,35 +1,36 @@
 import argparse
 import json
 import pickle
+import sys
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-import torchvision.ops as ops
 import torch
-
+import torchvision.ops as ops
 from hydra import initialize_config_dir, compose
 from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import instantiate
+
+sys.path.append('./repositories/cnos')
+from src.model.detector import filter_similarities_dict
 from tqdm import tqdm
 
 from condensate_templates import get_descriptors_for_condensed_templates, TemplateBank, _l2n, _apply_whitener
 from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
-
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
-from src.model.detector import filter_similarities_dict
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
+from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
-from repositories.cnos.segment_anything.utils.amg import rle_to_mask
 
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: TrackerConfig, base_cache_folder, matching_config_overrides: Dict[str, Any],
+    def __init__(self, config: GloPoseConfig, base_cache_folder, matching_config_overrides: Dict[str, Any],
                  experiment_folder='default', ):
 
         self.config = config
@@ -56,7 +57,7 @@ class BOPChallengePosePredictor:
         self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
 
     def _initialize_flow_provider(self) -> None:
-        self.flow_provider = create_matching_provider(self.config.frame_filter_matcher, self.config)
+        self.flow_provider = create_matching_provider(self.config.onboarding.filter_matcher, self.config)
 
     def predict_poses_for_bop_challenge(self, base_dataset_folder: Path, bop_targets_path: Path,
                                         detection_templates_save_folder, onboarding_type: str, split: str,
@@ -81,10 +82,10 @@ class BOPChallengePosePredictor:
 
         view_graphs: Dict[int, ViewGraph] = {}
         from src.model.dinov2 import descriptor_from_hydra
-        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections, self.config.device)
+        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections, self.config.run.device)
         if templates_source == 'viewgraph':
             view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
-                                                                              self.config.device)
+                                                                              self.config.run.device)
             template_cls_descriptors = {
                 obj_id: compute_dino_descriptors_for_view_graph(view_graph, dino_descriptor)[0]
                 for obj_id, view_graph in view_graphs.items()
@@ -104,13 +105,13 @@ class BOPChallengePosePredictor:
                 descriptor,
                 self.cnos_matching_config['cosine_similarity_quantile'],
                 self.cnos_matching_config['mahalanobis_quantile'],
-                device=self.config.device
+                device=self.config.run.device
             )
         elif templates_source == 'prerendered':
             orig_split_path = base_dataset_folder / onboarding_type
             cache_split_path = self.cache_folder / f'{descriptor}_cache' / 'bop' / dataset_name / onboarding_type
             template_images, template_segmentations, template_cls_descriptors = \
-                get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor, self.config.device)
+                get_descriptors_for_templates(orig_split_path, cache_split_path, descriptor, self.config.run.device)
 
             template_data = TemplateBank(images=template_images, cls_desc=template_cls_descriptors,
                                          masks=template_segmentations)
@@ -156,7 +157,7 @@ class BOPChallengePosePredictor:
                 cnos_detections = pickle.load(detections_file)
 
             image = PrecomputedFrameProvider.load_and_downsample_image(
-                path_to_image, self.config.image_downsample, self.config.device
+                path_to_image, self.config.input.image_downsample, self.config.run.device
             )
             image = image.squeeze()
             if pose_logger is not None:
@@ -172,7 +173,7 @@ class BOPChallengePosePredictor:
 
             if default_detections_scene_im_dict is not None:
                 default_detections = get_detections_cnos_format(default_detections_scene_im_dict, scene_id, im_id,
-                                                                self.config.device)
+                                                                self.config.run.device)
                 # detections = default_detections
 
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
@@ -207,7 +208,7 @@ class BOPChallengePosePredictor:
                 #                    match_min_certainty=self.config.min_roma_certainty_threshold,
                 #                    match_reliability_threshold=self.config.flow_reliability_threshold,
                 #                    query_img_segmentation=proposal_mask,
-                #                    device=self.config.device, pose_logger=pose_logger)
+                #                    device=self.config.run.device, pose_logger=pose_logger)
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / experiment_name / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
@@ -252,7 +253,7 @@ class BOPChallengePosePredictor:
         default_detections_masks = []
         for detection in cnos_detections['masks']:
             detection_mask = rle_to_mask(detection)
-            detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.device)
+            detection_mask_tensor = torch.from_numpy(detection_mask).to(self.config.run.device)
             default_detections_masks.append(detection_mask_tensor)
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
@@ -263,10 +264,11 @@ class BOPChallengePosePredictor:
             }
             cnos_detections_class_format = Detections(detections_dict)
             image_np = image.permute(1, 2, 0).numpy(force=True)
-            default_detections_cls_descriptors, default_detections_patch_descriptors =\
+            default_detections_cls_descriptors, default_detections_patch_descriptors = \
                 dino_descriptor(image_np, cnos_detections_class_format)
         else:
-            default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(self.config.device)
+            default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(
+                self.config.run.device)
 
         if template_data.whitening_mean is not None and template_data.whitening_W is not None:
             mu_w = template_data.whitening_mean
@@ -301,7 +303,7 @@ class BOPChallengePosePredictor:
         keep_indices = detections.apply_nms_for_masks_inside_masks()
         filter_similarities_dict(detections_scores, keep_indices)
 
-        indices = torch.arange(len(detections.masks), device=self.config.device)
+        indices = torch.arange(len(detections.masks), device=self.config.run.device)
         sort_indices = indices[torch.argsort(detections.scores[indices], descending=True)]
         detections.filter(sort_indices)
         filter_similarities_dict(detections_scores, sort_indices)
@@ -449,8 +451,8 @@ def main():
             condensed_templates_base = None
             experiment = f'onboarding-templates@{args.descriptor}'
 
-        config = TrackerConfig()
-        config.device = args.device
+        config = GloPoseConfig()
+        config.run.device = args.device
 
         matching_config_overrides = {
             'aggregation_function': args.aggregation_function,

@@ -11,7 +11,7 @@ def main():
 
     config = load_config(args.config)
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(
-        config.bop_data_folder, dataset)
+        config.paths.bop_data_folder, dataset)
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -19,19 +19,18 @@ def main():
         sequences = (hope_both + hope_up + hope_down + hope_dynamic)[4:5]
 
     for sequence in sequences:
-
         with exception_logger():
             config = load_config(args.config)
 
             experiment_name = args.experiment
 
-            config.experiment_name = experiment_name
-            config.dataset = dataset
-            config.image_downsample = .5
+            config.run.experiment_name = experiment_name
+            config.run.dataset = dataset
+            config.input.image_downsample = .5
 
-            config.depth_scale_to_meter = 0.001
+            config.input.depth_scale_to_meter = 0.001
 
-            config.skip_indices *= 1
+            config.input.skip_indices *= 1
 
             sequence_type = 'onboarding'
 

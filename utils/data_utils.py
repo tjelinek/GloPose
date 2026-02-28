@@ -3,12 +3,12 @@ import math
 from pathlib import Path
 from typing import Iterable, Dict, Tuple, cast, List
 
+import imageio
 import torch
 import trimesh
-import imageio
 from torchvision import transforms
 
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 
 
 def load_texture(texture_path: Path, texture_size: int) -> torch.Tensor:
@@ -26,7 +26,7 @@ def load_mesh(mesh_path: Path):
     from kaolin.io.utils import mesh_handler_naive_triangulate
 
     gt_mesh_prototype: kaolin.rep.SurfaceMesh = kaolin.io.obj.import_mesh(str(mesh_path), with_materials=True,
-                                                            heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
+                                                                          heterogeneous_mesh_handler=mesh_handler_naive_triangulate)
 
     gt_mesh_prototype.uvs[:, 1] = 1.0 - gt_mesh_prototype.uvs[:, 1]
     # Fixing import that was changed in this commit
@@ -78,17 +78,17 @@ def load_gt_annotations_file(file_path) -> Tuple[torch.Tensor, torch.Tensor]:
     return rotations_tensor, translations_tensor
 
 
-def load_gt_data(config: TrackerConfig):
+def load_gt_data(config: GloPoseConfig):
     gt_texture = None
     gt_mesh = None
     gt_rotations = None
     gt_translations = None
-    if config.gt_texture_path is not None:
-        gt_texture = load_texture(Path(config.gt_texture_path), config.texture_size)
-    if config.gt_mesh_path is not None:
-        gt_mesh = load_mesh(Path(config.gt_mesh_path))
-    if config.gt_track_path is not None:
-        gt_rotations, gt_translations = load_gt_annotations_file(config.gt_track_path)
+    if config.renderer.gt_texture_path is not None:
+        gt_texture = load_texture(Path(config.renderer.gt_texture_path), config.renderer.texture_size)
+    if config.renderer.gt_mesh_path is not None:
+        gt_mesh = load_mesh(Path(config.renderer.gt_mesh_path))
+    if hasattr(config.renderer, 'gt_track_path') and config.renderer.gt_track_path is not None:
+        gt_rotations, gt_translations = load_gt_annotations_file(config.renderer.gt_track_path)
 
     return gt_texture, gt_mesh, gt_rotations, gt_translations
 

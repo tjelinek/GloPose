@@ -5,17 +5,17 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 
 from data_providers.frame_provider import FrameProviderAll, PrecomputedSegmentationProvider
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 from utils.bop_challenge import load_gt_images, load_gt_segmentations
 from utils.image_utils import overlay_mask_torch
 
 
 def get_segmentation_provider(segmentation_type, initial_segmentation, initial_image, images_paths, segmentation_paths,
                               cache_folder_SAM2) -> FrameProviderAll:
-    config = TrackerConfig()
+    config = GloPoseConfig()
 
-    config.segmentation_provider = segmentation_type
-    config.frame_provider = 'precomputed'
+    config.input.segmentation_provider = segmentation_type
+    config.input.frame_provider = 'precomputed'
     write_folder = Path('/mnt/personal/jelint19/tmp/sam2_segs')
 
     tracker = FrameProviderAll(config, write_folder=write_folder,

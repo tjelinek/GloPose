@@ -6,7 +6,6 @@ from typing import Dict, Tuple, List
 
 import numpy as np
 import torch
-
 from segment_anything.utils.amg import rle_to_mask
 
 if './repositories/cnos' not in sys.path:

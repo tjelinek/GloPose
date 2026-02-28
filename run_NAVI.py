@@ -19,7 +19,7 @@ def main():
     args = parse_args()
 
     config = load_config(args.config)
-    navi_sequences = get_navi_sequences(config.navi_data_folder)
+    navi_sequences = get_navi_sequences(config.paths.navi_data_folder)
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
@@ -38,21 +38,21 @@ def main():
             experiment_name = args.experiment
             output_folder = args.output_folder
 
-            config.experiment_name = experiment_name
-            config.sequence = f'{obj_name}_{sequence}'
-            config.dataset = dataset
-            config.image_downsample = 1.0
+            config.run.experiment_name = experiment_name
+            config.run.sequence = f'{obj_name}_{sequence}'
+            config.run.dataset = dataset
+            config.input.image_downsample = 1.0
 
-            config.skip_indices *= 1
-            config.object_id = obj_name
+            config.input.skip_indices *= 1
+            config.run.object_id = obj_name
 
             # Determine output folder
             if output_folder is not None:
-                write_folder = Path(output_folder) / dataset / config.sequence
+                write_folder = Path(output_folder) / dataset / config.run.sequence
             else:
-                write_folder = config.default_results_folder / experiment_name / dataset / config.sequence
+                write_folder = config.paths.results_folder / experiment_name / dataset / config.run.sequence
 
-            base_folder = config.navi_data_folder / obj_name / sequence
+            base_folder = config.paths.navi_data_folder / obj_name / sequence
             image_folder = base_folder / 'images'
             segmentation_folder = base_folder / 'masks'
             depths_folder = base_folder / 'depth'
@@ -63,7 +63,7 @@ def main():
             gt_segs = load_images_navi(segmentation_folder)
             gt_depths = load_images_navi(depths_folder)
 
-            gt_pinhole_params = extract_cam_data_navi(gt_path, config.image_downsample, config.device)
+            gt_pinhole_params = extract_cam_data_navi(gt_path, config.input.image_downsample, config.run.device)
 
             valid_frames = sorted(set(gt_images.keys()) & set(gt_segs.keys()) & set(gt_pinhole_params.keys()))
 
@@ -76,12 +76,12 @@ def main():
 
             first_segmentation = \
                 PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs, segmentation_channel=0,
-                                                                         image_downsample=config.image_downsample,
-                                                                         device=config.device)
+                                                                         image_downsample=config.input.image_downsample,
+                                                                         device=config.run.device)
 
-            config.input_frames = len(gt_images)
-            config.frame_provider = 'precomputed'
-            config.segmentation_provider = 'SAM2'
+            config.input.input_frames = len(gt_images)
+            config.input.frame_provider = 'precomputed'
+            config.input.segmentation_provider = 'SAM2'
 
             tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, depth_paths=gt_depths,
                                          gt_Se3_world2cam=gt_Se3_world2cam, gt_pinhole_params=gt_pinhole_params,

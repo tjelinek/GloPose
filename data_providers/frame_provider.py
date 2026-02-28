@@ -9,14 +9,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from hydra import initialize_config_module, initialize_config_dir
+from hydra import initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from kornia.image import ImageSize
 from torchvision import transforms
 from torchvision.io import decode_image, ImageReadMode
 
+from configs.glopose_config import GloPoseConfig
 from data_structures.keyframe_buffer import FrameObservation
-from tracker_config import TrackerConfig
 from utils.data_utils import get_scale_from_meter, is_video_input
 from utils.general import erode_segment_mask2
 from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nth_video_frame, get_video_length
@@ -24,13 +24,13 @@ from utils.image_utils import get_target_shape, get_intrinsics_from_exif, get_nt
 
 class SyntheticDataProvider:
 
-    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
+    def __init__(self, config: GloPoseConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
         from models.rendering import RenderingKaolin
         from models.encoder import init_gt_encoder
 
-        self.image_shape: ImageSize = config.rendered_image_shape
-        self.device = config.device
-        self.num_frames = config.input_frames
+        self.image_shape: ImageSize = config.renderer.rendered_image_shape
+        self.device = config.run.device
+        self.num_frames = config.input.input_frames
 
         faces = gt_mesh.faces
         self.gt_texture = gt_texture
@@ -89,8 +89,8 @@ class FrameProvider(ABC):
     def get_n_th_image_name(self, frame_i: int) -> Path:
         pass
 
-    def save_images(self, output_path: Path, only_frame_index: bool = False, progress = None) ->\
-                    List[Path]:
+    def save_images(self, output_path: Path, only_frame_index: bool = False, progress=None) -> \
+            List[Path]:
         output_path.mkdir(exist_ok=True)
         transform_to_pil = transforms.ToPILImage()
 
@@ -127,8 +127,9 @@ class FrameProvider(ABC):
 
 class SyntheticFrameProvider(FrameProvider, SyntheticDataProvider):
 
-    def __init__(self, config: TrackerConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
-        FrameProvider.__init__(self, config.image_downsample, config.input_frames, config.skip_indices, config.device)
+    def __init__(self, config: GloPoseConfig, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i, **kwargs):
+        FrameProvider.__init__(self, config.input.image_downsample, config.input.input_frames,
+                               config.input.skip_indices, config.run.device)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
 
     def next_image(self, frame_id):
@@ -256,10 +257,10 @@ class WhiteSegmentationProvider(SegmentationProvider):
 
 class SyntheticSegmentationProvider(SegmentationProvider, SyntheticDataProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i):
-        SegmentationProvider.__init__(self, image_shape, config.device)
+    def __init__(self, config: GloPoseConfig, image_shape, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i):
+        SegmentationProvider.__init__(self, image_shape, config.run.device)
         SyntheticDataProvider.__init__(self, config, gt_texture, gt_mesh, gt_Se3_obj1_to_obj_i)
-        self.skip_indices = config.skip_indices
+        self.skip_indices = config.input.skip_indices
 
     def next_segmentation(self, frame_id, **kwargs):
         segmentation = super().next_synthetic_observation(frame_id * self.skip_indices).observed_segmentation
@@ -328,17 +329,17 @@ class PrecomputedSegmentationProvider(SegmentationProvider):
 
 class SAM2SegmentationProvider(SegmentationProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape, initial_segmentation: torch.Tensor,
+    def __init__(self, config: GloPoseConfig, image_shape, initial_segmentation: torch.Tensor,
                  image_provider: FrameProvider, write_folder: Path,
                  sam2_cache_folder: Path, progress=None, **kwargs):
-        super().__init__(image_shape, config.device)
+        super().__init__(image_shape, config.run.device)
 
         assert initial_segmentation is not None
 
         self.sequence_length = image_provider.sequence_length
-        self.skip_indices = config.skip_indices
+        self.skip_indices = config.input.skip_indices
 
-        from sam2.build_sam import build_sam2, build_sam2_video_predictor
+        from sam2.build_sam import build_sam2_video_predictor
         import sam2
 
         self.predictor: Optional[SamPredictor] = None
@@ -346,7 +347,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         if self.cache_folder is not None:
 
-            if self.cache_folder.exists() and config.purge_cache:
+            if self.cache_folder.exists() and config.paths.purge_cache:
                 shutil.rmtree(self.cache_folder)
             self.cache_folder.mkdir(exist_ok=True, parents=True)
 
@@ -366,7 +367,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
             with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
-                self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint, device=self.device)
+                self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint,
+                                                            device=self.device)
 
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
@@ -435,48 +437,49 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
 
 class FrameProviderAll:
-    def __init__(self, config: TrackerConfig, **kwargs):
-        self.downsample_factor = config.image_downsample
+    def __init__(self, config: GloPoseConfig, **kwargs):
+        self.downsample_factor = config.input.image_downsample
         self.image_shape: Optional[ImageSize] = None
-        self.device = config.device
-        self.config = config.frame_provider_config
+        self.device = config.run.device
+        self.config = config.input.frame_provider_config
 
         self.frame_provider: FrameProvider
         self.segmentation_provider: SegmentationProvider
 
-        if config.frame_provider == 'synthetic':
+        if config.input.frame_provider == 'synthetic':
             self.frame_provider = SyntheticFrameProvider(config, **kwargs)
-        elif config.frame_provider == 'precomputed':
-            self.frame_provider = PrecomputedFrameProvider(num_frames=config.input_frames,
-                                                           image_downsample=config.image_downsample,
-                                                           skip_indices=config.skip_indices,
-                                                           device=config.device, **kwargs)
+        elif config.input.frame_provider == 'precomputed':
+            self.frame_provider = PrecomputedFrameProvider(num_frames=config.input.input_frames,
+                                                           image_downsample=config.input.image_downsample,
+                                                           skip_indices=config.input.skip_indices,
+                                                           device=config.run.device, **kwargs)
         else:
-            raise ValueError(f"Unknown value of 'frame_provider': {config.frame_provider}")
+            raise ValueError(f"Unknown value of 'frame_provider': {config.input.frame_provider}")
 
         self.image_shape: ImageSize = self.frame_provider.image_shape
 
         if kwargs.get('depth_paths') is not None:
-            if config.dataset == 'HO3D':
+            if config.run.dataset == 'HO3D':
                 self.depth_provider = PrecomputedDepthProvider_HO3D(config, self.image_shape, **kwargs)
             else:
                 self.depth_provider = PrecomputedDepthProvider(config, self.image_shape,
-                                                               depth_scale_to_meter=config.depth_scale_to_meter,
+                                                               depth_scale_to_meter=config.input.depth_scale_to_meter,
                                                                **kwargs)
         else:
             self.depth_provider = None
 
-        if config.segmentation_provider == 'synthetic':
+        if config.input.segmentation_provider == 'synthetic':
             self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
-        elif config.segmentation_provider == 'precomputed':
-            self.segmentation_provider = PrecomputedSegmentationProvider(device=config.device,
+        elif config.input.segmentation_provider == 'precomputed':
+            self.segmentation_provider = PrecomputedSegmentationProvider(device=config.run.device,
                                                                          image_shpape=self.image_shape, **kwargs)
-        elif config.segmentation_provider == 'whites':
-            self.segmentation_provider = WhiteSegmentationProvider(self.image_shape, config.skip_indices, config.device,
+        elif config.input.segmentation_provider == 'whites':
+            self.segmentation_provider = WhiteSegmentationProvider(self.image_shape, config.input.skip_indices,
+                                                                   config.run.device,
                                                                    **kwargs)
-        elif config.segmentation_provider == 'SAM2':
+        elif config.input.segmentation_provider == 'SAM2':
 
-            if config.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
+            if config.input.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
                 next_observation = synthetic_segment_provider.next_synthetic_observation(0)
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
@@ -489,7 +492,7 @@ class FrameProviderAll:
                                                                   self.frame_provider,
                                                                   **kwargs)
         else:
-            raise ValueError(f"Unknown value of 'segmentation_provider': {config.segmentation_provider}")
+            raise ValueError(f"Unknown value of 'segmentation_provider': {config.input.segmentation_provider}")
 
     def get_n_th_image_name(self, frame_i: int) -> Path:
         return self.frame_provider.get_n_th_image_name(frame_i)
@@ -531,9 +534,9 @@ class FrameProviderAll:
 
 ##############################
 class DepthProvider(ABC):
-    def __init__(self, image_shape: ImageSize, config: TrackerConfig):
+    def __init__(self, image_shape: ImageSize, config: GloPoseConfig):
         self.image_shape: ImageSize = image_shape
-        self.device = config.device
+        self.device = config.run.device
         self.config = config
 
     @abstractmethod
@@ -541,12 +544,12 @@ class DepthProvider(ABC):
         pass
 
     def get_sequence_length(self):
-        return self.config.input_frames
+        return self.config.input.input_frames
 
 
 class PrecomputedDepthProvider(DepthProvider):
 
-    def __init__(self, config: TrackerConfig, image_shape: ImageSize, depth_paths: List[Path],
+    def __init__(self, config: GloPoseConfig, image_shape: ImageSize, depth_paths: List[Path],
                  depth_scale_to_meter: float = 1.0, output_unit: str = None, **kwargs):
         super().__init__(image_shape, config)
 
@@ -559,7 +562,7 @@ class PrecomputedDepthProvider(DepthProvider):
         else:
             self.conversion_scale = 1.0
 
-        self.skip_indices = config.skip_indices
+        self.skip_indices = config.input.skip_indices
 
     def get_sequence_length(self):
         return len(self.depth_paths)

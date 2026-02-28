@@ -15,9 +15,9 @@ from hloc.utils import viz_3d
 
 from data_providers.flow_provider import UFMFlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider
+from configs.glopose_config import GloPoseConfig
 from onboarding_pipeline import OnboardingPipeline
 from pose.glomap import reconstruct_images_using_sfm
-from tracker_config import TrackerConfig
 from utils.data_utils import is_video_input
 from utils.dataset_sequences import (
     get_handal_sequences,
@@ -82,7 +82,7 @@ def _scan_config_files() -> List[str]:
         if "__pycache__" in str(rel):
             continue
         parts = rel.parts
-        if any(d in parts for d in ("components_config", "matching_configs", "sequences_configs")):
+        if any(d in parts for d in ("components", "matching", "sequences_configs")):
             continue
         config_files.append(str(rel))
     return config_files or ["configs/base_config.py"]
@@ -252,22 +252,22 @@ def get_keyframes_and_segmentations(
     if config_path.exists():
         config = load_config(config_path)
     else:
-        config = TrackerConfig()
+        config = GloPoseConfig()
 
     combined_paths = "\n".join(str(p) for p in input_images)
     sequence_hash = hashlib.sha256(combined_paths.encode("utf-8")).hexdigest()[:16]
 
-    config.dataset = "custom_input"
-    config.sequence = sequence_hash
-    config.experiment_name = "webapp"
-    config.frame_provider = "precomputed"
-    config.frame_provider_config.erode_segmentation = True
-    config.device = device_radio
-    config.frame_filter = frame_filter
-    config.min_roma_certainty_threshold = min_certainty_slider
-    config.flow_reliability_threshold = matchability_slider
+    config.run.dataset = "custom_input"
+    config.run.sequence = sequence_hash
+    config.run.experiment_name = "webapp"
+    config.input.frame_provider = "precomputed"
+    config.input.frame_provider_config.erode_segmentation = True
+    config.run.device = device_radio
+    config.onboarding.frame_filter = frame_filter
+    config.onboarding.min_certainty_threshold = min_certainty_slider
+    config.onboarding.flow_reliability_threshold = matchability_slider
 
-    write_folder = config.default_results_folder / "webapp" / "custom_input" / sequence_hash
+    write_folder = config.paths.results_folder / "webapp" / "custom_input" / sequence_hash
     write_folder_global = write_folder
 
     if segmentations is not None:
@@ -276,16 +276,16 @@ def get_keyframes_and_segmentations(
         )
     else:
         first_segment_tensor = None
-        config.segmentation_provider = "whites"
+        config.input.segmentation_provider = "whites"
 
     if is_video_input(input_images):
         input_images = input_images[0]
     if segmentations is not None and is_video_input(segmentations):
         segmentations = segmentations[0]
 
-    config.input_frames = len(input_images) if isinstance(input_images, list) else get_video_length_in_frames(
+    config.input.input_frames = len(input_images) if isinstance(input_images, list) else get_video_length_in_frames(
         input_images)
-    config.skip_indices = math.ceil(config.input_frames / 200)
+    config.input.skip_indices = math.ceil(config.input.input_frames / 200)
 
     tracker = OnboardingPipeline(
         config, write_folder, input_images=input_images,
@@ -322,9 +322,9 @@ def on_reconstruct_click(
     global matching_pairs_global, images_for_reconstruction_global
     global segmentation_for_reconstruction_global, write_folder_global
 
-    config = TrackerConfig()
+    config = GloPoseConfig()
     if matcher_radio == "UFM":
-        match_provider = UFMFlowProviderDirect(device_radio, config.ufm_config)
+        match_provider = UFMFlowProviderDirect(device_radio, config.onboarding.ufm)
     elif matcher_radio == "SIFT":
         raise NotImplementedError("SIFT is not implemented yet.")
     else:
@@ -338,12 +338,12 @@ def on_reconstruct_click(
             images_for_reconstruction_global,
             segmentation_for_reconstruction_global,
             matching_pairs_global,
-            config.init_with_first_two_images,
+            config.onboarding.init_with_first_two_images,
             mapper,
             match_provider,
-            config.roma_sample_size,
+            config.onboarding.sample_size,
             colmap_base_path,
-            config.add_track_merging_matches,
+            config.onboarding.add_track_merging_matches,
             device=device_radio,
             progress=progress,
         )

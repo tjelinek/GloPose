@@ -108,7 +108,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 - **Provider pattern:** Abstract base classes (FrameProvider, FlowProvider, MatchingProvider) with multiple backends
 - **Graph-based data:** DataGraph (frames + temporal edges), ViewGraph (3D template library)
-- **Dataclass configs:** `TrackerConfig` in `tracker_config.py` is the central config (~100+ settings)
+- **Dataclass configs:** `GloPoseConfig` in `configs/glopose_config.py` is the top-level config, composed of sub-configs: `PathsConfig`, `RunConfig`, `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `VisualizationConfig`, `RendererConfig`
 - **Observation types:** FrameObservation, FlowObservation encapsulate per-frame and cross-frame data
 
 ### Cross-cutting concerns
@@ -124,7 +124,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 - **Type hints:** Used extensively, modern union syntax (`X | Y`)
 - **Naming:** snake_case for functions/variables, PascalCase for classes
-- **Imports:** Relative within package (`from tracker_config import TrackerConfig`), absolute for externals
+- **Imports:** Relative within package (`from configs.glopose_config import GloPoseConfig`), absolute for externals
 - **Strings:** f-strings preferred
 - **No linter/formatter configured** — match existing code style when making changes
 - **Dataclasses** over plain dicts for structured data
@@ -141,11 +141,10 @@ NetworkX, Gradio, Rerun SDK, wandb
 - Results go to `{results_root}/{experiment}/{dataset}/{sequence}/` with COLMAP database, reconstructions, and pose
   estimates
 - Rerun SDK is used for 3D visualization logging alongside disk output
-- Many operations are GPU-intensive; device selection is configurable via `TrackerConfig`
-- Hardcoded RCI paths are scattered across many files beyond `onboarding_pipeline.py` (scripts, dataset generators, pose
-  estimator, etc.). The `TrackerConfig` defaults (`default_data_folder`, `default_results_folder`,
-  `default_cache_folder`) centralize the main ones.
-- **Per-dataset data paths** are explicit fields in `TrackerConfig`:
+- Many operations are GPU-intensive; device selection is configurable via `GloPoseConfig.run.device`
+- Hardcoded RCI paths are scattered across some dataset generators and scripts. The `GloPoseConfig.paths`
+  sub-config (`PathsConfig`) centralizes results, cache, and dataset paths.
+- **Per-dataset data paths** are explicit fields in `GloPoseConfig.paths`:
   - `bop_data_folder` → `/mnt/data/vrg/public_datasets/bop/` (handal, hope, tless, lmo, icbin, etc.)
   - `ho3d_data_folder` → `/mnt/personal/jelint19/data/HO3D/`
   - `navi_data_folder` → `/mnt/personal/jelint19/data/NAVI/navi_v1.5/`
@@ -224,7 +223,7 @@ The RCI personal folder is sshfs-mounted locally:
 ### Critical (all fixed)
 
 - ~~**Hardcoded user paths**~~: Fixed — `onboarding_pipeline.py` now derives cache paths from
-  `TrackerConfig.default_cache_folder`.
+  `GloPoseConfig.paths.cache_folder`.
 - ~~**Class name collision**~~: Fixed — `PrecomputedSIFTMatchingProvider` replaced by unified `SparseMatchingProvider`.
 - ~~**Config bug**~~: Fixed — `similarity_transformation: str = 'kabsch'` now uses proper type annotation.
 
@@ -232,8 +231,9 @@ The RCI personal folder is sshfs-mounted locally:
 
 - ~~**`OnboardingPipeline` tight coupling**~~: Mostly fixed — provider creation uses `create_matching_provider()` factory.
   Some non-provider `if/elif/else` chains remain (frame filter selection, depth provider selection).
-- **`TrackerConfig` god-object**: ~47 flat fields spanning 8+ concerns (viz, input, rendering, mesh, filtering,
-  matching, reconstruction, SIFT). Sub-configs exist (`BaseRomaConfig`, etc.) but most fields remain top-level.
+- ~~**`TrackerConfig` god-object**~~: Decomposed into `GloPoseConfig` with 8 sub-configs (`PathsConfig`, `RunConfig`,
+  `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `VisualizationConfig`, `RendererConfig`).
+  All field access is max 2 levels deep: `config.sub.field`.
 - **`CommonFrameData` god-class** (`data_graph.py:32-72`): 20+ fields mixing input data, SIFT features, ground truth,
   filtering state, file paths, predictions, and timing.
 - **`results_logging.py` (~983 lines)**: `WriteResults` has 10+ responsibilities — rerun blueprint layout (282 lines in
@@ -301,14 +301,14 @@ These are prerequisites for working on modules A/B/C independently.
 
 #### 1.3 Config decomposition
 
-- [ ] Split `TrackerConfig` (~47 flat fields) into per-module configs:
-    - [ ] `OnboardingConfig` (frame filtering, dense matching, reconstruction, input data, SfM settings)
-    - [ ] `DetectionConfig` (condensation params, descriptor model, similarity metric)
-    - [ ] `PoseEstimationConfig` (already exists as `BasePoseEstimationConfig` — review if sufficient)
-    - [ ] `VisualizationConfig` (rerun settings, write frequency, jpeg quality)
-    - [ ] Sub-configs for providers: keep existing `BaseRomaConfig`, `BaseUFMConfig`, `BaseSiftConfig`, `BaseBOPConfig`
-- [ ] Keep a top-level `GloPoseConfig` that composes all sub-configs
-- [ ] Preserve backwards compatibility via `__getattr__` delegation if needed
+- [x] ~~Split `TrackerConfig` (~47 flat fields) into per-module configs~~:
+    - [x] ~~`OnboardingConfig` (frame filtering, dense matching, reconstruction, input data, SfM settings)~~
+    - [x] ~~`DetectionConfig` (condensation params, descriptor model, similarity metric)~~
+    - [x] ~~`CondensationConfig` (method, descriptor, whitening, augmentation)~~
+    - [x] ~~`VisualizationConfig` (rerun settings, write frequency, jpeg quality)~~
+    - [x] ~~Sub-configs for providers: keep existing `BaseRomaConfig`, `BaseUFMConfig`, `BaseSiftConfig`, `BaseBOPConfig`~~
+- [x] ~~Keep a top-level `GloPoseConfig` that composes all sub-configs~~
+- [x] ~~All consumers migrated, `tracker_config.py` deleted~~
 
 ---
 
@@ -351,16 +351,28 @@ Goal: `onboarding_pipeline.py` becomes a clean onboarding pipeline that produces
 
 Goal: clear separation between offline representation building (B1) and online inference (B2).
 
-#### 3.1 Separate representation building from inference
+#### 3.1 Split `pose/pose_estimator.py` into detection and pose estimation modules
+
+`BOPChallengePosePredictor` currently only does detection (the pose call is commented out at lines 211-216).
+Split into two modules:
+
+- [ ] Create `detection/detector.py` — detection inference:
+    - [ ] `detect(image, detection_model: DetectionModel) -> List[Detection]`
+    - [ ] SAM proposal generation + descriptor matching + NMS
+    - [ ] Move all detection-related code from `BOPChallengePosePredictor` here
+- [ ] Create `pose_estimation/estimator.py` — pose estimation (currently commented out):
+    - [ ] `estimate_poses(detections, onboarding_result, image, intrinsics) -> List[PoseEstimate]`
+    - [ ] Template matching → PnP or flow-based alignment
+    - [ ] The flow provider is already initialized in `BOPChallengePosePredictor.__init__` — move it here
+- [ ] Define shared types at the boundary: `Detection`, `PoseEstimate`
+- [ ] Keep `pose/pose_estimator.py` as a thin wrapper or delete once consumers are migrated
+
+#### 3.2 Separate representation building from inference
 
 - [ ] Extract condensation logic from `condensate_templates.py` into a `detection/representation.py` (or similar):
     - [ ] `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel`
     - [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
     - [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
-- [ ] Extract detection inference from `pose_estimator.py` into `detection/detector.py`:
-    - [ ] `detect(image, detection_model: DetectionModel) -> List[Detection]`
-    - [ ] SAM proposal generation + descriptor matching + NMS
-    - [ ] Rename or decompose `BOPChallengePosePredictor` — it only does detection despite the name
 
 #### 3.2 CNOS integration investigation
 
@@ -417,8 +429,23 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 
 These can be done in parallel with the module work.
 
+#### 5.0 Reorganize file structure
+
+- [ ] Reorganize project layout to reflect the three-module architecture:
+    - [ ] `onboarding/` — OnboardingPipeline, frame filtering, SfM, DataGraph
+    - [ ] `detection/` — condensation, detector, representation building
+    - [ ] `pose_estimation/` — pose estimator, flow-based alignment
+    - [ ] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate)
+    - [ ] `adapters/` — external repo wrappers (cnos, metric3d, sam2)
+- [ ] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
+- [ ] Update all imports across the codebase
+- [ ] Verify all entry points (`run_*.py`, `app.py`) still work
+
 #### 5.1 Visualization
 
+- [ ] **Update Rerun SDK from ~0.22 to 0.30** — review breaking API changes (blueprint API, logging API,
+  annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
+  `visualizations/pose_estimation_visualizations.py`, and any other files using `rerun`
 - [ ] Unify `RerunAnnotations` and `RerunAnnotationsPose` into a single annotation constants module
 - [ ] Extract shared rerun blueprint setup into a common function
 - [ ] Extract shared matching visualization logic into a shared helper
@@ -616,6 +643,14 @@ For each method: run on our selected keyframes AND on every-nth subsampled frame
 
 - [ ] Run our pipeline (RoMa) with and without `black_background=True` on HANDAL static
 - [ ] Add this as a row in the matching ablation table or a separate mini-table
+
+#### P3.6 Track merging matches ablation
+
+- [ ] Run onboarding with track merging matches disabled on HANDAL static (all 40 objects)
+- [ ] Run onboarding with track merging matches enabled (default) on the same sequences
+- [ ] Compare reconstruction quality: rotation/translation error, accuracy at thresholds,
+  reconstruction rate, number of 3D points
+- [ ] Add results as a row in the ablation tables or a separate mini-table
 
 ---
 

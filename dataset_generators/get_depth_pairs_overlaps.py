@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from data_providers.frame_provider import PrecomputedDepthProvider, PrecomputedFrameProvider, \
     PrecomputedSegmentationProvider, PrecomputedDepthProvider_HO3D
-from tracker_config import TrackerConfig
+from configs.glopose_config import GloPoseConfig
 from utils.bop_challenge import read_gt_Se3_world2cam, get_pinhole_params
 
 
@@ -233,8 +233,8 @@ def compute_all_overlaps(cam2worlds, intrinsics, depths, overlap_thresh, delimit
 
 
 def compute_overlaps_bop(dataset_name, device='cuda'):
-    config = TrackerConfig()
-    config.device = device
+    config = GloPoseConfig()
+    config.run.device = device
 
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/bop/{dataset_name}')
     training_set = path_to_dataset / 'train_pbr'
@@ -250,7 +250,7 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         # if scene_info_path.exists():
         #     continue
 
-        camera_K = get_pinhole_params(scene_camera_path, scale=config.image_downsample, device=config.device)
+        camera_K = get_pinhole_params(scene_camera_path, scale=config.input.image_downsample, device=config.run.device)
 
         missing_intrinsics = [i for i in range(1000) if i not in camera_K.keys()]
 
@@ -277,10 +277,10 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
         extrinsics_output_scale = 'm'
 
         Se3_world2cams = read_gt_Se3_world2cam(scene_camera_path, input_scale=extrinsics_input_scale,
-                                               output_scale=extrinsics_output_scale, device=config.device)
+                                               output_scale=extrinsics_output_scale, device=config.run.device)
 
-        image_provider = PrecomputedFrameProvider(images_paths, config.input_frames, config.image_downsample,
-                                                  config.skip_indices, config.device)
+        image_provider = PrecomputedFrameProvider(images_paths, config.input.input_frames, config.input.image_downsample,
+                                                  config.input.skip_indices, config.run.device)
         image_shape = image_provider.image_shape
 
         depth_provider = PrecomputedDepthProvider(config, image_shape, depths_paths,
@@ -332,8 +332,8 @@ def compute_overlaps_bop(dataset_name, device='cuda'):
 
 
 def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
-    config = TrackerConfig()
-    config.device = device
+    config = GloPoseConfig()
+    config.run.device = device
 
     path_to_dataset = Path(f'/mnt/personal/jelint19/data/HO3D/')
     training_set = path_to_dataset / 'train'
@@ -358,12 +358,12 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
 
         N = len(images_paths)
 
-        image_provider = PrecomputedFrameProvider(images_paths, config.input_frames, config.image_downsample,
-                                                  config.skip_indices, config.device)
+        image_provider = PrecomputedFrameProvider(images_paths, config.input.input_frames, config.input.image_downsample,
+                                                  config.input.skip_indices, config.run.device)
         image_shape = image_provider.image_shape
         depth_provider = PrecomputedDepthProvider_HO3D(config, image_shape, depths_paths)
         segmentation_provider = PrecomputedSegmentationProvider(image_shape, segmentation_paths,
-                                                                skip_indices=config.skip_indices, device=config.device)
+                                                                skip_indices=config.input.skip_indices, device=config.run.device)
 
         valid_ids = []
         depths = []
@@ -381,9 +381,9 @@ def compute_overlaps_ho3d(random_shuffle=True, device='cuda'):
                 data = np.load(meta_file, allow_pickle=True)
                 data_dict = {key: data[key] for key in data}
 
-                cam_K = torch.from_numpy(data_dict['camMat']).to(config.device).to(torch.float32)
-                cam2obj_R = torch.from_numpy(data_dict['objRot']).to(config.device).squeeze()
-                cam2obj_t = torch.from_numpy(data_dict['objTrans']).to(config.device)
+                cam_K = torch.from_numpy(data_dict['camMat']).to(config.run.device).to(torch.float32)
+                cam2obj_R = torch.from_numpy(data_dict['objRot']).to(config.run.device).squeeze()
+                cam2obj_t = torch.from_numpy(data_dict['objTrans']).to(config.run.device)
                 cam2obj_Se3 = Se3(Quaternion.from_axis_angle(cam2obj_R), cam2obj_t)
                 cam2obj_T = cam2obj_Se3.matrix().squeeze()
 

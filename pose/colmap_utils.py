@@ -27,7 +27,6 @@ def world2cam_from_reconstruction(reconstruction: pycolmap.Reconstruction) -> Di
 def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_path: Path, db1_imgs_prefix="db1_",
                         db2_imgs_prefix="db2_") \
         -> Tuple[Dict[str, str], Dict[str, str]]:
-
     db1 = pycolmap.Database(str(colmap_db1_path))
 
     tmp_db1_path = merged_db_path.parent / 'tmp_db1.db'
@@ -42,7 +41,6 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     def rename_db_imgs(tmp_db: pycolmap.Database, db_imgs_prefix: str):
         db_rename_dict = {}
         for image in tmp_db.read_all_images():
-
             old_name = image.name
             new_name = db_imgs_prefix + image.name
             image.name = new_name
@@ -67,7 +65,7 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     return db1_rename_dict, db2_rename_dict
 
 
-def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.Reconstruction)\
+def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.Reconstruction) \
         -> pycolmap.Reconstruction:
     max_camera_id = max(rec1.cameras.keys()) if rec1.cameras else 0
 

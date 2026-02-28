@@ -1,19 +1,18 @@
 from pathlib import Path
 from typing import Final, Dict, List
 
+import cv2
 import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
 import torch
 import torchvision.transforms.functional as TF
-from matplotlib import pyplot as plt
+from PIL import Image
 from kornia.image import ImageSize
 from matplotlib import cm
-from PIL import Image
+from matplotlib import pyplot as plt
 from torchvision import transforms
-import cv2
 
-from repositories.cnos.src.model.utils import Detections
 from utils.image_utils import overlay_mask
 from utils.results_logging import log_correspondences_rerun
 
@@ -138,7 +137,7 @@ class PoseEstimatorLogger:
                                 grid_columns=2,
                                 contents=[
                                     rrb.Spatial2DView(
-                                        name=f"Nearest best object template {i+1}",
+                                        name=f"Nearest best object template {i + 1}",
                                         origin=f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}',
                                         # contents=[
                                         #     rrb.TextDocumentView(
@@ -199,21 +198,20 @@ class PoseEstimatorLogger:
         rr.log(RerunAnnotationsPose.observed_image_segmentation_all,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
 
-
         rr.send_blueprint(blueprint)
 
     def visualize_detections(self, all_detections_segmentations, detection_idx):
         h, w = all_detections_segmentations.shape[-2:]
 
         seg_all = TF.resize(all_detections_segmentations.float().unsqueeze(0),
-                        [int(h * self.image_downsample), int(w * self.image_downsample)],
-                        interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
+                            [int(h * self.image_downsample), int(w * self.image_downsample)],
+                            interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
         query_segment_np = seg_all.to(torch.float).numpy(force=True)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
         rr_segment = rr.SegmentationImage(query_segment_np[detection_idx])
 
-        segment_cumulative = query_segment_np[:detection_idx+1].sum(axis=0)
+        segment_cumulative = query_segment_np[:detection_idx + 1].sum(axis=0)
         rr_segment_cumulative = rr.SegmentationImage(segment_cumulative)
 
         rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
@@ -224,7 +222,7 @@ class PoseEstimatorLogger:
                                     template_images: Dict[int, List[torch.Tensor] | Path],
                                     template_masks: Dict[int, List[torch.Tensor] | Path],
                                     detection_idx: int,
-                                    detections: Detections,
+                                    detections,
                                     detections_scores,
                                     similarity_metric: str):
 
@@ -352,7 +350,8 @@ class PoseEstimatorLogger:
         template_target_blacks = np.ones_like(template_target_image_np)
         template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
 
-        rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(jpeg_quality=self.rerun_jpeg_quality)
+        rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(
+            jpeg_quality=self.rerun_jpeg_quality)
         rr.log(RerunAnnotationsPose.matching_certainty, rerun_certainty_img)
 
         template_image_size = ImageSize(*template_image.shape[-2:])

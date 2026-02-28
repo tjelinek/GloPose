@@ -19,7 +19,7 @@ def main():
 
     args = parse_args()
     config = load_config(args.config)
-    train_sequences, test_sequences = get_ho3d_sequences(config.ho3d_data_folder)
+    train_sequences, test_sequences = get_ho3d_sequences(config.paths.ho3d_data_folder)
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
     else:
@@ -39,27 +39,27 @@ def main():
         with exception_logger():
             config = load_config(args.config)
 
-            config.skip_indices *= 10
+            config.input.skip_indices *= 10
 
-            if config.gt_flow_source == 'GenerateSynthetic':
+            if config.input.gt_flow_source == 'GenerateSynthetic':
                 exit()
 
             experiment_name = args.experiment
-            config.experiment_name = experiment_name
-            config.sequence = sequence
-            config.object_id = sequence
-            config.dataset = dataset
-            config.image_downsample = 1.0
-            config.frame_provider_config.erode_segmentation = True
+            config.run.experiment_name = experiment_name
+            config.run.sequence = sequence
+            config.run.object_id = sequence
+            config.run.dataset = dataset
+            config.input.image_downsample = 1.0
+            config.input.frame_provider_config.erode_segmentation = True
 
             if args.output_folder is not None:
                 write_folder = Path(args.output_folder) / dataset / sequence
             else:
-                write_folder = config.default_results_folder / experiment_name / dataset / sequence
+                write_folder = config.paths.results_folder / experiment_name / dataset / sequence
 
             t0 = time.time()
 
-            sequence_folder = config.ho3d_data_folder / split / sequence
+            sequence_folder = config.paths.ho3d_data_folder / split / sequence
             image_folder = sequence_folder / 'rgb'
             segmentation_folder = sequence_folder / 'seg'
             if not segmentation_folder.exists():
@@ -107,16 +107,16 @@ def main():
             gt_images_list = [gt_images_list[i] for i in valid_indices]
             gt_segmentations_list = [gt_segmentations_list[i] for i in valid_indices]
 
-            config.input_frames = len(gt_images_list)
+            config.input.input_frames = len(gt_images_list)
 
-            cam2obj_rotations = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.device)
-            cam2obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.device)
+            cam2obj_rotations = torch.from_numpy(np.array(filtered_gt_rotations)).to(config.run.device)
+            cam2obj_translations = torch.from_numpy(np.array(filtered_gt_translations)).to(config.run.device)
             cam2obj_translations *= 1000.0  # Scaling from mm to m
 
             Se3_cam2obj = Se3(Quaternion.from_axis_angle(cam2obj_rotations), cam2obj_translations)
             Se3_obj2cam = Se3_cam2obj.inverse()
-            Se3_cam2obj_dict = {i: Se3_cam2obj[i] for i in range(config.input_frames)}
-            Se3_obj2cam_dict = {i: Se3_obj2cam[i] for i in range(config.input_frames)}
+            Se3_cam2obj_dict = {i: Se3_cam2obj[i] for i in range(config.input.input_frames)}
+            Se3_obj2cam_dict = {i: Se3_obj2cam[i] for i in range(config.input.input_frames)}
 
             print('Data loading took {:.2f} seconds'.format((time.time() - t0) / 1))
 
@@ -125,21 +125,20 @@ def main():
             config.camera_intrinsics = cam_intrinsics_list[0]
             config.camera_extrinsics = T_obj_to_cam.numpy(force=True)
 
-
-            config.segmentation_provider = 'SAM2'
-            config.frame_provider = 'precomputed'
+            config.input.segmentation_provider = 'SAM2'
+            config.input.frame_provider = 'precomputed'
 
             first_segment_tensor = \
                 PrecomputedSegmentationProvider.get_initial_segmentation(gt_images_list, gt_segmentations_list,
                                                                          segmentation_channel=1)
 
-            image_h, image_w = (torch.tensor(int(s * config.image_downsample))[None].to(config.device)
+            image_h, image_w = (torch.tensor(int(s * config.input.image_downsample))[None].to(config.run.device)
                                 for s in first_segment_tensor.shape[-2:])
 
             gt_pinhole_params = {}
-            for i in range(config.input_frames):
+            for i in range(config.input.input_frames):
                 obj2cam = Se3_obj2cam_dict[i].matrix()[None]
-                cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.device)
+                cam_K_tensor = torch.from_numpy(cam_intrinsics_list[i])[None].to(config.run.device)
                 gt_pinhole_params[i] = PinholeCamera(cam_K_tensor, obj2cam, image_h, image_w)
 
             tracker = OnboardingPipeline(config, write_folder, input_images=gt_images_list,

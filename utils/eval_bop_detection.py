@@ -4,11 +4,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-from bop_toolkit_lib import pycoco_utils
 from bop_toolkit_lib import dataset_params
 from bop_toolkit_lib import inout
+from bop_toolkit_lib import pycoco_utils
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 
 
 def evaluate_bop_coco(

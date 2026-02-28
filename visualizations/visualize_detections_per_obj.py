@@ -4,16 +4,15 @@ and create a histogram of image counts per object with percentage overlay
 """
 
 import shutil
-from itertools import product
-from pathlib import Path
-import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter
 from collections import defaultdict
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
 
 def copy_images_to_flat_structure(source_dir, target_dir, dry_run: bool = True):
-
     source_dir = Path(source_dir)
     target_dir = Path(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +88,7 @@ def get_total_counts(original_dataset_path, dataset, split):
             total_counts[obj] = up_total + down_total
 
     return dict(total_counts)
+
 
 def create_histogram(image_counts, dataset, split, output_file, experiment_name, total_counts=None):
     if not image_counts:
@@ -293,7 +293,8 @@ def main():
 
             for dataset, split in dataset_sequences:
                 relative_path = Path(dataset) / split
-                SOURCE_DIRECTORY = Path('/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
+                SOURCE_DIRECTORY = Path(
+                    '/mnt/personal/jelint19/cache/detections_templates_cache/') / experiment / relative_path
                 TARGET_DIRECTORY = results_base / experiment / relative_path
                 HISTOGRAM_FILE = TARGET_DIRECTORY.parent.parent / f'histogram_{dataset}-{split}-{experiment}.png'
 

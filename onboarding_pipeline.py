@@ -18,16 +18,16 @@ from data_providers.frame_provider import FrameProviderAll
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import ViewGraph, view_graph_from_datagraph
 from eval.eval_onboarding import resolve_gt_model_path
+from configs.glopose_config import GloPoseConfig
 from pose.frame_filter import create_frame_filter
 from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
-from tracker_config import TrackerConfig
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.results_logging import WriteResults
 
 
 class OnboardingPipeline:
 
-    def __init__(self, config: TrackerConfig, write_folder: Path, input_images: Union[List[Path], Path],
+    def __init__(self, config: GloPoseConfig, write_folder: Path, input_images: Union[List[Path], Path],
                  gt_texture=None, gt_mesh=None, gt_Se3_cam2obj: Optional[Dict[int, Se3]] = None,
                  gt_Se3_world2cam: Optional[Dict[int, Se3]] = None,
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
@@ -36,7 +36,7 @@ class OnboardingPipeline:
                  progress=None):
 
         self.write_folder: Path = write_folder
-        self.config: TrackerConfig = config
+        self.config: GloPoseConfig = config
 
         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         print(f'Processing sequence written into {write_folder}')
@@ -44,31 +44,31 @@ class OnboardingPipeline:
 
         self.progress = progress
 
-        cache_root = config.default_cache_folder
+        cache_root = config.paths.cache_folder
         self.matching_cache_folder: Path = \
-            (cache_root / f'{self.config.frame_filter_matcher}_cache' /
-             config.roma_config.config_name / config.dataset / f'{config.sequence}_{config.special_hash}')
+            (cache_root / f'{self.config.onboarding.filter_matcher}_cache' /
+             config.onboarding.roma.config_name / config.run.dataset / f'{config.run.sequence}_{config.run.special_hash}')
         self.cache_folder_SIFT: Path = (cache_root / 'SIFT_cache' /
-                                        config.sift_matcher_config.config_name / config.dataset /
-                                        f'{config.sequence}_{config.special_hash}')
-        self.cache_folder_SAM2: Path = ((cache_root / 'SAM_cache' / self.config.dataset /
-                                         f'{self.config.sequence}_{self.config.special_hash}') /
-                                        str(self.config.image_downsample))
+                                        config.onboarding.sift.config_name / config.run.dataset /
+                                        f'{config.run.sequence}_{config.run.special_hash}')
+        self.cache_folder_SAM2: Path = ((cache_root / 'SAM_cache' / self.config.run.dataset /
+                                         f'{self.config.run.sequence}_{self.config.run.special_hash}') /
+                                        str(self.config.input.image_downsample))
 
         self.cache_folder_view_graph: Path = (cache_root / 'view_graph_cache' /
-                                              config.experiment_name / config.dataset /
-                                              f'{config.sequence}_{config.special_hash}')
+                                              config.run.experiment_name / config.run.dataset /
+                                              f'{config.run.sequence}_{config.run.special_hash}')
 
-        self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.sequence}'
+        self.colmap_base_path: Path = self.write_folder / f'glomap_{self.config.run.sequence}'
         self.colmap_image_path = self.colmap_base_path / 'images'
         self.colmap_seg_path = self.colmap_base_path / 'segmentations'
 
         self.prepare_output_folder()
 
-        skip = config.skip_indices
+        skip = config.input.skip_indices
         if skip != 1:
-            used_indices = range(0, config.input_frames, skip)
-            config.input_frames = config.input_frames // skip
+            used_indices = range(0, config.input.input_frames, skip)
+            config.input.input_frames = config.input.input_frames // skip
 
             if gt_Se3_cam2obj is not None:
                 gt_Se3_cam2obj = {i // skip: gt_Se3_cam2obj[i] for i in used_indices if i in gt_Se3_cam2obj}
@@ -99,7 +99,7 @@ class OnboardingPipeline:
         # Other utilities and flags
         self.results_writer = None
 
-        self.data_graph: DataGraph = DataGraph(out_device=self.config.device)
+        self.data_graph: DataGraph = DataGraph(out_device=self.config.run.device)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, input_images, initial_segmentation,
                                        input_segmentations, depth_paths)
@@ -107,13 +107,13 @@ class OnboardingPipeline:
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
 
-        filtering_cache = FlowCache(self.config.device, self.matching_cache_folder, self.data_graph,
-                                    allow_disk_cache=self.config.dense_matching_allow_disk_cache,
-                                    purge_cache=self.config.purge_cache)
+        filtering_cache = FlowCache(self.config.run.device, self.matching_cache_folder, self.data_graph,
+                                    allow_disk_cache=self.config.onboarding.allow_disk_cache,
+                                    purge_cache=self.config.paths.purge_cache)
         self.match_provider_filtering = create_flow_provider(
-            self.config.frame_filter_matcher, self.config, cache=filtering_cache)
+            self.config.onboarding.filter_matcher, self.config, cache=filtering_cache)
         self.match_provider_reconstruction = create_flow_provider(
-            self.config.reconstruction_matcher, self.config)
+            self.config.onboarding.reconstruction_matcher, self.config)
         self.frame_filter = create_frame_filter(
             self.config, self.data_graph, self.match_provider_filtering)
 
@@ -123,9 +123,9 @@ class OnboardingPipeline:
 
         if self.gt_Se3_cam2obj is not None:
 
-            if self.config.segmentation_provider == 'synthetic' or self.config.frame_provider == 'synthetic':
-                assert set(range(self.config.input_frames)).issubset(self.gt_Se3_cam2obj.keys()), \
-                    f"Missing keys: {set(range(self.config.input_frames)) - self.gt_Se3_cam2obj.keys()}"
+            if self.config.input.segmentation_provider == 'synthetic' or self.config.input.frame_provider == 'synthetic':
+                assert set(range(self.config.input.input_frames)).issubset(self.gt_Se3_cam2obj.keys()), \
+                    f"Missing keys: {set(range(self.config.input.input_frames)) - self.gt_Se3_cam2obj.keys()}"
 
             all_gt_T_cam2obj = [self.gt_Se3_cam2obj[i].matrix() for i in sorted(self.gt_Se3_cam2obj.keys())]
             gt_T_cam2obj = torch.stack(all_gt_T_cam2obj)
@@ -143,7 +143,7 @@ class OnboardingPipeline:
 
     def dump_frame_node_for_glomap(self, frame_idx: int):
 
-        device = self.config.device
+        device = self.config.run.device
 
         frame_data = self.data_graph.get_frame_data(frame_idx)
 
@@ -187,18 +187,18 @@ class OnboardingPipeline:
         colmap_db_path = self.colmap_base_path / 'database.db'
         colmap_output_path = self.colmap_base_path / 'output'
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
-                                               colmap_output_path, self.config.object_id)
+                                               colmap_output_path, self.config.run.object_id)
 
         # Populate metadata on the ViewGraph
         view_graph.alignment_success = alignment_success and reconstruction is not None
         view_graph.frame_filtering_time = frame_filtering_time
         view_graph.reconstruction_time = reconstruction_time
-        view_graph.num_input_frames = self.config.input_frames
+        view_graph.num_input_frames = self.config.input.input_frames
         view_graph.gt_model_path = resolve_gt_model_path(self.config)
 
         # Build image_name_to_frame_id mapping
         image_name_to_frame_id = {}
-        for i in range(self.config.input_frames):
+        for i in range(self.config.input.input_frames):
             frame_data = self.data_graph.get_frame_data(i)
             image_name_to_frame_id[str(frame_data.image_filename.name)] = i
         view_graph.image_name_to_frame_id = image_name_to_frame_id
@@ -213,9 +213,10 @@ class OnboardingPipeline:
         if reconstruction is not None and alignment_success:
             view_graph.save_viewgraph(self.cache_folder_view_graph, reconstruction, save_images=True,
                                       overwrite=True, to_cpu=True)
-            self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, known_gt_poses)
+            self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction,
+                                                       known_gt_poses)
         elif reconstruction is not None:
-            self.results_writer.visualize_colmap_track(self.config.input_frames - 1, reconstruction, False)
+            self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction, False)
         else:
             print("!!!Reconstruction failed")
 
@@ -269,7 +270,7 @@ class OnboardingPipeline:
             self.results_writer.write_results(frame_i=frame_i, keyframe_graph=self.frame_filter.keyframe_graph)
 
             print(f'Elapsed time in seconds: {time.time() - start:.3f}s, frame {frame_i} out of '
-                  f'{self.config.input_frames - 1}')
+                  f'{self.config.input.input_frames - 1}')
 
         keyframe_graph = self.frame_filter.get_keyframe_graph()
 
@@ -279,16 +280,19 @@ class OnboardingPipeline:
             Tuple[Optional[Reconstruction], bool]:
 
         first_frame_data = self.data_graph.get_frame_data(0)
-        camera_K = first_frame_data.gt_pinhole_K if not self.config.use_default_colmap_K else None
+        camera_K = first_frame_data.gt_pinhole_K if not self.config.onboarding.use_default_colmap_K else None
         reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
-                                                      self.config.init_with_first_two_images, self.config.mapper,
-                                                      self.match_provider_reconstruction, self.config.roma_sample_size,
-                                                      self.colmap_base_path, self.config.add_track_merging_matches,
-                                                      camera_K, self.config.device)
+                                                      self.config.onboarding.init_with_first_two_images,
+                                                      self.config.onboarding.mapper,
+                                                      self.match_provider_reconstruction,
+                                                      self.config.onboarding.sample_size,
+                                                      self.colmap_base_path,
+                                                      self.config.onboarding.add_track_merging_matches,
+                                                      camera_K, self.config.run.device)
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
-        if self.config.similarity_transformation == 'depths':
+        if self.config.onboarding.similarity_transformation == 'depths':
 
             first_image_filename = str(first_frame_data.image_filename)
 
@@ -301,7 +305,7 @@ class OnboardingPipeline:
 
             reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_obj2cam, image_depths,
                                                                            first_image_filename)
-        elif self.config.similarity_transformation == 'kabsch':
+        elif self.config.onboarding.similarity_transformation == 'kabsch':
             gt_Se3_world2cam_poses = {
                 str(self.data_graph.get_frame_data(n).image_filename):
                     self.data_graph.get_frame_data(n).gt_Se3_world2cam
@@ -309,7 +313,7 @@ class OnboardingPipeline:
             }
             reconstruction, align_success = align_with_kabsch(reconstruction, gt_Se3_world2cam_poses)
         else:
-            raise ValueError(f'Unknown similarity transform method {self.config.similarity_transformation}')
+            raise ValueError(f'Unknown similarity transform method {self.config.onboarding.similarity_transformation}')
 
         return reconstruction, align_success
 
