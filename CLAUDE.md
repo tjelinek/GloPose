@@ -11,7 +11,7 @@ poses of the object in novel images.
 
 - **Environment:** Conda (`environment.yml`), env name `glopose`, Python 3.13
 - **Install:** `conda env create -f environment.yml && conda activate glopose`
-- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, Metric3D, SAM2, vggt, ho3d) — some installed as
+- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, SAM2, vggt, ho3d) — some installed as
   editable pip packages
 
 ## Running
@@ -202,7 +202,7 @@ The RCI personal folder is sshfs-mounted locally:
 │   └── condensation/   # Template condensation results
 ├── data/           # Datasets (HANDAL, HO3D, NAVI, BEHAVE, bop, GoogleScannedObjects, etc.)
 ├── weights/        # Pre-trained model weights
-│   ├── RoMa/, SegmentAnything2/, Metric3D/, DINO/, DepthAnythingV2/
+│   ├── RoMa/, SegmentAnything2/, DINO/, DepthAnythingV2/
 │   └── Dust3r/, FastSAM/, MFT/, RAFT/, XMem/
 ├── logs/           # Job logs
 └── tmp/            # Temporary files (Gradio temp dir, etc.)
@@ -251,7 +251,7 @@ CWD-dependent, pollutes namespaces, and provides no insulation from API changes.
 - `app.py:113` has `except Exception: pass`.
 - `onboarding_pipeline.py` has zero try/except — COLMAP failure is communicated only via `reconstruction is None` and
   print statements.
-- `metric3d.py:15` and `render_ho3d_segmantations.py:107` have bare `except:` catching even `SystemExit`/
+- `render_ho3d_segmantations.py:107` has bare `except:` catching even `SystemExit`/
   `KeyboardInterrupt`.
 
 ---
@@ -279,7 +279,6 @@ These are prerequisites for working on modules A/B/C independently.
     - [ ] Wrap DINOv2 descriptor computation behind a `DescriptorExtractor` interface (currently scattered across
       `view_graph.py`, `condensate_templates.py`, `pose_estimator.py`)
     - [ ] Define our own `Detection` type; adapter converts to/from cnos `Detections` at the boundary
-- [ ] Create `adapters/metric3d_adapter.py` for Metric3D
 - [ ] Create `adapters/sam2_adapter.py` for SAM2 (currently inline in `frame_provider.py:341`)
 - [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
 
@@ -380,7 +379,7 @@ These can be done in parallel with the module work.
     - [ ] `detection/` — condensation, detector, representation building
     - [ ] `pose_estimation/` — pose estimator, flow-based alignment
     - [ ] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate)
-    - [ ] `adapters/` — external repo wrappers (cnos, metric3d, sam2)
+    - [ ] `adapters/` — external repo wrappers (cnos, sam2)
 - [ ] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
 - [ ] Update all imports across the codebase
 - [ ] Verify all entry points (`run_*.py`, `app.py`) still work
@@ -399,7 +398,7 @@ These can be done in parallel with the module work.
 #### 5.2 Error handling
 
 - [ ] Replace `assert` with `raise ValueError`/`RuntimeError` for runtime validation
-- [ ] Replace bare `except:` with `except Exception:` in `metric3d.py:15` and `render_ho3d_segmantations.py:107`
+- [ ] Replace bare `except:` with `except Exception:` in `render_ho3d_segmantations.py:107`
 - [ ] Add structured error handling for COLMAP reconstruction failures in `onboarding_pipeline.py`
 - [ ] Review `exception_logger` — at minimum log the sequence that failed
 
@@ -476,7 +475,7 @@ alignment to skip and no evaluation to run.
 - [ ] Fix `utils/experiment_runners.py`: for dynamic sequences, load at minimum the first-frame GT pose
   (already available in BOP `scene_gt.json`) so depth-based alignment can proceed
 - [ ] Verify `align_reconstruction_with_pose()` in `glomap.py` works end-to-end: it needs GT pose for
-  first frame + depth maps. Test with Metric3D-predicted depth and with GT depth (where available)
+  first frame + depth maps. Test with predicted depth and with GT depth (where available)
 - [ ] After alignment, evaluate all registered cameras against their GT poses (for sequences where
   per-frame GT exists in `scene_gt.json` but we don't use it during reconstruction)
 - [ ] Add `similarity_transformation='depths'` results to the same CSV format as static onboarding
@@ -484,8 +483,8 @@ alignment to skip and no evaluation to run.
 #### P2.2 Scale recovery robustness
 
 - [ ] Compare scale recovery methods: (a) current depth-based median ratio, (b) using GT depth for
-  first frame only vs Metric3D depth, (c) using multiple frames' depth for more robust scale estimation
-- [ ] If Metric3D depth is too noisy for reliable scale, consider fallback: use the known object diameter
+  first frame only vs predicted depth, (c) using multiple frames' depth for more robust scale estimation
+- [ ] If predicted depth is too noisy for reliable scale, consider fallback: use the known object diameter
   (available in BOP `models_info.json`) as a scale reference
 
 #### P2.3 Run dynamic onboarding across datasets
