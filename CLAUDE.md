@@ -270,7 +270,8 @@ These are prerequisites for working on modules A/B/C independently.
     - [x] Define our own `Detection` type (`data_structures/types.py`); adapter converts to/from cnos `Detections`
       via `make_cnos_detections()` at the boundary
 - [x] Create `adapters/sam2_adapter.py` for SAM2 (was inline in `frame_provider.py`)
-- [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
+- [x] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters — **not now**. All three are unused
+  or minimally used (ho3d: one offline utility script only). Adapters deferred to P3.4 ablation studies.
 
 ### Phase 2: Module B — Detection
 
