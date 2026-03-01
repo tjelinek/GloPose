@@ -95,7 +95,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ### Key directories
 
-- `adapters/` — External repository wrappers (cnos adapter done; sam2 adapter TODO); sole location for `sys.path` manipulation
+- `adapters/` — External repository wrappers (cnos, sam2); sole location for `sys.path` manipulation and Hydra init
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring
@@ -247,6 +247,10 @@ cnos integration is centralized in `adapters/cnos_adapter.py` — the sole locat
 and cnos imports. Scoring functions are vendored in `detection/scoring.py`, small utilities in `utils/mask_utils.py`
 and `utils/bbox_utils.py`. No other files import cnos internals directly.
 
+SAM2 video predictor is wrapped in `adapters/sam2_adapter.py` — the sole location for SAM2 imports and
+Hydra config initialization. `SAM2SegmentationProvider` in `data_providers/frame_provider.py` imports
+`build_video_predictor` and `mask_to_sam_prompt` from the adapter.
+
 ---
 
 ## TODO
@@ -265,7 +269,7 @@ These are prerequisites for working on modules A/B/C independently.
       and `utils/bbox_utils.py`
     - [x] Define our own `Detection` type (`data_structures/types.py`); adapter converts to/from cnos `Detections`
       via `make_cnos_detections()` at the boundary
-- [ ] Create `adapters/sam2_adapter.py` for SAM2 (currently inline in `frame_provider.py:341`)
+- [x] Create `adapters/sam2_adapter.py` for SAM2 (was inline in `frame_provider.py`)
 - [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
 
 ### Phase 2: Module B — Detection

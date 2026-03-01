@@ -9,8 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from hydra import initialize_config_dir
-from hydra.core.global_hydra import GlobalHydra
+
 from kornia.image import ImageSize
 from torchvision import transforms
 from torchvision.io import decode_image, ImageReadMode
@@ -342,10 +341,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
         self.sequence_length = image_provider.sequence_length
         self.skip_indices = config.input.skip_indices
 
-        from sam2.build_sam import build_sam2_video_predictor
-        import sam2
-
-        self.predictor: Optional[SamPredictor] = None
+        self.predictor = None
         self.cache_folder: Optional[Path] = sam2_cache_folder
 
         if self.cache_folder is not None:
@@ -365,13 +361,8 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
         if not self.cache_exists:
 
-            checkpoint = Path("/mnt/personal/jelint19/weights/SegmentAnything2/sam2.1_hiera_large.pt")
-            cfg_dir = Path(sam2.__file__).parent / "configs"
-            if GlobalHydra.instance().is_initialized():
-                GlobalHydra.instance().clear()
-            with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
-                self.predictor = build_sam2_video_predictor("sam2.1/sam2.1_hiera_l.yaml", checkpoint,
-                                                            device=self.device)
+            from adapters.sam2_adapter import build_video_predictor, mask_to_sam_prompt
+            self.predictor = build_video_predictor(device=self.device)
 
             sam2_tmp_path = write_folder / 'sam2_imgs'
             sam2_tmp_path.mkdir(exist_ok=True, parents=True)
@@ -383,7 +374,7 @@ class SAM2SegmentationProvider(SegmentationProvider):
                                               offload_state_to_cpu=True,
                                               )
 
-            initial_mask_sam_format = self._mask_to_sam_prompt(initial_segmentation)
+            initial_mask_sam_format = mask_to_sam_prompt(initial_segmentation)
             out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
                                                                                       initial_mask_sam_format)
 
@@ -408,14 +399,6 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def get_sequence_length(self):
         return self.sequence_length
-
-    @staticmethod
-    def _image_to_sam(image: torch.Tensor) -> np.ndarray:
-        return image.squeeze().permute(1, 2, 0).numpy(force=True)
-
-    @staticmethod
-    def _mask_to_sam_prompt(mask: torch.Tensor) -> np.ndarray:
-        return mask.squeeze().to(torch.bool).numpy(force=True)
 
     def next_segmentation(self, frame_i, image) -> torch.Tensor:
 
