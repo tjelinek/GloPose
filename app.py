@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import math
 import os
 import shutil
@@ -30,6 +31,8 @@ from utils.dataset_sequences import (
 )
 from utils.general import load_config
 from utils.image_utils import get_video_length_in_frames
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -119,8 +122,8 @@ def _get_sequences_for_dataset(dataset: str) -> List[str]:
             return dyn + up + down + both
         elif dataset == "SyntheticObjects":
             return list(SYNTHETIC_OBJECTS_SEQUENCES)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to discover sequences for {dataset}: {e}")
     return []
 
 
