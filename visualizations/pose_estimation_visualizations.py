@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from torchvision import transforms
 
 from utils.image_utils import overlay_mask
-from utils.results_logging import log_correspondences_rerun
+from visualizations.rerun_utils import log_correspondences_rerun
 
 
 class RerunAnnotationsPose:

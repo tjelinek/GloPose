@@ -13,16 +13,13 @@ import torchvision
 from PIL import Image
 from kornia.geometry import Se3
 from matplotlib import pyplot as plt
-from matplotlib.collections import LineCollection
-from matplotlib.colors import Normalize
-
 from data_structures.data_graph import DataGraph
 from data_structures.rerun_annotations import RerunAnnotations
 from configs.glopose_config import GloPoseConfig
 from onboarding.colmap_utils import world2cam_from_reconstruction
 from utils.data_utils import load_texture, load_mesh_using_trimesh
-from utils.flow import source_coords_to_target_coords_image
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
+from visualizations.rerun_utils import log_correspondences_rerun
 from utils.image_utils import overlay_mask
 
 
@@ -844,67 +841,6 @@ class WriteResults:
 
         return Se3_cam2obj
 
-    @staticmethod
-    def plot_matched_lines(ax1, ax2, source_coords, occlusion_mask, occl_threshold, flow, cmap='jet', marker='o',
-                           segment_mask=None, segment_threshold=0.99):
-        """
-        Draws lines from source coordinates in ax1 to target coordinates in ax2.
-        Args:
-        - ax1: The matplotlib axis to draw source points on.
-        - ax2: The matplotlib axis to draw target points on.
-        - source_coords: Source coordinates as a 2xN numpy array (N is the number of points).
-        - target_coords: Target coordinates as a 2xN numpy array.
-        - cmap: Colormap used for plotting.
-        - marker: Marker style for the points.
-        """
-        # Assuming flow is [2, H, W] and source_coords is [2, N]
-        y1, x1 = source_coords.T
-        y2_f, x2_f = source_coords_to_target_coords_image(source_coords, flow)
-
-        # Apply masks
-        valid_mask = occlusion_mask[-y1.astype(int), x1.astype(int), 0] <= occl_threshold
-        if segment_mask is not None:
-            valid_mask &= segment_mask[0, 0, 0, -y1.astype(int), x1.astype(int)] > segment_threshold
-
-        # Filter coordinates and colors based on valid_mask
-        x1, y1, x2_f, y2_f = x1[valid_mask], y1[valid_mask], x2_f[valid_mask], y2_f[valid_mask]
-
-        # Normalize and map colors
-        norm = Normalize(vmin=0, vmax=np.sum(valid_mask))
-        cmap = plt.get_cmap(cmap)
-        colors = cmap(norm(range(np.sum(valid_mask))))
-
-        # Create LineCollection for valid lines
-        lines = np.stack((x1, y1, x2_f, y2_f), axis=1).reshape(-1, 2, 2)
-        lc = LineCollection(lines, colors=colors, linewidths=0.5, alpha=0.8)
-        ax2.add_collection(lc)
-
-        # Scatter plot for source and target points
-        ax1.scatter(x1, y1, color=colors, marker=marker, alpha=0.8, s=1.5)
-        ax2.scatter(x2_f, y2_f, color=colors, marker=marker, alpha=0.8, s=1.5)
-
-    def render_silhouette_overlap(self, last_rendered_silhouette, last_segment_mask, frame_idx):
-        last_rendered_silhouette_binary = last_rendered_silhouette[0] > 0.5
-        last_segment_mask_binary = last_segment_mask[0] > 0.5
-        silh_overlap_image = torch.zeros(1, *last_segment_mask.shape[-2:], 3)
-        R = torch.tensor([255.0, 0, 0])
-        G = torch.tensor([0, 255.0, 0])
-        Y = R + G
-        # Set yellow where there is last_rendered_silhouette and last_segment_mask
-        indicesG = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary > 0))
-        silh_overlap_image[0, indicesG[:, 0], indicesG[:, 1]] = Y
-        # Set red where there is last_rendered_silhouette and not last_segment_mask
-        indicesR = torch.nonzero((last_segment_mask_binary > 0) & (last_rendered_silhouette_binary <= 0))
-        silh_overlap_image[0, indicesR[:, 0], indicesR[:, 1]] = R
-        # Set green where there is not last_rendered_silhouette and last_segment_mask
-        indicesB = torch.nonzero((last_segment_mask_binary <= 0) & (last_rendered_silhouette_binary > 0))
-        silh_overlap_image[0, indicesB[:, 0], indicesB[:, 1]] = G
-
-        silh_overlap_image_np = silh_overlap_image[0].cpu().to(torch.uint8).numpy()
-        (self.write_folder / Path('silhouette_overlap')).mkdir(exist_ok=True, parents=True)
-        silhouette_overlap_path = self.write_folder / 'silhouette_overlap' / Path(f"silhouette_overlap_{frame_idx}.png")
-        imageio.imwrite(silhouette_overlap_path, silh_overlap_image_np)
-
     def visualize_observed_data(self, frame_i):
 
         if frame_i % self.config.visualization.large_images_write_frequency != 0:
@@ -967,29 +903,3 @@ class WriteResults:
             plt.savefig(str(save_path), **kwargs)
 
         plt.close()
-
-
-def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, source_image_height, sample_size=None):
-    if sample_size is not None:
-        random_indices = torch.randperm(min(sample_size, src_yx.shape[0]))
-        src_yx = src_yx[random_indices]
-        target_yx = target_yx[random_indices]
-
-    if len(src_yx.shape) == 1 or src_yx.shape[1] == 0:
-        return  # No matches to draw
-    target_yx_2nd_image = target_yx
-    target_yx_2nd_image[:, 0] = source_image_height + target_yx_2nd_image[:, 0]
-
-    line_strips_xy = np.stack([src_yx[:, [1, 0]], target_yx_2nd_image[:, [1, 0]]], axis=1)
-
-    num_points = line_strips_xy.shape[0]
-    colors = [cmap(i / num_points)[:3] for i in range(num_points)]
-    colors = (np.array(colors) * 255).astype(int).tolist()
-
-    rr.log(
-        rerun_annotation,
-        rr.LineStrips2D(
-            strips=line_strips_xy,
-            colors=colors,
-        ),
-    )

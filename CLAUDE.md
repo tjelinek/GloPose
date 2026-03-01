@@ -235,9 +235,6 @@ The RCI personal folder is sshfs-mounted locally:
 
 ### Structural
 
-- **`results_logging.py` (~995 lines)**: `WriteResults` has 15 methods spanning 10+ responsibilities — rerun blueprint
-  layout (282 lines in `rerun_init` alone), keyframe viz, 3D camera viz, flow matching viz, image I/O, matplotlib
-  helpers, silhouette rendering, math utilities. Should be 4-5 classes.
 - **Duplicated visualization systems**: `results_logging.py` and `visualizations/pose_estimation_visualizations.py` have
   near-identical rerun init, blueprint setup, matching visualization logic, and overlapping annotation constants (
   `RerunAnnotations` vs `RerunAnnotationsPose`).
