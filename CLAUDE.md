@@ -72,8 +72,8 @@ The system has three independent modules that communicate through well-defined d
 |--------------------|------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
 | A. Onboarding      | `onboarding/pipeline.py` (orchestrator), `onboarding/reconstruction.py` (SfM), `onboarding/frame_filter.py`, `data_providers/` | Working. Evaluation extracted to `eval/` module. `OnboardingPipeline` still tightly coupled to all providers.                  |
 | B1. Representation | `detection/representation.py` (condensation), `data_structures/view_graph.py` (ViewGraph)                  | Working. `TemplateBank` dataclass in `data_structures/template_bank.py`. No clean `build_detection_model()` interface yet.     |
-| B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`)                                                      | Working. Despite the class name, it only does detection (the pose call is commented out). Tangled with BOP I/O.               |
-| C. Pose estimation | `detection/detector.py` (commented out at lines 191-196), `onboarding/reconstruction.py` (`predict_poses`) | **Not connected.** Flow provider is initialized but never called. `predict_poses` has `breakpoint()` + dummy return.          |
+| B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`)                                                      | Working. Tangled with BOP I/O. Pose estimation wired in via `--run_pose_estimation` flag.                                     |
+| C. Pose estimation | `pose_estimation/estimator.py` (`PoseEstimator`)                                                           | Working. Matches query against ViewGraph templates, registers into COLMAP reconstruction, extracts 6DoF pose. Not yet evaluated on RCI. |
 
 ### Key data types (interface boundaries)
 
@@ -99,7 +99,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring
-- `pose_estimation/` — pose estimator (placeholder, not yet implemented)
+- `pose_estimation/` — `PoseEstimator`: flow-based matching against ViewGraph templates → COLMAP registration → 6DoF pose
 - `eval/` — Evaluation module: `eval_onboarding.py` (per-keyframe/sequence/dataset CSV), `eval_reconstruction.py`
 - `data_providers/` — Frame, flow, depth, and matching providers (abstract + implementations)
 - `data_structures/` — ViewGraph, DataGraph, KeyframeBuffer, Detection, PoseEstimate, observations
@@ -113,10 +113,11 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 - **Provider pattern:** Abstract base classes (FrameProvider, FlowProvider, MatchingProvider) with multiple backends
 - **Graph-based data:** DataGraph (frames + temporal edges), ViewGraph (3D template library)
-- **Dataclass configs:** `GloPoseConfig` in `configs/glopose_config.py` is the top-level config, composed of sub-configs: `PathsConfig`, `RunConfig`, `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `VisualizationConfig`, `RendererConfig`
+- **Dataclass configs:** `GloPoseConfig` in `configs/glopose_config.py` is the top-level config, composed of sub-configs: `PathsConfig`, `RunConfig`, `InputConfig`, `OnboardingConfig`, `CondensationConfig`, `DetectionConfig`, `PoseEstimationConfig`, `VisualizationConfig`, `RendererConfig`
 - **Narrowed config passing:** Lower-level components receive only the sub-config(s) they need, not the full
   `GloPoseConfig`. For example: `RenderingKaolin` and `Encoder` take `RendererConfig`; frame filters and matching
-  providers take `OnboardingConfig` + `device`; evaluation functions take `RunConfig` + `BaseBOPConfig`.
+  providers take `OnboardingConfig` + `device`; `PoseEstimator` takes `PoseEstimationConfig`;
+  evaluation functions take `RunConfig` + `BaseBOPConfig`.
   Orchestrators (`OnboardingPipeline`, `FrameProviderAll`, `BOPChallengePosePredictor`, `run_*.py` scripts) still
   hold the full `GloPoseConfig` and pass the relevant sub-configs down.
 - **Observation types:** FrameObservation, FlowObservation encapsulate per-frame and cross-frame data
@@ -283,10 +284,12 @@ Goal: clear separation between offline representation building (B1) and online i
 is commented out). Split into two modules:
 
 - [x] Move detection code to `detection/detector.py` (done via file reorganization)
-- [ ] Create `pose_estimation/estimator.py` — pose estimation (currently commented out):
-    - [ ] `estimate_poses(detections, onboarding_result, image, intrinsics) -> List[PoseEstimate]`
-    - [ ] Template matching → PnP or flow-based alignment
-    - [ ] The flow provider is already initialized in `BOPChallengePosePredictor.__init__` — move it here
+- [x] Create `pose_estimation/estimator.py` — `PoseEstimator` class with `estimate_poses()` and
+  `_estimate_single_pose()`. Refactored from old `predict_poses()` in `onboarding/reconstruction.py`.
+  Fixes: removed `breakpoint()`/dummy return, removed `reconstruction.normalize()`, removed `or True` hack,
+  added `try/finally` cleanup for temp COLMAP DB, uses `PoseEstimationConfig`.
+- [x] Wire into `detection/detector.py`: `--run_pose_estimation` flag, ViewGraph loading, camera intrinsics,
+  per-image pose estimation, BOP pose CSV output via `write_bop_pose_csv()`.
 - [x] Define shared types at the boundary: `Detection`, `PoseEstimate` (in `data_structures/types.py`)
 
 #### 2.2 Separate representation building from inference
@@ -320,12 +323,10 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 
 #### 3.1 Implement/reconnect pose estimation
 
-- [ ] Uncomment and refactor the pose estimation call in `detection/detector.py` (lines 191-196)
-- [ ] Create `pose_estimation/estimator.py`:
-    - [ ] 
-      `estimate_poses(detections: List[Detection], onboarding_result: OnboardingResult, image, intrinsics) -> List[PoseEstimate]`
-    - [ ] Template matching → PnP or flow-based alignment
-- [ ] The flow provider (RoMa/UFM) is already initialized in `BOPChallengePosePredictor.__init__` — wire it up
+- [x] Create `pose_estimation/estimator.py` with `PoseEstimator` class (done in TODO 2.1)
+- [x] Wire into `detection/detector.py` with `--run_pose_estimation` flag (done in TODO 2.1)
+- [x] Old `predict_poses()` deleted from `onboarding/reconstruction.py`
+- [ ] Verify end-to-end on RCI with `--run_pose_estimation --templates_source viewgraph` on hope val
 
 #### 3.2 Evaluation
 
@@ -352,7 +353,7 @@ These can be done in parallel with the module work.
 - [x] Reorganize project layout to reflect the three-module architecture:
     - [x] `onboarding/` — `pipeline.py` (OnboardingPipeline), `frame_filter.py`, `reconstruction.py` (SfM), `colmap_utils.py`
     - [x] `detection/` — `representation.py` (condensation/B1), `detector.py` (detection inference/B2)
-    - [x] `pose_estimation/` — placeholder package (not yet implemented)
+    - [x] `pose_estimation/` — `PoseEstimator` (flow matching → COLMAP registration → 6DoF pose)
     - [x] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate) — unchanged
     - [x] `adapters/` — external repo wrappers (cnos adapter done; sam2 adapter still needed)
 - [x] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
@@ -610,19 +611,20 @@ Goal: compare our reconstructed 3D model against GT mesh models.
 
 Goal: demonstrate that our onboarding result can be used for 6DoF pose estimation on novel images.
 
-#### P5.1 Fix `predict_poses` in onboarding/reconstruction.py
+#### P5.1 Fix pose estimation implementation
 
-- [ ] Remove `breakpoint()` at line 888 and dummy `Se3.identity()` return at line 892
-- [ ] Complete the implementation: after registering the query image in the COLMAP reconstruction,
-  extract the estimated `cam_from_world` pose from the mapper result
-- [ ] Handle failure cases (registration fails, too few inliers)
+- [x] Removed `breakpoint()` and dummy `Se3.identity()` return — now extracts actual pose via
+  `get_image_Se3_world2cam()` after successful COLMAP registration
+- [x] Removed `reconstruction.normalize()` that would corrupt the coordinate frame
+- [x] Handles failure cases: returns `None` when no reliable matches or registration fails
+- [x] Implementation moved from `onboarding/reconstruction.py` to `pose_estimation/estimator.py`
 
 #### P5.2 Wire up pose estimation in the detection pipeline
 
-- [ ] Uncomment the `predict_poses` call in `detection/detector.py` (lines 191-196)
-- [ ] For each detection: crop query image to detection bbox, run flow matching against best-matching
-  ViewGraph templates, register into reconstruction, extract pose
-- [ ] Output poses in BOP format (`scene_id, im_id, obj_id, score, R, t, time`)
+- [x] `BOPChallengePosePredictor` now accepts `run_pose_estimation=True` (CLI: `--run_pose_estimation`)
+- [x] For each image: collects `Detection` objects, runs `PoseEstimator.estimate_poses()` with
+  ViewGraphs and camera intrinsics, writes BOP pose CSV via `write_bop_pose_csv()`
+- [x] Old commented-out pose call deleted from `detection/detector.py`
 
 #### P5.3 Evaluate pose estimation
 
