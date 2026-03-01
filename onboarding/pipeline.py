@@ -20,8 +20,8 @@ from data_structures.data_graph import DataGraph
 from data_structures.view_graph import ViewGraph, view_graph_from_datagraph
 from eval.eval_onboarding import resolve_gt_model_path
 from configs.glopose_config import GloPoseConfig
-from pose.frame_filter import create_frame_filter
-from pose.glomap import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
+from onboarding.frame_filter import create_frame_filter
+from onboarding.reconstruction import align_reconstruction_with_pose, align_with_kabsch, reconstruct_images_using_sfm
 from utils.math_utils import Se3_cam_to_obj_to_Se3_obj_1_to_obj_i
 from utils.results_logging import WriteResults
 

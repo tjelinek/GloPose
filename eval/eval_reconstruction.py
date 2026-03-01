@@ -8,7 +8,7 @@ import torch
 from kornia.geometry import Se3, So3, Quaternion
 from pycolmap import Reconstruction
 
-from pose.colmap_utils import get_image_Se3_world2cam
+from onboarding.colmap_utils import get_image_Se3_world2cam
 
 
 def round_numeric_columns(df: pd.DataFrame, decimals: int = 3) -> pd.DataFrame:

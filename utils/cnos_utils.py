@@ -1,18 +1,14 @@
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Tuple, List
 
 import numpy as np
 import torch
-from segment_anything.utils.amg import rle_to_mask
 
-if './repositories/cnos' not in sys.path:
-    sys.path.append('./repositories/cnos')
-
-from src.utils.bbox_utils import xywh_to_xyxy
-from src.model.utils import Detections
+from adapters.cnos_adapter import make_cnos_detections
+from utils.bbox_utils import xywh_to_xyxy
+from utils.mask_utils import rle_to_mask
 
 
 def get_default_detections_per_scene_and_image(default_detections_file: Path) -> Dict[Tuple[int, int], List]:
@@ -48,6 +44,6 @@ def get_detections_cnos_format(default_detections_scene_im: Dict[Tuple[int, int]
         'masks': masks,
     }
 
-    detections = Detections(detections_dict)
+    detections = make_cnos_detections(detections_dict)
 
     return detections

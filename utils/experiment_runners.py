@@ -9,7 +9,7 @@ from data_providers.frame_provider import PrecomputedSegmentationProvider
 from dataset_generators import scenarios
 from eval.eval_onboarding import evaluate_onboarding
 from configs.glopose_config import GloPoseConfig
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
 from utils.data_utils import load_texture, load_mesh

@@ -10,7 +10,6 @@ threadpool_limits(limits=1)
 
 import pickle
 import shutil
-import sys
 import argparse
 import warnings
 from collections import defaultdict, Counter
@@ -31,14 +30,13 @@ from sklearn.covariance import LedoitWolf
 from tqdm import tqdm
 from PIL import Image
 from imblearn.under_sampling import CondensedNearestNeighbour
-from repositories.cnos.segment_anything.utils.amg import rle_to_mask
+from utils.mask_utils import rle_to_mask
 
 from data_structures.template_bank import TemplateBank  # noqa: F401 — re-exported for backward compat
 from utils.bop_challenge import extract_object_id
 from utils.detection_utils import average_patch_similarity
 
-sys.path.append('./repositories/cnos')
-from src.model.dinov2 import descriptor_from_hydra
+from adapters.cnos_adapter import create_descriptor_extractor
 
 warnings.filterwarnings('ignore', message='The number of unique classes is greater than 50%', category=UserWarning)
 
@@ -362,7 +360,7 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
     dino_cls_descriptors = []
     dino_patch_descriptors = []
 
-    dino_descriptor = descriptor_from_hydra(descriptor_model, descriptor_mask_detections, device=device)
+    dino_descriptor = create_descriptor_extractor(descriptor_model, descriptor_mask_detections, device=device)
 
     sequences = sorted(path_to_split.iterdir())
     cnn = CondensedNearestNeighbour(random_state=42, n_jobs=8, n_neighbors=1)
@@ -629,7 +627,7 @@ def get_descriptors_for_condensed_templates(path_to_detections: Path, descriptor
                                             cosine_similarity_quantile: float, mahalanobis_quantile: float,
                                             force_recompute_descriptors: bool = True, device: str = 'cuda') \
         -> TemplateBank:
-    descriptor = descriptor_from_hydra(model=descriptor_name, device=device)
+    descriptor = create_descriptor_extractor(model=descriptor_name, device=device)
 
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)

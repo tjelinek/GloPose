@@ -27,11 +27,11 @@ for arg in "$@"; do
     fi
 done
 
-python -m pose.pose_estimator "${PYTHON_ARGS[@]}"
+python -m detection.detector "${PYTHON_ARGS[@]}"
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ] && [ -n "$FAILED_JOBS_LOG" ]; then
-    echo "python -m pose.pose_estimator ${PYTHON_ARGS[*]}" >> "$FAILED_JOBS_LOG"
+    echo "python -m detection.detector ${PYTHON_ARGS[*]}" >> "$FAILED_JOBS_LOG"
     echo "$SLURM_JOB_NAME" >> "$FAILED_JOBS_LOG"
     echo "---" >> "$FAILED_JOBS_LOG"
 fi

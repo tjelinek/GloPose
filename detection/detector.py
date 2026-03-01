@@ -1,29 +1,24 @@
 import argparse
 import json
 import pickle
-import sys
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 import torch
 import torchvision.ops as ops
-from hydra import initialize_config_dir, compose
-from hydra.core.global_hydra import GlobalHydra
-from hydra.utils import instantiate
-
-sys.path.append('./repositories/cnos')
-from src.model.detector import filter_similarities_dict
 from tqdm import tqdm
 
-from condensate_templates import get_descriptors_for_condensed_templates, _l2n, _apply_whitener
+from adapters.cnos_adapter import create_descriptor_extractor, load_cnos_matching_config, make_cnos_detections
+from detection.scoring import compute_templates_similarity_scores, filter_similarities_dict
+from detection.representation import get_descriptors_for_condensed_templates, _l2n, _apply_whitener
 from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_structures.template_bank import TemplateBank
 from data_structures.types import Detection
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
 from configs.glopose_config import GloPoseConfig
-from repositories.cnos.segment_anything.utils.amg import rle_to_mask
+from utils.mask_utils import rle_to_mask
 from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
 from utils.bop_io import detection_to_bop_record
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
@@ -44,20 +39,8 @@ class BOPChallengePosePredictor:
 
         self._initialize_flow_provider()
 
-        if GlobalHydra.instance().is_initialized():
-            GlobalHydra.instance().clear()
-        cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
-        overrides = []
-
-        for override_k, override_v in matching_config_overrides.items():
-            if override_v is not None:
-                overrides.append(f'model.matching_config.{override_k}={override_v}')
-
-        with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-            cnos_cfg = compose(config_name="run_inference", overrides=overrides)
-
-        self.cnos_matching_config = instantiate(cnos_cfg.model.matching_config)
-        self.cnos_postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
+        self.cnos_matching_config, self.cnos_postprocessing_config = \
+            load_cnos_matching_config(matching_config_overrides)
 
     def _initialize_flow_provider(self) -> None:
         self.flow_provider = create_matching_provider(self.config.onboarding.filter_matcher, self.config.onboarding, self.config.run.device)
@@ -84,8 +67,7 @@ class BOPChallengePosePredictor:
         template_segmentations: Dict[int, torch.Tensor]
 
         view_graphs: Dict[int, ViewGraph] = {}
-        from src.model.dinov2 import descriptor_from_hydra
-        dino_descriptor = descriptor_from_hydra(descriptor, descriptor_mask_detections, self.config.run.device)
+        dino_descriptor = create_descriptor_extractor(descriptor, descriptor_mask_detections, self.config.run.device)
         if templates_source == 'viewgraph':
             view_graphs: Dict[Any, ViewGraph] = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
                                                                               self.config.run.device)
@@ -250,9 +232,6 @@ class BOPChallengePosePredictor:
 
     def proces_custom_sam_detections(self, cnos_detections, template_data: TemplateBank, image, dino_descriptor,
                                      descriptor_mask_detections, recompute_default_descriptors=True):
-        from src.model.utils import Detections
-        from src.model.detector import compute_templates_similarity_scores
-
         default_detections_masks = []
         for detection in cnos_detections['masks']:
             detection_mask = rle_to_mask(detection)
@@ -261,14 +240,10 @@ class BOPChallengePosePredictor:
         default_detections_masks = torch.stack(default_detections_masks, dim=0)
 
         if recompute_default_descriptors:
-            detections_dict = {
-                'masks': default_detections_masks,
-                'boxes': ops.masks_to_boxes(default_detections_masks.to(torch.float)).to(torch.long)
-            }
-            cnos_detections_class_format = Detections(detections_dict)
+            boxes = ops.masks_to_boxes(default_detections_masks.to(torch.float)).to(torch.long)
             image_np = image.permute(1, 2, 0).numpy(force=True)
             default_detections_cls_descriptors, default_detections_patch_descriptors = \
-                dino_descriptor(image_np, cnos_detections_class_format)
+                dino_descriptor.extract_descriptors(image_np, default_detections_masks, boxes)
         else:
             default_detections_cls_descriptors = torch.from_numpy(cnos_detections['descriptors']).to(
                 self.config.run.device)
@@ -300,7 +275,7 @@ class BOPChallengePosePredictor:
             'object_ids': selected_objects,
             'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
         }
-        detections = Detections(detections_dict)
+        detections = make_cnos_detections(detections_dict)
         keep_indices = detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
         filter_similarities_dict(detections_scores, keep_indices)
         keep_indices = detections.apply_nms_for_masks_inside_masks()

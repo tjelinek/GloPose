@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from kornia.geometry import Quaternion, Se3
 
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_tum_rgbd_sequences
 from utils.general import load_config
 from utils.runtime_utils import parse_args

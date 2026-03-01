@@ -1,5 +1,4 @@
 import json
-import sys
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -435,9 +434,8 @@ def group_test_targets_by_image(test_annotations):
 
 def get_descriptors_for_templates(path_to_split: Path, path_to_split_cache: Path, descriptor: str, device='cuda') \
         -> Tuple[Dict[int, torch.Tensor], ...]:
-    sys.path.append('./repositories/cnos')
-    from src.model.dinov2 import descriptor_from_hydra
-    descriptor = descriptor_from_hydra(model=descriptor)
+    from adapters.cnos_adapter import create_descriptor_extractor
+    descriptor = create_descriptor_extractor(model=descriptor)
 
     images_dict: Dict[int, Any] = defaultdict(list)
     segmentations_dict: Dict[int, Any] = defaultdict(list)

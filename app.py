@@ -16,8 +16,8 @@ from hloc.utils import viz_3d
 from data_providers.flow_provider import UFMFlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from configs.glopose_config import GloPoseConfig
-from onboarding_pipeline import OnboardingPipeline
-from pose.glomap import reconstruct_images_using_sfm
+from onboarding.pipeline import OnboardingPipeline
+from onboarding.reconstruction import reconstruct_images_using_sfm
 from utils.data_utils import is_video_input
 from utils.dataset_sequences import (
     get_handal_sequences,

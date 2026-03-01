@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from configs.glopose_config import GloPoseConfig
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.general import load_config
 from utils.runtime_utils import parse_args
 

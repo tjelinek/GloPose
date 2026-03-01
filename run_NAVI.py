@@ -7,7 +7,7 @@ from kornia.geometry import Se3, Quaternion, PinholeCamera
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from eval.eval_onboarding import evaluate_onboarding
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_navi_sequences
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config

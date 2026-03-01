@@ -19,8 +19,8 @@ from tqdm import tqdm
 from data_providers.flow_provider import FlowProviderDirect
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
 from data_structures.view_graph import ViewGraph
-from pose.colmap_utils import colmap_K_params_vec
-from pose.frame_filter import compute_matching_reliability
+from onboarding.colmap_utils import colmap_K_params_vec
+from onboarding.frame_filter import compute_matching_reliability
 from utils.conversions import Se3_to_Rigid3d
 from utils.image_utils import get_intrinsics_from_exif
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger

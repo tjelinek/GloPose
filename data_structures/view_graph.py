@@ -1,6 +1,5 @@
 import pickle
 import shutil
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Tuple
@@ -12,9 +11,11 @@ import torchvision.utils as vutils
 from kornia.geometry import Se3, Quaternion
 from tqdm import tqdm
 
+import adapters.cnos_adapter  # noqa: F401 — ensures cnos on sys.path for pickle deserialization
+
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
-from pose.colmap_utils import merge_two_databases, merge_colmap_reconstructions
+from onboarding.colmap_utils import merge_two_databases, merge_colmap_reconstructions
 
 @dataclass
 class ViewGraphNode:
@@ -137,8 +138,6 @@ def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
     """Loads the graph structure and associated images/segmentations from disk."""
     graph_path = load_dir / "graph.pkl"
 
-    sys.path.append('./repositories/cnos')
-
     with open(graph_path, "rb") as f:
         view_graph: ViewGraph = pickle.load(f)
         view_graph.send_to_device(device)
@@ -161,13 +160,9 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
                            data_graph.storage_device)
 
     if colmap_reconstruction is not None:
-        from einops import rearrange
-        from torchvision.ops import masks_to_boxes
-        sys.path.append('./repositories/cnos')
-        from src.model.dinov2 import descriptor_from_hydra
-        from src.model.utils import Detections
+        from adapters.cnos_adapter import create_descriptor_extractor
 
-        dino_model = descriptor_from_hydra()
+        descriptor_extractor = create_descriptor_extractor()
 
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
@@ -182,7 +177,7 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
             # Compute DINOv2 descriptor for this node
             descriptor = _compute_dino_descriptor(
-                frame_observation.observed_image, frame_observation.observed_segmentation, dino_model)
+                frame_observation.observed_image, frame_observation.observed_segmentation, descriptor_extractor)
 
             view_graph.add_node(frame_index, Se3_obj2cam, frame_observation, image_id, image.name, descriptor)
 
@@ -203,18 +198,16 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
 
 
 def _compute_dino_descriptor(image_tensor: torch.Tensor, segmentation_mask: torch.Tensor,
-                             dino_model) -> torch.Tensor:
+                             descriptor_extractor) -> torch.Tensor:
     """Compute a DINOv2 descriptor from an image tensor and segmentation mask."""
     from einops import rearrange
     from torchvision.ops import masks_to_boxes
-    sys.path.append('./repositories/cnos')
-    from src.model.utils import Detections
 
     segmentation_mask = segmentation_mask.squeeze(0)
     segmentation_bbox = masks_to_boxes(segmentation_mask)
     image_np = rearrange((image_tensor * 255).to(torch.uint8), '1 c h w -> h w c').numpy(force=True)
-    detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
-    _cls_descriptor, dense_descriptor = dino_model(image_np, detections)
+    _cls_descriptor, dense_descriptor = descriptor_extractor.extract_descriptors(
+        image_np, segmentation_mask, segmentation_bbox)
     return dense_descriptor.squeeze()
 
 

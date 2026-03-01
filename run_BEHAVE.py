@@ -7,7 +7,7 @@ from PIL import Image
 from kornia.geometry import Quaternion, Se3
 
 from eval.eval_onboarding import evaluate_onboarding
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.dataset_sequences import get_behave_sequences
 from utils.general import load_config
 from utils.image_utils import get_nth_video_frame

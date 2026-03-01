@@ -70,16 +70,16 @@ The system has three independent modules that communicate through well-defined d
 
 | Module             | Current location                                                                                           | Status                                                                                                                         |
 |--------------------|------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| A. Onboarding      | `onboarding_pipeline.py` (orchestrator), `pose/glomap.py` (SfM), `pose/frame_filter.py`, `data_providers/` | Working but monolithic. `OnboardingPipeline` is tightly coupled to all providers.                                              |
-| B1. Representation | `condensate_templates.py` (condensation), `view_graph.py` (ViewGraph)                                      | Working. `TemplateBank` dataclass exists but is defined in `condensate_templates.py`.                                          |
-| B2. Detection      | `pose/pose_estimator.py` (`BOPChallengePosePredictor`)                                                     | Working. Despite the class name, it only does detection (the pose call is commented out). Tangled with BOP I/O and evaluation. |
-| C. Pose estimation | `pose/pose_estimator.py` (commented out at lines 211-216)                                                  | **Not connected.** The flow provider is initialized but never called.                                                          |
+| A. Onboarding      | `onboarding/pipeline.py` (orchestrator), `onboarding/reconstruction.py` (SfM), `onboarding/frame_filter.py`, `data_providers/` | Working but monolithic. `OnboardingPipeline` is tightly coupled to all providers.                                              |
+| B1. Representation | `detection/representation.py` (condensation), `view_graph.py` (ViewGraph)                                  | Working. `TemplateBank` dataclass exists in `data_structures/template_bank.py`.                                                |
+| B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`)                                                      | Working. Despite the class name, it only does detection (the pose call is commented out). Tangled with BOP I/O and evaluation. |
+| C. Pose estimation | `detection/detector.py` (commented out at lines 211-216)                                                   | **Not connected.** The flow provider is initialized but never called.                                                          |
 
 ### Key data types (interface boundaries)
 
 - **`ViewGraph`** (`data_structures/view_graph.py`): Per-object posed keyframes + COLMAP reconstruction. Primary
   onboarding output.
-- **`TemplateBank`** (`condensate_templates.py`): Condensed detection-ready templates with descriptors and statistical
+- **`TemplateBank`** (`data_structures/template_bank.py`): Condensed detection-ready templates with descriptors and statistical
   params. Bridge between onboarding and detection.
 - **`Detections`** (from `repositories/cnos/src/model/utils.py`): Scored bboxes + masks. Detection output. Currently an
   external type — should become our own.
@@ -94,12 +94,15 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ### Key directories
 
+- `adapters/` — External repository wrappers (cnos); sole location for `sys.path` manipulation
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
-- `pose/` — SfM (glomap.py), frame filtering, COLMAP utils, pose estimation
+- `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
+- `detection/` — template condensation (representation building), detector (inference), scoring
+- `pose_estimation/` — pose estimator (placeholder, not yet implemented)
 - `data_providers/` — Frame, flow, depth, and matching providers (abstract + implementations)
 - `data_structures/` — ViewGraph, DataGraph, KeyframeBuffer, observations
 - `models/` — Mesh rendering (Kaolin), feature encoding
-- `utils/` — Dataset sequences, math (SE(3)), image I/O, evaluation, results logging
+- `utils/` — Dataset sequences, math (SE(3)), image I/O, evaluation, results logging, mask/bbox utils
 - `visualizations/` — Flow and pose visualization helpers
 - `scripts/` — Dataset downloaders, evaluation, job runners
 - `repositories/` — External dependency submodules (do not edit)
@@ -118,12 +121,13 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ### Cross-cutting concerns
 
-- **DINOv2 descriptors** are computed in `view_graph.py` (standalone functions, no longer in `ViewGraph` class),
-  `condensate_templates.py` (representation), and `pose_estimator.py` (detection). Still scattered — should be
-  behind a single descriptor service / adapter.
-- **BOP dataset conventions** (folder layout, splits, annotations) are known by `pose_estimator.py`,
-  `condensate_templates.py`, and many `run_*.py` scripts. Should be encapsulated in a BOP data adapter.
-- **`Detections` type** is imported from the external cnos repo. Should be our own type at the module boundary.
+- **DINOv2 descriptors** are centralized behind `adapters/cnos_adapter.py` (`DescriptorExtractor` protocol,
+  `CnosDescriptorExtractor` implementation). All consumers use `create_descriptor_extractor()` or pass
+  a `DescriptorExtractor` instance — no direct cnos imports outside `adapters/`.
+- **BOP dataset conventions** (folder layout, splits, annotations) are known by `detection/detector.py`,
+  `detection/representation.py`, and many `run_*.py` scripts. Should be encapsulated in a BOP data adapter.
+- **`Detections` type** from cnos is accessed via `adapters.cnos_adapter.make_cnos_detections()` for NMS
+  methods. Should eventually become our own type at the module boundary.
 
 ## Code Conventions
 
@@ -237,9 +241,9 @@ The RCI personal folder is sshfs-mounted locally:
 
 ### External Repo Integration
 
-All external repos are integrated via `sys.path.append('./repositories/...')` scattered across 10+ files. This is
-CWD-dependent, pollutes namespaces, and provides no insulation from API changes. Files that touch cnos internals:
-`view_graph.py`, `pose_estimation_visualizations.py`, `condensate_templates.py`, `bop_challenge.py`, `cnos_utils.py`.
+cnos integration is centralized in `adapters/cnos_adapter.py` — the sole location for `sys.path` manipulation
+and cnos imports. Scoring functions are vendored in `detection/scoring.py`, small utilities in `utils/mask_utils.py`
+and `utils/bbox_utils.py`. No other files import cnos internals directly.
 
 ### Error Handling
 
@@ -255,10 +259,12 @@ These are prerequisites for working on modules A/B/C independently.
 
 #### 1.1 External repo adapters
 
-- [ ] Create `adapters/cnos_adapter.py` — single location for `sys.path` manipulation and cnos imports (DINOv2
+- [x] Create `adapters/cnos_adapter.py` — single location for `sys.path` manipulation and cnos imports (DINOv2
   descriptors, `Detections` type, Hydra configs). All other files import from the adapter.
-    - [ ] Wrap DINOv2 descriptor computation behind a `DescriptorExtractor` interface (currently scattered across
-      `view_graph.py`, `condensate_templates.py`, `pose_estimator.py`)
+    - [x] Wrap DINOv2 descriptor computation behind a `DescriptorExtractor` interface (currently scattered across
+      `view_graph.py`, `detection/representation.py`, `detection/detector.py`)
+    - [x] Vendor scoring functions into `detection/scoring.py`, mask/bbox utils into `utils/mask_utils.py`
+      and `utils/bbox_utils.py`
     - [ ] Define our own `Detection` type; adapter converts to/from cnos `Detections` at the boundary
 - [ ] Create `adapters/sam2_adapter.py` for SAM2 (currently inline in `frame_provider.py:341`)
 - [ ] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters
@@ -267,28 +273,24 @@ These are prerequisites for working on modules A/B/C independently.
 
 Goal: clear separation between offline representation building (B1) and online inference (B2).
 
-#### 2.1 Split `pose/pose_estimator.py` into detection and pose estimation modules
+#### 2.1 Split detection and pose estimation logic
 
-`BOPChallengePosePredictor` currently only does detection (the pose call is commented out at lines 211-216).
-Split into two modules:
+`BOPChallengePosePredictor` (now in `detection/detector.py`) currently only does detection (the pose call
+is commented out). Split into two modules:
 
-- [ ] Create `detection/detector.py` — detection inference:
-    - [ ] `detect(image, detection_model: DetectionModel) -> List[Detection]`
-    - [ ] SAM proposal generation + descriptor matching + NMS
-    - [ ] Move all detection-related code from `BOPChallengePosePredictor` here
+- [x] Move detection code to `detection/detector.py` (done via file reorganization)
 - [ ] Create `pose_estimation/estimator.py` — pose estimation (currently commented out):
     - [ ] `estimate_poses(detections, onboarding_result, image, intrinsics) -> List[PoseEstimate]`
     - [ ] Template matching → PnP or flow-based alignment
     - [ ] The flow provider is already initialized in `BOPChallengePosePredictor.__init__` — move it here
 - [ ] Define shared types at the boundary: `Detection`, `PoseEstimate`
-- [ ] Keep `pose/pose_estimator.py` as a thin wrapper or delete once consumers are migrated
 
 #### 2.2 Separate representation building from inference
 
-- [ ] Extract condensation logic from `condensate_templates.py` into a `detection/representation.py` (or similar):
-    - [ ] `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel`
-    - [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
-    - [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
+- [x] Condensation logic moved to `detection/representation.py` (done via file reorganization)
+- [ ] Define clean `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel` interface
+- [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
+- [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
 
 #### 2.3 CNOS integration investigation
 
@@ -302,7 +304,7 @@ Split into two modules:
 #### 2.4 Clean up BOP coupling
 
 - [ ] BOP folder conventions (scene/image path construction, annotation loading) are scattered across
-  `pose_estimator.py`, `condensate_templates.py`, and `run_*.py` scripts
+  `detection/detector.py`, `detection/representation.py`, and `run_*.py` scripts
 - [ ] Extract into a `bop_data.py` adapter: `load_annotations`, `get_image_path`, `get_scene_folder`, etc.
 - [ ] Detection module should accept images and models, not know about BOP folder layout
 
@@ -314,7 +316,7 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 
 #### 3.1 Implement/reconnect pose estimation
 
-- [ ] Uncomment and refactor the pose estimation call in `pose_estimator.py` (lines 211-216)
+- [ ] Uncomment and refactor the pose estimation call in `detection/detector.py` (lines 211-216)
 - [ ] Create `pose_estimation/estimator.py`:
     - [ ] 
       `estimate_poses(detections: List[Detection], onboarding_result: OnboardingResult, image, intrinsics) -> List[PoseEstimate]`
@@ -341,15 +343,15 @@ These can be done in parallel with the module work.
 
 #### 4.1 Reorganize file structure
 
-- [ ] Reorganize project layout to reflect the three-module architecture:
-    - [ ] `onboarding/` — OnboardingPipeline, frame filtering, SfM, DataGraph
-    - [ ] `detection/` — condensation, detector, representation building
-    - [ ] `pose_estimation/` — pose estimator, flow-based alignment
-    - [ ] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate)
-    - [ ] `adapters/` — external repo wrappers (cnos, sam2)
-- [ ] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
-- [ ] Update all imports across the codebase
-- [ ] Verify all entry points (`run_*.py`, `app.py`) still work
+- [x] Reorganize project layout to reflect the three-module architecture:
+    - [x] `onboarding/` — `pipeline.py` (OnboardingPipeline), `frame_filter.py`, `reconstruction.py` (SfM), `colmap_utils.py`
+    - [x] `detection/` — `representation.py` (condensation/B1), `detector.py` (detection inference/B2)
+    - [x] `pose_estimation/` — placeholder package (not yet implemented)
+    - [x] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate) — unchanged
+    - [ ] `adapters/` — external repo wrappers (cnos, sam2) — not yet created
+- [x] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
+- [x] Update all imports across the codebase
+- [ ] Verify all entry points (`run_*.py`, `app.py`) still work on RCI
 
 #### 4.2 Visualization
 
@@ -412,7 +414,7 @@ whether the reconstruction is *complete* (covers the whole object, not just one 
 
 - [ ] Implement viewpoint coverage metric: for each reconstruction, compute the angular span of camera
   poses (e.g., solid angle coverage on the viewing sphere). Report fraction of hemisphere/sphere covered.
-- [ ] Add to `utils/eval_reconstruction.py`: `compute_viewpoint_coverage(reconstruction) -> float`
+- [ ] Add to `eval/eval_reconstruction.py`: `compute_viewpoint_coverage(reconstruction) -> float`
 - [ ] Add completeness columns to `reconstruction_keyframe_stats.csv` output
 
 ---
@@ -429,7 +431,7 @@ alignment to skip and no evaluation to run.
 
 - [ ] Fix `utils/experiment_runners.py`: for dynamic sequences, load at minimum the first-frame GT pose
   (already available in BOP `scene_gt.json`) so depth-based alignment can proceed
-- [ ] Verify `align_reconstruction_with_pose()` in `glomap.py` works end-to-end: it needs GT pose for
+- [ ] Verify `align_reconstruction_with_pose()` in `onboarding/reconstruction.py` works end-to-end: it needs GT pose for
   first frame + depth maps. Test with predicted depth and with GT depth (where available)
 - [ ] After alignment, evaluate all registered cameras against their GT poses (for sequences where
   per-frame GT exists in `scene_gt.json` but we don't use it during reconstruction)
@@ -475,7 +477,7 @@ Compare our filtered ViewGraph (selective edges based on matching reliability) a
 (all-to-all) ViewGraph.
 
 - [ ] Verify that `frame_filter_view_graph='dense'` config option creates all-to-all edges in the
-  ViewGraph (check `frame_filter.py` and `onboarding_pipeline.py`)
+  ViewGraph (check `onboarding/frame_filter.py` and `onboarding/pipeline.py`)
 - [ ] Run with `frame_filter_view_graph='dense'` on HANDAL static sequences — same keyframes as
   our adaptive filter, but with all-to-all matching
 - [ ] Run with our default filtered ViewGraph on the same sequences
@@ -602,7 +604,7 @@ Goal: compare our reconstructed 3D model against GT mesh models.
 
 Goal: demonstrate that our onboarding result can be used for 6DoF pose estimation on novel images.
 
-#### P5.1 Fix `predict_poses` in glomap.py
+#### P5.1 Fix `predict_poses` in onboarding/reconstruction.py
 
 - [ ] Remove `breakpoint()` at line 889 and dummy `Se3.identity()` return
 - [ ] Complete the implementation: after registering the query image in the COLMAP reconstruction,
@@ -611,7 +613,7 @@ Goal: demonstrate that our onboarding result can be used for 6DoF pose estimatio
 
 #### P5.2 Wire up pose estimation in the detection pipeline
 
-- [ ] Uncomment the `predict_poses` call in `pose_estimator.py` (lines 205-210)
+- [ ] Uncomment the `predict_poses` call in `detection/detector.py` (lines 205-210)
 - [ ] For each detection: crop query image to detection bbox, run flow matching against best-matching
   ViewGraph templates, register into reconstruction, extract pose
 - [ ] Output poses in BOP format (`scene_id, im_id, obj_id, score, R, t, time`)

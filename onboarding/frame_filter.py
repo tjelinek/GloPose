@@ -10,7 +10,7 @@ import torch
 from data_providers.flow_provider import FlowProviderDirect, MatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from configs.glopose_config import OnboardingConfig
-from pose.colmap_utils import colmap_K_params_vec
+from onboarding.colmap_utils import colmap_K_params_vec
 from utils.image_utils import otsu_threshold
 
 

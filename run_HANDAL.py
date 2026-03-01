@@ -2,7 +2,7 @@ from pathlib import Path
 
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from eval.eval_onboarding import evaluate_onboarding
-from onboarding_pipeline import OnboardingPipeline
+from onboarding.pipeline import OnboardingPipeline
 from utils.bop_challenge import add_extrinsics_to_pinhole_params, load_gt_images, load_gt_segmentations, \
     extract_gt_Se3_cam2obj, extract_object_id, get_pinhole_params
 from utils.dataset_sequences import get_handal_sequences

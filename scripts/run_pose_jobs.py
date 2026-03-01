@@ -42,7 +42,7 @@ def submit_job(config, experiment_folder=None, failed_jobs_log=None, dry_run=Fal
 
     if dry_run:
         # cmd_joined = ' '.join(cmd)
-        python_cmd = f"python -m pose.pose_estimator {' '.join(python_args)}"
+        python_cmd = f"python -m detection.detector {' '.join(python_args)}"
         print(f"[DRY RUN] {python_cmd}")
         return 0
 

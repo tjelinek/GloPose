@@ -53,7 +53,7 @@ def submit_job(config, failed_jobs_log=None, dry_run=False):
     ] + python_args
 
     if dry_run:
-        python_cmd = f"python -m condensate_templates {' '.join(python_args)}"
+        python_cmd = f"python -m detection.representation {' '.join(python_args)}"
         print(f"[DRY RUN] {python_cmd}")
         return 0
 
