@@ -9,6 +9,12 @@ class RerunAnnotations:
     template_image_segmentation: Final[str] = '/observations/template_image/segment'
     observed_image: Final[str] = '/observations/observed_image'
     observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
+    observed_image_all: Final[str] = '/observations/observed_image_all'
+    observed_image_segmentation_all: Final[str] = '/observations/observed_image_all/segment'
+
+    # Detection
+    detection_image: Final[str] = '/observations/template_image'
+    detection_nearest_neighbors: Final[str] = '/observations/template_image_neighbors'
 
     # Keyframes
     keyframe_images = '/keyframes/keyframe_images'

@@ -9,7 +9,6 @@ import pycolmap
 import rerun as rr
 import rerun.blueprint as rrb
 import torch
-import torchvision
 from PIL import Image
 from kornia.geometry import Se3
 from matplotlib import pyplot as plt
@@ -19,7 +18,8 @@ from configs.glopose_config import GloPoseConfig
 from onboarding.colmap_utils import world2cam_from_reconstruction
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
-from visualizations.rerun_utils import log_correspondences_rerun
+from visualizations.rerun_utils import (init_rerun_recording, register_matching_series_lines,
+                                        visualize_certainty_map, log_matching_correspondences)
 from utils.image_utils import overlay_mask
 
 
@@ -55,10 +55,8 @@ class WriteResults:
             self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
-        rr.init(f'{self.config.run.sequence}-{self.config.run.experiment_name}')
         rerun_file = (self.write_folder /
                       f'rerun_{self.config.run.experiment_name}_{self.config.run.sequence}_{self.config.run.special_hash}.rrd')
-        rr.save(rerun_file)
 
         self.template_fields = {
             RerunAnnotations.chained_pose_polar_template,
@@ -275,16 +273,11 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
+        rerun_name = f'{self.config.run.sequence}-{self.config.run.experiment_name}'
+        init_rerun_recording(rerun_name, rerun_file, blueprint)
+
         if self.config.onboarding.frame_filter == 'dense_matching':
-            rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-                   rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
-            rr.log(RerunAnnotations.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
-                   static=True)
-            rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
-                   rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
-            rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
-                   rr.SeriesLine(color=[0, 0, 255], name=f"min {self.config.onboarding.filter_matcher} certainty"),
-                   static=True)
+            register_matching_series_lines()
         elif self.config.onboarding.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
                    rr.SeriesLine(color=[255, 0, 0], name="min matches"), static=True)
@@ -341,8 +334,6 @@ class WriteResults:
                rr.AnnotationContext([(1, "blue", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
         rr.log(RerunAnnotations.template_image_segmentation,
                rr.AnnotationContext([(1, "blue", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
-
-        rr.send_blueprint(blueprint)
 
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
         rr.set_time_sequence('frame', frame_i)
@@ -764,69 +755,42 @@ class WriteResults:
             if threshold is None:
                 threshold = self.config.onboarding.min_certainty_threshold
 
-            above_threshold_mask = certainties >= threshold
-            src_pts_xy_roma = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
-            dst_pts_xy_roma = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
+            src_pts_yx = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
+            dst_pts_yx = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
-            inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
-            inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
-            outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
-            outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
-
-            if self.config.onboarding.matchability_based_reliability:
-                certainties_matchable = arc_observation.src_dst_certainty_roma_matchable.numpy(force=True)
-                above_threshold_mask_matchable = certainties_matchable >= threshold
-                src_pts_xy_roma_matchable = arc_observation.src_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
-                dst_pts_xy_roma_matchable = arc_observation.dst_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
-                inliers_source_yx_matchable = src_pts_xy_roma_matchable[above_threshold_mask_matchable]
-                inliers_target_yx_matchable = dst_pts_xy_roma_matchable[above_threshold_mask_matchable]
-                outliers_source_yx_matchable = src_pts_xy_roma_matchable[~above_threshold_mask_matchable]
-                outliers_target_yx_matchable = dst_pts_xy_roma_matchable[~above_threshold_mask_matchable]
-
-            roma_certainty_map = arc_observation.roma_flow_warp_certainty
-            roma_h, roma_w = roma_certainty_map.shape[0], roma_certainty_map.shape[1] // 2
-            certainty_map_column = torch.zeros(roma_h * 2, roma_w).to(roma_certainty_map.device)
-            certainty_map_column[:roma_h, :roma_w] = roma_certainty_map[:roma_h, :roma_w]
-            certainty_map_column[roma_h:, :roma_w] = roma_certainty_map[:roma_h, roma_w:]
-            certainty_map_column = certainty_map_column[None]
-            roma_certainty_map_image_size = (
-                torchvision.transforms.functional.resize(certainty_map_column, size=template_target_image.shape[1:]))
-
-            roma_certainty_map_im_size_np = roma_certainty_map_image_size.numpy(force=True)
-            template_target_blacks = np.ones_like(template_target_image_np)
-            template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
-
-            rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(
-                jpeg_quality=self.config.visualization.jpeg_quality)
-            rr.log(RerunAnnotations.matching_certainty, rerun_certainty_img)
+            visualize_certainty_map(arc_observation.roma_flow_warp_certainty,
+                                    template_target_image.shape, template_target_image_np,
+                                    RerunAnnotations.matching_certainty,
+                                    self.config.visualization.jpeg_quality)
         elif self.config.onboarding.frame_filter == 'SIFT':
             src_pts_xy = arc_observation.src_pts_xy_roma
             dst_pts_xy = arc_observation.dst_pts_xy_roma
 
             if src_pts_xy is not None and dst_pts_xy is not None and len(src_pts_xy) > 0:
-                inliers_source_yx = src_pts_xy[:, [1, 0]].numpy(force=True)
-                inliers_target_yx = dst_pts_xy[:, [1, 0]].numpy(force=True)
+                src_pts_yx = src_pts_xy[:, [1, 0]].numpy(force=True)
+                dst_pts_yx = dst_pts_xy[:, [1, 0]].numpy(force=True)
             else:
-                inliers_source_yx = np.zeros((0, 2))
-                inliers_target_yx = np.zeros((0, 2))
-            outliers_source_yx = np.zeros((0, 2))
-            outliers_target_yx = np.zeros((0, 2))
+                src_pts_yx = np.zeros((0, 2))
+                dst_pts_yx = np.zeros((0, 2))
+            certainties = np.ones(src_pts_yx.shape[0])
+            threshold = 0.0  # all SIFT matches are inliers
         else:
             return
 
         template_image_size = template_data.image_shape
-        cmap_inliers = plt.get_cmap('Greens')
-        log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotations.matches_high_certainty, template_image_size.height, 20)
-        cmap_outliers = plt.get_cmap('Reds')
-        log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotations.matches_low_certainty, template_image_size.height, 20)
+        log_matching_correspondences(src_pts_yx, dst_pts_yx, certainties, threshold,
+                                     template_image_size.height,
+                                     RerunAnnotations.matches_high_certainty,
+                                     RerunAnnotations.matches_low_certainty, 20)
 
         if self.config.onboarding.matchability_based_reliability and self.config.onboarding.frame_filter == 'dense_matching':
-            log_correspondences_rerun(cmap_inliers, inliers_source_yx_matchable, inliers_target_yx_matchable,
-                                      RerunAnnotations.matches_high_certainty_matchable, template_image_size.height, 20)
-            log_correspondences_rerun(cmap_outliers, outliers_source_yx_matchable, outliers_target_yx_matchable,
-                                      RerunAnnotations.matches_low_certainty_matchable, template_image_size.height, 20)
+            matchable_certainties = arc_observation.src_dst_certainty_roma_matchable.numpy(force=True)
+            matchable_src_yx = arc_observation.src_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
+            matchable_dst_yx = arc_observation.dst_pts_xy_roma_matchable[:, [1, 0]].numpy(force=True)
+            log_matching_correspondences(matchable_src_yx, matchable_dst_yx, matchable_certainties,
+                                         threshold, template_image_size.height,
+                                         RerunAnnotations.matches_high_certainty_matchable,
+                                         RerunAnnotations.matches_low_certainty_matchable, 20)
 
     def accumulate_Se3_attributes(self, frame_indices, attr_name: str) -> Se3:
 

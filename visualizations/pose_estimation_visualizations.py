@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Final, Dict, List
+from typing import Dict, List
 
 import cv2
 import numpy as np
@@ -8,43 +8,12 @@ import rerun.blueprint as rrb
 import torch
 import torchvision.transforms.functional as TF
 from PIL import Image
-from kornia.image import ImageSize
 from matplotlib import cm
-from matplotlib import pyplot as plt
 from torchvision import transforms
 
-from utils.image_utils import overlay_mask
-from visualizations.rerun_utils import log_correspondences_rerun
-
-
-class RerunAnnotationsPose:
-    observed_image: Final[str] = '/observations/observed_image'
-    observed_image_segmentation: Final[str] = '/observations/observed_image/segment'
-    observed_image_all: Final[str] = '/observations/observed_image_all'
-    observed_image_segmentation_all: Final[str] = '/observations/observed_image_all/segment'
-
-    detection_image: Final[str] = '/observations/template_image'
-    detection_nearest_neighbors: Final[str] = '/observations/template_image_neighbors'
-
-    matches_high_certainty: Final[str] = '/matching/high_certainty'
-    matches_low_certainty: Final[str] = '/matching/low_certainty'
-    matching_certainty: Final[str] = '/matching/certainty'
-    matches_high_certainty_segmentation: Final[str] = '/matching/high_certainty/segmentation'
-    matches_low_certainty_segmentation: Final[str] = '/matching/low_certainty/segmentation'
-    matching_reliability_plot: Final[str] = '/matching/reliability_plot'
-    matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
-    matching_reliability_threshold_roma: Final[str] = '/matching/reliability_plot/reliability_threshold'
-
-    matches_high_certainty_matchable: Final[str] = '/matching/high_certainty_matchable'
-    matches_low_certainty_matchable: Final[str] = '/matching/low_certainty_matchable'
-    matching_matchability_plot: Final[str] = '/matching/matchability_plot'
-    matching_matchability_plot_share_matchable: Final[str] = '/matching/matchability_plot/share_matchable'
-    matching_min_roma_certainty_plot: Final[str] = '/matching/min_roma_certainty_plot/'
-    matching_min_roma_certainty_plot_min_certainty: Final[str] = '/matching/min_roma_certainty_plot/min_certainty'
-
-    matches_sift: Final[str] = '/matching/reliability_plot/sift_num_matches/'
-    min_matches_sift: Final[str] = '/matching/reliability_plot/min_matches_sift'
-    good_to_add_number_of_matches_sift: Final[str] = '/matching/reliability_plot/good_to_add_matches_sift'
+from data_structures.rerun_annotations import RerunAnnotations
+from visualizations.rerun_utils import (init_rerun_recording, register_matching_series_lines,
+                                        visualize_certainty_map, log_matching_correspondences)
 
 
 def tensor2numpy(image, downsample_factor=1.0):
@@ -105,11 +74,8 @@ class PoseEstimatorLogger:
 
     @staticmethod
     def init_rerun(output_path: Path):
-        rr.init(str(output_path))
-        rr.save(output_path)
-
-        match_reliability_statistics = rrb.TimeSeriesView(name=f"Matching Reliability",
-                                                          origin=RerunAnnotationsPose.matching_reliability_plot,
+        match_reliability_statistics = rrb.TimeSeriesView(name="Matching Reliability",
+                                                          origin=RerunAnnotations.matching_reliability_plot,
                                                           axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
                                                                                 zoom_lock=True),
                                                           plot_legend=rrb.PlotLegend(visible=True))
@@ -119,32 +85,26 @@ class PoseEstimatorLogger:
                     rrb.Horizontal(
                         contents=[
                             rrb.Spatial2DView(
-                                name=f"Scene",
-                                origin=RerunAnnotationsPose.observed_image),
+                                name="Scene",
+                                origin=RerunAnnotations.observed_image),
                             rrb.Spatial2DView(
-                                name=f"Scene - all detections",
-                                origin=RerunAnnotationsPose.observed_image_all),
+                                name="Scene - all detections",
+                                origin=RerunAnnotations.observed_image_all),
                         ],
                         name='Detections'
                     ),
                     rrb.Horizontal(
                         contents=[
                             rrb.Spatial2DView(
-                                name=f"Template",
-                                origin=RerunAnnotationsPose.detection_image),
+                                name="Template",
+                                origin=RerunAnnotations.detection_image),
                             rrb.Grid(
-                                name=f"Scene - all detections",
+                                name="Scene - all detections",
                                 grid_columns=2,
                                 contents=[
                                     rrb.Spatial2DView(
                                         name=f"Nearest best object template {i + 1}",
-                                        origin=f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}',
-                                        # contents=[
-                                        #     rrb.TextDocumentView(
-                                        #         name="score",
-                                        #         origin=f"{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/score"
-                                        #     )
-                                        # ]
+                                        origin=f'{RerunAnnotations.detection_nearest_neighbors}/{i}',
                                     )
                                     for i in range(6)
                                 ]
@@ -157,15 +117,14 @@ class PoseEstimatorLogger:
                             rrb.Horizontal(
                                 contents=[
                                     rrb.Spatial2DView(
-                                        name=f"Matches High Certainty",
-                                        origin=RerunAnnotationsPose.matches_high_certainty),
+                                        name="Matches High Certainty",
+                                        origin=RerunAnnotations.matches_high_certainty),
                                     rrb.Spatial2DView(
-                                        name=f"Matches Low Certainty",
-                                        origin=RerunAnnotationsPose.matches_low_certainty),
+                                        name="Matches Low Certainty",
+                                        origin=RerunAnnotations.matches_low_certainty),
                                     rrb.Spatial2DView(
-                                        name=f"Matching Certainty",
-                                        origin=RerunAnnotationsPose.matching_certainty),
-
+                                        name="Matching Certainty",
+                                        origin=RerunAnnotations.matching_certainty),
                                 ],
                                 name='Matching'
                             ),
@@ -175,30 +134,21 @@ class PoseEstimatorLogger:
                         name='Matching'
                     ),
                 ],
-                name=f'Results'
+                name='Results'
             )
         )
 
-        rr.log(RerunAnnotationsPose.matching_reliability_threshold_roma,
-               rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
-        rr.log(RerunAnnotationsPose.matching_reliability, rr.SeriesLine(color=[0, 0, 255], name="reliability"),
-               static=True)
-        rr.log(RerunAnnotationsPose.matching_matchability_plot_share_matchable,
-               rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
-        rr.log(RerunAnnotationsPose.matching_min_roma_certainty_plot_min_certainty,
-               rr.SeriesLine(color=[0, 0, 255], name=f"min match certainty"),
-               static=True)
+        init_rerun_recording(str(output_path), output_path, blueprint)
+        register_matching_series_lines()
 
-        rr.log(RerunAnnotationsPose.matches_high_certainty_segmentation,
+        rr.log(RerunAnnotations.matches_high_certainty_segmentation,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
-        rr.log(RerunAnnotationsPose.matches_low_certainty_segmentation,
+        rr.log(RerunAnnotations.matches_low_certainty_segmentation,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
-        rr.log(RerunAnnotationsPose.observed_image_segmentation,
+        rr.log(RerunAnnotations.observed_image_segmentation,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
-        rr.log(RerunAnnotationsPose.observed_image_segmentation_all,
+        rr.log(RerunAnnotations.observed_image_segmentation_all,
                rr.AnnotationContext([(1, "white", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
-
-        rr.send_blueprint(blueprint)
 
     def visualize_detections(self, all_detections_segmentations, detection_idx):
         h, w = all_detections_segmentations.shape[-2:]
@@ -214,8 +164,8 @@ class PoseEstimatorLogger:
         segment_cumulative = query_segment_np[:detection_idx + 1].sum(axis=0)
         rr_segment_cumulative = rr.SegmentationImage(segment_cumulative)
 
-        rr.log(RerunAnnotationsPose.observed_image_segmentation, rr_segment)
-        rr.log(f'{RerunAnnotationsPose.observed_image_segmentation_all}', rr_segment_cumulative)
+        rr.log(RerunAnnotations.observed_image_segmentation, rr_segment)
+        rr.log(f'{RerunAnnotations.observed_image_segmentation_all}', rr_segment_cumulative)
 
     def visualize_nearest_neighbors(self,
                                     query_image: torch.Tensor,
@@ -242,7 +192,7 @@ class PoseEstimatorLogger:
         cropped_detection = query_image[..., y1:y2, x1:x2]
 
         rr_detection = rr.Image(tensor2numpy(cropped_detection)).compress(jpeg_quality=self.rerun_jpeg_quality)
-        rr.log(RerunAnnotationsPose.detection_image, rr_detection)
+        rr.log(RerunAnnotations.detection_image, rr_detection)
 
         template_images = template_images[viewgraph_id]
         template_masks = template_masks[viewgraph_id]
@@ -275,11 +225,11 @@ class PoseEstimatorLogger:
                 template_image_with_overlay = template_image
 
             rr_template = rr.Image(template_image_with_overlay).compress(jpeg_quality=self.rerun_jpeg_quality)
-            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}', rr_template)
+            rr.log(f'{RerunAnnotations.detection_nearest_neighbors}/{i}', rr_template)
 
             rr_mask = rr.SegmentationImage(template_mask, opacity=0.5)
             context = rr.AnnotationContext([(0, "", (0, 0, 0, 0))])  # 0 is transparent
-            rr.log(f'{RerunAnnotationsPose.detection_nearest_neighbors}/{i}/mask', rr_mask, context)
+            rr.log(f'{RerunAnnotations.detection_nearest_neighbors}/{i}/mask', rr_mask, context)
 
     def visualize_image(self, query_image: torch.Tensor):
         h, w = query_image.shape[-2:]
@@ -287,8 +237,8 @@ class PoseEstimatorLogger:
         query_image_np = tensor2numpy(img)
         rr.set_time_sequence('frame', self.rerun_sequence_id)
         rr_image = rr.Image(query_image_np).compress(jpeg_quality=self.rerun_jpeg_quality)
-        rr.log(RerunAnnotationsPose.observed_image, rr_image)
-        rr.log(RerunAnnotationsPose.observed_image_all, rr_image)
+        rr.log(RerunAnnotations.observed_image, rr_image)
+        rr.log(RerunAnnotations.observed_image_all, rr_image)
 
     def visualize_pose_matching_rerun(self, src_pts_xy: torch.Tensor, dst_pts_xy: torch.Tensor, certainty: torch.Tensor,
                                       viewgraph_image: torch.Tensor, query_image: torch.Tensor, reliability: float,
@@ -301,8 +251,8 @@ class PoseEstimatorLogger:
 
         rr.set_time_sequence('frame', self.rerun_sequence_id)
 
-        rr.log(RerunAnnotationsPose.matching_reliability, rr.Scalar(reliability))
-        rr.log(RerunAnnotationsPose.matching_reliability_threshold_roma,
+        rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+        rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                rr.Scalar(reliability_threshold))
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
@@ -320,46 +270,22 @@ class PoseEstimatorLogger:
 
         rerun_image = rr.Image(template_target_image_np).compress(jpeg_quality=self.rerun_jpeg_quality)
         rerun_segment = rr.SegmentationImage(template_target_image_segment_np)
-        rr.log(RerunAnnotationsPose.matches_high_certainty, rerun_image)
-        rr.log(RerunAnnotationsPose.matches_low_certainty, rerun_image)
-        # rr.log(RerunAnnotationsPose.matches_high_certainty_segmentation, rerun_segment)
-        # rr.log(RerunAnnotationsPose.matches_low_certainty_segmentation, rerun_segment)
+        rr.log(RerunAnnotations.matches_high_certainty, rerun_image)
+        rr.log(RerunAnnotations.matches_low_certainty, rerun_image)
+        # rr.log(RerunAnnotations.matches_high_certainty_segmentation, rerun_segment)
+        # rr.log(RerunAnnotations.matches_low_certainty_segmentation, rerun_segment)
 
-        certainties = certainty.numpy(force=True)
-        threshold = certainty_threshold
-
-        above_threshold_mask = certainties >= threshold
-        src_pts_xy_roma = src_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
-        dst_pts_xy_roma = dst_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
-
-        inliers_source_yx = src_pts_xy_roma[above_threshold_mask]
-        inliers_target_yx = dst_pts_xy_roma[above_threshold_mask]
-        outliers_source_yx = src_pts_xy_roma[~above_threshold_mask]
-        outliers_target_yx = dst_pts_xy_roma[~above_threshold_mask]
+        src_pts_yx = src_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
+        dst_pts_yx = dst_pts_xy[:, [1, 0]].numpy(force=True) * self.image_downsample
 
         roma_certainty_map = match_certainty_map if match_certainty_map is not None else torch.ones_like(
             template_target_image[0, ...])
-        roma_h, roma_w = roma_certainty_map.shape[-2], roma_certainty_map.shape[-1] // 2
-        certainty_map_column = torch.zeros(roma_h * 2, roma_w).to(roma_certainty_map.device)
-        certainty_map_column[:roma_h, :roma_w] = roma_certainty_map[:roma_h, :roma_w]
-        certainty_map_column[roma_h:, :roma_w] = roma_certainty_map[:roma_h, roma_w:]
-        certainty_map_column = certainty_map_column[None]
-        roma_certainty_map_image_size = TF.resize(certainty_map_column, size=list(template_target_image.shape[1:]))
+        visualize_certainty_map(roma_certainty_map, template_target_image.shape,
+                                template_target_image_np, RerunAnnotations.matching_certainty,
+                                self.rerun_jpeg_quality)
 
-        roma_certainty_map_im_size_np = roma_certainty_map_image_size.numpy(force=True)
-        template_target_blacks = np.ones_like(template_target_image_np)
-        template_target_image_certainty_np = overlay_mask(template_target_blacks, roma_certainty_map_im_size_np)
-
-        rerun_certainty_img = rr.Image(template_target_image_certainty_np).compress(
-            jpeg_quality=self.rerun_jpeg_quality)
-        rr.log(RerunAnnotationsPose.matching_certainty, rerun_certainty_img)
-
-        template_image_size = ImageSize(*template_image.shape[-2:])
-        cmap_inliers = plt.get_cmap('Greens')
-        log_correspondences_rerun(cmap_inliers, inliers_source_yx, inliers_target_yx,
-                                  RerunAnnotationsPose.matches_high_certainty,
-                                  int(template_image_size.height * self.image_downsample), 2000)
-        cmap_outliers = plt.get_cmap('Reds')
-        log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
-                                  RerunAnnotationsPose.matches_low_certainty,
-                                  int(template_image_size.height * self.image_downsample), 2000)
+        template_image_height = int(template_image.shape[-2] * self.image_downsample)
+        log_matching_correspondences(src_pts_yx, dst_pts_yx, certainty.numpy(force=True),
+                                     certainty_threshold, template_image_height,
+                                     RerunAnnotations.matches_high_certainty,
+                                     RerunAnnotations.matches_low_certainty, 2000)

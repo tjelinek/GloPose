@@ -105,7 +105,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - `data_structures/` — ViewGraph, DataGraph, KeyframeBuffer, Detection, PoseEstimate, observations
 - `models/` — Mesh rendering (Kaolin), feature encoding
 - `utils/` — Dataset sequences, math (SE(3)), image I/O, results logging, mask/bbox utils
-- `visualizations/` — Flow and pose visualization helpers
+- `visualizations/` — Flow and pose visualization helpers, shared rerun utilities (`rerun_utils.py`)
 - `scripts/` — Dataset downloaders, evaluation, job runners
 - `repositories/` — External dependency submodules (do not edit)
 
@@ -233,12 +233,6 @@ The RCI personal folder is sshfs-mounted locally:
 
 ## Known Issues & Architectural Notes
 
-### Structural
-
-- **Duplicated visualization systems**: `results_logging.py` and `visualizations/pose_estimation_visualizations.py` have
-  near-identical rerun init, blueprint setup, matching visualization logic, and overlapping annotation constants (
-  `RerunAnnotations` vs `RerunAnnotationsPose`).
-
 ### External Repo Integration
 
 cnos integration is centralized in `adapters/cnos_adapter.py` — the sole location for `sys.path` manipulation
@@ -359,14 +353,16 @@ These can be done in parallel with the module work.
 
 #### 4.2 Visualization
 
+- [x] Unify `RerunAnnotations` and `RerunAnnotationsPose` into a single `RerunAnnotations` class
+  in `data_structures/rerun_annotations.py`
+- [x] Extract shared rerun init into `visualizations/rerun_utils.py`: `init_rerun_recording()`
+- [x] Extract shared matching series line registration: `register_matching_series_lines()`
+- [x] Extract shared matching visualization helpers: `visualize_certainty_map()`,
+  `log_matching_correspondences()` — both callers (`results_logging.py`, `pose_estimation_visualizations.py`)
+  now use these instead of duplicating the certainty map reshaping and correspondence logging
 - [ ] **Update Rerun SDK from ~0.21 to 0.30** — review breaking API changes (blueprint API, logging API,
   annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
-  `visualizations/pose_estimation_visualizations.py`, and any other files using `rerun`
-- [ ] Unify `RerunAnnotations` and `RerunAnnotationsPose` into a single annotation constants module
-- [ ] Extract shared rerun blueprint setup into a common function
-- [ ] Extract shared matching visualization logic into a shared helper
-- [ ] Decompose `results_logging.py` (~995 lines) into focused classes: `KeyframeVisualizer`, `Scene3DVisualizer`,
-  `MatchingVisualizer`, `ImageLogger`
+  `visualizations/pose_estimation_visualizations.py`, and `visualizations/rerun_utils.py`
 
 #### 4.3 Web UI
 
