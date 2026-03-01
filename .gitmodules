@@ -4,6 +4,3 @@
 [submodule "repositories/ho3d"]
 	path = repositories/ho3d
 	url = git@github.com:tjelinek/ho3d.git
-[submodule "repositories/segment-anything-2-real-time"]
-	path = repositories/segment-anything-2-real-time
-	url = git@github.com:tjelinek/segment-anything-2-real-time.git
