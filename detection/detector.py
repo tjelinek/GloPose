@@ -18,9 +18,10 @@ from data_structures.template_bank import TemplateBank
 from data_structures.types import Detection
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
 from configs.glopose_config import GloPoseConfig
+from pose_estimation.estimator import PoseEstimator
 from utils.mask_utils import rle_to_mask
-from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates
-from utils.bop_io import detection_to_bop_record
+from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates, get_gop_camera_intrinsics
+from utils.bop_io import detection_to_bop_record, pose_to_bop_record, write_bop_pose_csv
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
@@ -29,15 +30,25 @@ from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 class BOPChallengePosePredictor:
 
     def __init__(self, config: GloPoseConfig, base_cache_folder, matching_config_overrides: Dict[str, Any],
-                 experiment_folder='default', ):
+                 experiment_folder='default', run_pose_estimation: bool = False):
 
         self.config = config
         self.flow_provider: Optional[MatchingProvider] = None
+        self.run_pose_estimation = run_pose_estimation
+        self.pose_estimator: Optional[PoseEstimator] = None
 
         self.write_folder = Path('/mnt/personal/jelint19/results/PoseEstimation') / experiment_folder
         self.cache_folder = base_cache_folder
 
         self._initialize_flow_provider()
+
+        if self.run_pose_estimation:
+            self.pose_estimator = PoseEstimator(
+                matching_provider=self.flow_provider,
+                config=config.pose_estimation,
+                cache_folder=base_cache_folder,
+                device=config.run.device,
+            )
 
         self.cnos_matching_config, self.cnos_postprocessing_config = \
             load_cnos_matching_config(matching_config_overrides)
@@ -103,7 +114,15 @@ class BOPChallengePosePredictor:
         else:
             raise ValueError(f'Unknown templates_source {templates_source}')
 
+        # Ensure ViewGraphs are loaded when pose estimation is enabled
+        if self.run_pose_estimation and not view_graphs:
+            if view_graph_save_paths is None:
+                raise ValueError("view_graph_save_paths required when run_pose_estimation=True")
+            view_graphs = load_view_graphs_by_object_id(view_graph_save_paths, onboarding_type,
+                                                        self.config.run.device)
+
         json_2d_detection_results = []
+        bop_pose_results = []
 
         total_items = len(test_annotations)
 
@@ -136,7 +155,8 @@ class BOPChallengePosePredictor:
             path_to_cnos_detections = path_to_scene_detection_cache / f'cnos_{detector_name}_detections_{descriptor}'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
 
-            # camera_intrinsics = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+            if self.run_pose_estimation:
+                camera_K = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
@@ -161,10 +181,10 @@ class BOPChallengePosePredictor:
                                                                 self.config.run.device)
                 # detections = default_detections
 
+            image_detections: list[Detection] = []
             for detection_mask_idx in tqdm(range(detections.masks.shape[0]), desc="Processing SAM mask proposals",
                                            total=detections.masks.shape[0], unit="items", disable=True):
                 corresponding_obj_id: int = detections.object_ids[detection_mask_idx].item()
-                # corresponding_view_graph = view_graphs[corresponding_obj_id]
                 proposal_mask = detections.masks[detection_mask_idx]
 
                 if pose_logger is not None:
@@ -184,16 +204,22 @@ class BOPChallengePosePredictor:
                     bbox_xywh=coco_bbox,
                     mask=proposal_mask,
                 )
+                image_detections.append(det)
                 json_2d_detection_results.append(
                     detection_to_bop_record(det, scene_id, im_id, detections_duration)
                 )
 
-                # self.predict_poses(image, camera_intrinsics, corresponding_view_graph, self.flow_provider,
-                #                    self.config.roma_sample_size,
-                #                    match_min_certainty=self.config.min_roma_certainty_threshold,
-                #                    match_reliability_threshold=self.config.flow_reliability_threshold,
-                #                    query_img_segmentation=proposal_mask,
-                #                    device=self.config.run.device, pose_logger=pose_logger)
+            # Run pose estimation on all detections for this image
+            if self.run_pose_estimation and image_detections:
+                pose_start_time = time.time()
+                pose_estimates = self.pose_estimator.estimate_poses(
+                    image_detections, view_graphs, image, camera_K, pose_logger
+                )
+                pose_duration = time.time() - pose_start_time
+                for pose_est in pose_estimates:
+                    bop_pose_results.append(
+                        pose_to_bop_record(pose_est, scene_id, im_id, pose_duration)
+                    )
 
         # {method}_{dataset}-{split}_{optional_id}.{ext}
         json_file_path = self.write_folder / experiment_name / (f'{method_name}_{base_dataset_folder.stem}-{split}_'
@@ -201,7 +227,13 @@ class BOPChallengePosePredictor:
         with open(json_file_path, 'w') as f:
             json.dump(json_2d_detection_results, f)
 
-        print(f'Results saved to {str(json_file_path)}')
+        print(f'Detection results saved to {str(json_file_path)}')
+
+        if self.run_pose_estimation and bop_pose_results:
+            pose_csv_path = self.write_folder / experiment_name / (
+                f'{method_name}_{base_dataset_folder.stem}-{split}_{onboarding_type}@{experiment_name}.csv')
+            write_bop_pose_csv(bop_pose_results, pose_csv_path)
+            print(f'Pose results saved to {str(pose_csv_path)}')
 
         if dataset_name in ['hope', 'handal'] and split != 'val':
             return
@@ -330,6 +362,7 @@ def main():
     parser.add_argument('--mahalanobis_quantile', type=float, default=None)
     parser.add_argument('--lowe_ratio_threshold', type=float, default=None)
     parser.add_argument('--dry_run', action='store_true')
+    parser.add_argument('--run_pose_estimation', action='store_true')
     parser.add_argument('--augment_with_split_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--augment_with_train_pbr_detections', type=lambda x: bool(int(x)), default=True)
     parser.add_argument('--min_avg_patch_cosine_similarity', type=float, default=0.25)
@@ -445,7 +478,8 @@ def main():
             'patch_descriptors_filtering': args.patch_descriptors_filtering,
             'min_avg_patch_cosine_similarity': args.min_avg_patch_cosine_similarity,
         }
-        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder)
+        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder,
+                                                    run_pose_estimation=args.run_pose_estimation)
         match_cfg = predictor.cnos_matching_config
         experiment = (f'{experiment}@mask_{args.descriptor_mask_detections}@aggr_{match_cfg.aggregation_function}@'
                       f'sim_{match_cfg.similarity_metric}@detector_{args.detector}@nms{args.use_enhanced_nms}@OOD_')

@@ -126,6 +126,16 @@ class VisualizationConfig:
 
 
 @dataclass
+class PoseEstimationConfig:
+    matcher: str = 'UFM'
+    sample_size: int = 10000
+    min_certainty_threshold: float = 0.975
+    flow_reliability_threshold: float = 0.5
+    black_background: bool = True
+    max_templates_to_match: int = 10
+
+
+@dataclass
 class RendererConfig:
     camera_position: Tuple[float, float, float] = (0, 0, 5.0)
     camera_up: Tuple[float, float, float] = (0, 1, 0)
@@ -151,5 +161,6 @@ class GloPoseConfig:
     condensation: CondensationConfig = field(default_factory=CondensationConfig)
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     bop: BaseBOPConfig = field(default_factory=BaseBOPConfig)
+    pose_estimation: PoseEstimationConfig = field(default_factory=PoseEstimationConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
     renderer: RendererConfig = field(default_factory=RendererConfig)
