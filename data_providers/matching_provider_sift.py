@@ -9,8 +9,6 @@ from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
 from data_providers.flow_provider import MatchingProvider, FlowMatchingProvider
-from utils.sift import sift_to_rootsift
-
 
 # ---------------------------------------------------------------------------
 # Keypoint detector / matcher ABCs
@@ -208,3 +206,9 @@ def match_features_sift(descriptors1, descriptors2, lafs1, lafs2, hw1, hw2, alg=
         # Adalam takes into account also geometric information and image sizes
 
     return dists, idxs
+
+
+def sift_to_rootsift(x: torch.Tensor, eps=1e-6) -> torch.Tensor:
+    x = torch.nn.functional.normalize(x, p=1, dim=-1, eps=eps)
+    x.clip_(min=eps).sqrt_()
+    return torch.nn.functional.normalize(x, p=2, dim=-1, eps=eps)
