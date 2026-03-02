@@ -257,100 +257,20 @@ Hydra config initialization. `SAM2SegmentationProvider` in `data_providers/frame
 
 ## TODO
 
-### Phase 1: Define module boundaries and shared types
-
-These are prerequisites for working on modules A/B/C independently.
-
-#### 1.1 External repo adapters
-
-- [x] Create `adapters/cnos_adapter.py` — single location for `sys.path` manipulation and cnos imports (DINOv2
-  descriptors, `Detections` type, Hydra configs). All other files import from the adapter.
-    - [x] Wrap DINOv2 descriptor computation behind a `DescriptorExtractor` interface (currently scattered across
-      `view_graph.py`, `detection/representation.py`, `detection/detector.py`)
-    - [x] Vendor scoring functions into `detection/scoring.py`, mask/bbox utils into `utils/mask_utils.py`
-      and `utils/bbox_utils.py`
-    - [x] Define our own `Detection` type (`data_structures/types.py`); adapter converts to/from cnos `Detections`
-      via `make_cnos_detections()` at the boundary
-- [x] Create `adapters/sam2_adapter.py` for SAM2 (was inline in `frame_provider.py`)
-- [x] Evaluate whether `mast3r`, `vggt`, `ho3d` need adapters — **not now**. All three are unused
-  or minimally used (ho3d: one offline utility script only). Adapters deferred to P3.4 ablation studies.
-
 ### Phase 2: Module B — Detection
 
 Goal: clear separation between offline representation building (B1) and online inference (B2).
 
-#### 2.1 Split detection and pose estimation logic
-
-`BOPChallengePosePredictor` (now in `detection/detector.py`) currently only does detection (the pose call
-is commented out). Split into two modules:
-
-- [x] Move detection code to `detection/detector.py` (done via file reorganization)
-- [x] Create `pose_estimation/estimator.py` — `PoseEstimator` class with `estimate_poses()` and
-  `_estimate_single_pose()`. Refactored from old `predict_poses()` in `onboarding/reconstruction.py`.
-  Fixes: removed `breakpoint()`/dummy return, removed `reconstruction.normalize()`, removed `or True` hack,
-  added `try/finally` cleanup for temp COLMAP DB, uses `PoseEstimationConfig`.
-- [x] Wire into `detection/detector.py`: `--run_pose_estimation` flag, ViewGraph loading, camera intrinsics,
-  per-image pose estimation, BOP pose CSV output via `write_bop_pose_csv()`.
-- [x] Define shared types at the boundary: `Detection`, `PoseEstimate` (in `data_structures/types.py`)
-
 #### 2.2 Separate representation building from inference
 
-- [x] Condensation logic moved to `detection/representation.py` (done via file reorganization)
 - [ ] Define clean `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel` interface
 - [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
 - [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
 
-#### 2.3 CNOS integration: vendor remaining deps + keep original as baseline
-
-**Decision:** vendor the remaining runtime dependencies so GloPose detection is fully self-contained;
-keep `repositories/cnos/` as a read-only baseline runner for comparison experiments.
-
-**Context:** CNOS (nv-nguyen fork at `repositories/cnos/`) supports model-free templates via
-`rendering_type`: `onboarding_static`, `onboarding_dynamic`, `matchability_images` (our keyframes).
-The 3-way comparison (CNOS + BOP onboarding frames vs CNOS + our keyframes vs GloPose detection)
-is the key experiment for the paper. The bridge between GloPose and CNOS is a file-based template
-export (`ViewGraph → matchability_images/{obj}/rgb/ + mask_visib/`), already implemented as an
-inline `__main__` block in `data_structures/view_graph.py` (line 365).
-
-**Already done:**
-- [x] Scoring functions vendored in `detection/scoring.py` (pure torch, no cnos imports)
-- [x] Mask/bbox utils vendored in `utils/mask_utils.py`, `utils/bbox_utils.py` (pure numpy)
-- [x] `adapters/cnos_adapter.py` centralizes all cnos imports (DINOv2 loading, `Detections` type, Hydra config)
-- [x] ViewGraph-to-CNOS-format export exists (`data_structures/view_graph.py:365`, `scripts/run_cnos.batch`)
-
-**Vendored runtime dependencies:**
-- [x] Replace `descriptor_from_hydra()` with `descriptor_from_config()` using direct `torch.hub.load()`.
-  Vendored in `adapters/dino_descriptor.py` (`CustomDINOv2` as `nn.Module`, `DescriptorModelConfig` dataclass,
-  preset configs `DINOV2_CONFIG`/`DINOV3_CONFIG`). Utilities in `adapters/dino_utils.py` (`CropResizePad`,
-  `BatchedData`). `DescriptorExtractor` protocol unchanged.
-- [x] Vendor NMS into `detection/nms.py`: `DetectionContainer` class with `apply_nms_per_object_id()`,
-  `apply_nms_for_masks_inside_masks()`, `filter()`. `make_detections()` in `cnos_adapter.py` replaces
-  `make_cnos_detections()` (backward-compat alias kept).
-- [x] Replace Hydra config loading (`load_cnos_matching_config()`) with fields in `DetectionConfig`
-  dataclass: `confidence_thresh=0.15`, `nms_thresh=0.25`, `cosine_similarity_quantile=0.5`,
-  `mahalanobis_quantile=0.95`, `lowe_ratio_threshold=1.25`, `aggregation_function='max'`,
-  `ood_detection_method='none'`, `max_num_instances=100`. `BOPChallengePosePredictor` reads
-  `self.config.detection.*` directly; `matching_config_overrides` parameter removed.
-- [ ] Verify GloPose detection produces identical results before/after vendoring on a test sequence
-
-**CNOS baseline runner:**
-- [x] Create `scripts/run_cnos_baseline.py`: CLI script that invokes original CNOS
-  (`repositories/cnos/run_inference.py`) via subprocess with Hydra overrides for `dataset_name`,
-  `rendering_type`, `descriptor_model`, etc.
-- [x] Promote ViewGraph export from `data_structures/view_graph.py` `__main__` block to
-  `export_viewgraphs_to_cnos_format(viewgraphs_home, bop_home, experiment, split)` function.
-  `__main__` block calls it with hardcoded defaults.
-
-**Divergence investigation** (moved to paper ablation P3 — requires RCI runs, not architectural work):
-- Tracing where GloPose detection diverges from original CNOS (descriptor extraction, proposal
-  generation, similarity scoring, NMS) is an empirical comparison best done as part of the
-  detection ablation experiments (see P3.3, P5.3).
-
 #### 2.4 Clean up BOP coupling
 
-- [ ] BOP folder conventions (scene/image path construction, annotation loading) are scattered across
-  `detection/detector.py`, `detection/representation.py`, and `run_*.py` scripts
-- [ ] Extract into a `bop_data.py` adapter: `load_annotations`, `get_image_path`, `get_scene_folder`, etc.
+BOP path utilities extracted to `utils/bop_data.py`. Remaining:
+
 - [ ] Detection module should accept images and models, not know about BOP folder layout
 
 ---
@@ -359,18 +279,8 @@ inline `__main__` block in `data_structures/view_graph.py` (line 365).
 
 Goal: given detections and an onboarding result, produce 6DoF poses.
 
-#### 3.1 Implement/reconnect pose estimation
-
-- [x] Create `pose_estimation/estimator.py` with `PoseEstimator` class (done in TODO 2.1)
-- [x] Wire into `detection/detector.py` with `--run_pose_estimation` flag (done in TODO 2.1)
-- [x] Old `predict_poses()` deleted from `onboarding/reconstruction.py`
-- [ ] Verify end-to-end on RCI with `--run_pose_estimation --templates_source viewgraph` on hope val
-
 #### 3.2 Evaluation
 
-- [x] Separate onboarding evaluation from pipeline execution — `eval/` module created
-    - [x] `eval/eval_onboarding.py` — `evaluate_onboarding(view_graph, gt_Se3_world2cam, config, write_folder)`
-    - [x] `eval/eval_reconstruction.py` — moved from `utils/eval_reconstruction.py`
 - [ ] Extend `eval/` with remaining evaluation types:
     - [ ] `evaluate_detections(detections, ground_truth) -> DetectionMetrics` (BOP COCO)
     - [ ] `evaluate_poses(pose_estimates, ground_truth) -> PoseMetrics` (BOP 6DoF)
@@ -386,38 +296,11 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 
 These can be done in parallel with the module work.
 
-#### 4.1 Reorganize file structure
-
-- [x] Reorganize project layout to reflect the three-module architecture:
-    - [x] `onboarding/` — `pipeline.py` (OnboardingPipeline), `frame_filter.py`, `reconstruction.py` (SfM), `colmap_utils.py`
-    - [x] `detection/` — `representation.py` (condensation/B1), `detector.py` (detection inference/B2)
-    - [x] `pose_estimation/` — `PoseEstimator` (flow matching → COLMAP registration → 6DoF pose)
-    - [x] `data_structures/` — shared types (ViewGraph, TemplateBank, Detection, PoseEstimate) — unchanged
-    - [x] `adapters/` — external repo wrappers (cnos adapter done; sam2 adapter still needed)
-- [x] Move top-level scripts (`onboarding_pipeline.py`, `condensate_templates.py`) into packages
-- [x] Update all imports across the codebase
-- [ ] Verify all entry points (`run_*.py`, `app.py`) still work on RCI
-
 #### 4.2 Visualization
 
-- [x] Unify `RerunAnnotations` and `RerunAnnotationsPose` into a single `RerunAnnotations` class
-  in `data_structures/rerun_annotations.py`
-- [x] Extract shared rerun init into `visualizations/rerun_utils.py`: `init_rerun_recording()`
-- [x] Extract shared matching series line registration: `register_matching_series_lines()`
-- [x] Extract shared matching visualization helpers: `visualize_certainty_map()`,
-  `log_matching_correspondences()` — both callers (`results_logging.py`, `pose_estimation_visualizations.py`)
-  now use these instead of duplicating the certainty map reshaping and correspondence logging
 - [ ] **Update Rerun SDK from ~0.21 to 0.30** — review breaking API changes (blueprint API, logging API,
   annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
   `visualizations/pose_estimation_visualizations.py`, and `visualizations/rerun_utils.py`
-
-#### 4.3 Web UI
-
-- [ ] Update `app.py` to reflect the three-module architecture:
-    - [ ] Tab 1: Onboarding (existing "Run on Dataset" + "Custom Input")
-    - [ ] Tab 2: Detection (run detector on novel images using an onboarded model)
-    - [ ] Tab 3: Pose estimation (given detections, estimate poses)
-    - [ ] Tab 4: Browse results (existing)
 
 ---
 
@@ -651,21 +534,6 @@ Goal: compare our reconstructed 3D model against GT mesh models.
 
 Goal: demonstrate that our onboarding result can be used for 6DoF pose estimation on novel images.
 
-#### P5.1 Fix pose estimation implementation
-
-- [x] Removed `breakpoint()` and dummy `Se3.identity()` return — now extracts actual pose via
-  `get_image_Se3_world2cam()` after successful COLMAP registration
-- [x] Removed `reconstruction.normalize()` that would corrupt the coordinate frame
-- [x] Handles failure cases: returns `None` when no reliable matches or registration fails
-- [x] Implementation moved from `onboarding/reconstruction.py` to `pose_estimation/estimator.py`
-
-#### P5.2 Wire up pose estimation in the detection pipeline
-
-- [x] `BOPChallengePosePredictor` now accepts `run_pose_estimation=True` (CLI: `--run_pose_estimation`)
-- [x] For each image: collects `Detection` objects, runs `PoseEstimator.estimate_poses()` with
-  ViewGraphs and camera intrinsics, writes BOP pose CSV via `write_bop_pose_csv()`
-- [x] Old commented-out pose call deleted from `detection/detector.py`
-
 #### P5.3 Evaluate pose estimation
 
 - [ ] Run detection + pose estimation on HANDAL BOP val sequences using default CNOS detections
@@ -698,3 +566,29 @@ Summary of all scripts and outputs for the paper.
     (COLMAP point cloud rendered from a canonical viewpoint) → GT model overlay
   - Show failure cases and challenging objects
   - Export as PDF-ready figures (matplotlib, no rerun dependency)
+
+---
+
+## Paper: Detection Module Evaluation
+
+Checklist for the detection paper. Key experiment: 3-way comparison of CNOS + BOP onboarding frames
+vs CNOS + our keyframes vs GloPose detection.
+
+### D1. Verify vendored detection produces identical results
+
+Runtime dependencies (DINOv2/v3 descriptors, NMS, detection config) are vendored. CNOS baseline
+runner: `scripts/run_cnos_baseline.py`. ViewGraph export: `export_viewgraphs_to_cnos_format()`
+in `data_structures/view_graph.py`.
+
+- [ ] Run GloPose detection and original CNOS on the same test sequence, verify identical outputs
+  (descriptor values, similarity scores, NMS survivors, final detections)
+
+### D2. Divergence investigation
+
+Trace where GloPose detection diverges from original CNOS. Compare each stage:
+descriptor extraction, proposal generation, similarity scoring, NMS, and post-processing.
+
+- [ ] Run side-by-side comparison on HANDAL val and HOPE val with matched configs
+- [ ] Identify and document divergence points (if any) — are differences due to vendoring
+  or to intentional changes (e.g., DetectionConfig defaults vs Hydra defaults)?
+- [ ] Quantify detection AP impact of each divergence
