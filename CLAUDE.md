@@ -72,7 +72,7 @@ The system has three independent modules that communicate through well-defined d
 |--------------------|------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
 | A. Onboarding      | `onboarding/pipeline.py` (orchestrator), `onboarding/reconstruction.py` (SfM), `onboarding/frame_filter.py`, `data_providers/` | Working. Evaluation extracted to `eval/` module. `OnboardingPipeline` still tightly coupled to all providers.                  |
 | B1. Representation | `detection/representation.py` (condensation), `data_structures/view_graph.py` (ViewGraph)                  | Working. `TemplateBank` dataclass in `data_structures/template_bank.py`. No clean `build_detection_model()` interface yet.     |
-| B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`)                                                      | Working. Tangled with BOP I/O. Pose estimation wired in via `--run_pose_estimation` flag.                                     |
+| B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`), `detection/nms.py` (`DetectionContainer`)           | Working. Runtime deps vendored (no Hydra/cnos at runtime). Config via `DetectionConfig`. Tangled with BOP I/O.                |
 | C. Pose estimation | `pose_estimation/estimator.py` (`PoseEstimator`)                                                           | Working. Matches query against ViewGraph templates, registers into COLMAP reconstruction, extracts 6DoF pose. Not yet evaluated on RCI. |
 
 ### Key data types (interface boundaries)
@@ -81,8 +81,8 @@ The system has three independent modules that communicate through well-defined d
   onboarding output.
 - **`TemplateBank`** (`data_structures/template_bank.py`): Condensed detection-ready templates with descriptors and statistical
   params. Bridge between onboarding and detection.
-- **`Detection`** (`data_structures/types.py`): Our own scored bbox + mask type at the module boundary. cnos
-  `Detections` type is accessed via `adapters.cnos_adapter.make_cnos_detections()` only when NMS is needed.
+- **`Detection`** (`data_structures/types.py`): Our own scored bbox + mask type at the module boundary.
+  `DetectionContainer` (`detection/nms.py`) provides NMS methods, created via `adapters.cnos_adapter.make_detections()`.
 - **`PoseEstimate`** (`data_structures/types.py`): 6DoF pose estimate with confidence. Output of pose estimation module.
 - **`DataGraph`** (`data_structures/data_graph.py`): Internal to onboarding — tracks per-frame data and cross-frame
   relationships during processing.
@@ -95,10 +95,11 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ### Key directories
 
-- `adapters/` — External repository wrappers (cnos, sam2); sole location for `sys.path` manipulation and Hydra init
+- `adapters/` — External repository wrappers and vendored code: `cnos_adapter.py` (descriptor extractor protocol),
+  `dino_descriptor.py` (vendored DINOv2/v3 model), `dino_utils.py` (vendored utilities), `sam2_adapter.py` (SAM2)
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
-- `detection/` — template condensation (representation building), detector (inference), scoring
+- `detection/` — template condensation (representation building), detector (inference), scoring, NMS (`nms.py`)
 - `pose_estimation/` — `PoseEstimator`: flow-based matching against ViewGraph templates → COLMAP registration → 6DoF pose
 - `eval/` — Evaluation module: `eval_onboarding.py` (per-keyframe/sequence/dataset CSV), `eval_reconstruction.py`
 - `data_providers/` — Frame, flow, depth, and matching providers (abstract + implementations)
@@ -125,12 +126,21 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 ### Cross-cutting concerns
 
 - **DINOv2 descriptors** are centralized behind `adapters/cnos_adapter.py` (`DescriptorExtractor` protocol,
-  `CnosDescriptorExtractor` implementation). All consumers use `create_descriptor_extractor()` or pass
-  a `DescriptorExtractor` instance — no direct cnos imports outside `adapters/`.
+  `GloPoseDescriptorExtractor` implementation). The descriptor model is vendored in `adapters/dino_descriptor.py`
+  (`CustomDINOv2` as `nn.Module`, loaded via `descriptor_from_config()` — no Hydra dependency).
+  All consumers use `create_descriptor_extractor()` or pass a `DescriptorExtractor` instance.
+  `sys.path` manipulation for cnos is kept solely for pickle compatibility with old ViewGraph caches.
+- **Detection config** — all matching/postprocessing parameters (thresholds, NMS, OOD) are fields in
+  `DetectionConfig` dataclass. No Hydra config loading at runtime. `BOPChallengePosePredictor` reads
+  `self.config.detection.*` directly.
+- **NMS** is handled by `DetectionContainer` (`detection/nms.py`), created via `make_detections()`.
+  Replaces cnos `Detections` class. Our own `Detection` type in `data_structures/types.py` is used at
+  module boundaries.
+- **CNOS baseline** — original CNOS can be run via `scripts/run_cnos_baseline.py` for comparison.
+  ViewGraph export to CNOS format is available as `export_viewgraphs_to_cnos_format()` in
+  `data_structures/view_graph.py`.
 - **BOP dataset conventions** (folder layout, splits, annotations) are known by `detection/detector.py`,
   `detection/representation.py`, and many `run_*.py` scripts. Should be encapsulated in a BOP data adapter.
-- **`Detections` type** from cnos is accessed via `adapters.cnos_adapter.make_cnos_detections()` only for NMS
-  methods. Our own `Detection` type in `data_structures/types.py` is used at module boundaries.
 
 ## Code Conventions
 
@@ -144,7 +154,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 ## Key Dependencies
 
-PyTorch, Kornia (geometry/camera), Kaolin (mesh rendering), pycolmap, SAM2, RoMa/UFM (optical flow), DINOv2 (via CNOS),
+PyTorch, Kornia (geometry/camera), Kaolin (mesh rendering), pycolmap, SAM2, RoMa/UFM (optical flow), DINOv2 (via torch.hub),
 NetworkX, Gradio, Rerun SDK, wandb
 
 ## Things to Know
@@ -290,14 +300,51 @@ is commented out). Split into two modules:
 - [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
 - [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
 
-#### 2.3 CNOS integration investigation
+#### 2.3 CNOS integration: vendor remaining deps + keep original as baseline
 
-- [ ] Inspect original CNOS detector pipeline end-to-end to understand where our detection results diverge (some
-  datasets show significantly worse performance). Compare: descriptor extraction, proposal generation, similarity
-  scoring, NMS, and post-processing steps against the original CNOS code.
-- [ ] Decide integration strategy: either (a) reliably integrate CNOS as a dependency with a clean adapter, or
-  (b) vendor the specific pieces we need (descriptor matching, similarity scoring) into our own codebase and
-  drop the CNOS dependency. Document the decision and rationale.
+**Decision:** vendor the remaining runtime dependencies so GloPose detection is fully self-contained;
+keep `repositories/cnos/` as a read-only baseline runner for comparison experiments.
+
+**Context:** CNOS (nv-nguyen fork at `repositories/cnos/`) supports model-free templates via
+`rendering_type`: `onboarding_static`, `onboarding_dynamic`, `matchability_images` (our keyframes).
+The 3-way comparison (CNOS + BOP onboarding frames vs CNOS + our keyframes vs GloPose detection)
+is the key experiment for the paper. The bridge between GloPose and CNOS is a file-based template
+export (`ViewGraph → matchability_images/{obj}/rgb/ + mask_visib/`), already implemented as an
+inline `__main__` block in `data_structures/view_graph.py` (line 365).
+
+**Already done:**
+- [x] Scoring functions vendored in `detection/scoring.py` (pure torch, no cnos imports)
+- [x] Mask/bbox utils vendored in `utils/mask_utils.py`, `utils/bbox_utils.py` (pure numpy)
+- [x] `adapters/cnos_adapter.py` centralizes all cnos imports (DINOv2 loading, `Detections` type, Hydra config)
+- [x] ViewGraph-to-CNOS-format export exists (`data_structures/view_graph.py:365`, `scripts/run_cnos.batch`)
+
+**Vendored runtime dependencies:**
+- [x] Replace `descriptor_from_hydra()` with `descriptor_from_config()` using direct `torch.hub.load()`.
+  Vendored in `adapters/dino_descriptor.py` (`CustomDINOv2` as `nn.Module`, `DescriptorModelConfig` dataclass,
+  preset configs `DINOV2_CONFIG`/`DINOV3_CONFIG`). Utilities in `adapters/dino_utils.py` (`CropResizePad`,
+  `BatchedData`). `DescriptorExtractor` protocol unchanged.
+- [x] Vendor NMS into `detection/nms.py`: `DetectionContainer` class with `apply_nms_per_object_id()`,
+  `apply_nms_for_masks_inside_masks()`, `filter()`. `make_detections()` in `cnos_adapter.py` replaces
+  `make_cnos_detections()` (backward-compat alias kept).
+- [x] Replace Hydra config loading (`load_cnos_matching_config()`) with fields in `DetectionConfig`
+  dataclass: `confidence_thresh=0.15`, `nms_thresh=0.25`, `cosine_similarity_quantile=0.5`,
+  `mahalanobis_quantile=0.95`, `lowe_ratio_threshold=1.25`, `aggregation_function='max'`,
+  `ood_detection_method='none'`, `max_num_instances=100`. `BOPChallengePosePredictor` reads
+  `self.config.detection.*` directly; `matching_config_overrides` parameter removed.
+- [ ] Verify GloPose detection produces identical results before/after vendoring on a test sequence
+
+**CNOS baseline runner:**
+- [x] Create `scripts/run_cnos_baseline.py`: CLI script that invokes original CNOS
+  (`repositories/cnos/run_inference.py`) via subprocess with Hydra overrides for `dataset_name`,
+  `rendering_type`, `descriptor_model`, etc.
+- [x] Promote ViewGraph export from `data_structures/view_graph.py` `__main__` block to
+  `export_viewgraphs_to_cnos_format(viewgraphs_home, bop_home, experiment, split)` function.
+  `__main__` block calls it with hardcoded defaults.
+
+**Divergence investigation** (moved to paper ablation P3 — requires RCI runs, not architectural work):
+- Tracing where GloPose detection diverges from original CNOS (descriptor extraction, proposal
+  generation, similarity scoring, NMS) is an empirical comparison best done as part of the
+  detection ablation experiments (see P3.3, P5.3).
 
 #### 2.4 Clean up BOP coupling
 
