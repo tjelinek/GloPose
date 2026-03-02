@@ -41,3 +41,27 @@ class PoseEstimate:
     def t_meters(self) -> torch.Tensor:
         """(3,) translation vector in meters."""
         return self.Se3_obj2cam.translation.squeeze()
+
+
+@dataclass
+class DetectionSet:
+    """Batched detection results for an image."""
+    masks: torch.Tensor                             # (N, H, W)
+    scores: torch.Tensor                            # (N,)
+    object_ids: torch.Tensor                        # (N,)
+    boxes: torch.Tensor                             # (N, 4) xyxy, long
+    score_distribution: torch.Tensor | None = None  # (N, num_objects)
+
+    def __post_init__(self):
+        self.boxes = self.boxes.long()
+
+    def __len__(self) -> int:
+        return self.masks.shape[0]
+
+    def filter(self, indices: torch.Tensor) -> None:
+        self.masks = self.masks[indices]
+        self.scores = self.scores[indices]
+        self.object_ids = self.object_ids[indices]
+        self.boxes = self.boxes[indices]
+        if self.score_distribution is not None:
+            self.score_distribution = self.score_distribution[indices]
