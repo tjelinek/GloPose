@@ -362,28 +362,31 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
     return view_graphs
 
 
-if __name__ == '__main__':
+def export_viewgraphs_to_cnos_format(viewgraphs_home: Path, bop_home: Path, experiment: str, split: str):
+    """Export ViewGraph images/segmentations to CNOS matchability_images format.
 
-    viewgraphs_home = Path('/mnt/personal/jelint19/cache/view_graph_cache/')
-    bop_home = Path('/mnt/personal/jelint19/data/bop/')
-    experiment = 'ufm_c0975r05'
-    split = 'both'
+    Creates the directory structure expected by CNOS for template-based detection:
+        {bop_home}/{dataset}/matchability_images_{split}/{obj_id}/rgb/
+        {bop_home}/{dataset}/matchability_images_{split}/{obj_id}/mask_visib/
 
+    Args:
+        viewgraphs_home: Root of ViewGraph cache (e.g., /mnt/personal/jelint19/cache/view_graph_cache/)
+        bop_home: Root of BOP data directory (e.g., /mnt/personal/jelint19/data/bop/)
+        experiment: Experiment name (e.g., 'ufm_c0975r05')
+        split: Onboarding split suffix to filter (e.g., 'both', 'up', 'down', 'dynamic')
+    """
     path_to_experiment = viewgraphs_home / experiment
 
     for dataset_path in tqdm(list(path_to_experiment.iterdir()), desc="Datasets"):
-
         dataset = dataset_path.name
         destination_folder = bop_home / dataset / f'matchability_images_{split}'
         shutil.rmtree(str(destination_folder), ignore_errors=True)
 
         for view_graph_path in tqdm(list(dataset_path.iterdir()), desc=f"Sequences in {dataset}", leave=False):
-
             if dataset in ['hope', 'handal'] and view_graph_path.name.split('_')[-1] != split:
                 continue
 
-            sequence_name = '_'.join(view_graph_path.name.split('_', )[:-1])
-            # view_graph = load_view_graph(sequence_path, 'cpu')
+            sequence_name = '_'.join(view_graph_path.name.split('_')[:-1])
 
             view_graph_img_path = view_graph_path / 'images'
             view_graph_seg_path = view_graph_path / 'segmentations'
@@ -402,3 +405,13 @@ if __name__ == '__main__':
             for file_path in view_graph_seg_path.iterdir():
                 if file_path.is_file():
                     shutil.copy2(file_path, destination_segmentations)
+
+
+if __name__ == '__main__':
+
+    export_viewgraphs_to_cnos_format(
+        viewgraphs_home=Path('/mnt/personal/jelint19/cache/view_graph_cache/'),
+        bop_home=Path('/mnt/personal/jelint19/data/bop/'),
+        experiment='ufm_c0975r05',
+        split='both',
+    )
