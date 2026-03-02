@@ -106,16 +106,17 @@ class DetectionConfig:
     descriptor_model: str = 'dinov2'
     descriptor_mask_detections: bool = True
     detector_name: str = 'sam'
-    aggregation_function: str = None
+    aggregation_function: str = 'max'
     similarity_metric: str = 'cosine'
-    confidence_thresh: float = None
-    ood_detection_method: str = None
-    cosine_similarity_quantile: float = None
-    mahalanobis_quantile: float = None
-    lowe_ratio_threshold: float = None
+    confidence_thresh: float = 0.15
+    ood_detection_method: str = 'none'
+    cosine_similarity_quantile: float = 0.5
+    mahalanobis_quantile: float = 0.95
+    lowe_ratio_threshold: float = 1.25
     patch_descriptors_filtering: bool = True
     min_avg_patch_cosine_similarity: float = 0.25
-    nms_thresh: float = None
+    nms_thresh: float = 0.25
+    max_num_instances: int = 100
 
 
 @dataclass
