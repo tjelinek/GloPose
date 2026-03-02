@@ -24,7 +24,8 @@ poses of the object in novel images.
 ## Testing
 
 No formal test suite. Validation is done by running dataset-specific scripts and evaluation utilities
-(`eval/eval_onboarding.py`, `eval/eval_reconstruction.py`, `utils/eval_bop_detection.py`, `utils/bop_challenge.py`).
+(`eval/eval_onboarding.py`, `eval/eval_reconstruction.py`, `eval/eval_point_cloud.py`,
+`eval/eval_bop_detection.py`, `utils/bop_challenge.py`).
 
 ## Architecture
 
@@ -101,7 +102,9 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring, NMS (`nms.py`)
 - `pose_estimation/` — `PoseEstimator`: flow-based matching against ViewGraph templates → COLMAP registration → 6DoF pose
-- `eval/` — Evaluation module: `eval_onboarding.py` (per-keyframe/sequence/dataset CSV), `eval_reconstruction.py`
+- `eval/` — Evaluation module: `eval_onboarding.py` (wiring + GT mesh unit mapping), `eval_reconstruction.py`
+  (per-keyframe/sequence/dataset CSV stats + AUC), `eval_point_cloud.py` (3D reconstruction quality: accuracy,
+  completeness, F-score; pose AUC adapted from VGGT)
 - `data_providers/` — Frame, flow, depth, and matching providers (abstract + implementations)
 - `data_structures/` — ViewGraph, DataGraph, KeyframeBuffer, Detection, PoseEstimate, observations
 - `models/` — Mesh rendering (Kaolin), feature encoding
@@ -155,7 +158,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 ## Key Dependencies
 
 PyTorch, Kornia (geometry/camera), Kaolin (mesh rendering), pycolmap, SAM2, RoMa/UFM (optical flow), DINOv2 (via torch.hub),
-NetworkX, Gradio, Rerun SDK, wandb
+NetworkX, Gradio, Rerun SDK, wandb, scipy (KDTree for point cloud eval), trimesh (mesh loading)
 
 ## Things to Know
 
@@ -284,11 +287,11 @@ Goal: given detections and an onboarding result, produce 6DoF poses.
 - [ ] Extend `eval/` with remaining evaluation types:
     - [ ] `evaluate_detections(detections, ground_truth) -> DetectionMetrics` (BOP COCO)
     - [ ] `evaluate_poses(pose_estimates, ground_truth) -> PoseMetrics` (BOP 6DoF)
-    - [ ] `evaluate_reconstruction(reconstruction, ground_truth) -> ReconstructionMetrics`
-        - [ ] Chamfer distance
-        - [ ] Hausdorff distance
-        - [ ] Additional metrics as needed (F-score, completeness, accuracy)
-- [ ] Move remaining `utils/eval_*.py` and `utils/bop_challenge.py` into `eval/`
+    - [x] `evaluate_reconstruction(reconstruction, ground_truth) -> ReconstructionMetrics`
+        — implemented in `eval/eval_point_cloud.py`: accuracy, completeness, overall, F-score@1/2/5mm,
+        pose AUC@5/10/30°. Wired into CSV pipeline via `eval/eval_onboarding.py`.
+- [x] `eval_bop_detection.py` moved from `utils/` to `eval/`
+- [ ] Gradually migrate functions from `utils/bop_challenge.py` into `utils/bop_data.py` (clean extraction already started)
 
 ---
 
@@ -339,13 +342,8 @@ on all static onboarding sequences across all datasets.
 
 #### P1.2 Reconstruction completeness metric
 
-Currently we only measure camera pose accuracy (rotation/translation error). We also need to measure
-whether the reconstruction is *complete* (covers the whole object, not just one side).
-
-- [ ] Implement viewpoint coverage metric: for each reconstruction, compute the angular span of camera
-  poses (e.g., solid angle coverage on the viewing sphere). Report fraction of hemisphere/sphere covered.
-- [ ] Add to `eval/eval_reconstruction.py`: `compute_viewpoint_coverage(reconstruction) -> float`
-- [ ] Add completeness columns to `reconstruction_keyframe_stats.csv` output
+3D point cloud quality metrics (accuracy, completeness, overall, F-score) are now implemented in
+`eval/eval_point_cloud.py` and wired into the CSV pipeline.
 
 ---
 
@@ -399,6 +397,8 @@ Compare our adaptive frame filtering against fixed-interval subsampling.
   - Produces **Table: Frame selection ablation** — rows: {every-1, every-2, ..., every-64, ours-adaptive},
     columns: {mean rot err (°), mean trans err (cm), rot acc@5°, trans acc@5cm, #keyframes (mean),
     reconstruction rate (%), runtime (s)}
+  - Include 3D quality columns when available: accuracy_mm, completeness_mm, overall_mm, fscore_5mm,
+    pose_auc_at_5, pose_auc_at_10, pose_auc_at_30
   - Also produces a **plot**: x-axis = mean #keyframes, y-axis = pose accuracy, with a point per method
 
 #### P3.2 ViewGraph filtering ablation
@@ -484,48 +484,48 @@ For each method: run on our selected keyframes AND on every-nth subsampled frame
 
 ---
 
-### P4. 3D reconstruction quality (Chamfer / Hausdorff)
+### P4. 3D reconstruction quality
 
 Goal: compare our reconstructed 3D model against GT mesh models.
 
-#### P4.1 GT model loading
+#### P4.1 GT model loading — DONE
 
-- [ ] Write `utils/gt_model_loader.py`: loads GT models from BOP dataset directories
-  (`models/obj_NNNNNN.ply`). BOP models are triangle meshes in PLY format. Parse with trimesh or
-  Open3D. Return as point cloud (sample surface points) or keep as mesh.
-- [ ] Handle coordinate system conventions: BOP models are in mm, model origin is at object center.
-  Our COLMAP reconstructions are in arbitrary scale — need Sim3d alignment first.
+GT mesh loading (`trimesh.load` + surface sampling) is in `eval/eval_point_cloud.py:sample_points_from_mesh()`.
+GT model path resolution is in `eval/eval_onboarding.py:resolve_gt_model_path()` (BOP, NAVI, HO3D).
+Unit mapping (BOP→mm, NAVI/HO3D/GSO→m) is in `eval/eval_onboarding.py:gt_mesh_unit_for_dataset()`.
 
-#### P4.2 Reconstruction-to-GT alignment
+#### P4.2 Reconstruction-to-GT alignment — DONE (via existing Kabsch)
 
-- [ ] Implement `align_reconstruction_to_gt_model()`:
-  - Extract 3D points from COLMAP reconstruction (`reconstruction.points3D`)
-  - Sample points from GT mesh surface (uniform sampling, e.g., 10k–100k points)
-  - Run ICP (trimesh or Open3D) to align reconstruction point cloud to GT model
-  - Alternatively: use known GT camera poses to transform reconstruction into GT model frame
-    (if Kabsch alignment to GT poses already done, the reconstruction is already in GT frame)
-- [ ] Decide alignment strategy: ICP (no GT poses needed) vs GT-pose-based (more reliable if poses
-  are accurate). Likely use GT-pose-based for static sequences, ICP as fallback.
+Reconstruction points are already in GT frame after Kabsch alignment (`onboarding/reconstruction.py`
+transforms `reconstruction.points3D` with the Sim3d alignment). No separate ICP step needed for
+static sequences with GT poses.
 
-#### P4.3 3D distance metrics
+- [ ] For dynamic sequences or sequences without GT poses, implement ICP fallback alignment
 
-- [ ] Implement `utils/eval_3d_metrics.py`:
-  - `chamfer_distance(pred_points, gt_points) -> float` — mean of mean nearest-neighbor distances
-    in both directions
-  - `hausdorff_distance(pred_points, gt_points) -> float` — max of max nearest-neighbor distances
-  - `f_score(pred_points, gt_points, threshold) -> float` — fraction of points with NN distance < threshold
-  - `completeness(pred_points, gt_points, threshold) -> float` — fraction of GT points covered
-  - `accuracy(pred_points, gt_points, threshold) -> float` — fraction of predicted points close to GT
-  - Use KD-tree (scipy or Open3D) for efficient NN queries
+#### P4.3 3D distance metrics — DONE
+
+Implemented in `eval/eval_point_cloud.py:compute_reconstruction_metrics()`:
+- **Accuracy** (mm): mean NN-distance pred→GT, clamped at 20mm
+- **Completeness** (mm): mean NN-distance GT→pred, clamped at 20mm
+- **Overall** (mm): (accuracy + completeness) / 2
+- **F-score@τ** at τ = 1mm, 2mm, 5mm
+- Uses `scipy.spatial.KDTree` for efficient NN queries
+
+Also implemented `compute_pose_auc()` (AUC@5/10/30° over rotation errors, adapted from VGGT).
+
+All metrics are wired into the CSV pipeline at sequence, dataset, and experiment levels.
 
 #### P4.4 Run 3D evaluation
 
 - [ ] Run 3D evaluation on all HANDAL static objects (GT models available in BOP `models/` dir)
+  — metrics are now computed automatically when `gt_model_path` exists
 - [ ] Run on HO3D, HOPE, BOP classic where GT models are available
+- [ ] Verify new columns in `reconstruction_sequence_stats.csv`: `accuracy_mm`, `completeness_mm`,
+  `overall_mm`, `fscore_1mm`, `fscore_2mm`, `fscore_5mm`, `pose_auc_at_5`, `pose_auc_at_10`, `pose_auc_at_30`
 - [ ] Write `scripts/eval_3d_reconstruction.py`:
-  - For each sequence: load COLMAP reconstruction, load GT model, align, compute metrics
-  - Produces **Table: 3D reconstruction quality** — rows: per-dataset aggregate,
-    columns: {Chamfer (mm), Hausdorff (mm), F-score@1mm, F-score@5mm, completeness@5mm, accuracy@5mm}
+  - Reads existing CSVs and produces **Table: 3D reconstruction quality** — rows: per-dataset aggregate,
+    columns: {accuracy (mm), completeness (mm), overall (mm), F-score@1mm, F-score@2mm, F-score@5mm,
+    AUC@5°, AUC@10°, AUC@30°}
   - Also run for external methods (P3.4) to include in comparison
 
 ---

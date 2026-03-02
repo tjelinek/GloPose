@@ -10,6 +10,7 @@ dependencies:
   - colmap==3.12.6
   - pillow
   - networkx
+  - scipy
   - imageio
   - git
   - openssl

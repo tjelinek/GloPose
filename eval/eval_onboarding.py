@@ -4,6 +4,11 @@ from typing import Dict
 from kornia.geometry import Se3
 
 from data_structures.view_graph import ViewGraph
+from eval.eval_point_cloud import (
+    sample_points_from_mesh,
+    extract_reconstruction_points,
+    compute_reconstruction_metrics,
+)
 from eval.eval_reconstruction import (
     evaluate_reconstruction,
     update_sequence_reconstructions_stats,
@@ -11,6 +16,21 @@ from eval.eval_reconstruction import (
 )
 from configs.glopose_config import RunConfig, PathsConfig
 from configs.components.bop_config import BaseBOPConfig
+
+
+def gt_mesh_unit_for_dataset(dataset: str) -> str:
+    """Return the coordinate unit of the GT mesh for a given dataset.
+
+    BOP-format datasets store models in millimetres; NAVI, HO3D, and
+    Google Scanned Objects use metres.
+    """
+    dataset_lower = dataset.lower()
+    metre_datasets = {'navi', 'ho3d', 'gso', 'google_scanned'}
+    for name in metre_datasets:
+        if name in dataset_lower:
+            return 'm'
+    # BOP datasets (handal, hope, tless, lmo, ycbv, …) use mm
+    return 'mm'
 
 
 def evaluate_onboarding(
@@ -74,6 +94,19 @@ def evaluate_onboarding(
             rec_csv_detailed_stats, dataset_name_for_eval, sequence_name,
         )
 
+    # 3D reconstruction quality (point cloud vs GT mesh)
+    reconstruction_quality = None
+    if reconstruction is not None and view_graph.gt_model_path is not None and view_graph.gt_model_path.exists():
+        try:
+            gt_pts = sample_points_from_mesh(view_graph.gt_model_path)
+            pred_pts = extract_reconstruction_points(reconstruction)
+            unit = gt_mesh_unit_for_dataset(run.dataset)
+            reconstruction_quality = compute_reconstruction_metrics(
+                pred_pts, gt_pts, gt_mesh_unit=unit,
+            )
+        except Exception as e:
+            print(f"Warning: point cloud evaluation failed: {e}")
+
     # Per-sequence summary statistics
     reconstruction_success = view_graph.reconstruction_success
     alignment_success = view_graph.alignment_success
@@ -83,6 +116,7 @@ def evaluate_onboarding(
         view_graph.num_input_frames, reconstruction, dataset_name_for_eval,
         sequence_name, reconstruction_success, alignment_success,
         view_graph.frame_filtering_time, view_graph.reconstruction_time,
+        reconstruction_quality=reconstruction_quality,
     )
 
     # Per-dataset aggregate statistics

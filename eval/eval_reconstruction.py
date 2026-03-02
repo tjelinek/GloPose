@@ -8,6 +8,7 @@ import torch
 from kornia.geometry import Se3, So3, Quaternion
 from pycolmap import Reconstruction
 
+from eval.eval_point_cloud import compute_pose_auc
 from onboarding.colmap_utils import get_image_Se3_world2cam
 
 
@@ -134,7 +135,8 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
                                           input_frames: int, reconstruction: Reconstruction, dataset: str,
                                           sequence: str, reconstruction_success: bool, pose_alignment_success: bool,
                                           frame_filtering_time: float, reconstruction_time: float,
-                                          input_translation_unit: str = 'mm', output_translation_unit: str = 'cm'):
+                                          input_translation_unit: str = 'mm', output_translation_unit: str = 'cm',
+                                          reconstruction_quality: dict | None = None):
     # Read the input CSV file containing reconstruction data
     if not csv_per_frame_stats.exists():
         print(f"Error: Input file {csv_per_frame_stats} does not exist.")
@@ -166,6 +168,15 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
         'trans_accuracy_at_1_cm': None,
         'trans_accuracy_at_5_cm': None,
         'trans_accuracy_at_10_cm': None,
+        'pose_auc_at_5': None,
+        'pose_auc_at_10': None,
+        'pose_auc_at_30': None,
+        'accuracy_mm': None,
+        'completeness_mm': None,
+        'overall_mm': None,
+        'fscore_1mm': None,
+        'fscore_2mm': None,
+        'fscore_5mm': None,
         'reconstruction_success': reconstruction_success,
         'alignment_success': pose_alignment_success,
         'frame_filtering_time': frame_filtering_time,
@@ -228,6 +239,20 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
                     translation_errors_np),
             })
 
+            # Pose AUC over rotation errors
+            auc = compute_pose_auc(rotation_errors_np)
+            stats.update({
+                'pose_auc_at_5': auc.get('auc_at_5'),
+                'pose_auc_at_10': auc.get('auc_at_10'),
+                'pose_auc_at_30': auc.get('auc_at_30'),
+            })
+
+    # Merge reconstruction quality metrics if provided
+    if reconstruction_quality is not None:
+        for key in ('accuracy_mm', 'completeness_mm', 'overall_mm',
+                    'fscore_1mm', 'fscore_2mm', 'fscore_5mm'):
+            stats[key] = reconstruction_quality.get(key)
+
     stats_df = pd.DataFrame([stats])
 
     # Write to CSV
@@ -286,6 +311,10 @@ def update_dataset_reconstruction_statistics(
     # Only calculate accuracy metrics for successful reconstructions
     successful_df = dataset_df[dataset_df['reconstruction_success'] & dataset_df['alignment_success']]
 
+    recon_quality_cols = ['accuracy_mm', 'completeness_mm', 'overall_mm',
+                          'fscore_1mm', 'fscore_2mm', 'fscore_5mm']
+    auc_cols = ['pose_auc_at_5', 'pose_auc_at_10', 'pose_auc_at_30']
+
     if len(successful_df) > 0:
         dataset_stats.update({
             'mean_rotation_error': successful_df['mean_rotation_error'].mean(),
@@ -298,12 +327,22 @@ def update_dataset_reconstruction_statistics(
             'trans_accuracy_at_5_cm': successful_df['trans_accuracy_at_5_cm'].mean(),
             'trans_accuracy_at_10_cm': successful_df['trans_accuracy_at_10_cm'].mean(),
         })
+        for col in auc_cols:
+            if col in successful_df.columns:
+                dataset_stats[col] = successful_df[col].mean()
+            else:
+                dataset_stats[col] = None
+        for col in recon_quality_cols:
+            if col in successful_df.columns:
+                dataset_stats[col] = successful_df[col].mean()
+            else:
+                dataset_stats[col] = None
     else:
         # No successful reconstructions
         for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
                        'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
                        'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
-                       'trans_accuracy_at_10_cm']:
+                       'trans_accuracy_at_10_cm'] + auc_cols + recon_quality_cols:
             dataset_stats[metric] = None
 
     # Convert to DataFrame and save
@@ -384,6 +423,10 @@ def update_experiment_statistics(
         # Only calculate accuracy metrics for successful reconstructions
         successful_df = dataset_df[dataset_df['reconstruction_success'] & dataset_df['alignment_success']]
 
+        recon_quality_cols = ['accuracy_mm', 'completeness_mm', 'overall_mm',
+                              'fscore_1mm', 'fscore_2mm', 'fscore_5mm']
+        auc_cols = ['pose_auc_at_5', 'pose_auc_at_10', 'pose_auc_at_30']
+
         if len(successful_df) > 0:
             experiment_stats.update({
                 'mean_rotation_error': successful_df['mean_rotation_error'].mean(),
@@ -396,12 +439,22 @@ def update_experiment_statistics(
                 'trans_accuracy_at_5_cm': successful_df['trans_accuracy_at_5_cm'].mean(),
                 'trans_accuracy_at_10_cm': successful_df['trans_accuracy_at_10_cm'].mean(),
             })
+            for col in auc_cols:
+                if col in successful_df.columns:
+                    experiment_stats[col] = successful_df[col].mean()
+                else:
+                    experiment_stats[col] = None
+            for col in recon_quality_cols:
+                if col in successful_df.columns:
+                    experiment_stats[col] = successful_df[col].mean()
+                else:
+                    experiment_stats[col] = None
         else:
             # No successful reconstructions for this dataset
             for metric in ['mean_rotation_error', f'mean_translation_error_{output_translation_unit}',
                            'rot_accuracy_at_2_deg', 'rot_accuracy_at_5_deg', 'rot_accuracy_at_10_deg',
                            'trans_accuracy_at_1_cm', 'trans_accuracy_at_5_cm',
-                           'trans_accuracy_at_10_cm']:
+                           'trans_accuracy_at_10_cm'] + auc_cols + recon_quality_cols:
                 experiment_stats[metric] = None
 
         # Convert to DataFrame
