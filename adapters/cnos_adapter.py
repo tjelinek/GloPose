@@ -1,11 +1,11 @@
-"""Adapter for the cnos external repository.
+"""Adapter for descriptor extraction and detection containers.
 
-This is the SOLE location in GloPose that manipulates sys.path for cnos
-and imports cnos internals. All other modules import from here.
+This module provides the DescriptorExtractor protocol and concrete
+implementation using vendored DINOv2/v3 code (no Hydra dependency).
 
-The module-level sys.path.append ensures pickle compatibility: old ViewGraph
-pickles may reference cnos types (e.g. src.model.utils.Detections) and need
-cnos on the path at deserialization time.
+The sys.path manipulation for cnos is kept solely for pickle compatibility:
+old ViewGraph pickles may reference cnos types (e.g. src.model.utils.Detections)
+and need cnos on the path at deserialization time.
 """
 
 import sys
@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
-# ── Ensure cnos is on sys.path (needed for pickle compat and all cnos imports) ──
+# TODO: Remove once all ViewGraph caches are regenerated without cnos types
 _cnos_path = './repositories/cnos'
 if _cnos_path not in sys.path:
     sys.path.append(_cnos_path)
@@ -30,7 +30,6 @@ class DescriptorExtractor(Protocol):
     """Protocol for DINOv2/v3 descriptor extraction.
 
     Callers pass raw numpy images, mask tensors, and box tensors.
-    The adapter handles constructing any cnos-internal types.
     """
 
     def extract_descriptors(self, image_np, masks: Tensor, boxes: Tensor) -> tuple[Tensor, Tensor]:
@@ -56,84 +55,39 @@ class DescriptorExtractor(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Concrete implementation wrapping cnos CustomDINOv2
+# Concrete implementation using vendored DINOv2/v3
 # ---------------------------------------------------------------------------
 
-class CnosDescriptorExtractor:
-    """Wraps cnos CustomDINOv2 behind the DescriptorExtractor interface.
+class GloPoseDescriptorExtractor:
+    """Wraps vendored CustomDINOv2 behind the DescriptorExtractor interface.
 
-    Callers never need to construct cnos Detections objects — this adapter
-    does it internally.
+    Uses descriptor_from_config() instead of Hydra-based descriptor_from_hydra().
     """
 
     def __init__(self, model: str = 'dinov3', mask_detections: bool = True, device: str = 'cuda'):
-        from src.model.dinov2 import descriptor_from_hydra
-        self._dino_model = descriptor_from_hydra(model=model, mask_detections=mask_detections, device=device)
+        from adapters.dino_descriptor import descriptor_from_config
+        self._dino_model = descriptor_from_config(model=model, mask_detections=mask_detections, device=device)
 
     def extract_descriptors(self, image_np, masks: Tensor, boxes: Tensor) -> tuple[Tensor, Tensor]:
-        from src.model.utils import Detections
-        detections = Detections({'masks': masks, 'boxes': boxes})
-        return self._dino_model(image_np, detections)
+        class _Proposals:
+            def __init__(self, masks, boxes):
+                self.masks = masks
+                self.boxes = boxes
+
+        proposals = _Proposals(masks, boxes)
+        return self._dino_model(image_np, proposals)
 
     def get_detections_from_files(self, image_path: Path, segmentation_path: Path) -> tuple[Tensor, Tensor]:
         return self._dino_model.get_detections_from_files(image_path, segmentation_path)
 
 
+# Backward-compat alias
+CnosDescriptorExtractor = GloPoseDescriptorExtractor
+
+
 def create_descriptor_extractor(model: str = 'dinov3', mask_detections: bool = True,
-                                device: str = 'cuda') -> CnosDescriptorExtractor:
+                                device: str = 'cuda') -> GloPoseDescriptorExtractor:
     """Factory: primary entry point for creating a descriptor extractor."""
-    return CnosDescriptorExtractor(model=model, mask_detections=mask_detections, device=device)
+    return GloPoseDescriptorExtractor(model=model, mask_detections=mask_detections, device=device)
 
 
-# ---------------------------------------------------------------------------
-# Hydra config loading for detection matching/postprocessing
-# ---------------------------------------------------------------------------
-
-def load_cnos_matching_config(overrides: dict[str, object]) -> tuple[dict, dict]:
-    """Load cnos matching and post-processing configs via Hydra.
-
-    Args:
-        overrides: Dict of matching_config overrides (key -> value).
-            Keys with None values are skipped.
-
-    Returns:
-        (matching_config, postprocessing_config) as plain dicts.
-    """
-    from hydra import initialize_config_dir, compose
-    from hydra.core.global_hydra import GlobalHydra
-    from hydra.utils import instantiate
-
-    if GlobalHydra.instance().is_initialized():
-        GlobalHydra.instance().clear()
-
-    cfg_dir = (Path(__file__).parent.parent / 'repositories' / 'cnos' / 'configs').resolve()
-    hydra_overrides = []
-    for k, v in overrides.items():
-        if v is not None:
-            hydra_overrides.append(f'model.matching_config.{k}={v}')
-
-    with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-        cnos_cfg = compose(config_name="run_inference", overrides=hydra_overrides)
-
-    matching_config = instantiate(cnos_cfg.model.matching_config)
-    postprocessing_config = instantiate(cnos_cfg.model.post_processing_config)
-    return matching_config, postprocessing_config
-
-
-# ---------------------------------------------------------------------------
-# Escape hatch: cnos Detections container (for NMS methods)
-# ---------------------------------------------------------------------------
-
-def make_cnos_detections(data: dict) -> 'CnosDetections':
-    """Construct a cnos Detections object from a dict.
-
-    Use this when you need cnos NMS methods (apply_nms_per_object_id,
-    apply_nms_for_masks_inside_masks, filter). Prefer extract_descriptors
-    for descriptor computation.
-    """
-    from src.model.utils import Detections
-    return Detections(data)
-
-
-# Type alias for documentation
-CnosDetections = object  # Runtime type is src.model.utils.Detections
