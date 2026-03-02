@@ -317,16 +317,6 @@ def add_extrinsics_to_pinhole_params(pinhole_params: Dict[int, PinholeCamera], g
     return pinhole_params
 
 
-def get_gop_camera_intrinsics(json_path: Path, image_id: int):
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-
-    if str(image_id) not in data:
-        raise ValueError(f"Image ID {image_id} not found in the JSON file.")
-
-    cam_K = data[str(image_id)]['cam_K']
-    return np.array(cam_K).reshape(3, 3)
-
 
 def read_gt_Se3_world2cam(pose_json_path: Path, input_scale='m', output_scale='m', device: str = 'cpu') \
         -> dict[int, Se3]:

@@ -34,6 +34,7 @@ from utils.mask_utils import rle_to_mask
 
 from data_structures.template_bank import TemplateBank  # noqa: F401 — re-exported for backward compat
 from utils.bop_challenge import extract_object_id
+from utils.bop_data import get_rgb_folder_name, get_segmentation_folder_name, get_scene_gt_path
 from utils.detection_utils import average_patch_similarity
 
 from adapters.cnos_adapter import create_descriptor_extractor
@@ -370,18 +371,9 @@ def perform_condensation_per_dataset(bop_base: Path, cache_base_path: Path, data
         if not sequence.is_dir():
             continue
 
-        if 'aria' in split and 'static' in split:
-            rgb_folder = sequence / 'rgb'
-            segmentation_folder = sequence / 'mask_visib_rgb'
-            scene_gt = sequence / 'scene_gt_rgb.json'
-        elif 'quest3' in split and 'static' in split:
-            rgb_folder = sequence / 'gray1'
-            segmentation_folder = sequence / 'mask_visib_gray1'
-            scene_gt = sequence / 'scene_gt_gray1.json'
-        else:
-            rgb_folder = sequence / 'rgb'
-            segmentation_folder = sequence / 'mask_visib'
-            scene_gt = sequence / 'scene_gt.json'
+        rgb_folder = sequence / get_rgb_folder_name(split)
+        segmentation_folder = sequence / get_segmentation_folder_name(split)
+        scene_gt = get_scene_gt_path(sequence, split)
 
         object_id = extract_object_id(scene_gt, 0)[1]
 
