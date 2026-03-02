@@ -6,7 +6,7 @@ from typing import Dict, Tuple, List
 import numpy as np
 import torch
 
-from adapters.cnos_adapter import make_cnos_detections
+from data_structures.types import DetectionSet
 from utils.bbox_utils import xywh_to_xyxy
 from utils.mask_utils import rle_to_mask
 
@@ -24,7 +24,7 @@ def get_default_detections_per_scene_and_image(default_detections_file: Path) ->
 
 
 def get_detections_cnos_format(default_detections_scene_im: Dict[Tuple[int, int], List], scene_id: int,
-                               im_id: int, device: str = 'cuda') -> Detections:
+                               im_id: int, device: str = 'cuda'):
     """
     Takes output of get_default_detections_per_scene_and_image
     """
@@ -37,13 +37,11 @@ def get_detections_cnos_format(default_detections_scene_im: Dict[Tuple[int, int]
     scores = torch.tensor([item[i]['score'] for i in range(N)]).to(device)
     obj_ids = torch.tensor([item[i]['category_id'] - 1 for i in range(N)]).to(device)
 
-    detections_dict = {
-        'object_ids': obj_ids,
-        'bbox': bboxes,
-        'scores': scores,
-        'masks': masks,
-    }
-
-    detections = make_cnos_detections(detections_dict)
+    detections = DetectionSet(
+        masks=masks,
+        scores=scores,
+        object_ids=obj_ids,
+        boxes=bboxes,
+    )
 
     return detections

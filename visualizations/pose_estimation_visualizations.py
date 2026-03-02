@@ -12,6 +12,7 @@ from matplotlib import cm
 from torchvision import transforms
 
 from data_structures.rerun_annotations import RerunAnnotations
+from data_structures.types import DetectionSet
 from visualizations.rerun_utils import (init_rerun_recording, register_matching_series_lines,
                                         visualize_certainty_map, log_matching_correspondences)
 
@@ -172,7 +173,7 @@ class PoseEstimatorLogger:
                                     template_images: Dict[int, List[torch.Tensor] | Path],
                                     template_masks: Dict[int, List[torch.Tensor] | Path],
                                     detection_idx: int,
-                                    detections,
+                                    detections: DetectionSet,
                                     detections_scores,
                                     similarity_metric: str):
 

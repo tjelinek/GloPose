@@ -9,18 +9,20 @@ import torch
 import torchvision.ops as ops
 from tqdm import tqdm
 
-from adapters.cnos_adapter import create_descriptor_extractor, load_cnos_matching_config, make_cnos_detections
+from adapters.cnos_adapter import create_descriptor_extractor
+from detection.nms import nms_per_object_id, nms_masks_inside_masks
 from detection.scoring import compute_templates_similarity_scores, filter_similarities_dict
 from detection.representation import get_descriptors_for_condensed_templates, _l2n, _apply_whitener
 from data_providers.flow_provider import MatchingProvider, create_matching_provider
 from data_providers.frame_provider import PrecomputedFrameProvider
 from data_structures.template_bank import TemplateBank
-from data_structures.types import Detection
+from data_structures.types import Detection, DetectionSet
 from data_structures.view_graph import ViewGraph, load_view_graphs_by_object_id, compute_dino_descriptors_for_view_graph
 from configs.glopose_config import GloPoseConfig
 from pose_estimation.estimator import PoseEstimator
 from utils.mask_utils import rle_to_mask
-from utils.bop_challenge import group_test_targets_by_image, get_descriptors_for_templates, get_gop_camera_intrinsics
+from utils.bop_challenge import get_descriptors_for_templates
+from utils.bop_data import load_test_targets, get_scene_folder, get_image_path, get_camera_json_path, load_camera_intrinsics, should_run_evaluation, get_targets_filename
 from utils.bop_io import detection_to_bop_record, pose_to_bop_record, write_bop_pose_csv
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
 from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
@@ -29,7 +31,7 @@ from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 
 class BOPChallengePosePredictor:
 
-    def __init__(self, config: GloPoseConfig, base_cache_folder, matching_config_overrides: Dict[str, Any],
+    def __init__(self, config: GloPoseConfig, base_cache_folder,
                  experiment_folder='default', run_pose_estimation: bool = False):
 
         self.config = config
@@ -50,9 +52,6 @@ class BOPChallengePosePredictor:
                 device=config.run.device,
             )
 
-        self.cnos_matching_config, self.cnos_postprocessing_config = \
-            load_cnos_matching_config(matching_config_overrides)
-
     def _initialize_flow_provider(self) -> None:
         self.flow_provider = create_matching_provider(self.config.onboarding.filter_matcher, self.config.onboarding, self.config.run.device)
 
@@ -67,9 +66,7 @@ class BOPChallengePosePredictor:
         rerun_folder = self.write_folder / experiment_name / f'rerun_{dataset_name}'
         rerun_folder.mkdir(exist_ok=True, parents=True)
 
-        with bop_targets_path.open('r') as file:
-            test_annotations = json.load(file)
-            test_annotations = group_test_targets_by_image(test_annotations)
+        test_annotations = load_test_targets(bop_targets_path)
 
         test_dataset_path = base_dataset_folder / split
 
@@ -99,8 +96,8 @@ class BOPChallengePosePredictor:
             template_data = get_descriptors_for_condensed_templates(
                 detection_templates_save_folder,
                 descriptor,
-                self.cnos_matching_config['cosine_similarity_quantile'],
-                self.cnos_matching_config['mahalanobis_quantile'],
+                self.config.detection.cosine_similarity_quantile,
+                self.config.detection.mahalanobis_quantile,
                 device=self.config.run.device
             )
         elif templates_source == 'prerendered':
@@ -145,18 +142,16 @@ class BOPChallengePosePredictor:
                 pose_logger = None
 
             # Construct paths
-            scene_folder_name = f'{scene_id:06d}'
-            image_id_str = f'{im_id:06d}'
-            path_to_scene = test_dataset_path / scene_folder_name
-            path_to_scene_detection_cache = (self.cache_folder / 'detections_cache' / dataset_name / split /
-                                             scene_folder_name)
-            path_to_image = self._get_image_path(path_to_scene, image_id_str, dataset_name)
-            path_to_camera_intrinsics = path_to_scene / 'scene_camera.json'
+            path_to_scene = get_scene_folder(test_dataset_path, scene_id)
+            path_to_scene_detection_cache = get_scene_folder(
+                self.cache_folder / 'detections_cache' / dataset_name / split, scene_id)
+            path_to_image = get_image_path(path_to_scene, im_id, dataset_name)
+            path_to_camera_intrinsics = get_camera_json_path(path_to_scene)
             path_to_cnos_detections = path_to_scene_detection_cache / f'cnos_{detector_name}_detections_{descriptor}'
             path_to_detections_file = path_to_cnos_detections / f'{im_id:06d}.pkl'
 
             if self.run_pose_estimation:
-                camera_K = get_gop_camera_intrinsics(path_to_camera_intrinsics, im_id)
+                camera_K = load_camera_intrinsics(path_to_camera_intrinsics, im_id)
 
             with open(path_to_detections_file, "rb") as detections_file:
                 cnos_detections = pickle.load(detections_file)
@@ -191,7 +186,7 @@ class BOPChallengePosePredictor:
                     pose_logger.visualize_detections(detections.masks, detection_mask_idx)
                     pose_logger.visualize_nearest_neighbors(image, template_data.images, template_data.masks,
                                                             detection_mask_idx, detections, detections_scores,
-                                                            self.cnos_matching_config['similarity_metric'])
+                                                            self.config.detection.similarity_metric)
                     pose_logger.rerun_sequence_id += 1
 
                 torchvision_bbox = ops.masks_to_boxes(proposal_mask[None].to(torch.float)).squeeze().to(torch.long)
@@ -235,16 +230,13 @@ class BOPChallengePosePredictor:
             write_bop_pose_csv(bop_pose_results, pose_csv_path)
             print(f'Pose results saved to {str(pose_csv_path)}')
 
-        if dataset_name in ['hope', 'handal'] and split != 'val':
+        if not should_run_evaluation(dataset_name, split):
             return
         result_filename = json_file_path.name
         results_path = json_file_path.parent
         eval_path = self.write_folder / "bop_eval"
         datasets_path = "/mnt/data/vrg/public_datasets/bop/"
-        targets_filename = "test_targets_bop19.json"
-        if dataset_name in ['hope', 'handal'] and split == 'val':
-            targets_filename = "val_targets_bop24.json"
-            # Run evaluation
+        targets_filename = get_targets_filename(dataset_name, split)
 
         try:
             metrics = evaluate_bop_coco(
@@ -287,30 +279,30 @@ class BOPChallengePosePredictor:
 
         default_detections_cls_descriptors = _l2n(default_detections_cls_descriptors)
 
+        det_cfg = self.config.detection
         idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, detections_scores = \
             compute_templates_similarity_scores(template_data, default_detections_cls_descriptors,
                                                 default_detections_patch_descriptors, default_detections_masks,
-                                                self.cnos_matching_config['similarity_metric'],
-                                                self.cnos_matching_config['aggregation_function'],
-                                                self.cnos_matching_config['max_num_instances'],
-                                                self.cnos_matching_config['confidence_thresh'],
-                                                self.cnos_matching_config['lowe_ratio_threshold'],
-                                                self.cnos_matching_config['ood_detection_method'],
-                                                self.cnos_matching_config['patch_descriptors_filtering'],
-                                                self.cnos_matching_config['min_avg_patch_cosine_similarity'],
+                                                det_cfg.similarity_metric,
+                                                det_cfg.aggregation_function,
+                                                det_cfg.max_num_instances,
+                                                det_cfg.confidence_thresh,
+                                                det_cfg.lowe_ratio_threshold,
+                                                det_cfg.ood_detection_method,
+                                                det_cfg.patch_descriptors_filtering,
+                                                det_cfg.min_avg_patch_cosine_similarity,
                                                 descriptor_mask_detections)
         selected_detections_masks = default_detections_masks[idx_selected_proposals]
-        detections_dict = {
-            'masks': selected_detections_masks,
-            'scores': pred_scores,
-            'score_distribution': pred_score_distribution,
-            'object_ids': selected_objects,
-            'boxes': ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
-        }
-        detections = make_cnos_detections(detections_dict)
-        keep_indices = detections.apply_nms_per_object_id(nms_thresh=self.cnos_postprocessing_config['nms_thresh'])
+        detections = DetectionSet(
+            masks=selected_detections_masks,
+            scores=pred_scores,
+            object_ids=selected_objects,
+            boxes=ops.masks_to_boxes(selected_detections_masks.to(torch.float)).to(torch.long),
+            score_distribution=pred_score_distribution,
+        )
+        keep_indices = nms_per_object_id(detections, nms_thresh=det_cfg.nms_thresh)
         filter_similarities_dict(detections_scores, keep_indices)
-        keep_indices = detections.apply_nms_for_masks_inside_masks()
+        keep_indices = nms_masks_inside_masks(detections)
         filter_similarities_dict(detections_scores, keep_indices)
 
         indices = torch.arange(len(detections.masks), device=self.config.run.device)
@@ -319,27 +311,6 @@ class BOPChallengePosePredictor:
         filter_similarities_dict(detections_scores, sort_indices)
 
         return detections, detections_scores
-
-    @staticmethod
-    def _get_image_path(path_to_scene: Path, image_id_str: str, dataset_name: str) -> Path:
-
-        # Try .png first
-        image_filename = f'{image_id_str}.png'
-        path_to_image = path_to_scene / 'rgb' / image_filename
-
-        if not path_to_image.exists():
-            image_filename = f'{image_id_str}.jpg'
-            if dataset_name == 'hot3d':
-                path_to_image = path_to_scene / 'rgb' / image_filename
-                if not path_to_image.exists():
-                    path_to_image = Path(str(path_to_scene).replace('aria', 'quest3'))
-            else:
-                path_to_image = path_to_scene / 'rgb' / image_filename
-
-            if not path_to_image.exists():
-                raise FileNotFoundError(f"Image file not found: {path_to_image}")
-
-        return path_to_image
 
 
 def main():
@@ -467,31 +438,37 @@ def main():
         config = GloPoseConfig()
         config.run.device = args.device
 
-        matching_config_overrides = {
-            'aggregation_function': args.aggregation_function,
-            'ood_detection_method': args.ood_detection_method,
-            'confidence_thresh': args.confidence_thresh,
-            'cosine_similarity_quantile': args.cosine_similarity_quantile,
-            'mahalanobis_quantile': args.mahalanobis_quantile,
-            'lowe_ratio_threshold': args.lowe_ratio_threshold,
-            'similarity_metric': args.similarity_metric,
-            'patch_descriptors_filtering': args.patch_descriptors_filtering,
-            'min_avg_patch_cosine_similarity': args.min_avg_patch_cosine_similarity,
-        }
-        predictor = BOPChallengePosePredictor(config, cache_path, matching_config_overrides, args.experiment_folder,
-                                                    run_pose_estimation=args.run_pose_estimation)
-        match_cfg = predictor.cnos_matching_config
-        experiment = (f'{experiment}@mask_{args.descriptor_mask_detections}@aggr_{match_cfg.aggregation_function}@'
-                      f'sim_{match_cfg.similarity_metric}@detector_{args.detector}@nms{args.use_enhanced_nms}@OOD_')
+        # Apply CLI overrides to config.detection (only when explicitly set)
+        det_cfg = config.detection
+        if args.aggregation_function is not None:
+            det_cfg.aggregation_function = args.aggregation_function
+        if args.ood_detection_method is not None:
+            det_cfg.ood_detection_method = args.ood_detection_method
+        if args.confidence_thresh is not None:
+            det_cfg.confidence_thresh = args.confidence_thresh
+        if args.cosine_similarity_quantile is not None:
+            det_cfg.cosine_similarity_quantile = args.cosine_similarity_quantile
+        if args.mahalanobis_quantile is not None:
+            det_cfg.mahalanobis_quantile = args.mahalanobis_quantile
+        if args.lowe_ratio_threshold is not None:
+            det_cfg.lowe_ratio_threshold = args.lowe_ratio_threshold
+        det_cfg.similarity_metric = args.similarity_metric
+        det_cfg.patch_descriptors_filtering = args.patch_descriptors_filtering
+        det_cfg.min_avg_patch_cosine_similarity = args.min_avg_patch_cosine_similarity
+
+        predictor = BOPChallengePosePredictor(config, cache_path, args.experiment_folder,
+                                              run_pose_estimation=args.run_pose_estimation)
+        experiment = (f'{experiment}@mask_{args.descriptor_mask_detections}@aggr_{det_cfg.aggregation_function}@'
+                      f'sim_{det_cfg.similarity_metric}@detector_{args.detector}@nms{args.use_enhanced_nms}@OOD_')
 
         if args.ood_detection_method == 'global_threshold':
-            experiment += f'conf_{match_cfg.confidence_thresh}'
+            experiment += f'conf_{det_cfg.confidence_thresh}'
         elif args.ood_detection_method == 'lowe_test':
-            experiment += f'lowe_{match_cfg.lowe_ratio_threshold}'
+            experiment += f'lowe_{det_cfg.lowe_ratio_threshold}'
         elif args.ood_detection_method == 'cosine_similarity_quantiles':
-            experiment += f'cosQuantiles_{match_cfg.cosine_similarity_quantile}'
+            experiment += f'cosQuantiles_{det_cfg.cosine_similarity_quantile}'
         elif args.ood_detection_method == 'mahalanobis_ood_detection':
-            experiment += f'mahaTau_{match_cfg.mahalanobis_quantile}'
+            experiment += f'mahaTau_{det_cfg.mahalanobis_quantile}'
         elif args.ood_detection_method == 'none':
             experiment += f'none'
 
