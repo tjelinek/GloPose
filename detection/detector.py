@@ -25,7 +25,7 @@ from utils.bop_challenge import get_descriptors_for_templates
 from utils.bop_data import load_test_targets, get_scene_folder, get_image_path, get_camera_json_path, load_camera_intrinsics, should_run_evaluation, get_targets_filename
 from utils.bop_io import detection_to_bop_record, pose_to_bop_record, write_bop_pose_csv
 from utils.cnos_utils import get_default_detections_per_scene_and_image, get_detections_cnos_format
-from utils.eval_bop_detection import evaluate_bop_coco, update_results_csv
+from eval.eval_bop_detection import evaluate_bop_coco, update_results_csv
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
 
 
