@@ -15,16 +15,15 @@ from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions
 from tqdm import tqdm
 
-from data_providers.flow_provider import FlowMatchingProvider
+from data_providers.flow_provider import MatchingProvider
 from data_providers.frame_provider import PrecomputedSegmentationProvider, PrecomputedFrameProvider
-from data_structures.view_graph import ViewGraph
 from onboarding.colmap_utils import colmap_K_params_vec
 from utils.conversions import Se3_to_Rigid3d
 from utils.image_utils import get_intrinsics_from_exif
 
 
 def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], matching_pairs: List[Tuple[int, int]],
-                                 init_with_first_two_images: bool, mapper: str, match_provider: FlowMatchingProvider,
+                                 init_with_first_two_images: bool, mapper: str, match_provider: MatchingProvider,
                                  match_sample_size: int, colmap_working_dir: Path, add_track_merging_matches: bool,
                                  camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
                                  progress=None) \

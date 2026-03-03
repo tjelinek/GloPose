@@ -8,7 +8,7 @@ from kornia.feature import get_laf_center, match_adalam, LightGlueMatcher
 from kornia_moons.feature import laf_from_opencv_SIFT_kpts
 from torchvision.transforms.functional import to_pil_image
 
-from data_providers.flow_provider import MatchingProvider, FlowMatchingProvider
+from data_providers.flow_provider import MatchingProvider
 
 # ---------------------------------------------------------------------------
 # Keypoint detector / matcher ABCs
@@ -92,11 +92,11 @@ class SparseMatchingProvider(MatchingProvider):
     """
 
     def __init__(self, detector: KeypointDetector, matcher: KeypointMatcher,
-                 num_features: int, device: str = 'cpu'):
+                 num_features: int, device: str = 'cpu', data_graph=None):
+        super().__init__(device, data_graph)
         self.detector = detector
         self.matcher = matcher
         self.num_features = num_features
-        self.device = device
 
     def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample=None, source_image_segmentation: torch.Tensor = None,
@@ -142,7 +142,7 @@ class SparseMatchingProvider(MatchingProvider):
         certainty = scores.to(torch.float).to(self.device)
 
         if as_int:
-            src_pts_xy, dst_pts_xy = FlowMatchingProvider.keypoints_to_int(
+            src_pts_xy, dst_pts_xy = MatchingProvider.keypoints_to_int(
                 src_pts_xy, dst_pts_xy, source_image, target_image)
 
         if only_foreground_matches:

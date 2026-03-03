@@ -290,14 +290,18 @@ class OnboardingPipeline:
 
         first_frame_data = self.data_graph.get_frame_data(0)
         camera_K = first_frame_data.gt_pinhole_K if not self.config.onboarding.use_default_colmap_K else None
-        reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
-                                                      self.config.onboarding.init_with_first_two_images,
-                                                      self.config.onboarding.mapper,
-                                                      self.match_provider_reconstruction,
-                                                      self.config.onboarding.sample_size,
-                                                      self.colmap_base_path,
-                                                      self.config.onboarding.add_track_merging_matches,
-                                                      camera_K, self.config.run.device)
+        try:
+            reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
+                                                          self.config.onboarding.init_with_first_two_images,
+                                                          self.config.onboarding.mapper,
+                                                          self.match_provider_reconstruction,
+                                                          self.config.onboarding.sample_size,
+                                                          self.colmap_base_path,
+                                                          self.config.onboarding.add_track_merging_matches,
+                                                          camera_K, self.config.run.device)
+        except Exception as e:
+            print(f"Reconstruction failed: {e}")
+            reconstruction = None
 
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
