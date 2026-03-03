@@ -487,10 +487,3 @@ def create_matching_provider(name: str, onboarding: OnboardingConfig, device: st
     if name not in providers:
         raise ValueError(f"Unknown matching provider '{name}'. Options: {list(providers.keys())}")
     return providers[name]()
-
-
-# Backward-compatibility aliases — remove after all consumers are updated
-FlowProviderDirect = FlowMatchingProvider
-RoMaFlowProviderDirect = RoMaMatchingProvider
-UFMFlowProviderDirect = UFMMatchingProvider
-create_flow_provider = create_matching_provider

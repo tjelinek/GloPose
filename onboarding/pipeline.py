@@ -14,7 +14,7 @@ from PIL import Image
 from kornia.geometry import Se3, PinholeCamera
 from pycolmap import Reconstruction
 
-from data_providers.flow_provider import FlowCache, create_flow_provider
+from data_providers.flow_provider import FlowCache, create_matching_provider
 from data_providers.frame_provider import FrameProviderAll
 from data_structures.data_graph import DataGraph
 from data_structures.view_graph import ViewGraph, view_graph_from_datagraph
@@ -114,9 +114,9 @@ class OnboardingPipeline:
         filtering_cache = FlowCache(self.config.run.device, self.matching_cache_folder, self.data_graph,
                                     allow_disk_cache=self.config.onboarding.allow_disk_cache,
                                     purge_cache=self.config.paths.purge_cache)
-        self.match_provider_filtering = create_flow_provider(
+        self.match_provider_filtering = create_matching_provider(
             self.config.onboarding.filter_matcher, self.config.onboarding, self.config.run.device, cache=filtering_cache)
-        self.match_provider_reconstruction = create_flow_provider(
+        self.match_provider_reconstruction = create_matching_provider(
             self.config.onboarding.reconstruction_matcher, self.config.onboarding, self.config.run.device)
         self.frame_filter = create_frame_filter(
             self.config.onboarding, self.config.run.device, self.config.input.input_frames,
