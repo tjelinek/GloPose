@@ -4,13 +4,12 @@ from typing import List, Tuple
 
 import networkx as nx
 import numpy as np
-import pycolmap
 import torch
 
 from data_providers.flow_provider import MatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from configs.glopose_config import OnboardingConfig
-from onboarding.colmap_utils import colmap_K_params_vec
+from onboarding.ransac import estimate_inlier_mask
 from utils.image_utils import otsu_threshold
 
 
