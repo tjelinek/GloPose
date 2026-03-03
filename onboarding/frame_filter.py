@@ -469,7 +469,7 @@ def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int
         return RoMaFrameFilter(onboarding, n_frames, data_graph, flow_provider, device)
 
     def _ransac():
-        return RoMaFrameFilterRANSAC(onboarding, n_frames, data_graph, flow_provider, device)
+        return FrameFilterRANSAC(onboarding, n_frames, data_graph, flow_provider, device)
 
     def _passthrough():
         return FrameFilterPassThrough(onboarding, n_frames, data_graph)
@@ -486,7 +486,7 @@ def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int
 
     filters = {
         'dense_matching': _dense_matching,
-        'RoMaRANSAC': _ransac,
+        'RANSAC': _ransac,
         'passthrough': _passthrough,
         'SIFT': _sift,
     }
