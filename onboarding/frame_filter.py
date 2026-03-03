@@ -7,7 +7,7 @@ import numpy as np
 import pycolmap
 import torch
 
-from data_providers.flow_provider import FlowMatchingProvider, MatchingProvider
+from data_providers.flow_provider import MatchingProvider
 from data_structures.data_graph import DataGraph, CommonFrameData
 from configs.glopose_config import OnboardingConfig
 from onboarding.colmap_utils import colmap_K_params_vec
@@ -52,11 +52,11 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, flow_provider: FlowMatchingProvider, device: str = 'cuda'):
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, flow_provider: MatchingProvider, device: str = 'cuda'):
 
         super().__init__(onboarding, n_frames, data_graph, device)
 
-        self.flow_provider: FlowMatchingProvider = flow_provider
+        self.flow_provider: MatchingProvider = flow_provider
 
         self.current_flow_reliability_threshold = self.onboarding.flow_reliability_threshold
 
@@ -457,7 +457,7 @@ def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.
 
 def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int,
                         data_graph: DataGraph,
-                        flow_provider: FlowMatchingProvider = None) -> BaseFrameFilter:
+                        flow_provider: MatchingProvider = None) -> BaseFrameFilter:
     """Factory that maps a config string to a BaseFrameFilter instance.
 
     Args:

@@ -196,16 +196,11 @@ class PoseEstimator:
             )
 
             if pose_logger is not None:
-                warp, certainty = self.matching_provider.compute_flow(
-                    template_image, query_img_resized,
-                    source_image_segmentation=template_segmentation,
-                    zero_certainty_outside_segmentation=True
-                )
                 pose_logger.visualize_pose_matching_rerun(
                     db_img_pts_xy, query_img_pts_xy, certainties,
                     template_image, query_img_resized, reliability,
                     self.config.flow_reliability_threshold,
-                    self.config.min_certainty_threshold, certainty,
+                    self.config.min_certainty_threshold,
                     viewgraph_image_segment=template_segmentation,
                     query_image_segment=query_seg_resized
                 )

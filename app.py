@@ -14,7 +14,7 @@ import pycolmap
 import torch
 from hloc.utils import viz_3d
 
-from data_providers.flow_provider import UFMMatchingProvider
+from data_providers.flow_provider import create_matching_provider
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from configs.glopose_config import GloPoseConfig
 from onboarding.pipeline import OnboardingPipeline
@@ -328,12 +328,7 @@ def on_reconstruct_click(
         mapper, matcher_radio, num_features, device_radio, progress=gr.Progress()
 ):
     config = GloPoseConfig()
-    if matcher_radio == "UFM":
-        match_provider = UFMMatchingProvider(device_radio, config.onboarding.ufm)
-    elif matcher_radio == "SIFT":
-        raise NotImplementedError("SIFT is not implemented yet.")
-    else:
-        raise ValueError(f"Unknown matching provider {matcher_radio}")
+    match_provider = create_matching_provider(matcher_radio, config.onboarding, device_radio)
 
     colmap_base_path = _custom_state.write_folder / f"glomap_{_custom_state.write_folder.stem}"
     colmap_base_path.mkdir(parents=True, exist_ok=True)

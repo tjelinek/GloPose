@@ -132,6 +132,10 @@ class MatchingProvider(ABC):
     (src_pts_xy, dst_pts_xy, certainty) tensors for a pair of images.
     """
 
+    def __init__(self, device: str, data_graph: Optional[DataGraph] = None):
+        self.device = device
+        self.data_graph: Optional[DataGraph] = data_graph
+
     @abstractmethod
     def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample=None, source_image_segmentation: torch.Tensor = None,
@@ -142,6 +146,37 @@ class MatchingProvider(ABC):
             -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pass
 
+    def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
+                                           sample: int = None, as_int: bool = False,
+                                           zero_certainty_outside_segmentation: bool = False,
+                                           only_foreground_matches: bool = False) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        assert self.data_graph is not None
+        source_data = self.data_graph.get_frame_data(source_image_index)
+        target_data = self.data_graph.get_frame_data(target_image_index)
+
+        return self.get_source_target_points(source_data.frame_observation.observed_image.squeeze(),
+                                             target_data.frame_observation.observed_image.squeeze(), sample,
+                                             source_data.frame_observation.observed_segmentation.squeeze(),
+                                             target_data.frame_observation.observed_segmentation.squeeze(),
+                                             source_data.image_filename, target_data.image_filename,
+                                             source_image_index, target_image_index, as_int,
+                                             zero_certainty_outside_segmentation, only_foreground_matches)
+
+    @staticmethod
+    def keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma, source_image_tensor, target_image_tensor):
+        h1 = source_image_tensor.shape[-2]
+        w1 = source_image_tensor.shape[-1]
+        h2 = target_image_tensor.shape[-2]
+        w2 = target_image_tensor.shape[-1]
+        src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
+        dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
+        src_pts_xy_roma[:, 0] = torch.clamp(src_pts_xy_roma[:, 0], 0, w1 - 1)
+        src_pts_xy_roma[:, 1] = torch.clamp(src_pts_xy_roma[:, 1], 0, h1 - 1)
+        dst_pts_xy_roma[:, 0] = torch.clamp(dst_pts_xy_roma[:, 0], 0, w2 - 1)
+        dst_pts_xy_roma[:, 1] = torch.clamp(dst_pts_xy_roma[:, 1], 0, h2 - 1)
+        return src_pts_xy_roma, dst_pts_xy_roma
+
 
 class FlowMatchingProvider(MatchingProvider):
     """Matching provider based on dense optical flow (RoMa, UFM).
@@ -150,7 +185,7 @@ class FlowMatchingProvider(MatchingProvider):
     """
 
     def __init__(self, device: str, cache: FlowCache = None):
-        self.device = device
+        super().__init__(device, data_graph=cache.data_graph if cache else None)
         self.cache = cache
 
     def _compute_raw(self, source_image_tensor: torch.Tensor,
@@ -195,20 +230,6 @@ class FlowMatchingProvider(MatchingProvider):
                 warp, certainty = self.sample(warp, certainty, sample)
 
         return warp, certainty
-
-    @staticmethod
-    def keypoints_to_int(src_pts_xy_roma, dst_pts_xy_roma, source_image_tensor, target_image_tensor):
-        h1 = source_image_tensor.shape[-2]
-        w1 = source_image_tensor.shape[-1]
-        h2 = target_image_tensor.shape[-2]
-        w2 = target_image_tensor.shape[-1]
-        src_pts_xy_roma = src_pts_xy_roma.to(torch.int)
-        dst_pts_xy_roma = dst_pts_xy_roma.to(torch.int)
-        src_pts_xy_roma[:, 0] = torch.clamp(src_pts_xy_roma[:, 0], 0, w1 - 1)
-        src_pts_xy_roma[:, 1] = torch.clamp(src_pts_xy_roma[:, 1], 0, h1 - 1)
-        dst_pts_xy_roma[:, 0] = torch.clamp(dst_pts_xy_roma[:, 0], 0, w2 - 1)
-        dst_pts_xy_roma[:, 1] = torch.clamp(dst_pts_xy_roma[:, 1], 0, h2 - 1)
-        return src_pts_xy_roma, dst_pts_xy_roma
 
     def get_source_target_points(self, source_image: torch.Tensor, target_image: torch.Tensor,
                                  sample=None, source_image_segmentation: torch.Tensor = None,
@@ -276,23 +297,6 @@ class FlowMatchingProvider(MatchingProvider):
 
         return src_pts_xy, dst_pts_xy, certainty
 
-    def get_source_target_points_datagraph(self, source_image_index: int, target_image_index: int,
-                                           sample: int = None, as_int: bool = False,
-                                           zero_certainty_outside_segmentation: bool = False,
-                                           only_foreground_matches: bool = False) \
-            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert self.cache is not None and self.cache.data_graph is not None
-        source_data = self.cache.data_graph.get_frame_data(source_image_index)
-        target_data = self.cache.data_graph.get_frame_data(target_image_index)
-
-        return self.get_source_target_points(source_data.frame_observation.observed_image.squeeze(),
-                                             target_data.frame_observation.observed_image.squeeze(), sample,
-                                             source_data.frame_observation.observed_segmentation.squeeze(),
-                                             target_data.frame_observation.observed_segmentation.squeeze(),
-                                             source_data.image_filename, target_data.image_filename,
-                                             source_image_index, target_image_index, as_int,
-                                             zero_certainty_outside_segmentation, only_foreground_matches)
-
     @abstractmethod
     def sample(self, warp: torch.Tensor, certainty: torch.Tensor, sample: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
@@ -320,7 +324,6 @@ class RoMaMatchingProvider(FlowMatchingProvider):
 
     def __init__(self, device, roma_config: BaseRomaConfig, cache: FlowCache = None):
         FlowMatchingProvider.__init__(self, device, cache)
-        self.device = device
 
         if roma_config.use_custom_weights:
             weights = torch.load('/mnt/personal/jelint19/weights/RoMa/checkpointstrain_roma_outdoor_latest.pth',
@@ -367,7 +370,6 @@ class UFMMatchingProvider(FlowMatchingProvider):
 
     def __init__(self, device, ufm_config: BaseUFMConfig, cache: FlowCache = None):
         FlowMatchingProvider.__init__(self, device, cache)
-        self.device = device
         self.ufm_config = ufm_config
 
         from uniflowmatch.models.ufm import UniFlowMatchClassificationRefinement
@@ -481,7 +483,8 @@ def create_matching_provider(name: str, onboarding: OnboardingConfig, device: st
         matcher = LightGlueKeypointMatcher(device)
         return SparseMatchingProvider(detector, matcher,
                                       num_features=onboarding.sift.sift_filter_num_feats,
-                                      device=device)
+                                      device=device,
+                                      data_graph=cache.data_graph if cache else None)
 
     providers = {'RoMa': _roma, 'UFM': _ufm, 'SIFT': _sift}
     if name not in providers:

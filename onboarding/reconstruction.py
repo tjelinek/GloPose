@@ -180,6 +180,9 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
 
     for colmap_image_u, colmap_image_v in edge_match_indices.keys():
         match_indices_np = edge_match_indices[colmap_image_u, colmap_image_v].numpy(force=True)
+        if match_indices_np.ndim != 2 or match_indices_np.shape[1] != 2:
+            continue
+        match_indices_np = match_indices_np.astype(np.uint32)
         database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
     database.close()
