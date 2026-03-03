@@ -51,6 +51,23 @@ class InputConfig:
 
 
 @dataclass
+class RANSACConfig:
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.config_name: str = self.__class__.__name__
+        self.method: str = 'pycolmap'          # 'pycolmap' | 'magsac++' | 'ransac' | '8point' | 'pygcransac'
+        self.max_error: float = 0.5            # Inlier threshold (pixels)
+        self.confidence: float = 0.9999        # RANSAC success probability
+        self.min_num_matches: int = 5          # Skip RANSAC below this
+        self.min_inlier_ratio: float = 0.25     # Floor: reliability=0 if inlier_ratio < this
+        self.use_prosac: bool = False           # pygcransac only: confidence-weighted sampling
+        self.min_iters: int = 1000             # pygcransac only: minimum iterations
+
+
+@dataclass
 class OnboardingConfig:
     # Frame filter settings
     frame_filter: str = 'dense_matching'
@@ -69,6 +86,7 @@ class OnboardingConfig:
     roma: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     ufm: BaseUFMConfig = field(default_factory=BaseUFMConfig)
     sift: BaseSiftConfig = field(default_factory=BaseSiftConfig)
+    ransac: RANSACConfig = field(default_factory=RANSACConfig)
     sift_filter_min_matches: int = 100
     sift_filter_good_to_add_matches: int = 450
 

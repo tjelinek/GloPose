@@ -255,7 +255,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         return reliability
 
 
-class RoMaFrameFilterRANSAC(RoMaFrameFilter):
+class FrameFilterRANSAC(RoMaFrameFilter):
 
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         src_pts_xy, dst_pts_xy, certainty = (
@@ -265,37 +265,35 @@ class RoMaFrameFilterRANSAC(RoMaFrameFilter):
                                                                   only_foreground_matches=True))
         src_pts_xy_np = src_pts_xy.numpy(force=True)
         dst_pts_xy_np = dst_pts_xy.numpy(force=True)
+        certainty_np = certainty.numpy(force=True)
 
         frame_data_source = self.data_graph.get_frame_data(source_frame)
         frame_data_target = self.data_graph.get_frame_data(target_frame)
-        camera_K1 = self.data_graph.get_frame_data(source_frame).gt_pinhole_K
-        camera_K2 = self.data_graph.get_frame_data(target_frame).gt_pinhole_K
+        camera_K1 = frame_data_source.gt_pinhole_K
+        camera_K2 = frame_data_target.gt_pinhole_K
 
-        source_shape = frame_data_source.image_shape
-        target_shape = frame_data_target.image_shape
+        K1_np = camera_K1.numpy(force=True) if camera_K1 is not None else None
+        K2_np = camera_K2.numpy(force=True) if camera_K2 is not None else None
 
-        ransac_opts = pycolmap.RANSACOptions()
-        ransac_opts.max_error = 0.5
-        # ransac_opts.confidence = 0.99999999
+        ransac_config = self.onboarding.ransac
+        inlier_mask = estimate_inlier_mask(
+            src_pts_xy_np, dst_pts_xy_np, ransac_config,
+            K1=K1_np, K2=K2_np,
+            source_shape=frame_data_source.image_shape,
+            target_shape=frame_data_target.image_shape,
+            confidences=certainty_np)
 
-        if camera_K1 is not None and camera_K2 is not None:
-            K_params1 = colmap_K_params_vec(camera_K1.numpy(force=True))
-            K_params2 = colmap_K_params_vec(camera_K2.numpy(force=True))
+        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
 
-            camera1 = pycolmap.Camera(camera_id=1, model=pycolmap.CameraModelId.PINHOLE, width=source_shape.width,
-                                      height=source_shape.height, params=K_params1)
-            camera2 = pycolmap.Camera(camera_id=1, model=pycolmap.CameraModelId.PINHOLE, width=target_shape.width,
-                                      height=target_shape.height, params=K_params2)
-
-            ransac_res = pycolmap.estimate_essential_matrix(src_pts_xy_np, dst_pts_xy_np, camera1, camera2, ransac_opts)
-        else:
-            ransac_res = pycolmap.estimate_fundamental_matrix(src_pts_xy_np, dst_pts_xy_np, ransac_opts)
-
-        if ransac_res is not None:
-            inlier_mask = ransac_res.get('inlier_mask')
-            reliability = inlier_mask.sum() / len(inlier_mask)
+        if inlier_mask is not None:
+            reliability = float(inlier_mask.sum() / len(inlier_mask))
+            edge_data.ransac_inliers = torch.from_numpy(src_pts_xy_np[inlier_mask])
+            edge_data.ransac_outliers = torch.from_numpy(src_pts_xy_np[~inlier_mask])
         else:
             reliability = 0.
+
+        edge_data.reliability_score = reliability
+        edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
 
         return reliability
 
