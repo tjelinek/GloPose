@@ -138,12 +138,11 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
                                           input_translation_unit: str = 'mm', output_translation_unit: str = 'cm',
                                           reconstruction_quality: dict | None = None):
     # Read the input CSV file containing reconstruction data
-    if not csv_per_frame_stats.exists():
-        print(f"Error: Input file {csv_per_frame_stats} does not exist.")
-        return
-
-    df = pd.read_csv(csv_per_frame_stats)
-    sequence_df = df[(df['dataset'] == dataset) & (df['sequence'] == sequence)]
+    if csv_per_frame_stats.exists():
+        df = pd.read_csv(csv_per_frame_stats)
+        sequence_df = df[(df['dataset'] == dataset) & (df['sequence'] == sequence)]
+    else:
+        sequence_df = pd.DataFrame()
 
     rotation_errors: List[float] = []
     translation_errors: List[float] = []
