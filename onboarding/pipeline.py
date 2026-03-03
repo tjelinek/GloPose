@@ -178,15 +178,23 @@ class OnboardingPipeline:
         keyframe_graph = self.filter_frames()
 
         keyframe_nodes_idxs = list(sorted(keyframe_graph.nodes()))
-        images_paths, segmentation_paths, matching_pairs = self.prepare_input_for_colmap(keyframe_graph)
 
         end_time = time.time()
         frame_filtering_time = end_time - start_time
 
-        start_time = time.time()
-        reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
-        end_time = time.time()
-        reconstruction_time = end_time - start_time
+        if len(keyframe_nodes_idxs) <= 2:
+            logger.warning("Too few keyframes (%d) for reconstruction in %s/%s — skipping COLMAP",
+                           len(keyframe_nodes_idxs), self.config.run.dataset, self.config.run.sequence)
+            reconstruction = None
+            alignment_success = False
+            reconstruction_time = 0.0
+        else:
+            images_paths, segmentation_paths, matching_pairs = self.prepare_input_for_colmap(keyframe_graph)
+
+            start_time = time.time()
+            reconstruction, alignment_success = self.run_reconstruction(images_paths, segmentation_paths, matching_pairs)
+            end_time = time.time()
+            reconstruction_time = end_time - start_time
 
         # Always create a ViewGraph (even if reconstruction failed)
         colmap_db_path = self.colmap_base_path / 'database.db'
@@ -248,7 +256,6 @@ class OnboardingPipeline:
             u_index = keyframe_nodes_idxs.index(frame1_idx)
             v_index = keyframe_nodes_idxs.index(frame2_idx)
             matching_pairs.append((u_index, v_index))
-        assert len(keyframe_nodes_idxs) > 2
         print(sorted(keyframe_graph.edges))
 
         return images_paths, segmentation_paths, matching_pairs
