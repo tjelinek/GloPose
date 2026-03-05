@@ -123,6 +123,12 @@ class RoMaFrameFilter(BaseFrameFilter):
             return
         if frame_i >= self.n_frames - 1 and False:
             self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
+    def _init_first_frame(self):
+        self.add_keyframe(0)
+        first_frame_node = self.data_graph.get_frame_data(0)
+        first_frame_node.reliable_sources = {0}
+        first_frame_node.matching_source_keyframe = 0
+        first_frame_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
 
         preceding_frame_idx = frame_i - 1
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
@@ -172,18 +178,13 @@ class RoMaFrameFilter(BaseFrameFilter):
         current_keyframe_graph_nodes = list(self.keyframe_graph.nodes)
         for source_node_idx in current_keyframe_graph_nodes:
 
-            flow_reliability = self.flow_reliability(source_node_idx, frame_i)
-
-            if flow_reliability > best_source_reliability:
-                best_source = source_node_idx
-                best_source_reliability = flow_reliability
-                reliable_flows |= {source_node_idx}
-        source = best_source
-
-        if best_source_reliability < self.current_flow_reliability_threshold:
-            return None, None
-        return reliable_flows, source
-
+        for kf in list(self.keyframe_graph.nodes):
+            reliability = self.flow_reliability(kf, frame_i)
+            if reliability >= self.current_flow_reliability_threshold:
+                reliable_kfs.add(kf)
+            if reliability > best_source_reliability:
+                best_source = kf
+                best_source_reliability = reliability
 
         if best_source_reliability < self.current_flow_reliability_threshold:
             return set(), None
