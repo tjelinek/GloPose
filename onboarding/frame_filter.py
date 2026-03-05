@@ -1,13 +1,13 @@
 from abc import abstractmethod
 from time import time
-from typing import List, Tuple
+from typing import Tuple
 
 import networkx as nx
 import numpy as np
 import torch
 
 from data_providers.flow_provider import MatchingProvider
-from data_structures.data_graph import DataGraph, CommonFrameData
+from data_structures.data_graph import DataGraph
 from configs.glopose_config import OnboardingConfig
 from onboarding.ransac import estimate_inlier_mask
 from utils.image_utils import otsu_threshold
@@ -159,35 +159,47 @@ class RoMaFrameFilter(BaseFrameFilter):
             self.keyframe_graph.add_edge(prev, frame_i)
             return prev, {prev}
 
-                reliable_flows_sources |= {source}
-            else:
-                source = best_source
-                if reliable_flows_sources_prime is not None:
-                    reliable_flows_sources |= reliable_flows_sources_prime
+        return source, reliable_kfs
+
+    @torch.no_grad()
+    def filter_frames(self, frame_i: int):
+        start_time = time()
+
+        if frame_i == 0:
+            self._init_first_frame()
+            return
+
+        # Step 1: Check preceding frame's match reliability
+        preceding_source = self.data_graph.get_frame_data(frame_i - 1).matching_source_keyframe
+        self.flow_reliability(preceding_source, frame_i - 1)
+        preceding_reliable = self.data_graph.get_edge_observations(
+            preceding_source, frame_i - 1).is_match_reliable
+
+        # Step 2: Determine source and collect reliable keyframe matches
+        if frame_i == 1:
+            source, reliable_kfs = 0, {0}
         else:
-            source = 0
-        flow_arc_long_jump = (source, frame_i)
-        long_jump_source, long_jump_target = flow_arc_long_jump
+            source, reliable_kfs = self._find_source(frame_i, preceding_source, preceding_reliable)
 
-        duration = time() - start_time
-        datagraph_node = self.data_graph.get_frame_data(frame_i)
-        datagraph_node.pose_estimation_time = duration
-        datagraph_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
+        # Step 3: Handle last frame
+        is_last = (frame_i == self.n_frames - 1)
+        if is_last and self.onboarding.always_add_last_frame:
+            source, reliable_kfs = self._ensure_last_frame_keyframe(
+                frame_i, source, reliable_kfs)
 
-        flow_reliability = self.flow_reliability(long_jump_source, long_jump_target)
+        # Step 4: Final reliability + metadata
+        flow_reliability = self.flow_reliability(source, frame_i)
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
+        node = self.data_graph.get_frame_data(frame_i)
+        node.pose_estimation_time = time() - start_time
+        node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
+        node.reliable_sources = {source} | reliable_kfs
+        node.matching_source_keyframe = source
 
-        datagraph_node.reliable_sources = ({long_jump_source} | reliable_flows_sources)
-
-        datagraph_node.matching_source_keyframe = source
-
-    def match_to_all_keyframes(self, frame_i):
+    def _match_to_all_keyframes(self, frame_i: int) -> Tuple[set, int | None]:
         best_source: int = 0
         best_source_reliability: float = 0.
-        reliable_flows = set()
-
-        current_keyframe_graph_nodes = list(self.keyframe_graph.nodes)
-        for source_node_idx in current_keyframe_graph_nodes:
+        reliable_kfs = set()
 
         for kf in list(self.keyframe_graph.nodes):
             reliability = self.flow_reliability(kf, frame_i)
@@ -199,7 +211,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         if best_source_reliability < self.current_flow_reliability_threshold:
             return set(), None
-        return reliable_flows, source
+        return reliable_kfs, best_source
 
     def flow_reliability(self, source_frame: int, target_frame: int) -> float:
         dev = self.device

@@ -72,6 +72,8 @@ class OnboardingConfig:
     # Frame filter settings
     frame_filter: str = 'dense_matching'
     view_graph_strategy: str = 'from_matching'
+    always_add_last_frame: bool = True
+    edge_strategy: str = 'on_unreliable'  # 'always' | 'on_unreliable'
     passthrough_skip: int = 1
     min_certainty_threshold: float = 0.975
     flow_reliability_threshold: float = 0.5
