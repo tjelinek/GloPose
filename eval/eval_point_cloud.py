@@ -5,6 +5,74 @@ import trimesh
 from scipy.spatial import KDTree
 
 
+def _load_ply_without_edges(mesh_path: Path) -> bytes:
+    """Read a PLY file and strip edge elements that crash trimesh.
+
+    Some Blender-exported PLY files contain ``element edge`` sections
+    that trigger a bug in trimesh's PLY parser.  This helper reads the
+    file, removes the edge element declaration from the header and the
+    corresponding data lines (ASCII) or bytes (binary), and returns the
+    cleaned content as bytes suitable for ``trimesh.load``.
+    """
+    import io
+    import re
+
+    raw = mesh_path.read_bytes()
+    header_end = raw.find(b'end_header')
+    header = raw[:header_end].decode('ascii')
+
+    # Check if there's an edge element
+    edge_match = re.search(r'^element edge (\d+)$', header, re.MULTILINE)
+    has_edges = edge_match is not None
+    has_texture = 'comment TextureFile' in header
+
+    if not has_edges and not has_texture:
+        return raw  # nothing to strip
+
+    num_edges = int(edge_match.group(1)) if has_edges else 0
+
+    # Remove edge element (and its properties) and TextureFile comments
+    # from the header.  Removing the texture comment avoids a resolver
+    # error when loading from BytesIO.
+    header_lines = header.splitlines(keepends=True)
+    cleaned_lines = []
+    skip = False
+    for line in header_lines:
+        stripped = line.strip()
+        if stripped.startswith('element edge'):
+            skip = True
+            continue
+        if skip and stripped.startswith('property'):
+            continue
+        skip = False
+        if stripped.startswith('comment TextureFile'):
+            continue
+        cleaned_lines.append(line)
+
+    new_header = ''.join(cleaned_lines)
+
+    if num_edges > 0:
+        is_ascii = 'format ascii' in header
+        if is_ascii:
+            # For ASCII PLY: drop the last `num_edges` data lines
+            after_header = raw[header_end + len('end_header'):].decode('ascii')
+            data_lines = after_header.split('\n')
+            # Remove trailing empty element if present
+            while data_lines and data_lines[-1].strip() == '':
+                data_lines.pop()
+            data_lines = data_lines[:-num_edges]
+            cleaned = new_header.encode('ascii') + b'end_header' + '\n'.join(data_lines).encode('ascii')
+        else:
+            # For binary PLY: we'd need to compute byte offsets per edge.
+            # Fall back to returning the raw bytes and let trimesh try.
+            cleaned = raw
+    else:
+        # No edges to strip — just rebuild with cleaned header
+        cleaned = new_header.encode('ascii') + raw[header_end:]
+
+    return cleaned
+
+
 def sample_points_from_mesh(mesh_path: Path, num_points: int = 100_000) -> np.ndarray:
     """Load a mesh and uniformly sample points from its surface.
 
@@ -15,7 +83,13 @@ def sample_points_from_mesh(mesh_path: Path, num_points: int = 100_000) -> np.nd
     Returns:
         (N, 3) array of sampled surface points.
     """
-    mesh = trimesh.load(mesh_path, force='mesh')
+    import io
+
+    if mesh_path.suffix.lower() == '.ply':
+        cleaned = _load_ply_without_edges(mesh_path)
+        mesh = trimesh.load(io.BytesIO(cleaned), file_type='ply', force='mesh')
+    else:
+        mesh = trimesh.load(mesh_path, force='mesh')
     points, _ = mesh.sample(num_points, return_index=True)
     return np.asarray(points, dtype=np.float64)
 
