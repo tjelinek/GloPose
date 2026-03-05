@@ -607,18 +607,6 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
     pred_first_image_point_depths = np.asarray(pred_first_image_point_depths)
     gt_first_image_point_depths = np.asarray(gt_first_image_point_depths)
 
-    # points_xyz = []
-    # for point3D_id, point3D in reconstruction.points3D.items():
-    #     points_xyz.append(point3D.xyz)
-    # points_xyz = np.stack(points_xyz)
-    #
-    # points_min = points_xyz.min(axis=0)
-    # points_max = points_xyz.max(axis=0)
-    #
-    # print(f'Points orig min {points_min}')
-    # print(f'Points orig max {points_max}')
-    # print(f'Points orig range {points_max - points_min}')
-
     scale = np.median(gt_first_image_point_depths) / np.median(pred_first_image_point_depths)
 
     colmap_cam_from_world = first_image_colmap.cam_from_world
@@ -641,40 +629,12 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     Sim3d_first_image_colmap2gt = gt_world_from_cam_scaled * colmap_world_from_cam_sim3d.inverse()
 
-    # Sim3d_first_image_colmap2gt_old = pycolmap.Sim3d(
-    #     scale=1.0 / scale,
-    #     rotation=gt_world_from_cam.rotation * colmap_world_from_cam.rotation.inverse(),
-    #     translation=gt_world_from_cam.translation - scale * (
-    #         gt_world_from_cam.rotation.matrix() @ colmap_world_from_cam.translation))
-    #
-    # test_sim3d_equivalence(Sim3d_first_image_colmap2gt, Sim3d_first_image_colmap2gt_old)
-
     for point3D_id, point3D in reconstruction.points3D.items():
         point3D.xyz = Sim3d_first_image_colmap2gt * point3D.xyz
 
     for image_id, image in reconstruction.images.items():
         if image.has_pose:
             image.cam_from_world = Sim3d_first_image_colmap2gt.transform_camera_world(image.cam_from_world)
-
-    # print("Pose alignment check:")
-    # print(f'Scale: {scale}')
-    # print(f"GT pose: {gt_cam_from_world}")
-    # print(f"Rec pose: {reconstruction.find_image_with_name(first_image_name).cam_from_world}")
-    #
-    # for image_id, image in reconstruction.images.items():
-    #     if image.has_pose:
-    #         print(f'{image_id} pose {image.cam_from_world}')
-    # points_xyz = []
-    # for point3D_id, point3D in reconstruction.points3D.items():
-    #     points_xyz.append(point3D.xyz)
-    # points_xyz = np.stack(points_xyz)
-    #
-    # points_min = points_xyz.min(axis=0)
-    # points_max = points_xyz.max(axis=0)
-    #
-    # print(f'Points transformed min {points_min}')
-    # print(f'Points transformed max {points_max}')
-    # print(f'Points transformed range {points_max - points_min}')
 
     return reconstruction, True
 
