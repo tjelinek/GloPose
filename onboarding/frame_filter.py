@@ -106,23 +106,6 @@ class RoMaFrameFilter(BaseFrameFilter):
         kf_data.is_keyframe = True
         print(frame_i)
 
-    @torch.no_grad()
-    def filter_frames(self, frame_i: int):
-
-        start_time = time()
-
-        if len(self.keyframe_graph.nodes) >= 10 and False:
-            self.update_flow_reliability_threshold()
-
-        if frame_i == 0:
-            self.add_keyframe(0)
-            first_frame_node = self.data_graph.get_frame_data(0)
-            first_frame_node.reliable_sources = {0}
-            first_frame_node.matching_source_keyframe = 0
-            first_frame_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
-            return
-        if frame_i >= self.n_frames - 1 and False:
-            self.keyframe_graph.add_edge(sorted(list(self.keyframe_graph.nodes))[-1], self.n_frames - 1)
     def _init_first_frame(self):
         self.add_keyframe(0)
         first_frame_node = self.data_graph.get_frame_data(0)
@@ -134,6 +117,11 @@ class RoMaFrameFilter(BaseFrameFilter):
         preceding_frame_node = self.data_graph.get_frame_data(preceding_frame_idx)
         preceding_source = preceding_frame_node.matching_source_keyframe
         self.flow_reliability(preceding_source, preceding_frame_idx)
+    def _find_source(self, frame_i: int, preceding_source: int, preceding_reliable: bool
+                     ) -> Tuple[int, set]:
+        need_all_keyframes = (
+            self.onboarding.edge_strategy == 'always' or not preceding_reliable
+        )
 
         reliable_flows_sources = set()
         edge_data = self.data_graph.get_edge_observations(preceding_source, preceding_frame_idx)
@@ -147,6 +135,19 @@ class RoMaFrameFilter(BaseFrameFilter):
                 self.add_keyframe(new_source)
                 self.keyframe_graph.add_edge(preceding_source, new_source)
                 source = new_source
+        if need_all_keyframes:
+            reliable_kfs, best_source = self._match_to_all_keyframes(frame_i)
+            if best_source is not None:
+                return best_source, reliable_kfs
+            # No reliable match anywhere — add frame_i-1 as new keyframe
+            new_source = frame_i - 1
+            self.add_keyframe(new_source)
+            self.keyframe_graph.add_edge(preceding_source, new_source)
+            return new_source, {new_source}
+
+        # Preceding match is reliable and strategy is 'on_unreliable'
+        return preceding_source, {preceding_source}
+
 
                 reliable_flows_sources |= {source}
             else:
