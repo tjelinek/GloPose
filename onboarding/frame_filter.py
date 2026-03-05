@@ -3,7 +3,6 @@ from time import time
 from typing import Tuple
 
 import networkx as nx
-import numpy as np
 import torch
 
 from data_providers.flow_provider import MatchingProvider
@@ -57,23 +56,7 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         self.flow_provider: MatchingProvider = flow_provider
 
-        self.current_flow_reliability_threshold = self.onboarding.flow_reliability_threshold
-
-    def update_flow_reliability_threshold(self):
-        all_frames = self.data_graph.G.nodes
-        template_reliabilities = []
-
-        for node in all_frames:
-            template_idx = self.data_graph.get_frame_data(node).matching_source_keyframe
-            edge = (template_idx, node)
-            if self.data_graph.G.has_edge(*edge):
-                template_reliabilities.append(self.data_graph.get_edge_observations(*edge).reliability_score)
-
-        template_reliabilities_np = np.array(template_reliabilities)
-        # threshold = threshold_otsu(template_reliabilities_np)
-        threshold = otsu_threshold(torch.from_numpy(template_reliabilities_np))
-
-        self.current_flow_reliability_threshold = threshold
+        self.matching_reliability_threshold = self.onboarding.flow_reliability_threshold
 
     def add_keyframe(self, frame_i: int):
         self.keyframe_graph.add_node(frame_i)
@@ -111,7 +94,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         first_frame_node = self.data_graph.get_frame_data(0)
         first_frame_node.reliable_sources = {0}
         first_frame_node.matching_source_keyframe = 0
-        first_frame_node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
+        first_frame_node.current_flow_reliability_threshold = self.matching_reliability_threshold
 
     def _find_source(self, frame_i: int, preceding_source: int, preceding_reliable: bool
                      ) -> Tuple[int, set]:
@@ -192,7 +175,7 @@ class RoMaFrameFilter(BaseFrameFilter):
         print(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{flow_reliability}')
         node = self.data_graph.get_frame_data(frame_i)
         node.pose_estimation_time = time() - start_time
-        node.current_flow_reliability_threshold = self.current_flow_reliability_threshold
+        node.current_flow_reliability_threshold = self.matching_reliability_threshold
         node.reliable_sources = {source} | reliable_kfs
         node.matching_source_keyframe = source
 
@@ -203,13 +186,13 @@ class RoMaFrameFilter(BaseFrameFilter):
 
         for kf in list(self.keyframe_graph.nodes):
             reliability = self.flow_reliability(kf, frame_i)
-            if reliability >= self.current_flow_reliability_threshold:
+            if reliability >= self.matching_reliability_threshold:
                 reliable_kfs.add(kf)
             if reliability > best_source_reliability:
                 best_source = kf
                 best_source_reliability = reliability
 
-        if best_source_reliability < self.current_flow_reliability_threshold:
+        if best_source_reliability < self.matching_reliability_threshold:
             return set(), None
         return reliable_kfs, best_source
 
@@ -248,7 +231,7 @@ class RoMaFrameFilter(BaseFrameFilter):
             source_datagraph_node.relative_area_matchable = relative_area_matchable
 
         min_num_of_certain_matches = self.onboarding.min_number_of_reliable_matches
-        certain_matches_share_threshold = self.current_flow_reliability_threshold
+        certain_matches_share_threshold = self.matching_reliability_threshold
         match_certainty_threshold = source_datagraph_node.roma_certainty_threshold
 
         reliability = compute_matching_reliability(src_pts_xy_int, certainty, source_segmentation_mask,
@@ -298,7 +281,7 @@ class FrameFilterRANSAC(RoMaFrameFilter):
             reliability = 0.
 
         edge_data.reliability_score = reliability
-        edge_data.is_match_reliable = reliability >= self.current_flow_reliability_threshold
+        edge_data.is_match_reliable = reliability >= self.matching_reliability_threshold
 
         return reliability
 
