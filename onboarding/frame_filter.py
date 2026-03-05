@@ -184,24 +184,6 @@ class RoMaFrameFilter(BaseFrameFilter):
             return None, None
         return reliable_flows, source
 
-    def match_to_frames_from_last_kf(self, frame_i, preceding_source):
-        best_source: int = 0
-        best_source_reliability: float = 0.
-        reliable_flows = set()
-
-        nodes: List[Tuple[int, CommonFrameData]] = [(i, self.data_graph.get_frame_data(i)) for i in
-                                                    range(preceding_source, frame_i)]
-
-        for source_node_idx, node in nodes:
-            self.flow_reliability(source_node_idx, frame_i)
-            flow_edge_data = self.data_graph.get_edge_observations(source_node_idx, frame_i)
-            flow_reliability = flow_edge_data.reliability_score
-
-            if flow_reliability > best_source_reliability:
-                best_source = source_node_idx
-                best_source_reliability = flow_reliability
-                reliable_flows |= {source_node_idx}
-        source = best_source
 
         if best_source_reliability < self.current_flow_reliability_threshold:
             return set(), None
