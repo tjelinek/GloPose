@@ -78,7 +78,7 @@ class WriteResults:
             RerunAnnotations.translation_scale
         }
 
-        if self.config.onboarding.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
             match_reliability_statistics = rrb.TimeSeriesView(
                 name=f"{self.config.onboarding.frame_filter} Matching Reliability",
                 origin=RerunAnnotations.matching_reliability_plot,
@@ -175,7 +175,7 @@ class WriteResults:
                                             *([rrb.Spatial2DView(
                                                 name=f"{self.config.onboarding.filter_matcher} Matching Certainty",
                                                 origin=RerunAnnotations.matching_certainty)]
-                                              if self.config.onboarding.frame_filter == 'dense_matching' else [])
+                                              if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC') else [])
                                         ],
                                         name='Matching'
                                     ),
@@ -276,7 +276,7 @@ class WriteResults:
         rerun_name = f'{self.config.run.sequence}-{self.config.run.experiment_name}'
         init_rerun_recording(rerun_name, rerun_file, blueprint)
 
-        if self.config.onboarding.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
             register_matching_series_lines()
         elif self.config.onboarding.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
@@ -707,7 +707,7 @@ class WriteResults:
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
 
-        if self.config.onboarding.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
@@ -749,7 +749,7 @@ class WriteResults:
             rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
             rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
-        if self.config.onboarding.frame_filter == 'dense_matching':
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
             threshold = template_data.roma_certainty_threshold
             if threshold is None:
@@ -758,10 +758,11 @@ class WriteResults:
             src_pts_yx = arc_observation.src_pts_xy_roma[:, [1, 0]].numpy(force=True)
             dst_pts_yx = arc_observation.dst_pts_xy_roma[:, [1, 0]].numpy(force=True)
 
-            visualize_certainty_map(arc_observation.roma_flow_warp_certainty,
-                                    template_target_image.shape, template_target_image_np,
-                                    RerunAnnotations.matching_certainty,
-                                    self.config.visualization.jpeg_quality)
+            if arc_observation.roma_flow_warp_certainty is not None:
+                visualize_certainty_map(arc_observation.roma_flow_warp_certainty,
+                                        template_target_image.shape, template_target_image_np,
+                                        RerunAnnotations.matching_certainty,
+                                        self.config.visualization.jpeg_quality)
         elif self.config.onboarding.frame_filter == 'SIFT':
             src_pts_xy = arc_observation.src_pts_xy_roma
             dst_pts_xy = arc_observation.dst_pts_xy_roma
