@@ -5,7 +5,7 @@ def get_config() -> GloPoseConfig:
     cfg = GloPoseConfig()
 
     cfg.onboarding.min_certainty_threshold = 0.975
-    cfg.onboarding.flow_reliability_threshold = 0.5
+    cfg.onboarding.flow_reliability_threshold = 0.8
     cfg.onboarding.frame_filter = 'RANSAC'
     cfg.onboarding.filter_matcher = 'UFM'
 
