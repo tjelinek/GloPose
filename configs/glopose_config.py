@@ -93,6 +93,7 @@ class OnboardingConfig:
     sift_filter_good_to_add_matches: int = 450
 
     # Reconstruction settings
+    reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r'
     mapper: str = 'pycolmap'
     init_with_first_two_images: bool = False
     add_track_merging_matches: bool = True

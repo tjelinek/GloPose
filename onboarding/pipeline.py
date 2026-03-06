@@ -161,7 +161,6 @@ class OnboardingPipeline:
         node_save_path = self.colmap_image_path / image_filename
         img_np = (img * 255).to(torch.uint8).numpy(force=True)
         img_pil = Image.fromarray(img_np, mode='RGB')
-        imageio.v3.imwrite(node_save_path, (img * 255).to(torch.uint8).numpy(force=True))
         img_pil.save(node_save_path)
 
         segmentation_save_path = self.colmap_seg_path / seg_filename
@@ -297,19 +296,24 @@ class OnboardingPipeline:
 
         first_frame_data = self.data_graph.get_frame_data(0)
         camera_K = first_frame_data.gt_pinhole_K if not self.config.onboarding.use_default_colmap_K else None
-        try:
-            reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
-                                                          self.config.onboarding.init_with_first_two_images,
-                                                          self.config.onboarding.mapper,
-                                                          self.match_provider_reconstruction,
-                                                          self.config.onboarding.sample_size,
-                                                          self.colmap_base_path,
-                                                          self.config.onboarding.add_track_merging_matches,
-                                                          camera_K, self.config.run.device)
-        except Exception as e:
-            print(f"Reconstruction failed: {e}")
-            reconstruction = None
 
+        method = self.config.onboarding.reconstruction_method
+
+        if method == 'colmap':
+            reconstruction = self._reconstruct_colmap(images_paths, segmentation_paths, matching_pairs, camera_K)
+        elif method in ('vggt', 'mast3r'):
+            reconstruction = self._reconstruct_external(method, images_paths, segmentation_paths,
+                                                        matching_pairs, camera_K)
+        else:
+            raise ValueError(f'Unknown reconstruction method: {method}')
+
+        if reconstruction is not None:
+            # Save reconstruction to disk so evaluation can load it
+            rec_output_path = self.colmap_base_path / 'output' / '0'
+            rec_output_path.mkdir(exist_ok=True, parents=True)
+            reconstruction.write(str(rec_output_path))
+
+        # Alignment
         if reconstruction is None or self.gt_Se3_world2cam is None:
             return reconstruction, False
         if self.config.onboarding.similarity_transformation == 'depths':
@@ -336,6 +340,53 @@ class OnboardingPipeline:
             raise ValueError(f'Unknown similarity transform method {self.config.onboarding.similarity_transformation}')
 
         return reconstruction, align_success
+
+    def _reconstruct_colmap(self, images_paths, segmentation_paths, matching_pairs, camera_K) \
+            -> Optional[Reconstruction]:
+        try:
+            reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
+                                                          self.config.onboarding.init_with_first_two_images,
+                                                          self.config.onboarding.mapper,
+                                                          self.match_provider_reconstruction,
+                                                          self.config.onboarding.sample_size,
+                                                          self.colmap_base_path,
+                                                          self.config.onboarding.add_track_merging_matches,
+                                                          camera_K, self.config.run.device)
+        except Exception as e:
+            print(f"Reconstruction failed: {e}")
+            reconstruction = None
+        return reconstruction
+
+    def _reconstruct_external(self, method, images_paths, segmentation_paths, matching_pairs, camera_K) \
+            -> Optional[Reconstruction]:
+        """Run reconstruction with an external method (VGGT or Mast3r)."""
+        image_names = [p.name for p in images_paths]
+
+        try:
+            if method == 'vggt':
+                from adapters.vggt_adapter import reconstruct_with_vggt
+                reconstruction = reconstruct_with_vggt(
+                    image_paths=images_paths,
+                    image_names=image_names,
+                    device=self.config.run.device,
+                    camera_K=camera_K,
+                )
+            elif method == 'mast3r':
+                from adapters.mast3r_adapter import reconstruct_with_mast3r
+                reconstruction = reconstruct_with_mast3r(
+                    image_paths=images_paths,
+                    image_names=image_names,
+                    matching_pairs=matching_pairs,
+                    device=self.config.run.device,
+                    camera_K=camera_K,
+                )
+            else:
+                raise ValueError(f'Unknown external method: {method}')
+        except Exception as e:
+            print(f"External reconstruction ({method}) failed: {e}")
+            reconstruction = None
+
+        return reconstruction
 
     def init_datagraph_frame(self, frame_i):
         self.data_graph.add_new_frame(frame_i)

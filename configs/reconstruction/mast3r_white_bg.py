@@ -8,6 +8,7 @@ def get_config() -> GloPoseConfig:
     cfg.onboarding.flow_reliability_threshold = 0.5
     cfg.onboarding.frame_filter = 'dense_matching'
     cfg.onboarding.filter_matcher = 'UFM'
-    cfg.input.frame_provider_config.background_color = 'black'
+    cfg.onboarding.reconstruction_method = 'mast3r'
+    cfg.input.frame_provider_config.background_color = 'white'
 
     return cfg
