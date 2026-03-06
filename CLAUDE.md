@@ -160,6 +160,9 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 PyTorch, Kornia (geometry/camera), Kaolin (mesh rendering), pycolmap, SAM2, RoMa/UFM (optical flow), DINOv2 (via torch.hub),
 NetworkX, Gradio, Rerun SDK, wandb, scipy (KDTree for point cloud eval), trimesh (mesh loading)
 
+- **pycolmap API docs**: [`docs/pycolmap_api.md`](docs/pycolmap_api.md) (downloaded from
+  [colmap.github.io/pycolmap](https://colmap.github.io/pycolmap/pycolmap.html))
+
 ## Things to Know
 
 - Configs are **Python files**, not YAML/JSON — they define variables that get loaded dynamically
