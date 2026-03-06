@@ -176,7 +176,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
                                  init_with_first_two_images: bool, mapper: str, match_provider: MatchingProvider,
                                  match_sample_size: int, colmap_working_dir: Path, add_track_merging_matches: bool,
                                  camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
-                                 progress=None) \
+                                 progress=None, filter_points_by_seg: bool = False) \
         -> Optional[pycolmap.Reconstruction]:
     if len(matching_pairs) == 0:
         raise ValueError("Needed at least 1 match.")
@@ -231,6 +231,70 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
     except Exception as e:
         print(e)
         return None
+
+    if filter_points_by_seg:
+        reconstruction = filter_points_by_segmentation(reconstruction, segmentations, images)
+
+    return reconstruction
+
+
+def filter_points_by_segmentation(reconstruction: pycolmap.Reconstruction,
+                                   segmentations: List[Path],
+                                   images: List[Path]) -> pycolmap.Reconstruction:
+    """Remove 3D points whose 2D observation falls outside the segmentation mask in any image.
+    Then run bundle adjustment on the cleaned reconstruction."""
+
+    # Build mapping: image name -> segmentation path
+    image_name_to_seg: Dict[str, Path] = {}
+    for img_path, seg_path in zip(images, segmentations):
+        image_name_to_seg[img_path.name] = seg_path
+
+    # Load and cache segmentation masks as numpy arrays (H, W), values 0-255
+    seg_cache: Dict[str, np.ndarray] = {}
+
+    def get_seg_mask(image_name: str) -> np.ndarray | None:
+        if image_name in seg_cache:
+            return seg_cache[image_name]
+        seg_path = image_name_to_seg.get(image_name)
+        if seg_path is None or not seg_path.exists():
+            return None
+        import imageio
+        mask = imageio.v3.imread(seg_path)
+        if mask.ndim == 3:
+            mask = mask[:, :, 0]
+        seg_cache[image_name] = mask
+        return mask
+
+    # Collect point3D IDs to delete
+    point3d_ids_to_delete = set()
+    for point3d_id, point3d in reconstruction.points3D.items():
+        for track_element in point3d.track.elements:
+            image_id = track_element.image_id
+            point2d_idx = track_element.point2D_idx
+
+            image = reconstruction.images[image_id]
+            point2d = image.points2D[point2d_idx]
+            x, y = point2d.xy.astype(int)
+
+            mask = get_seg_mask(image.name)
+            if mask is None:
+                continue
+
+            h, w = mask.shape
+            if y < 0 or y >= h or x < 0 or x >= w or mask[y, x] < 128:
+                point3d_ids_to_delete.add(point3d_id)
+                break
+
+    num_before = len(reconstruction.points3D)
+    for point3d_id in point3d_ids_to_delete:
+        reconstruction.delete_point3D(point3d_id)
+    num_after = len(reconstruction.points3D)
+    print(f"Segmentation filtering: removed {num_before - num_after}/{num_before} points, "
+          f"{num_after} remaining")
+
+    # Run bundle adjustment on the cleaned reconstruction
+    ba_options = pycolmap.BundleAdjustmentOptions()
+    pycolmap.bundle_adjustment(reconstruction, ba_options)
 
     return reconstruction
 

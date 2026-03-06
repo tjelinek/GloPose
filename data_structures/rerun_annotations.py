@@ -65,6 +65,7 @@ class RerunAnnotations:
     colmap_predicted_camera_poses: Final[str] = '/3d_colmap/predicted_camera_keypoints'
     colmap_predicted_reliable_templates: Final[str] = '/3d_colmap/predicted_reliable_templates'
     colmap_predicted_line_strips_reliable: Final[str] = '/3d_colmap/line_strips_reliable'
+    colmap_point_projections: Final[str] = '/3d_colmap/point_projections'
 
     observed_flow: Final[str] = '/observed_flow/observed_flow'
     observed_flow_occlusion: Final[str] = '/observed_flow/occlusion'

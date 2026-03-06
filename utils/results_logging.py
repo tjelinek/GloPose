@@ -19,7 +19,8 @@ from onboarding.colmap_utils import world2cam_from_reconstruction
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
 from visualizations.rerun_utils import (init_rerun_recording, register_matching_series_lines,
-                                        visualize_certainty_map, log_matching_correspondences)
+                                        visualize_certainty_map, log_matching_correspondences,
+                                        log_colmap_point_projections)
 from utils.image_utils import overlay_mask
 
 
@@ -148,6 +149,17 @@ class WriteResults:
                                 origin=RerunAnnotations.space_visualization,
                                 name='3D Ground Truth',
                                 background=[255, 255, 255]
+                            ),
+                            rrb.Grid(
+                                contents=[
+                                    rrb.Spatial2DView(
+                                        name=f"Keyframe {i}",
+                                        origin=f'{RerunAnnotations.colmap_point_projections}/{i}'
+                                    )
+                                    for i in range(1, 28)
+                                ],
+                                grid_columns=9,
+                                name='Point Projections'
                             ),
                         ],
                         name='3D Space'
@@ -446,12 +458,17 @@ class WriteResults:
         # self.visualize_3d_camera_space(frame_i, keyframe_graph)
 
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction,
-                               visualize_also_gt_poses: bool):
+                               visualize_also_gt_poses: bool,
+                               colmap_images_dir: Path | None = None,
+                               colmap_segmentations_dir: Path | None = None):
         rr.set_time_sequence("frame", frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
         rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
+
+        if colmap_images_dir is not None:
+            log_colmap_point_projections(colmap_reconstruction, colmap_images_dir, colmap_segmentations_dir)
 
         all_image_names = [str(self.data_graph.get_frame_data(i).image_filename)
                            for i in range(len(self.data_graph.G.nodes))]

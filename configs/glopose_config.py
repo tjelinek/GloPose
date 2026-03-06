@@ -101,6 +101,7 @@ class OnboardingConfig:
     similarity_transformation: str = 'kabsch'
     sift_mapping_num_feats: int = 8192
     sift_mapping_min_matches: int = 15
+    filter_points_by_segmentation: bool = False
     export_view_graph: bool = False
 
 

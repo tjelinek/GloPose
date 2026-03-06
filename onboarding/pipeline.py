@@ -226,9 +226,11 @@ class OnboardingPipeline:
             view_graph.save_viewgraph(self.cache_folder_view_graph, reconstruction, save_images=True,
                                       overwrite=True, to_cpu=True)
             self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction,
-                                                       known_gt_poses)
+                                                       known_gt_poses,
+                                                       self.colmap_image_path, self.colmap_seg_path)
         elif reconstruction is not None:
-            self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction, False)
+            self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction, False,
+                                                       self.colmap_image_path, self.colmap_seg_path)
             logger.warning("Reconstruction succeeded but alignment failed for %s/%s",
                            self.config.run.dataset, self.config.run.sequence)
         else:
@@ -351,7 +353,8 @@ class OnboardingPipeline:
                                                           self.config.onboarding.sample_size,
                                                           self.colmap_base_path,
                                                           self.config.onboarding.add_track_merging_matches,
-                                                          camera_K, self.config.run.device)
+                                                          camera_K, self.config.run.device,
+                                                          filter_points_by_seg=self.config.onboarding.filter_points_by_segmentation)
         except Exception as e:
             print(f"Reconstruction failed: {e}")
             reconstruction = None

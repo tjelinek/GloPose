@@ -7,6 +7,8 @@ import torch
 import torchvision.transforms.functional as TF
 from matplotlib import pyplot as plt
 
+import imageio.v3 as iio
+
 from data_structures.rerun_annotations import RerunAnnotations
 from utils.image_utils import overlay_mask
 
@@ -117,3 +119,67 @@ def log_matching_correspondences(src_pts_yx: np.ndarray, dst_pts_yx: np.ndarray,
     cmap_outliers = plt.get_cmap('Reds')
     log_correspondences_rerun(cmap_outliers, outliers_source_yx, outliers_target_yx,
                               low_certainty_annotation, source_image_height, sample_size)
+
+
+def log_colmap_point_projections(reconstruction,
+                                  images_dir: Path,
+                                  segmentations_dir: Path | None = None,
+                                  jpeg_quality: int = 75):
+    """Log 2D projections of COLMAP 3D points onto each keyframe image in Rerun.
+
+    For each registered image, overlays colored dots at the 2D locations of tracked 3D points.
+    If segmentations_dir is provided, points are colored green (inside mask) or red (outside mask).
+
+    Args:
+        reconstruction: pycolmap.Reconstruction with registered images and 3D points
+        images_dir: directory containing the keyframe images (filenames match image.name)
+        segmentations_dir: optional directory with segmentation masks ({image.name}.png)
+        jpeg_quality: JPEG compression quality for rerun image logging
+    """
+    for image_id, image in sorted(reconstruction.images.items(), key=lambda x: x[0]):
+        image_path = images_dir / image.name
+        if not image_path.exists():
+            continue
+
+        image_np = iio.imread(image_path)
+
+        # Collect 2D points that have an associated 3D point
+        points_xy = []
+        point3d_ids = []
+        for point2D in image.points2D:
+            if point2D.has_point3D():
+                points_xy.append(point2D.xy)
+                point3d_ids.append(point2D.point3D_id)
+
+        if len(points_xy) == 0:
+            continue
+
+        points_xy = np.stack(points_xy, axis=0)
+
+        # Color by segmentation mask membership if available
+        if segmentations_dir is not None:
+            seg_path = segmentations_dir / f'{image.name}.png'
+            if seg_path.exists():
+                seg_mask = iio.imread(seg_path)
+                if seg_mask.ndim == 3:
+                    seg_mask = seg_mask[..., 0]
+
+                # Clamp coordinates to image bounds
+                h, w = seg_mask.shape[:2]
+                px = np.clip(points_xy[:, 0].astype(int), 0, w - 1)
+                py = np.clip(points_xy[:, 1].astype(int), 0, h - 1)
+                inside = seg_mask[py, px] > 127
+
+                colors = np.where(inside[:, None],
+                                  np.array([[0, 200, 0, 255]], dtype=np.uint8),
+                                  np.array([[200, 0, 0, 255]], dtype=np.uint8))
+            else:
+                colors = np.full((len(points_xy), 4), [0, 200, 0, 255], dtype=np.uint8)
+        else:
+            # Use 3D point colors from reconstruction
+            colors = np.stack([reconstruction.points3D[pid].color for pid in point3d_ids], axis=0)
+
+        entity_path = f'{RerunAnnotations.colmap_point_projections}/{image_id}'
+        rr.log(entity_path, rr.Image(image_np).compress(jpeg_quality=jpeg_quality), static=True)
+        rr.log(entity_path + '/points',
+               rr.Points2D(positions=points_xy, colors=colors, radii=2.0), static=True)
