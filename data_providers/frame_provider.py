@@ -496,8 +496,10 @@ class FrameProviderAll:
         if self.config.erode_segmentation:
             segmentation = erode_segment_mask2(self.config.erode_segmentation_iters, segmentation)
 
-        if self.config.black_background:
+        if self.config.background_color == 'black':
             image = image * segmentation
+        elif self.config.background_color == 'white':
+            image = image * segmentation + (1.0 - segmentation)
 
         depth = None
         if self.depth_provider is not None:
