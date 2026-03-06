@@ -72,6 +72,43 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     print('----------------------------------------')
 
 
+def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path) -> None:
+    """Submit all sequences for a config as a single SLURM job array."""
+    if not all_sequences:
+        return
+
+    configuration_path = Path('configs') / (configuration_name + '.py')
+    experiment = str(Path(configuration_name).stem)
+
+    # Write sequence list to a file in the output folder
+    os.makedirs(output_folder, exist_ok=True)
+    seq_list_path = output_folder / f'{experiment}_{dataset.value}_sequences.txt'
+    with open(seq_list_path, 'w') as f:
+        for seq in all_sequences:
+            f.write(seq + '\n')
+
+    n = len(all_sequences)
+    array_spec = f'0-{n - 1}'
+
+    batch_script = 'job_array.batch' if os.path.basename(os.getcwd()) == 'scripts' else 'scripts/job_array.batch'
+
+    cmd = [
+        'sbatch', f'--array={array_spec}',
+        batch_script,
+        '--config', str(configuration_path),
+        '--dataset-runner', runners[dataset],
+        '--experiment', experiment,
+        '--output-folder', str(output_folder),
+        '--sequence-list', str(seq_list_path),
+    ]
+
+    print('----------------------------------------')
+    print(f'Submitting job array ({n} tasks) for {configuration_name} on {dataset.value}')
+    print(' '.join(cmd))
+    subprocess.run(cmd)
+    print('----------------------------------------')
+
+
 def create_unused_folder(output_folder: Path):
     # i = 1
     # while os.path.exists(f"{output_folder}_{i}"):
@@ -166,21 +203,13 @@ def main():
         Datasets.TUM_RGBD: get_tum_rgbd_sequences(cfg.paths.tum_rgbd_data_folder),
     }
 
-    # Set batch length
-    batch_length = 1
+    output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
 
     for configuration in configurations:
-
-        output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
-        output_folder = output_folder_root/configuration
-        output_folder = create_unused_folder(output_folder)
+        output_folder = create_unused_folder(output_folder_root / configuration)
 
         for dataset in sequences:
-            seq_index = 0
-            while seq_index < len(sequences[dataset]):
-                batch_seqs = sequences[dataset][seq_index:seq_index + batch_length]
-                run_batch(configuration, batch_seqs, dataset, output_folder)
-                seq_index += batch_length
+            run_job_array(configuration, sequences[dataset], dataset, output_folder)
 
 
 if __name__ == "__main__":
