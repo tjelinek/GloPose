@@ -148,6 +148,7 @@ def main():
         # 'onboarding/ufm_c095r09',
         # 'onboarding/ufm_c095r095',
         'onboarding/ufm_c0975r05',
+        'onboarding/ufm_c0975r05_fixed_threshold',
         'onboarding/ufm_c0975r05_bbg',
         'onboarding/ufm_c0975r05_bbg_dense',
         'onboarding/ufm_c0975r05_dense',

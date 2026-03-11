@@ -76,6 +76,7 @@ class OnboardingConfig:
     edge_strategy: str = 'on_unreliable'  # 'always' | 'on_unreliable'
     passthrough_skip: int = 1
     min_certainty_threshold: float = 0.975
+    certainty_threshold_strategy: str = 'otsu'  # 'otsu' | 'fixed'
     flow_reliability_threshold: float = 0.5
     min_number_of_reliable_matches: int = 0
     matchability_based_reliability: bool = False
