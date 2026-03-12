@@ -323,6 +323,7 @@ Primary evaluation datasets:
 - **NAVI** (novel view synthesis benchmark)
 - **BOP classic** (T-LESS, LM-O, IC-BIN — static onboarding only)
 - **HOPE** (household objects, static + dynamic)
+- **HOT3D** (33 objects, hand-object tracking, fisheye cameras from Meta Aria/Quest3, BOP format)
 
 ---
 
