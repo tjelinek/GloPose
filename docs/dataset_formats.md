@@ -888,6 +888,21 @@ BOP 2024 additions: HOT3D, HANDAL, HOPEv2.
 Split conventions: most use `test`; HB and T-LESS use `test_primesense`.
 Target files: `test_targets_bop19.json` (classic) or `test_targets_bop24.json` (2024).
 
+#### HOT3D Dataset Specifics
+
+HOT3D uses a different folder structure and camera model from other BOP datasets:
+
+- **Folder structure**: `object_ref_{device}_{static|dynamic}_scenewise/{scene_id}/` instead of
+  `onboarding_{static|dynamic}/{obj_id}_{up|down}/`. Device is `aria` (RGB + grayscale) or `quest3`
+  (grayscale only). GloPose uses Aria RGB by default.
+- **No up/down**: Static sequences have a single capture per scene (33 scenes, one per object).
+- **File naming**: `scene_camera_rgb.json`, `scene_gt_rgb.json`, `mask_visib_rgb/` (camera-specific suffixes).
+- **Camera model**: FISHEYE624 (not pinhole). GloPose uses a pinhole approximation (focal length + principal
+  point from `projection_params`, ignoring distortion). This may cause reconstruction artifacts at image edges.
+- **No depth maps** in reference sequences (only in `train_pbr`).
+- **Dynamic sequences**: No pre-computed segmentation masks — SAM2 must generate them at runtime.
+- **Runner**: `run_HOT3D.py`, sequences named `{scene_id}_static` or `{scene_id}_dynamic`.
+
 ---
 
 ## 12. Mast3r / Dust3r

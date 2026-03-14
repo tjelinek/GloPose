@@ -7,7 +7,8 @@ from configs.glopose_config import GloPoseConfig
 from utils.dataset_sequences import (
     get_handal_sequences, get_navi_sequences, get_ho3d_sequences,
     get_tum_rgbd_sequences, get_behave_sequences, get_google_scanned_objects_sequences,
-    get_bop_val_sequences, get_bop_onboarding_sequences, get_bop_classic_sequences
+    get_bop_val_sequences, get_bop_onboarding_sequences, get_bop_classic_sequences,
+    get_hot3d_onboarding_sequences
 )
 
 
@@ -24,6 +25,8 @@ class Datasets(Enum):
     HOPE_ONBOARDING_STATIC = "HOPE_ONBOARDING_STATIC"
     HOPE_ONBOARDING_DYNAMIC = "HOPE_ONBOARDING_DYNAMIC"
     BOP_CLASSIC_ONBOARDING_SEQUENCES = "BOP_CLASSIC_ONBOARDING_SEQUENCES"
+    HOT3D_ONBOARDING_STATIC = "HOT3D_ONBOARDING_STATIC"
+    HOT3D_ONBOARDING_DYNAMIC = "HOT3D_ONBOARDING_DYNAMIC"
     BEHAVE = "BEHAVE"
     TUM_RGBD = "TUM_RGBD"
 
@@ -41,6 +44,8 @@ runners = {
     Datasets.HOPE_ONBOARDING_STATIC: "run_HOPE.py",
     Datasets.HOPE_ONBOARDING_DYNAMIC: "run_HOPE.py",
     Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: "run_BOP_classic_onboarding.py",
+    Datasets.HOT3D_ONBOARDING_STATIC: "run_HOT3D.py",
+    Datasets.HOT3D_ONBOARDING_DYNAMIC: "run_HOT3D.py",
     Datasets.BEHAVE: "run_BEHAVE.py",
     Datasets.TUM_RGBD: "run_TUM_RGBD.py",
 }
@@ -181,6 +186,7 @@ def main():
     ho3d_train, ho3d_eval = get_ho3d_sequences(cfg.paths.ho3d_data_folder)
     handal_dynamic, handal_up, handal_down, handal_both = get_bop_onboarding_sequences(bop_path, 'handal')
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(bop_path, 'hope')
+    hot3d_dynamic, hot3d_static = get_hot3d_onboarding_sequences(bop_path)
 
     sequences = {
         Datasets.SyntheticObjects: [],
@@ -200,6 +206,8 @@ def main():
             get_bop_classic_sequences(bop_path, 'lmo', 'train') +
             get_bop_classic_sequences(bop_path, 'icbin', 'train')
         ),
+        Datasets.HOT3D_ONBOARDING_STATIC: hot3d_static,
+        Datasets.HOT3D_ONBOARDING_DYNAMIC: hot3d_dynamic,
         Datasets.BEHAVE: get_behave_sequences(cfg.paths.behave_data_folder / 'train'),
         Datasets.TUM_RGBD: get_tum_rgbd_sequences(cfg.paths.tum_rgbd_data_folder),
     }

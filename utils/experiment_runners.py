@@ -133,7 +133,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
 
     if onboarding_type == 'static':
         static_onboarding_sequence = config.bop.static_onboarding_sequence
-        config.run.special_hash = static_onboarding_sequence
+        config.run.special_hash = static_onboarding_sequence or 'static'
     elif onboarding_type == 'dynamic':
         config.run.special_hash = 'dynamic'
         static_onboarding_sequence = None

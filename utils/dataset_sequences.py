@@ -215,6 +215,37 @@ def get_bop_onboarding_sequences(path: Path, dataset: str) -> Tuple[List[str], L
     return dynamic_sequences, static_up_sequences, static_down_sequences, static_both_sequences
 
 
+def get_hot3d_onboarding_sequences(path: Path, device: str = 'aria') -> Tuple[List[str], List[str]]:
+    """Scan HOT3D onboarding directories for sequences.
+
+    HOT3D uses device-specific folders (aria/quest3) and has no up/down distinction
+    for static sequences — each scene is a single capture.
+
+    Args:
+        path: Path to the BOP root directory (e.g., data_folder / 'bop')
+        device: Camera device ('aria' or 'quest3'). Default 'aria' for RGB images.
+
+    Returns:
+        Tuple of (dynamic_sequences, static_sequences)
+    """
+    dynamic_sequences = []
+    static_sequences = []
+
+    dynamic_dir = path / 'hot3d' / f'object_ref_{device}_dynamic_scenewise'
+    if dynamic_dir.exists():
+        for scene_dir in sorted(dynamic_dir.iterdir()):
+            if scene_dir.is_dir():
+                dynamic_sequences.append(f"{scene_dir.name}_dynamic")
+
+    static_dir = path / 'hot3d' / f'object_ref_{device}_static_scenewise'
+    if static_dir.exists():
+        for scene_dir in sorted(static_dir.iterdir()):
+            if scene_dir.is_dir():
+                static_sequences.append(f"{scene_dir.name}_static")
+
+    return dynamic_sequences, static_sequences
+
+
 def get_bop_classic_sequences(path: Path, dataset: str, split: str) -> List[str]:
     """Scan BOP classic dataset directory for sequences.
 

@@ -14,6 +14,61 @@ from utils.data_utils import get_scale_from_meter, get_scale_to_meter
 from utils.math_utils import scale_Se3
 
 
+def _scene_gt_filename(dataset: str) -> str:
+    """Return the scene GT JSON filename for a dataset."""
+    return 'scene_gt_rgb.json' if dataset == 'hot3d' else 'scene_gt.json'
+
+
+def _scene_camera_filename(dataset: str) -> str:
+    """Return the scene camera JSON filename for a dataset."""
+    return 'scene_camera_rgb.json' if dataset == 'hot3d' else 'scene_camera.json'
+
+
+def _mask_visib_folder_name(dataset: str) -> str:
+    """Return the mask visibility folder name for a dataset."""
+    return 'mask_visib_rgb' if dataset == 'hot3d' else 'mask_visib'
+
+
+def get_pinhole_params_from_hot3d(json_file_path: Path, scale: float = 1.0, device='cpu') -> Dict[int, PinholeCamera]:
+    """Extract approximate pinhole parameters from HOT3D fisheye camera JSON.
+
+    HOT3D uses FISHEYE624 cameras. This extracts focal length and principal point
+    from projection_params as a pinhole approximation (ignoring distortion).
+    """
+    with open(json_file_path, 'r') as f:
+        json_data = json.load(f)
+
+    pinhole_cameras = {}
+    for frame_str, frame_data in json_data.items():
+        frame_int = int(frame_str)
+        cam_model = frame_data['cam_model']
+        params = cam_model['projection_params']
+        w = cam_model['image_width']
+        h = cam_model['image_height']
+
+        # Approximate pinhole from fisheye: focal_length, cx, cy
+        fx = fy = params[0]
+        cx = params[1]
+        cy = params[2]
+
+        cam_K = torch.tensor([
+            [fx, 0, cx],
+            [0, fy, cy],
+            [0, 0, 1]
+        ], dtype=torch.float32, device=device)
+
+        cam_w2c = Se3.identity(device=device).matrix()
+        width = torch.tensor(w, device=device)
+        height = torch.tensor(h, device=device)
+
+        pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
+                                       height.unsqueeze(0), width.unsqueeze(0))
+        pinhole_camera = pinhole_camera.scale(torch.tensor(scale, device=device).unsqueeze(0))
+        pinhole_cameras[frame_int] = pinhole_camera
+
+    return pinhole_cameras
+
+
 def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -> Dict[int, PinholeCamera]:
     with open(json_file_path, 'r') as json_file:
         json_data = json.load(json_file)
@@ -94,7 +149,11 @@ def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_
     """Returns the sequence folder path based on sequence type and onboarding type."""
     if sequence_type == 'onboarding':
 
-        if onboarding_type == 'dynamic':
+        if dataset == 'hot3d':
+            # HOT3D uses device-specific folder names, no up/down distinction
+            device = 'aria'
+            return bop_folder / dataset / f'object_ref_{device}_{onboarding_type}_scenewise' / sequence
+        elif onboarding_type == 'dynamic':
             return bop_folder / dataset / f'onboarding_{onboarding_type}' / sequence
         elif onboarding_type == 'static' and direction in ['up', 'down']:
             return bop_folder / dataset / f'onboarding_{onboarding_type}' / f'{sequence}_{direction}'
@@ -186,15 +245,16 @@ def get_bop_images_and_segmentations(
 ) -> Tuple[Dict[int, Path], Dict[int, Path], Optional[Dict[int, Path]], Optional[List[int]]]:
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
+    mask_folder = _mask_visib_folder_name(dataset)
 
-    if sequence_type == 'onboarding' and onboarding_type == 'static':
+    if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
         up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
 
         images_down = load_gt_images(down_folder / 'rgb') if down_folder.exists() else {}
         images_up = load_gt_images(up_folder / 'rgb') if up_folder.exists() else {}
-        segs_down = load_gt_segmentations(down_folder / 'mask_visib') if down_folder.exists() else {}
-        segs_up = load_gt_segmentations(up_folder / 'mask_visib') if up_folder.exists() else {}
+        segs_down = load_gt_segmentations(down_folder / mask_folder) if down_folder.exists() else {}
+        segs_up = load_gt_segmentations(up_folder / mask_folder) if up_folder.exists() else {}
 
         depth_down_folder = down_folder / 'depth'
         depth_up_folder = up_folder / 'depth'
@@ -236,10 +296,10 @@ def get_bop_images_and_segmentations(
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         image_folder = sequence_folder / 'rgb'
-        segmentation_folder = sequence_folder / 'mask_visib'
+        segmentation_folder = sequence_folder / mask_folder
         depth_folder = sequence_folder / 'depth'
         gt_images = load_gt_images(image_folder)
-        gt_segs = load_gt_segmentations(segmentation_folder, object_id=scene_obj_id)
+        gt_segs = load_gt_segmentations(segmentation_folder, object_id=scene_obj_id) if segmentation_folder.exists() else {}
         gt_depths = None
         if depth_folder.exists():
             gt_depths = load_gt_images(depth_folder)
@@ -250,7 +310,8 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
                                         onboarding_type: str = None, sequence_starts: Optional[List[int]] = None,
                                         static_onboarding_sequence: Optional[str] = None, scene_obj_id: int = None,
                                         device: str = 'cpu') -> Dict[int, Se3]:
-    if sequence_type == 'onboarding' and onboarding_type == 'static':
+    gt_filename = _scene_gt_filename(dataset)
+    if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
             bop_folder,
             dataset,
@@ -258,19 +319,20 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: extract_gt_Se3_cam2obj(p / 'scene_gt.json', scale_factor, device=device),
+            loader_fn=lambda p: extract_gt_Se3_cam2obj(p / gt_filename, scale_factor, device=device),
             sequence_starts=sequence_starts
         )
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
-        pose_json_path = sequence_folder / 'scene_gt.json'
+        pose_json_path = sequence_folder / gt_filename
         return extract_gt_Se3_cam2obj(pose_json_path, scale_factor, scene_obj_id, device=device)
 
 
 def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
                    onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
                    scene_obj_id: int = None, sequence_starts: List[int] = None) -> int:
-    if sequence_type == 'onboarding' and onboarding_type == 'static':
+    gt_filename = _scene_gt_filename(dataset)
+    if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
             bop_folder,
             dataset,
@@ -278,19 +340,21 @@ def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type:
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: extract_object_id(p / 'scene_gt.json'),
+            loader_fn=lambda p: extract_object_id(p / gt_filename),
             sequence_starts=sequence_starts
         )[1]
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
-        pose_json_path = sequence_folder / 'scene_gt.json'
+        pose_json_path = sequence_folder / gt_filename
         return extract_object_id(pose_json_path, scene_obj_id)[1]
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,
                         onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
                         sequence_starts: Optional[List[int]] = None, device='cpu') -> dict[int, PinholeCamera]:
-    if sequence_type == 'onboarding' and onboarding_type == 'static':
+    camera_filename = _scene_camera_filename(dataset)
+    pinhole_loader = get_pinhole_params_from_hot3d if dataset == 'hot3d' else get_pinhole_params
+    if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
             bop_folder,
             dataset,
@@ -298,13 +362,13 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: get_pinhole_params(p / 'scene_camera.json', scale, device=device),
+            loader_fn=lambda p: pinhole_loader(p / camera_filename, scale, device=device),
             sequence_starts=sequence_starts
         )
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
-        pose_json_path = sequence_folder / 'scene_camera.json'
-        return get_pinhole_params(pose_json_path, scale, device=device)
+        pose_json_path = sequence_folder / camera_filename
+        return pinhole_loader(pose_json_path, scale, device=device)
 
 
 def add_extrinsics_to_pinhole_params(pinhole_params: Dict[int, PinholeCamera], gt_Se3_world2cam: dict[int, Se3]) -> (
@@ -345,7 +409,8 @@ def read_static_onboarding_world2cam(
         sequence_starts: Optional[List[int]] = None,
         device: str = 'cpu'
 ) -> dict[int, Se3]:
-    if sequence_type == 'onboarding' and onboarding_type == 'static':
+    camera_filename = _scene_camera_filename(dataset)
+    if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
             bop_folder,
             dataset,
@@ -353,12 +418,12 @@ def read_static_onboarding_world2cam(
             sequence_type,
             onboarding_type,
             static_onboarding_sequence,
-            loader_fn=lambda p: read_gt_Se3_world2cam(p / 'scene_camera.json', device=device),
+            loader_fn=lambda p: read_gt_Se3_world2cam(p / camera_filename, device=device),
             sequence_starts=sequence_starts
         )
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
-        pose_json_path = sequence_folder / 'scene_camera.json'
+        pose_json_path = sequence_folder / camera_filename
         return read_gt_Se3_world2cam(pose_json_path, device=device)
 
 
@@ -396,6 +461,19 @@ def set_config_for_bop_onboarding(config: GloPoseConfig, sequence: str):
             config.bop.static_onboarding_sequence = 'both'
             config.onboarding.similarity_transformation = 'kabsch'
         config.run.sequence = '_'.join(sequence_name_split[:2])
+    elif len(sequence_name_split) == 2:
+        # HOT3D: NNNNNN_static or NNNNNN_dynamic (no up/down distinction)
+        if sequence_name_split[1] == 'static':
+            config.bop.onboarding_type = 'static'
+            config.bop.static_onboarding_sequence = None
+            config.onboarding.similarity_transformation = 'kabsch'
+        elif sequence_name_split[1] == 'dynamic':
+            config.bop.onboarding_type = 'dynamic'
+            config.onboarding.similarity_transformation = 'depths'
+            config.input.frame_provider_config.erode_segmentation = True
+            config.input.run_only_on_frames_with_known_pose = False
+            config.input.skip_indices *= 4
+        config.run.sequence = sequence_name_split[0]
 
 
 def group_test_targets_by_image(test_annotations):
