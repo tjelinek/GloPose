@@ -582,7 +582,7 @@ class PrecomputedDepthProvider_HO3D(PrecomputedDepthProvider):
         depth_scale = 0.00012498664727900177
         depth_img = cv2.imread(str(depth_path))
 
-        dpt = depth_img[:, :, 2] + depth_img[:, :, 1] * 256
+        dpt = depth_img[:, :, 2].astype(np.float32) + depth_img[:, :, 1].astype(np.float32) * 256
         dpt = dpt * depth_scale
 
         depth_p = torch.from_numpy(dpt).to(device)[None, None].to(torch.float32)
