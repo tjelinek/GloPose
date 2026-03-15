@@ -457,8 +457,8 @@ class FrameProviderAll:
         if config.input.segmentation_provider == 'synthetic':
             self.segmentation_provider = SyntheticSegmentationProvider(config, self.image_shape, **kwargs)
         elif config.input.segmentation_provider == 'precomputed':
-            self.segmentation_provider = PrecomputedSegmentationProvider(device=config.run.device,
-                                                                         image_shpape=self.image_shape, **kwargs)
+            self.segmentation_provider = PrecomputedSegmentationProvider(self.image_shape, device=config.run.device,
+                                                                         **kwargs)
         elif config.input.segmentation_provider == 'whites':
             self.segmentation_provider = WhiteSegmentationProvider(self.image_shape, config.input.skip_indices,
                                                                    config.run.device,
