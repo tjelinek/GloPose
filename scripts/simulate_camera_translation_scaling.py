@@ -61,7 +61,7 @@ for factor in torch.linspace(0, 2, 100).cpu():
     position_obj2_unscaled = Se3_obj1_to_obj2_unscaled.inverse().t.squeeze()
     position_obj1_unscaled = Se3_obj1_to_obj1_unscaled.inverse().t.squeeze()
 
-    rr.set_time_sequence('scale_factor', int(factor * 100))
+    rr.set_time("scale_factor", sequence=int(factor * 100))
 
     line_strip_unscaled = np.stack([position_obj1_scaled.numpy(force=True), position_cam1.numpy(force=True),
                                     position_cam2_unscaled.numpy(force=True),

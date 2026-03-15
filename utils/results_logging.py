@@ -54,6 +54,7 @@ class WriteResults:
             self.segmentation_path.mkdir(exist_ok=True, parents=True)
             self.ransac_path.mkdir(exist_ok=True, parents=True)
             self.exported_mesh_path.mkdir(exist_ok=True, parents=True)
+            (self.write_folder / 'templates').mkdir(exist_ok=True, parents=True)
 
     def rerun_init(self):
         rerun_file = (self.write_folder /
@@ -292,11 +293,11 @@ class WriteResults:
             register_matching_series_lines()
         elif self.config.onboarding.frame_filter == 'SIFT':
             rr.log(RerunAnnotations.min_matches_sift,
-                   rr.SeriesLine(color=[255, 0, 0], name="min matches"), static=True)
+                   rr.SeriesLines(colors=[255, 0, 0], names="min matches"), static=True)
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
-                   rr.SeriesLine(color=[0, 255, 0], name="good to add matches"), static=True)
+                   rr.SeriesLines(colors=[0, 255, 0], names="good to add matches"), static=True)
             rr.log(RerunAnnotations.matches_sift,
-                   rr.SeriesLine(color=[0, 0, 255], name="matches"), static=True)
+                   rr.SeriesLines(colors=[0, 0, 255], names="matches"), static=True)
 
         annotations = set()
         for axis, c in axes_colors.items():
@@ -329,16 +330,16 @@ class WriteResults:
             ))
 
             for rerun_annotation, color in annotations:
-                rr.log(rerun_annotation, rr.SeriesLine(color=color,
-                                                       name=rerun_annotation.split('/')[-1]), static=True)
+                rr.log(rerun_annotation, rr.SeriesLines(colors=color,
+                                                       names=rerun_annotation.split('/')[-1]), static=True)
 
         for template_annotation in self.template_fields:
             rr.log(template_annotation,
-                   rr.SeriesPoint(
-                       color=[255, 0, 0],
-                       name="new template",
-                       marker="circle",
-                       marker_size=4,
+                   rr.SeriesPoints(
+                       colors=[255, 0, 0],
+                       names="new template",
+                       markers="circle",
+                       marker_sizes=4,
                    ),
                    static=True)
 
@@ -348,7 +349,7 @@ class WriteResults:
                rr.AnnotationContext([(1, "blue", (255, 255, 255)), (0, "black", (0, 0, 0))]), static=True)
 
     def visualize_keyframes(self, frame_i: int, keyframe_graph: nx.Graph):
-        rr.set_time_sequence('frame', frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         kfs = set(keyframe_graph.nodes)
         not_logged_keyframes = kfs - set(self.logged_keyframe_graph.nodes)
@@ -382,7 +383,7 @@ class WriteResults:
         rr.log(RerunAnnotations.keyframe_graph, rr.GraphEdges(edges=[(u, v) for (u, v) in keyframe_graph.edges]))
 
     def visualize_pose_graph(self, frame_i: int, keyframe_graph: nx.Graph):
-        rr.set_time_sequence('frame', frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         # Create a directed graph from the pose graph
         pose_graph = nx.DiGraph()
@@ -461,7 +462,7 @@ class WriteResults:
                                visualize_also_gt_poses: bool,
                                colmap_images_dir: Path | None = None,
                                colmap_segmentations_dir: Path | None = None):
-        rr.set_time_sequence("frame", frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
         points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -566,7 +567,7 @@ class WriteResults:
 
     def visualize_3d_camera_space(self, frame_i: int, keyframe_graph: nx.DiGraph):
 
-        rr.set_time_sequence("frame", frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         all_frames_from_0 = range(0, frame_i + 1)
         n_poses = len(all_frames_from_0)
@@ -602,7 +603,7 @@ class WriteResults:
         gt_t_cam2obj = gt_cam2obj_se3.translation.numpy(force=True)
         pred_t_cam2obj = pred_cam2obj_se3.translation.numpy(force=True)
 
-        rr.set_time_sequence('frame', frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         rr.log(
             RerunAnnotations.space_predicted_camera_pose,
@@ -681,7 +682,7 @@ class WriteResults:
                        rr.Image(template).compress(jpeg_quality=self.config.visualization.jpeg_quality))
 
                 for template_annotation in self.template_fields:
-                    rr.log(template_annotation, rr.Scalar(0.0))
+                    rr.log(template_annotation, rr.Scalars(0.0))
 
                 template_frame_data = self.data_graph.get_frame_data(keyframe_node_idx)
                 keyframe_pred_Se3_cam2obj = template_frame_data.pred_Se3_cam2obj
@@ -726,19 +727,19 @@ class WriteResults:
 
         if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
             reliability = arc_observation.reliability_score
-            rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+            rr.log(RerunAnnotations.matching_reliability, rr.Scalars(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-                   rr.Scalar(target_data.current_flow_reliability_threshold))
+                   rr.Scalars(target_data.current_flow_reliability_threshold))
             if self.config.onboarding.matchability_based_reliability:
                 matchability_share = template_data.relative_area_matchable
                 min_roma_certainty = template_data.roma_certainty_threshold
-                rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalar(matchability_share))
-                rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalar(min_roma_certainty))
+                rr.log(RerunAnnotations.matching_matchability_plot_share_matchable, rr.Scalars(matchability_share))
+                rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty, rr.Scalars(min_roma_certainty))
         elif self.config.onboarding.frame_filter == 'SIFT':
-            rr.log(RerunAnnotations.matches_sift, rr.Scalar(arc_observation.num_matches))
-            rr.log(RerunAnnotations.min_matches_sift, rr.Scalar(self.config.onboarding.sift_filter_min_matches))
+            rr.log(RerunAnnotations.matches_sift, rr.Scalars(arc_observation.num_matches))
+            rr.log(RerunAnnotations.min_matches_sift, rr.Scalars(self.config.onboarding.sift_filter_min_matches))
             rr.log(RerunAnnotations.good_to_add_number_of_matches_sift,
-                   rr.Scalar(self.config.onboarding.sift_filter_good_to_add_matches))
+                   rr.Scalars(self.config.onboarding.sift_filter_good_to_add_matches))
 
         if frame_i == 0 or (frame_i % self.config.visualization.large_images_write_frequency != 0):
             return
@@ -843,7 +844,7 @@ class WriteResults:
 
         self.log_image(frame_i, last_observed_image, observed_image_annotation, new_image_path)
 
-        rr.set_time_sequence("frame", frame_i)
+        rr.set_time("frame", sequence=frame_i)
 
         if frame_i == 0 or prev_frame.matching_source_keyframe != current_datagraph_node.matching_source_keyframe:
             template_frame_node = self.data_graph.get_frame_data(current_datagraph_node.matching_source_keyframe)
@@ -863,7 +864,7 @@ class WriteResults:
             assert len(image.shape) == 3 and image.shape[-1] == 3
 
         if self.config.visualization.write_to_rerun:
-            rr.set_time_sequence("frame", frame)
+            rr.set_time("frame", sequence=frame)
             image_np = (image.numpy(force=True) * 255.).astype(np.uint8) if image.dtype != torch.uint8 else image.numpy(
                 force=True)
             rr.log(rerun_annotation, rr.Image(image_np).compress(jpeg_quality=self.config.visualization.jpeg_quality))
@@ -879,7 +880,7 @@ class WriteResults:
             image_bytes_np = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
             image_np = image_bytes_np.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             image = Image.fromarray(image_np)
-            rr.set_time_sequence("frame", frame)
+            rr.set_time("frame", sequence=frame)
             rr.log(rerun_annotation, rr.Image(image).compress(jpeg_quality=self.config.visualization.jpeg_quality))
         else:
             plt.savefig(str(save_path), **kwargs)

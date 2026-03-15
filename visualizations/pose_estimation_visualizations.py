@@ -158,7 +158,7 @@ class PoseEstimatorLogger:
                             [int(h * self.image_downsample), int(w * self.image_downsample)],
                             interpolation=TF.InterpolationMode.NEAREST).squeeze(0)
         query_segment_np = seg_all.to(torch.float).numpy(force=True)
-        rr.set_time_sequence('frame', self.rerun_sequence_id)
+        rr.set_time("frame", sequence=self.rerun_sequence_id)
 
         rr_segment = rr.SegmentationImage(query_segment_np[detection_idx])
 
@@ -177,7 +177,7 @@ class PoseEstimatorLogger:
                                     detections_scores,
                                     similarity_metric: str):
 
-        rr.set_time_sequence('frame', self.rerun_sequence_id)
+        rr.set_time("frame", sequence=self.rerun_sequence_id)
 
         detection_bbox = detections.boxes[detection_idx]
         viewgraph_id = detections.object_ids[detection_idx].item()
@@ -236,7 +236,7 @@ class PoseEstimatorLogger:
         h, w = query_image.shape[-2:]
         img = TF.resize(query_image, [int(h * self.image_downsample), int(w * self.image_downsample)])
         query_image_np = tensor2numpy(img)
-        rr.set_time_sequence('frame', self.rerun_sequence_id)
+        rr.set_time("frame", sequence=self.rerun_sequence_id)
         rr_image = rr.Image(query_image_np).compress(jpeg_quality=self.rerun_jpeg_quality)
         rr.log(RerunAnnotations.observed_image, rr_image)
         rr.log(RerunAnnotations.observed_image_all, rr_image)
@@ -250,11 +250,11 @@ class PoseEstimatorLogger:
         template_image = viewgraph_image
         target_image = query_image
 
-        rr.set_time_sequence('frame', self.rerun_sequence_id)
+        rr.set_time("frame", sequence=self.rerun_sequence_id)
 
-        rr.log(RerunAnnotations.matching_reliability, rr.Scalar(reliability))
+        rr.log(RerunAnnotations.matching_reliability, rr.Scalars(reliability))
         rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-               rr.Scalar(reliability_threshold))
+               rr.Scalars(reliability_threshold))
 
         template_target_image = torch.cat([template_image, target_image], dim=-2)
         template_target_image_segment = torch.cat([viewgraph_image_segment, query_image_segment], dim=-2)

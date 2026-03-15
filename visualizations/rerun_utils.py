@@ -23,13 +23,13 @@ def init_rerun_recording(name: str, output_path: Path, blueprint: rrb.Blueprint)
 def register_matching_series_lines():
     """Register shared series line styles for matching reliability/matchability plots."""
     rr.log(RerunAnnotations.matching_reliability_threshold_roma,
-           rr.SeriesLine(color=[255, 0, 0], name="min reliability"), static=True)
+           rr.SeriesLines(colors=[255, 0, 0], names="min reliability"), static=True)
     rr.log(RerunAnnotations.matching_reliability,
-           rr.SeriesLine(color=[0, 0, 255], name="reliability"), static=True)
+           rr.SeriesLines(colors=[0, 0, 255], names="reliability"), static=True)
     rr.log(RerunAnnotations.matching_matchability_plot_share_matchable,
-           rr.SeriesLine(color=[255, 0, 0], name="share of matchable fg"), static=True)
+           rr.SeriesLines(colors=[255, 0, 0], names="share of matchable fg"), static=True)
     rr.log(RerunAnnotations.matching_min_roma_certainty_plot_min_certainty,
-           rr.SeriesLine(color=[0, 0, 255], name="min match certainty"), static=True)
+           rr.SeriesLines(colors=[0, 0, 255], names="min match certainty"), static=True)
 
 
 def log_correspondences_rerun(cmap, src_yx, target_yx, rerun_annotation, source_image_height, sample_size=None):
