@@ -58,8 +58,8 @@ def get_pinhole_params_from_hot3d(json_file_path: Path, scale: float = 1.0, devi
         ], dtype=torch.float32, device=device)
 
         cam_w2c = Se3.identity(device=device).matrix()
-        width = torch.tensor(w, device=device)
-        height = torch.tensor(h, device=device)
+        width = torch.tensor(w, dtype=torch.float32, device=device)
+        height = torch.tensor(h, dtype=torch.float32, device=device)
 
         pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
                                        height.unsqueeze(0), width.unsqueeze(0))
@@ -78,14 +78,14 @@ def get_pinhole_params(json_file_path: Path, scale: float = 1.0, device='cpu') -
     for frame_str, value in json_data.items():
         frame_int = int(frame_str)
         frame_data = json_data[frame_str]
-        cam_K = torch.tensor(frame_data['cam_K'], device=device).view(3, 3)
+        cam_K = torch.tensor(frame_data['cam_K'], dtype=torch.float32, device=device).view(3, 3)
         cam_w2c = Se3.identity(device=device).matrix()
 
         if frame_data.get('width') is not None and frame_data.get('height') is not None:
-            width = torch.tensor(frame_data['width'], device=device)
-            height = torch.tensor(frame_data['height'], device=device)
+            width = torch.tensor(frame_data['width'], dtype=torch.float32, device=device)
+            height = torch.tensor(frame_data['height'], dtype=torch.float32, device=device)
         else:
-            width, height = torch.tensor(0, device=device), torch.tensor(0, device=device)
+            width, height = torch.tensor(0., device=device), torch.tensor(0., device=device)
             no_image_shape_available = True
 
         pinhole_camera = PinholeCamera(cam_K.unsqueeze(0), cam_w2c.unsqueeze(0),
@@ -109,12 +109,13 @@ def read_obj2cam_Se3_from_gt(pose_json_path, device: str) -> Dict[int, Dict[int,
             for entry in data:
                 obj_id = entry['obj_id']
                 R_obj_to_cam = entry['cam_R_m2c']
-                R_m2c = torch.tensor(np.array(R_obj_to_cam).reshape(3, 3), device=device)
+                R_m2c = torch.tensor(np.array(R_obj_to_cam, dtype=np.float64).reshape(3, 3),
+                                     dtype=torch.float32, device=device)
 
                 cam_t_m2c = entry['cam_t_m2c']
-                t_m2c = torch.tensor(cam_t_m2c, device=device)
+                t_m2c = torch.tensor(cam_t_m2c, dtype=torch.float32, device=device)
 
-                gt_Se3_obj2cam = Se3(Quaternion.from_matrix(R_m2c), t_m2c).to(torch.float32)
+                gt_Se3_obj2cam = Se3(Quaternion.from_matrix(R_m2c), t_m2c)
                 dict_gt_Se3_obj2cam[obj_id][frame] = gt_Se3_obj2cam
 
     return dict_gt_Se3_obj2cam
@@ -132,7 +133,15 @@ def load_gt_images(image_folder: Path):
 
 
 def load_gt_segmentations(segmentation_folder: Path, object_id: int = None):
-    """Load segmentation files, filtering by object ID."""
+    """Load segmentation files, filtering by GT annotation index.
+
+    When object_id is None, loads all masks (first mask per frame).
+    When object_id is given, it is treated as a GT annotation index suffix —
+    only masks whose filename ends with that index are loaded.
+
+    Note: For multi-object val/test scenes, use load_gt_segmentations_by_obj_id()
+    instead, which resolves the correct GT index per frame from scene_gt.json.
+    """
     object_id_str = f"{object_id:06d}" if object_id is not None else None  # Ensure it's a zero-padded 6-digit string
 
     gt_segs = {
@@ -140,6 +149,33 @@ def load_gt_segmentations(segmentation_folder: Path, object_id: int = None):
         for file in sorted(segmentation_folder.iterdir())
         if object_id is None or file.stem.endswith(object_id_str)  # Dynamically filter by object ID
     }
+
+    return gt_segs
+
+
+def load_gt_segmentations_by_obj_id(segmentation_folder: Path, scene_gt_path: Path,
+                                     obj_id: int) -> Dict[int, Path]:
+    """Load segmentation masks for a specific object ID.
+
+    BOP mask naming is {frame_id}_{gt_index}.png where gt_index is the 0-based
+    position of the object in scene_gt.json[frame_id], NOT the obj_id.
+    See: https://github.com/thodan/bop_toolkit/blob/master/docs/bop_datasets_format.md
+
+    This function reads scene_gt.json to find the correct gt_index for the given
+    obj_id in each frame, then loads the corresponding mask files.
+    """
+    with open(scene_gt_path, 'r') as f:
+        scene_gt = json.load(f)
+
+    gt_segs = {}
+    for frame_str, annotations in scene_gt.items():
+        frame_id = int(frame_str)
+        for gt_index, ann in enumerate(annotations):
+            if ann['obj_id'] == obj_id:
+                mask_path = segmentation_folder / f'{frame_id:06d}_{gt_index:06d}.png'
+                if mask_path.exists():
+                    gt_segs[frame_id] = mask_path
+                break  # Take only the first instance of this obj_id per frame
 
     return gt_segs
 
@@ -299,7 +335,15 @@ def get_bop_images_and_segmentations(
         segmentation_folder = sequence_folder / mask_folder
         depth_folder = sequence_folder / 'depth'
         gt_images = load_gt_images(image_folder)
-        gt_segs = load_gt_segmentations(segmentation_folder, object_id=scene_obj_id) if segmentation_folder.exists() else {}
+        if scene_obj_id is not None and segmentation_folder.exists():
+            # Multi-object scene: resolve GT index per frame from scene_gt.json
+            gt_filename = _scene_gt_filename(dataset)
+            scene_gt_path = sequence_folder / gt_filename
+            gt_segs = load_gt_segmentations_by_obj_id(segmentation_folder, scene_gt_path, scene_obj_id)
+        elif segmentation_folder.exists():
+            gt_segs = load_gt_segmentations(segmentation_folder)
+        else:
+            gt_segs = {}
         gt_depths = None
         if depth_folder.exists():
             gt_depths = load_gt_images(depth_folder)
@@ -325,7 +369,7 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
     else:
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / gt_filename
-        return extract_gt_Se3_cam2obj(pose_json_path, scale_factor, scene_obj_id, device=device)
+        return extract_gt_Se3_cam2obj(pose_json_path, scale_factor, object_id=scene_obj_id, device=device)
 
 
 def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
@@ -344,9 +388,12 @@ def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type:
             sequence_starts=sequence_starts
         )[1]
     else:
+        # scene_obj_id is the actual obj_id (from get_bop_val_sequences), not an index
+        if scene_obj_id is not None:
+            return scene_obj_id
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
         pose_json_path = sequence_folder / gt_filename
-        return extract_object_id(pose_json_path, scene_obj_id)[1]
+        return extract_object_id(pose_json_path)[1]
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,
