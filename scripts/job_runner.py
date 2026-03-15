@@ -129,54 +129,58 @@ def create_unused_folder(output_folder: Path):
 
 def main():
     configurations = [
-        # 'base_config',
-        # 'passthrough',
-        # 'onboarding/passthroughs/every_32th_frame',
-        # 'onboarding/passthroughs/every_16th_frame',
-        # 'onboarding/passthroughs/every_8th_frame',
-        # 'onboarding/passthroughs/every_4th_frame',
-        # 'onboarding/passthroughs/every_2nd_frame',
-        # 'onboarding/ufm_c075r05',
-        # 'onboarding/ufm_c075r075',
-        # 'onboarding/ufm_c075r09',
-        # 'onboarding/ufm_c075r095',
-        # 'onboarding/ufm_c09r075',
-        # 'onboarding/ufm_c09r09',
-        # 'onboarding/ufm_c09r095',
-        # 'onboarding/ufm_c095r05_bbg',
-        # 'onboarding/ufm_c095r05_bbg_dense',
-        # 'onboarding/ufm_c095r05_viewgraph_from_matching',
-        # 'onboarding/ufm_c095r075',
-        # 'onboarding/ufm_c095r075_bbg',
-        # 'onboarding/ufm_c0975r075_bbg_dense',
-        # 'onboarding/ufm_c095r075_viewgraph_from_matching',
-        # 'onboarding/ufm_c095r09',
-        # 'onboarding/ufm_c095r095',
+        # --- Baseline ---
         'onboarding/ufm_c0975r05',
-        'onboarding/ufm_c0975r05_fixed_threshold',
-        'onboarding/ufm_c0975r05_bbg',
-        'onboarding/ufm_c0975r05_bbg_dense',
-        'onboarding/ufm_c0975r05_dense',
-        # 'onboarding/ufm_c0975r075',
-        # 'onboarding/ufm_c0975r075_viewgraph_from_matching',
-        # 'onboarding/ufm_c095r075_new',
-        # 'onboarding/ufm_c0975r09',
-        # 'onboarding/ufm_c0975r095',
+
+        # --- P3.1: Frame selection ablation ---
+        'onboarding/passthroughs/every_frame',
+        'onboarding/passthroughs/every_2nd_frame',
+        'onboarding/passthroughs/every_4th_frame',
+        'onboarding/passthroughs/every_8th_frame',
+        'onboarding/passthroughs/every_16th_frame',
+        'onboarding/passthroughs/every_32th_frame',
+        'onboarding/passthroughs/every_64th_frame',
+
+        # --- P3.2: ViewGraph density ablation ---
+        'onboarding/ufm_c0975r05_dense',            # all-to-all edges
+
+        # --- P3.3: Matching method ablation ---
+        'onboarding/roma_c0975r05',                  # RoMa matcher
+        'onboarding/sift_matching',                   # SIFT + LightGlue
+
         # --- P3.4: External reconstruction methods ---
         # VGGT — adaptive keyframes
-        # 'reconstruction/vggt',                    # white bg (convention)
-        # 'reconstruction/vggt_black_bg',
-        # 'reconstruction/vggt_original_bg',
+        'reconstruction/vggt',                        # white bg (convention)
+        'reconstruction/vggt_black_bg',
+        'reconstruction/vggt_original_bg',
         # VGGT — every 8th frame
-        # 'reconstruction/vggt_every_8th',          # white bg (convention)
-        # 'reconstruction/vggt_every_8th_original_bg',
+        'reconstruction/vggt_every_8th',              # white bg (convention)
+        'reconstruction/vggt_every_8th_original_bg',
         # Mast3r — adaptive keyframes
-        # 'reconstruction/mast3r',                  # black bg (convention)
-        # 'reconstruction/mast3r_white_bg',
-        # 'reconstruction/mast3r_original_bg',
+        'reconstruction/mast3r',                      # black bg (convention)
+        'reconstruction/mast3r_white_bg',
+        'reconstruction/mast3r_original_bg',
         # Mast3r — every 8th frame
-        # 'reconstruction/mast3r_every_8th',        # black bg (convention)
-        # 'reconstruction/mast3r_every_8th_original_bg',
+        'reconstruction/mast3r_every_8th',            # black bg (convention)
+        'reconstruction/mast3r_every_8th_original_bg',
+
+        # --- P3.5: Background removal ablation ---
+        'onboarding/ufm_c0975r05_bbg',               # black background
+
+        # --- P3.6: Track merging ablation ---
+        'onboarding/ufm_c0975r05_no_track_merging',
+
+        # --- Additional ablations ---
+        # RANSAC-based frame adding
+        'onboarding/ufm_ransac_pycolmap',
+        'onboarding/ufm_ransac_magsac',
+        # Bundle adjustment after segmentation filtering
+        'reconstruction/colmap_seg_filter',
+        'reconstruction/colmap_seg_filter_black_bg',
+        # Otsu vs fixed certainty threshold
+        'onboarding/ufm_c0975r05_fixed_threshold',
+        # Matchability-based reliability
+        'onboarding/ufm_c0975r05_matchability',
     ]
 
     cfg = GloPoseConfig()
@@ -189,27 +193,31 @@ def main():
     hot3d_dynamic, hot3d_static = get_hot3d_onboarding_sequences(bop_path)
 
     sequences = {
-        Datasets.SyntheticObjects: [],
-        Datasets.GoogleScannedObjects: get_google_scanned_objects_sequences(
-            cfg.paths.google_scanned_objects_data_folder / 'models'),
-        Datasets.HO3D_eval: ho3d_eval,
-        Datasets.HO3D_train: ho3d_train,
-        Datasets.NAVI: get_navi_sequences(cfg.paths.navi_data_folder),
-        Datasets.HANDAL: handal_train + handal_test,
-        Datasets.BOP_HANDAL: get_bop_val_sequences(bop_path / 'handal' / 'val'),
+        # --- BOP onboarding: static + dynamic ---
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_both,
         Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_dynamic,
         Datasets.HOPE_ONBOARDING_STATIC: hope_both,
         Datasets.HOPE_ONBOARDING_DYNAMIC: hope_dynamic,
+        Datasets.HOT3D_ONBOARDING_STATIC: hot3d_static,
+        Datasets.HOT3D_ONBOARDING_DYNAMIC: hot3d_dynamic,
+        # --- BOP classic ---
         Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: (
             get_bop_classic_sequences(bop_path, 'tless', 'train_primesense') +
             get_bop_classic_sequences(bop_path, 'lmo', 'train') +
             get_bop_classic_sequences(bop_path, 'icbin', 'train')
         ),
-        Datasets.HOT3D_ONBOARDING_STATIC: hot3d_static,
-        Datasets.HOT3D_ONBOARDING_DYNAMIC: hot3d_dynamic,
-        Datasets.BEHAVE: get_behave_sequences(cfg.paths.behave_data_folder / 'train'),
-        Datasets.TUM_RGBD: get_tum_rgbd_sequences(cfg.paths.tum_rgbd_data_folder),
+        # --- Other datasets ---
+        Datasets.HO3D_train: ho3d_train,
+        Datasets.NAVI: get_navi_sequences(cfg.paths.navi_data_folder),
+        # --- Disabled ---
+        # Datasets.SyntheticObjects: [],
+        # Datasets.GoogleScannedObjects: get_google_scanned_objects_sequences(
+        #     cfg.paths.google_scanned_objects_data_folder / 'models'),
+        # Datasets.HO3D_eval: ho3d_eval,
+        # Datasets.HANDAL: handal_train + handal_test,
+        # Datasets.BOP_HANDAL: get_bop_val_sequences(bop_path / 'handal' / 'val'),
+        # Datasets.BEHAVE: get_behave_sequences(cfg.paths.behave_data_folder / 'train'),
+        # Datasets.TUM_RGBD: get_tum_rgbd_sequences(cfg.paths.tum_rgbd_data_folder),
     }
 
     output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
