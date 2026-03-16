@@ -167,8 +167,8 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
         for image_id, image in colmap_reconstruction.images.items():
             frame_index = all_image_names.index(image.name)
 
-            image_t_obj2cam = torch.tensor(image.cam_from_world.translation)[None]
-            image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)[None]
+            image_t_obj2cam = torch.tensor(image.cam_from_world().translation)[None]
+            image_q_obj2cam_xyzw = torch.tensor(image.cam_from_world().rotation.quat)[None]
             image_q_obj2cam_wxyz = image_q_obj2cam_xyzw[:, [3, 0, 1, 2]]
 
             Se3_obj2cam = Se3(Quaternion(image_q_obj2cam_wxyz), image_t_obj2cam)
@@ -267,7 +267,7 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     merged_db_path: Path = merged_folder / "database.db"
     db1_image_rename_dict, db2_image_rename_dict = merge_two_databases(colmap_db1_path, colmap_db2_path, merged_db_path)
 
-    merged_db = pycolmap.Database(str(merged_db_path))
+    merged_db = pycolmap.Database.open(str(merged_db_path))
 
     viewgraph1_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph1, db1_image_rename_dict)
     viewgraph2_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph2, db2_image_rename_dict)

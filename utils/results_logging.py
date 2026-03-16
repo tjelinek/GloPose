@@ -521,8 +521,8 @@ class WriteResults:
         for image_id, image in sorted(colmap_reconstruction.images.items(), key=lambda x: x[0]):
             frame_index = all_image_names.index(image.name)
 
-            pred_t_world2cam = torch.tensor(image.cam_from_world.translation)
-            pred_q_world2cam_xyzw = torch.tensor(image.cam_from_world.rotation.quat)
+            pred_t_world2cam = torch.tensor(image.cam_from_world().translation)
+            pred_q_world2cam_xyzw = torch.tensor(image.cam_from_world().rotation.quat)
 
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',

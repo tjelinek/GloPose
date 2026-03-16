@@ -175,8 +175,9 @@ def reconstruct_with_vggt(
             extrinsic[fidx][:3, 3])
 
         image = pycolmap.Image(
-            id=fidx + 1, name=image_names[fidx],
-            camera_id=fidx + 1, cam_from_world=cam_from_world)
+            image_id=fidx + 1, name=image_names[fidx],
+            camera_id=fidx + 1)
+        image.set_cam_from_world(fidx + 1, cam_from_world)
 
         # Add 2D point observations for points belonging to this frame
         points2D_list = []
@@ -190,11 +191,7 @@ def reconstruct_with_vggt(
             track.add_element(fidx + 1, point2D_idx)
             point2D_idx += 1
 
-        try:
-            image.points2D = pycolmap.ListPoint2D(points2D_list)
-            image.registered = True
-        except Exception:
-            image.registered = False
+        image.points2D = pycolmap.ListPoint2D(points2D_list)
 
         reconstruction.add_image(image)
 

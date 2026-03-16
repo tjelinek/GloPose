@@ -197,11 +197,9 @@ def reconstruct_with_mast3r(
         cam_from_world = pycolmap.Rigid3d(pycolmap.Rotation3d(R), t)
 
         image = pycolmap.Image(
-            id=fidx + 1, name=image_names[fidx],
-            camera_id=fidx + 1, cam_from_world=cam_from_world)
-
-        image.points2D = pycolmap.ListPoint2D([])
-        image.registered = True
+            image_id=fidx + 1, name=image_names[fidx],
+            camera_id=fidx + 1)
+        image.set_cam_from_world(fidx + 1, cam_from_world)
         reconstruction.add_image(image)
 
     print(f"Mast3r reconstruction: {num_frames} images, "

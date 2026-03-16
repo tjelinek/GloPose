@@ -131,7 +131,7 @@ def _write_colmap_database(images: List[Path],
                            matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor],
                            single_camera: bool, camera_K: Optional[torch.Tensor],
                            database_path: Path, device: str) -> Path:
-    database = pycolmap.Database(str(database_path))
+    database = pycolmap.Database.open(str(database_path))
 
     keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
                                                                   eliminate_one_to_many_matches=True, device=device)
@@ -313,7 +313,7 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
             continue
 
         gt_cam_center = gt_Se3_world2cam.inverse().translation.numpy(force=True)
-        pred_cam_center = pred_image.cam_from_world.inverse().translation
+        pred_cam_center = pred_image.cam_from_world().inverse().translation
 
         gt_camera_centers.append(gt_cam_center)
         pred_camera_centers.append(pred_cam_center)
@@ -410,9 +410,9 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
 
         opts = pycolmap.IncrementalPipelineOptions()
         opts.triangulation.ignore_two_view_tracks = ignore_two_view_tracks
-        opts.ba_local_num_images = 3
-        opts.ba_global_images_freq = 3
         opts.triangulation.max_transitivity = 2
+        # opts.mapper.ba_local_num_images = 3
+        # opts.ba_global_frames_freq = 3
         if initial_pair_provided:
             opts.init_image_id1 = first_image_id
             opts.init_image_id2 = second_image_id
@@ -618,7 +618,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     first_image = reconstruction.find_image_with_name(first_image_name)
     first_image_name = first_image.name
-    cam_from_world = first_image.cam_from_world
+    cam_from_world = first_image.cam_from_world()
 
     pred_first_image_point_depths = []
     gt_first_image_point_depths = []
@@ -642,7 +642,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     scale = np.median(gt_first_image_point_depths) / np.median(pred_first_image_point_depths)
 
-    colmap_cam_from_world = first_image_colmap.cam_from_world
+    colmap_cam_from_world = first_image_colmap.cam_from_world()
     gt_cam_from_world = Se3_to_Rigid3d(first_image_gt_Se3_world2cam)
     gt_world_from_cam = gt_cam_from_world.inverse()
 
@@ -667,7 +667,8 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     for image_id, image in reconstruction.images.items():
         if image.has_pose:
-            image.cam_from_world = Sim3d_first_image_colmap2gt.transform_camera_world(image.cam_from_world)
+            new_pose = Sim3d_first_image_colmap2gt.transform_camera_world(image.cam_from_world())
+            image.set_cam_from_world(image.camera_id, new_pose)
 
     return reconstruction, True
 

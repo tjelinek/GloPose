@@ -8,7 +8,7 @@ from kornia.geometry import Se3, Quaternion
 
 
 def get_image_Se3_world2cam(image: pycolmap.Image, device: str) -> Se3:
-    image_world2cam: pycolmap.Rigid3d = image.cam_from_world
+    image_world2cam: pycolmap.Rigid3d = image.cam_from_world()
     image_t_cam = torch.tensor(image_world2cam.translation).to(device).to(torch.float)
     image_q_cam_xyzw = torch.tensor(image_world2cam.rotation.quat[[3, 0, 1, 2]]).to(device).to(torch.float)
     Se3_image_world2cam = Se3(Quaternion(image_q_cam_xyzw), image_t_cam)
@@ -27,7 +27,7 @@ def world2cam_from_reconstruction(reconstruction: pycolmap.Reconstruction) -> Di
 def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_path: Path, db1_imgs_prefix="db1_",
                         db2_imgs_prefix="db2_") \
         -> Tuple[Dict[str, str], Dict[str, str]]:
-    db1 = pycolmap.Database(str(colmap_db1_path))
+    db1 = pycolmap.Database.open(str(colmap_db1_path))
 
     tmp_db1_path = merged_db_path.parent / 'tmp_db1.db'
     tmp_db2_path = merged_db_path.parent / 'tmp_db2.db'
@@ -35,8 +35,8 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     shutil.copy(colmap_db1_path, tmp_db1_path)
     shutil.copy(colmap_db2_path, tmp_db2_path)
 
-    tmp_db1 = pycolmap.Database(str(tmp_db1_path))
-    tmp_db2 = pycolmap.Database(str(tmp_db2_path))
+    tmp_db1 = pycolmap.Database.open(str(tmp_db1_path))
+    tmp_db2 = pycolmap.Database.open(str(tmp_db2_path))
 
     def rename_db_imgs(tmp_db: pycolmap.Database, db_imgs_prefix: str):
         db_rename_dict = {}
@@ -53,7 +53,7 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     db1_rename_dict = rename_db_imgs(tmp_db1, db1_imgs_prefix)
     db2_rename_dict = rename_db_imgs(tmp_db2, db2_imgs_prefix)
 
-    merged_db = pycolmap.Database(str(merged_db_path))
+    merged_db = pycolmap.Database.open(str(merged_db_path))
     pycolmap.Database.merge(tmp_db1, tmp_db2, merged_db)
 
     tmp_db1_path.unlink()
@@ -100,10 +100,10 @@ def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.R
         new_image = pycolmap.Image(
             name=image.name,
             points2D=clean_points2D,
-            cam_from_world=image.cam_from_world,
             camera_id=camera_id_mapping[image.camera_id],
-            id=max_image_id
+            image_id=max_image_id
         )
+        new_image.set_cam_from_world(camera_id_mapping[image.camera_id], image.cam_from_world())
         rec1.add_image(new_image)
         image_id_mapping[old_image_id] = max_image_id
 

@@ -92,7 +92,7 @@ class PoseEstimator:
                                pose_logger: PoseEstimatorLogger | None) -> Se3 | None:
         """Core registration: match against templates, write to COLMAP DB, run incremental mapper."""
 
-        database = pycolmap.Database(str(cache_db_file))
+        database = pycolmap.Database.open(str(cache_db_file))
 
         h, w = query_img.shape[-2:]
         f_x = float(camera_K[0, 0])
