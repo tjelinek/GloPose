@@ -1,0 +1,60 @@
+#!/bin/bash
+#SBATCH --time=03:59:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=256G
+#SBATCH --partition=h200fast
+#SBATCH --job-name=FlowTracker
+#SBATCH --err=/mnt/personal/jelint19/results/FlowTracker_%A_%a.err
+#SBATCH --out=/mnt/personal/jelint19/results/FlowTracker_%A_%a.out
+
+dataset_runner=""
+config_file_path=""
+output_folder=""
+experiment=""
+sequence_list_file=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --dataset-runner) dataset_runner="$2"; shift ;;
+        --config) config_file_path="$2"; shift ;;
+        --experiment) experiment="$2"; shift ;;
+        --output-folder) output_folder="$2"; shift ;;
+        --sequence-list) sequence_list_file="$2"; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+if [ -z "$dataset_runner" ] || [ -z "$config_file_path" ] || [ -z "$output_folder" ] || [ -z "$sequence_list_file" ]; then
+    echo "Missing required arguments"
+    exit 1
+fi
+
+# Read the sequence for this array task
+sequence=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$sequence_list_file")
+
+if [ -z "$sequence" ]; then
+    echo "No sequence found for SLURM_ARRAY_TASK_ID=${SLURM_ARRAY_TASK_ID}"
+    exit 1
+fi
+
+runner_stem=$(basename "$dataset_runner" .py)
+
+modules_file=~/scripts/modules_glotracker_foss2025b.txt
+# shellcheck disable=SC2046
+ml $(<$modules_file)
+source ~/envs/glopose/bin/activate
+cd ~/projects/GloPose/
+
+mkdir -p "${output_folder}/logs"
+
+echo "Array task ${SLURM_ARRAY_TASK_ID}: sequence=${sequence}"
+echo "Config: ${config_file_path}"
+echo "Output: ${output_folder}"
+
+python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
+        --config="$config_file_path" --sequences \
+        "${sequence}" > "${output_folder}/logs/${runner_stem}_${sequence}.log" 2>&1
