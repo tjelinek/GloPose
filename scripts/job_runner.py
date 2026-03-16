@@ -127,8 +127,8 @@ def create_unused_folder(output_folder: Path):
     return output_folder
 
 
-def main():
-    configurations = [
+def get_configurations():
+    return [
         # --- Baseline ---
         'onboarding/ufm_c0975r05',
 
@@ -183,6 +183,8 @@ def main():
         'onboarding/ufm_c0975r05_matchability',
     ]
 
+
+def get_sequences():
     cfg = GloPoseConfig()
     bop_path = cfg.paths.bop_data_folder
 
@@ -192,7 +194,7 @@ def main():
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(bop_path, 'hope')
     hot3d_dynamic, hot3d_static = get_hot3d_onboarding_sequences(bop_path)
 
-    sequences = {
+    return {
         # --- BOP onboarding: static + dynamic ---
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_both,
         Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_dynamic,
@@ -220,7 +222,15 @@ def main():
         # Datasets.TUM_RGBD: get_tum_rgbd_sequences(cfg.paths.tum_rgbd_data_folder),
     }
 
-    output_folder_root = Path("/mnt/personal/jelint19/results/FlowTracker/")
+
+def get_results_root():
+    return Path("/mnt/personal/jelint19/results/FlowTracker/")
+
+
+def main():
+    configurations = get_configurations()
+    sequences = get_sequences()
+    output_folder_root = get_results_root()
 
     for configuration in configurations:
         output_folder = create_unused_folder(output_folder_root / configuration)
