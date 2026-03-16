@@ -20,6 +20,8 @@ poses of the object in novel images.
 - **Dataset scripts:** `python run_HANDAL.py --config configs/base_config.py --sequences SEQ --experiment EXP` (
   similarly for run_HO3D.py, run_NAVI.py, run_BOP_classic_onboarding.py, etc.)
 - **Batch jobs:** `python scripts/job_runner.py`
+- **Check job status:** `python scripts/check_experiment_status.py [--show-missing] [config_names...]`
+- **Collect results:** `python scripts/collect_experiment_results.py [--per-sequence] [--csv out.csv] [--dataset name] [config_names...]`
 
 ## Testing
 
@@ -110,7 +112,7 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - `models/` — Mesh rendering (Kaolin), feature encoding
 - `utils/` — Dataset sequences, math (SE(3)), image I/O, results logging, mask/bbox utils
 - `visualizations/` — Flow and pose visualization helpers, shared rerun utilities (`rerun_utils.py`)
-- `scripts/` — Dataset downloaders, evaluation, job runners
+- `scripts/` — Dataset downloaders, evaluation, job runners, experiment status/results collection
 - `repositories/` — External dependency submodules (do not edit)
 
 ### Key patterns
@@ -144,6 +146,13 @@ camera intrinsics formats, GT structures, and external method APIs lives in
   `data_structures/view_graph.py`.
 - **BOP dataset conventions** (folder layout, splits, annotations) are known by `detection/detector.py`,
   `detection/representation.py`, and many `run_*.py` scripts. Should be encapsulated in a BOP data adapter.
+- **Experiment management:**
+  - `experiment_tracker.md` — central log of all experiments with status and results tables
+  - `scripts/job_runner.py` exposes `get_configurations()`, `get_sequences()`, `get_results_root()` for
+    use by status/results scripts
+  - `scripts/check_experiment_status.py` — compares expected vs actual results per experiment
+  - `scripts/collect_experiment_results.py` — aggregates reconstruction metrics across experiments
+  - `skills/experiment/SKILL.md` — project-local Claude skill for the `/experiment` workflow
 
 ## Code Conventions
 
