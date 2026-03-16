@@ -1,36 +1,48 @@
 name: glopose
 channels:
   - conda-forge
+  - nvidia
+  - pytorch
 channel_priority: strict
 dependencies:
   - python=3.13
   - pip
   - numpy>=2
   - kaolin>=0.17
-  - colmap==3.12.6
   - pillow
   - networkx
   - scipy
   - imageio
+  - tqdm
   - git
   - openssl
   - krb5
   - ca-certificates
   - pip:
-      - "bop_toolkit_lib[eval_coco,eval_gpu] @ git+https://github.com/thodan/bop_toolkit.git"
-      - "-e git+https://github.com/Parskatt/RoMa.git#egg=romatch"
-      - "-e git+https://github.com/UniFlowMatch/UFM.git#subdirectory=UniCeption&egg=uniception"
-      - "-e git+https://github.com/UniFlowMatch/UFM.git#egg=uniflowmatch"
-      - "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git"
-      - "hand-tracking-toolkit @ git+https://github.com/facebookresearch/hand_tracking_toolkit.git"
-      - ultralytics
-      - "-e git+https://github.com/facebookresearch/sam2.git#egg=sam-2"
-      - "rerun-sdk>=0.21"
+      - pycolmap==3.13.0
       - kornia
       - kornia_moons
       - gradio
       - wandb
       - huggingface_hub
+      - "rerun-sdk>=0.22"
+      - trimesh
+      - ultralytics
+      - opencv-python
+      - einops
+      - safetensors
+      - imbalanced-learn
+      - pypng
+      - pytz
+      - webdataset
+      - PyOpenGL
+      - vispy
       - torchvision
-      - tqdm
-      - pycolmap==3.12.6
+      - "bop_toolkit_lib @ git+https://github.com/thodan/bop_toolkit.git"
+      - "pycocotools @ git+https://github.com/MartinSmeyer/cocoapi.git#subdirectory=PythonAPI"
+      - "hand-tracking-toolkit @ git+https://github.com/facebookresearch/hand_tracking_toolkit.git"
+      - "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git"
+      - "-e git+https://github.com/Parskatt/RoMa.git#egg=romatch"
+      - "-e git+https://github.com/UniFlowMatch/UFM.git#subdirectory=UniCeption&egg=uniception"
+      - "-e git+https://github.com/UniFlowMatch/UFM.git#egg=uniflowmatch"
+      - "-e git+https://github.com/facebookresearch/sam2.git#egg=sam-2"
