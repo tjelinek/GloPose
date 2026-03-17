@@ -218,8 +218,12 @@ def get_bop_onboarding_sequences(path: Path, dataset: str) -> Tuple[List[str], L
 def get_hot3d_onboarding_sequences(path: Path, device: str = 'aria') -> Tuple[List[str], List[str]]:
     """Scan HOT3D onboarding directories for sequences.
 
-    HOT3D uses device-specific folders (aria/quest3) and has no up/down distinction
-    for static sequences — each scene is a single capture.
+    HOT3D uses device-specific folders (aria/quest3). Static sequences have
+    up/down variants (like HANDAL), dynamic sequences are single captures.
+
+    Static dir names:  obj_NNNNNN_down, obj_NNNNNN_up  → used as-is (3-part,
+        handled by set_config_for_bop_onboarding like HANDAL).
+    Dynamic dir names: obj_NNNNNN → appended with _dynamic (3-part).
 
     Args:
         path: Path to the BOP root directory (e.g., data_folder / 'bop')
@@ -241,7 +245,8 @@ def get_hot3d_onboarding_sequences(path: Path, device: str = 'aria') -> Tuple[Li
     if static_dir.exists():
         for scene_dir in sorted(static_dir.iterdir()):
             if scene_dir.is_dir():
-                static_sequences.append(f"{scene_dir.name}_static")
+                # Dirs are already named obj_NNNNNN_down / obj_NNNNNN_up
+                static_sequences.append(scene_dir.name)
 
     return dynamic_sequences, static_sequences
 

@@ -332,11 +332,11 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
     def __init__(self, config: GloPoseConfig, image_shape, initial_segmentation: torch.Tensor,
                  image_provider: FrameProvider, write_folder: Path,
-                 sam2_cache_folder: Path, progress=None, **kwargs):
+                 sam2_cache_folder: Path, progress=None, initial_bbox=None, **kwargs):
         super().__init__(image_shape, config.run.device)
 
-        if initial_segmentation is None:
-            raise ValueError("SAM2 segmentation provider requires an initial_segmentation")
+        if initial_segmentation is None and initial_bbox is None:
+            raise ValueError("SAM2 segmentation provider requires initial_segmentation or initial_bbox")
 
         self.sequence_length = image_provider.sequence_length
         self.skip_indices = config.input.skip_indices
@@ -374,9 +374,16 @@ class SAM2SegmentationProvider(SegmentationProvider):
                                               offload_state_to_cpu=True,
                                               )
 
-            initial_mask_sam_format = mask_to_sam_prompt(initial_segmentation)
-            out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
-                                                                                      initial_mask_sam_format)
+            if initial_segmentation is not None:
+                initial_mask_sam_format = mask_to_sam_prompt(initial_segmentation)
+                out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_mask(state, 0, 0,
+                                                                                          initial_mask_sam_format)
+            else:
+                # No mask available — use bounding box prompt (e.g. HOT3D dynamic)
+                import numpy as np
+                box = np.array(initial_bbox, dtype=np.float32)
+                out_frame_idx, out_obj_ids, out_mask_logits = self.predictor.add_new_points_or_box(
+                    state, 0, 0, box=box)
 
             self.past_predictions = {0: (0, out_obj_ids, out_mask_logits)}
 
@@ -464,6 +471,7 @@ class FrameProviderAll:
                                                                    config.run.device,
                                                                    **kwargs)
         elif config.input.segmentation_provider == 'SAM2':
+            initial_bbox = kwargs.pop('initial_bbox', None)
 
             if config.input.frame_provider == 'synthetic':  # and kwargs['initial_segmentation'] is not None:
                 synthetic_segment_provider = SyntheticDataProvider(config, **kwargs)
@@ -471,12 +479,13 @@ class FrameProviderAll:
                 initial_segmentation = next_observation.observed_segmentation.squeeze()
                 kwargs['initial_segmentation'] = initial_segmentation
             else:
-                if 'initial_segmentation' not in kwargs or kwargs['initial_segmentation'] is None:
-                    raise ValueError("SAM2 segmentation provider requires 'initial_segmentation' in kwargs")
-            initial_segmentation = kwargs['initial_segmentation']
-            del kwargs['initial_segmentation']
+                if ('initial_segmentation' not in kwargs or kwargs['initial_segmentation'] is None) \
+                        and initial_bbox is None:
+                    raise ValueError("SAM2 segmentation provider requires 'initial_segmentation' or 'initial_bbox' in kwargs")
+            initial_segmentation = kwargs.pop('initial_segmentation', None)
             self.segmentation_provider = SAM2SegmentationProvider(config, self.image_shape, initial_segmentation,
                                                                   self.frame_provider,
+                                                                  initial_bbox=initial_bbox,
                                                                   **kwargs)
         else:
             raise ValueError(f"Unknown value of 'segmentation_provider': {config.input.segmentation_provider}")

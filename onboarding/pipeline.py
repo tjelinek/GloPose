@@ -37,6 +37,7 @@ class OnboardingPipeline:
                  gt_pinhole_params: Optional[Dict[int, PinholeCamera]] = None,
                  input_segmentations: Union[List[Path], Path] = None, depth_paths: Optional[List[Path]] = None,
                  initial_segmentation: Union[torch.Tensor, List[torch.Tensor]] = None,
+                 initial_bbox=None,
                  progress=None):
 
         self.write_folder: Path = write_folder
@@ -106,7 +107,7 @@ class OnboardingPipeline:
         self.data_graph: DataGraph = DataGraph(out_device=self.config.run.device)
 
         self.initialize_frame_provider(gt_mesh, gt_texture, input_images, initial_segmentation,
-                                       input_segmentations, depth_paths)
+                                       input_segmentations, depth_paths, initial_bbox=initial_bbox)
 
         self.results_writer = WriteResults(write_folder=self.write_folder, tracking_config=self.config,
                                            data_graph=self.data_graph)
@@ -124,7 +125,8 @@ class OnboardingPipeline:
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor,
                                   images_paths: List[Path] | Path, initial_segmentation: torch.Tensor,
-                                  input_segmentations: List[Path] | Path, depth_paths: List[Path]):
+                                  input_segmentations: List[Path] | Path, depth_paths: List[Path],
+                                  initial_bbox=None):
 
         if self.gt_Se3_cam2obj is not None:
 
@@ -143,6 +145,7 @@ class OnboardingPipeline:
                                         gt_Se3_obj1_to_obj_i=Se3_obj_1_to_obj_i,
                                         initial_segmentation=initial_segmentation, input_images=images_paths,
                                         input_segmentations=input_segmentations, depth_paths=depth_paths,
+                                        initial_bbox=initial_bbox,
                                         sam2_cache_folder=self.cache_folder_SAM2, write_folder=self.write_folder,
                                         progress=self.progress)
 

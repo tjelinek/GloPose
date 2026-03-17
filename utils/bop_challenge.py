@@ -181,14 +181,16 @@ def load_gt_segmentations_by_obj_id(segmentation_folder: Path, scene_gt_path: Pa
 
 
 def get_sequence_folder(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, onboarding_type: str = None,
-                        direction: str = None):
+                        direction: str = None, hot3d_device: str = 'aria'):
     """Returns the sequence folder path based on sequence type and onboarding type."""
     if sequence_type == 'onboarding':
 
         if dataset == 'hot3d':
-            # HOT3D uses device-specific folder names, no up/down distinction
-            device = 'aria'
-            return bop_folder / dataset / f'object_ref_{device}_{onboarding_type}_scenewise' / sequence
+            # HOT3D uses device-specific folder names
+            base = bop_folder / dataset / f'object_ref_{hot3d_device}_{onboarding_type}_scenewise'
+            if direction in ['up', 'down']:
+                return base / f'{sequence}_{direction}'
+            return base / sequence
         elif onboarding_type == 'dynamic':
             return bop_folder / dataset / f'onboarding_{onboarding_type}' / sequence
         elif onboarding_type == 'static' and direction in ['up', 'down']:
@@ -247,10 +249,13 @@ def load_static_onboarding_parts(
         onboarding_type: str,
         static_onboarding_sequence: Optional[str],
         loader_fn: Callable[[Path], Optional[dict]],
-        sequence_starts: Optional[List[int]] = None
+        sequence_starts: Optional[List[int]] = None,
+        hot3d_device: str = 'aria',
 ) -> dict:
-    folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
-    folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
+    folder_down = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down',
+                                       hot3d_device=hot3d_device)
+    folder_up = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up',
+                                     hot3d_device=hot3d_device)
 
     data_down = loader_fn(folder_down) if folder_down.exists() else {}
     data_up = loader_fn(folder_up) if folder_up.exists() else {}
@@ -278,14 +283,17 @@ def get_bop_images_and_segmentations(
         onboarding_type: str = None,
         static_onboarding_sequence: Optional[str] = None,
         scene_obj_id: int = None,
+        hot3d_device: str = 'aria',
 ) -> Tuple[Dict[int, Path], Dict[int, Path], Optional[Dict[int, Path]], Optional[List[int]]]:
     """Loads images and segmentations from BOP dataset based on sequence type."""
     sequence_starts = [0]
     mask_folder = _mask_visib_folder_name(dataset)
 
     if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
-        down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down')
-        up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up')
+        down_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'down',
+                                           hot3d_device=hot3d_device)
+        up_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type, 'up',
+                                         hot3d_device=hot3d_device)
 
         images_down = load_gt_images(down_folder / 'rgb') if down_folder.exists() else {}
         images_up = load_gt_images(up_folder / 'rgb') if up_folder.exists() else {}
@@ -330,7 +338,8 @@ def get_bop_images_and_segmentations(
         else:
             raise ValueError(f'Unknown static onboarding sequence type: {static_onboarding_sequence}')
     else:
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_device)
         image_folder = sequence_folder / 'rgb'
         segmentation_folder = sequence_folder / mask_folder
         depth_folder = sequence_folder / 'depth'
@@ -353,7 +362,7 @@ def get_bop_images_and_segmentations(
 def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale_factor,
                                         onboarding_type: str = None, sequence_starts: Optional[List[int]] = None,
                                         static_onboarding_sequence: Optional[str] = None, scene_obj_id: int = None,
-                                        device: str = 'cpu') -> Dict[int, Se3]:
+                                        device: str = 'cpu', hot3d_device: str = 'aria') -> Dict[int, Se3]:
     gt_filename = _scene_gt_filename(dataset)
     if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
@@ -364,17 +373,20 @@ def read_gt_Se3_cam2obj_transformations(bop_folder: Path, dataset: str, sequence
             onboarding_type,
             static_onboarding_sequence,
             loader_fn=lambda p: extract_gt_Se3_cam2obj(p / gt_filename, scale_factor, device=device),
-            sequence_starts=sequence_starts
+            sequence_starts=sequence_starts,
+            hot3d_device=hot3d_device,
         )
     else:
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_device)
         pose_json_path = sequence_folder / gt_filename
         return extract_gt_Se3_cam2obj(pose_json_path, scale_factor, object_id=scene_obj_id, device=device)
 
 
 def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type: str,
                    onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
-                   scene_obj_id: int = None, sequence_starts: List[int] = None) -> int:
+                   scene_obj_id: int = None, sequence_starts: List[int] = None,
+                   hot3d_device: str = 'aria') -> int:
     gt_filename = _scene_gt_filename(dataset)
     if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
         return load_static_onboarding_parts(
@@ -385,20 +397,23 @@ def read_object_id(bop_folder: Path, dataset: str, sequence: str, sequence_type:
             onboarding_type,
             static_onboarding_sequence,
             loader_fn=lambda p: extract_object_id(p / gt_filename),
-            sequence_starts=sequence_starts
+            sequence_starts=sequence_starts,
+            hot3d_device=hot3d_device,
         )[1]
     else:
         # scene_obj_id is the actual obj_id (from get_bop_val_sequences), not an index
         if scene_obj_id is not None:
             return scene_obj_id
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_device)
         pose_json_path = sequence_folder / gt_filename
         return extract_object_id(pose_json_path)[1]
 
 
 def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_type: str, scale,
                         onboarding_type: str = None, static_onboarding_sequence: Optional[str] = None,
-                        sequence_starts: Optional[List[int]] = None, device='cpu') -> dict[int, PinholeCamera]:
+                        sequence_starts: Optional[List[int]] = None, device='cpu',
+                        hot3d_device: str = 'aria') -> dict[int, PinholeCamera]:
     camera_filename = _scene_camera_filename(dataset)
     pinhole_loader = get_pinhole_params_from_hot3d if dataset == 'hot3d' else get_pinhole_params
     if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
@@ -410,10 +425,12 @@ def read_pinhole_params(bop_folder: Path, dataset: str, sequence: str, sequence_
             onboarding_type,
             static_onboarding_sequence,
             loader_fn=lambda p: pinhole_loader(p / camera_filename, scale, device=device),
-            sequence_starts=sequence_starts
+            sequence_starts=sequence_starts,
+            hot3d_device=hot3d_device,
         )
     else:
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_device)
         pose_json_path = sequence_folder / camera_filename
         return pinhole_loader(pose_json_path, scale, device=device)
 
@@ -454,7 +471,8 @@ def read_static_onboarding_world2cam(
         onboarding_type: Optional[str] = None,
         static_onboarding_sequence: Optional[str] = None,
         sequence_starts: Optional[List[int]] = None,
-        device: str = 'cpu'
+        device: str = 'cpu',
+        hot3d_device: str = 'aria',
 ) -> dict[int, Se3]:
     camera_filename = _scene_camera_filename(dataset)
     if sequence_type == 'onboarding' and onboarding_type == 'static' and static_onboarding_sequence is not None:
@@ -466,10 +484,12 @@ def read_static_onboarding_world2cam(
             onboarding_type,
             static_onboarding_sequence,
             loader_fn=lambda p: read_gt_Se3_world2cam(p / camera_filename, device=device),
-            sequence_starts=sequence_starts
+            sequence_starts=sequence_starts,
+            hot3d_device=hot3d_device,
         )
     else:
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_device)
         pose_json_path = sequence_folder / camera_filename
         return read_gt_Se3_world2cam(pose_json_path, device=device)
 
@@ -479,9 +499,11 @@ def read_dynamic_onboarding_depth_scales(
         dataset: str,
         sequence: str,
         sequence_type: str,
-        onboarding_type: str
+        onboarding_type: str,
+        hot3d_device: str = 'aria',
 ) -> dict[int, float]:
-    sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+    sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                           hot3d_device=hot3d_device)
     pose_json_path = sequence_folder / 'scene_camera.json'
     return read_depth_scales(pose_json_path)
 

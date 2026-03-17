@@ -48,6 +48,7 @@ class InputConfig:
     image_downsample: float = 1.0
     depth_scale_to_meter: float = 1.0
     run_only_on_frames_with_known_pose: bool = True
+    hot3d_device: str = 'aria'  # 'aria' or 'quest3'
 
 
 @dataclass

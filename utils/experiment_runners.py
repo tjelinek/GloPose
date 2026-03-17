@@ -196,8 +196,27 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
 
     # Get initial image and segmentation
-    first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
-                                                                                  segmentation_channel=0)
+    initial_bbox = None
+    if gt_segs[0] is not None:
+        first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
+                                                                                      segmentation_channel=0)
+    else:
+        # No mask available (e.g. HOT3D dynamic) — read bbox from scene_gt_info for SAM2 box prompt
+        first_segmentation = None
+        import json
+        gt_info_filename = 'scene_gt_info_rgb.json' if dataset == 'hot3d' else 'scene_gt_info.json'
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               hot3d_device=hot3d_dev)
+        gt_info_path = sequence_folder / gt_info_filename
+        if gt_info_path.exists():
+            with open(gt_info_path, 'r') as f:
+                gt_info = json.load(f)
+            frame_0_info = gt_info.get('0', [])
+            if frame_0_info:
+                bbox_xywh = frame_0_info[0].get('bbox_obj', [-1, -1, -1, -1])
+                if bbox_xywh[0] >= 0:
+                    x, y, w, h = bbox_xywh
+                    initial_bbox = [x, y, x + w, y + h]  # xyxy for SAM2
 
     # Get camera parameters (HOT3D: use undistorted pinhole params, others: read from JSON)
     if hot3d_pinhole_params is not None:
@@ -232,7 +251,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     # Initialize and run the tracker
     tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_world2cam,
                                  gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
-                                 initial_segmentation=first_segmentation)
+                                 initial_segmentation=first_segmentation, initial_bbox=initial_bbox)
 
     view_graph = tracker.run_pipeline()
     evaluate_onboarding(view_graph, gt_Se3_world2cam, config.run, config.bop, write_folder)
