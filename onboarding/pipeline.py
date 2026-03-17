@@ -330,7 +330,8 @@ class OnboardingPipeline:
             image_depths = {}
             for i in self.data_graph.G.nodes:
                 frame_data = self.data_graph.get_frame_data(i)
-                image_depths[str(frame_data.image_filename)] = frame_data.frame_observation.depth.squeeze()
+                if frame_data.frame_observation.depth is not None:
+                    image_depths[str(frame_data.image_filename)] = frame_data.frame_observation.depth.squeeze()
 
             reconstruction, align_success = align_reconstruction_with_pose(reconstruction, gt_Se3_obj2cam, image_depths,
                                                                            first_image_filename)

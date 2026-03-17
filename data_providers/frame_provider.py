@@ -348,7 +348,17 @@ class SAM2SegmentationProvider(SegmentationProvider):
 
             if self.cache_folder.exists() and config.paths.purge_cache:
                 shutil.rmtree(self.cache_folder)
+
+            # Invalidate cache if prompt type changed (mask vs bbox) or bbox value differs
+            prompt_marker = self.cache_folder / '_prompt.txt'
+            current_prompt = f'bbox:{initial_bbox}' if initial_segmentation is None else 'mask'
+            if self.cache_folder.exists():
+                old_prompt = prompt_marker.read_text().strip() if prompt_marker.exists() else None
+                if old_prompt != current_prompt:
+                    shutil.rmtree(self.cache_folder)
+
             self.cache_folder.mkdir(exist_ok=True, parents=True)
+            prompt_marker.write_text(current_prompt)
 
             self.cache_paths: List[Path] = [self.cache_folder / f'{i * self.skip_indices:05d}.pt'
                                             for i in range(self.sequence_length)]

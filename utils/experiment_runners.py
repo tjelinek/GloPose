@@ -216,7 +216,8 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
                 bbox_xywh = frame_0_info[0].get('bbox_obj', [-1, -1, -1, -1])
                 if bbox_xywh[0] >= 0:
                     x, y, w, h = bbox_xywh
-                    initial_bbox = [x, y, x + w, y + h]  # xyxy for SAM2
+                    s = config.input.image_downsample
+                    initial_bbox = [x * s, y * s, (x + w) * s, (y + h) * s]  # xyxy, scaled to output resolution
 
     # Get camera parameters (HOT3D: use undistorted pinhole params, others: read from JSON)
     if hot3d_pinhole_params is not None:

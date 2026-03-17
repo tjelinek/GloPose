@@ -218,9 +218,9 @@ def get_sequences():
         Datasets.HOPE_ONBOARDING_STATIC: hope_both,
         Datasets.HOPE_ONBOARDING_DYNAMIC: hope_dynamic,
         Datasets.HOT3D_ARIA_ONBOARDING_STATIC: hot3d_aria_static,
-        Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: hot3d_aria_dynamic,
+        # Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: hot3d_aria_dynamic,  # TODO: needs depth-based alignment support
         Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: hot3d_quest3_static,
-        Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: hot3d_quest3_dynamic,
+        # Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: hot3d_quest3_dynamic,  # TODO: needs depth-based alignment support
         # --- BOP classic ---
         Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: (
             get_bop_classic_sequences(bop_path, 'tless', 'train_primesense') +
