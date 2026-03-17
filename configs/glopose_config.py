@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 from configs.components.bop_config import BaseBOPConfig
 from configs.components.frame_provider_config import BaseFrameProviderConfig
@@ -32,7 +32,7 @@ class RunConfig:
     sequence: str = None
     experiment_name: str = None
     special_hash: str = ''
-    object_id: int | str = None
+    object_id: Union[int, str] = None
 
 
 @dataclass
