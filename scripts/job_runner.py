@@ -25,8 +25,10 @@ class Datasets(Enum):
     HOPE_ONBOARDING_STATIC = "HOPE_ONBOARDING_STATIC"
     HOPE_ONBOARDING_DYNAMIC = "HOPE_ONBOARDING_DYNAMIC"
     BOP_CLASSIC_ONBOARDING_SEQUENCES = "BOP_CLASSIC_ONBOARDING_SEQUENCES"
-    HOT3D_ONBOARDING_STATIC = "HOT3D_ONBOARDING_STATIC"
-    HOT3D_ONBOARDING_DYNAMIC = "HOT3D_ONBOARDING_DYNAMIC"
+    HOT3D_ARIA_ONBOARDING_STATIC = "HOT3D_ARIA_ONBOARDING_STATIC"
+    HOT3D_ARIA_ONBOARDING_DYNAMIC = "HOT3D_ARIA_ONBOARDING_DYNAMIC"
+    HOT3D_QUEST3_ONBOARDING_STATIC = "HOT3D_QUEST3_ONBOARDING_STATIC"
+    HOT3D_QUEST3_ONBOARDING_DYNAMIC = "HOT3D_QUEST3_ONBOARDING_DYNAMIC"
     BEHAVE = "BEHAVE"
     TUM_RGBD = "TUM_RGBD"
 
@@ -44,10 +46,18 @@ runners = {
     Datasets.HOPE_ONBOARDING_STATIC: "run_HOPE.py",
     Datasets.HOPE_ONBOARDING_DYNAMIC: "run_HOPE.py",
     Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: "run_BOP_classic_onboarding.py",
-    Datasets.HOT3D_ONBOARDING_STATIC: "run_HOT3D.py",
-    Datasets.HOT3D_ONBOARDING_DYNAMIC: "run_HOT3D.py",
+    Datasets.HOT3D_ARIA_ONBOARDING_STATIC: "run_HOT3D.py",
+    Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: "run_HOT3D.py",
+    Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: "run_HOT3D.py",
+    Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: "run_HOT3D.py",
     Datasets.BEHAVE: "run_BEHAVE.py",
     Datasets.TUM_RGBD: "run_TUM_RGBD.py",
+}
+
+# Extra CLI args passed to the runner script (e.g., --device quest3 for HOT3D Quest3)
+runner_extra_args = {
+    Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: "--device quest3",
+    Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: "--device quest3",
 }
 
 
@@ -63,6 +73,9 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     args.append(str(Path(configuration_name).stem))
     args.append("--output-folder")
     args.append(str(output_folder))
+    extra = runner_extra_args.get(dataset)
+    if extra:
+        args.extend(["--runner-extra-args", extra])
     args.append("--sequences")
     args.extend(sequences)
 
@@ -106,6 +119,9 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
         '--output-folder', str(output_folder),
         '--sequence-list', str(seq_list_path),
     ]
+    extra = runner_extra_args.get(dataset)
+    if extra:
+        cmd.extend(['--runner-extra-args', extra])
 
     print('----------------------------------------')
     print(f'Submitting job array ({n} tasks) for {configuration_name} on {dataset.value}')
@@ -192,7 +208,8 @@ def get_sequences():
     ho3d_train, ho3d_eval = get_ho3d_sequences(cfg.paths.ho3d_data_folder)
     handal_dynamic, handal_up, handal_down, handal_both = get_bop_onboarding_sequences(bop_path, 'handal')
     hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(bop_path, 'hope')
-    hot3d_dynamic, hot3d_static = get_hot3d_onboarding_sequences(bop_path)
+    hot3d_aria_dynamic, hot3d_aria_static = get_hot3d_onboarding_sequences(bop_path, device='aria')
+    hot3d_quest3_dynamic, hot3d_quest3_static = get_hot3d_onboarding_sequences(bop_path, device='quest3')
 
     return {
         # --- BOP onboarding: static + dynamic ---
@@ -200,8 +217,10 @@ def get_sequences():
         Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_dynamic,
         Datasets.HOPE_ONBOARDING_STATIC: hope_both,
         Datasets.HOPE_ONBOARDING_DYNAMIC: hope_dynamic,
-        Datasets.HOT3D_ONBOARDING_STATIC: hot3d_static,
-        Datasets.HOT3D_ONBOARDING_DYNAMIC: hot3d_dynamic,
+        Datasets.HOT3D_ARIA_ONBOARDING_STATIC: hot3d_aria_static,
+        Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: hot3d_aria_dynamic,
+        Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: hot3d_quest3_static,
+        Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: hot3d_quest3_dynamic,
         # --- BOP classic ---
         Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: (
             get_bop_classic_sequences(bop_path, 'tless', 'train_primesense') +

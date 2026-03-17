@@ -24,8 +24,10 @@ DATASET_CSV_NAMES = {
     Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: 'handal_dynamic_onboarding',
     Datasets.HOPE_ONBOARDING_STATIC: 'hope_static_onboarding',
     Datasets.HOPE_ONBOARDING_DYNAMIC: 'hope_dynamic_onboarding',
-    Datasets.HOT3D_ONBOARDING_STATIC: 'hot3d_static_onboarding',
-    Datasets.HOT3D_ONBOARDING_DYNAMIC: 'hot3d_dynamic_onboarding',
+    Datasets.HOT3D_ARIA_ONBOARDING_STATIC: 'hot3d_static_onboarding',
+    Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: 'hot3d_dynamic_onboarding',
+    Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: 'hot3d_static_onboarding',
+    Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC: 'hot3d_dynamic_onboarding',
     Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: 'bop_classic',
     Datasets.HO3D_train: 'HO3D',
     Datasets.NAVI: 'navi',
@@ -57,7 +59,8 @@ def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> 
             else:
                 results.append((csv_dataset, seq))
 
-        elif dataset_enum in (Datasets.HOT3D_ONBOARDING_STATIC, Datasets.HOT3D_ONBOARDING_DYNAMIC):
+        elif dataset_enum in (Datasets.HOT3D_ARIA_ONBOARDING_STATIC, Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC,
+                              Datasets.HOT3D_QUEST3_ONBOARDING_STATIC, Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC):
             # HOT3D: NNNNNN_static or NNNNNN_dynamic
             if len(parts) == 2:
                 base_seq = parts[0]

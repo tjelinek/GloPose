@@ -132,11 +132,14 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     # Path to BOP dataset
     bop_folder = config.paths.bop_data_folder
 
+    # HOT3D: prefix special_hash with device to avoid aria/quest3 cache collisions
+    hot3d_prefix = f'{config.input.hot3d_device}_' if dataset == 'hot3d' else ''
+
     if onboarding_type == 'static':
         static_onboarding_sequence = config.bop.static_onboarding_sequence
-        config.run.special_hash = static_onboarding_sequence or 'static'
+        config.run.special_hash = f'{hot3d_prefix}{static_onboarding_sequence or "static"}'
     elif onboarding_type == 'dynamic':
-        config.run.special_hash = 'dynamic'
+        config.run.special_hash = f'{hot3d_prefix}dynamic'
         static_onboarding_sequence = None
     elif sequence_type in ['test', 'train', 'val']:
         config.run.special_hash = f'{scene_obj_id:06d}'
@@ -151,17 +154,20 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         write_folder = config.paths.results_folder / experiment_name / dataset / f'{sequence}_{config.run.special_hash}'
 
     # Load images and segmentations
+    hot3d_dev = config.input.hot3d_device
     gt_images, gt_segs, gt_depths, sequence_starts = \
         get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type,
-                                         onboarding_type, static_onboarding_sequence, scene_obj_id=scene_obj_id)
+                                         onboarding_type, static_onboarding_sequence, scene_obj_id=scene_obj_id,
+                                         hot3d_device=hot3d_dev)
 
     # HOT3D fisheye undistortion: replace distorted images/masks with pinhole-undistorted versions
     hot3d_pinhole_params = None
     if dataset == 'hot3d':
         from adapters.hot3d_adapter import undistort_hot3d_sequence
-        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
+                                               direction=static_onboarding_sequence, hot3d_device=hot3d_dev)
         scene_camera_path = sequence_folder / _scene_camera_filename(dataset)
-        undistort_cache = config.paths.cache_folder / 'hot3d_undistorted' / f'{sequence}_{onboarding_type}'
+        undistort_cache = config.paths.cache_folder / 'hot3d_undistorted' / f'{hot3d_prefix}{sequence}_{onboarding_type}'
         gt_images, gt_segs, hot3d_pinhole_params = undistort_hot3d_sequence(
             scene_camera_path, gt_images, gt_segs, undistort_cache,
             scale=config.input.image_downsample, device=config.run.device)
@@ -170,10 +176,11 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
                                                               gt_cam_scale, onboarding_type,
                                                               sequence_starts, static_onboarding_sequence, scene_obj_id,
-                                                              device=config.run.device)
+                                                              device=config.run.device, hot3d_device=hot3d_dev)
 
     object_id = read_object_id(bop_folder, dataset, sequence, sequence_type, onboarding_type,
-                               static_onboarding_sequence, scene_obj_id, sequence_starts)
+                               static_onboarding_sequence, scene_obj_id, sequence_starts,
+                               hot3d_device=hot3d_dev)
     config.run.object_id = object_id
 
     # Apply frame skipping
@@ -183,7 +190,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         valid_frames = list(range(min(gt_images.keys()), max(gt_images.keys()) + 1))
 
     gt_images = [gt_images[i] for i in valid_frames]
-    gt_segs = [gt_segs[i] for i in valid_frames]
+    gt_segs = [gt_segs.get(i) for i in valid_frames]
     if gt_depths is not None:
         gt_depths = [gt_depths[i] for i in valid_frames]
     dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
@@ -198,13 +205,14 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     else:
         pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.input.image_downsample,
                                              onboarding_type, static_onboarding_sequence, sequence_starts,
-                                             config.run.device)
+                                             config.run.device, hot3d_device=hot3d_dev)
 
     gt_Se3_world2cam = None
     if onboarding_type == 'static' or sequence_type in ['val', 'train']:
         gt_Se3_world2cam = read_static_onboarding_world2cam(bop_folder, dataset, sequence, sequence_type,
                                                             onboarding_type, static_onboarding_sequence,
-                                                            sequence_starts, config.run.device)
+                                                            sequence_starts, config.run.device,
+                                                            hot3d_device=hot3d_dev)
     if gt_Se3_world2cam is not None:
         pinhole_params = add_extrinsics_to_pinhole_params(pinhole_params, gt_Se3_world2cam)
 

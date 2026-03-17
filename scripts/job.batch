@@ -15,6 +15,7 @@ config_file_path="config/config_deep.py"
 output_folder="/mnt/personal/jelint19/results/FlowTracker/"
 sequences=()
 experiment=""
+runner_extra_args=""
 
 # Extract arguments
 while [[ "$#" -gt 0 ]]; do
@@ -34,6 +35,7 @@ while [[ "$#" -gt 0 ]]; do
         --config) config_file_path="$2"; shift ;;
         --experiment) experiment="$2"; shift ;;
         --output-folder) output_folder="$2"; shift ;;
+        --runner-extra-args) runner_extra_args="$2"; shift ;;
         --sequences) parsing_sequences=1 ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -75,5 +77,5 @@ cd ~/projects/GloPose/
 mkdir -p "${output_folder}/logs"
 
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}"\
-        --config="$config_file_path" --sequences \
+        --config="$config_file_path" $runner_extra_args --sequences \
         "${sequences[@]}" > "${output_folder}/logs/${runner_stem}_${sequences_short}.log" 2>&1

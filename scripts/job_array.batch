@@ -15,6 +15,7 @@ config_file_path=""
 output_folder=""
 experiment=""
 sequence_list_file=""
+runner_extra_args=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -23,6 +24,7 @@ while [[ "$#" -gt 0 ]]; do
         --experiment) experiment="$2"; shift ;;
         --output-folder) output_folder="$2"; shift ;;
         --sequence-list) sequence_list_file="$2"; shift ;;
+        --runner-extra-args) runner_extra_args="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -56,5 +58,5 @@ echo "Config: ${config_file_path}"
 echo "Output: ${output_folder}"
 
 python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
-        --config="$config_file_path" --sequences \
+        --config="$config_file_path" $runner_extra_args --sequences \
         "${sequence}" > "${output_folder}/logs/${runner_stem}_${sequence}.log" 2>&1
