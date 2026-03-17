@@ -3,8 +3,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Tuple
 
-from kornia.image import ImageSize
-
 from configs.components.bop_config import BaseBOPConfig
 from configs.components.frame_provider_config import BaseFrameProviderConfig
 from configs.matching.roma_configs.base_roma_config import BaseRomaConfig
@@ -165,7 +163,7 @@ class RendererConfig:
     camera_position: Tuple[float, float, float] = (0, 0, 5.0)
     camera_up: Tuple[float, float, float] = (0, 1, 0)
     obj_center: Tuple[float, float, float] = (0, 0, 0)
-    rendered_image_shape: ImageSize = ImageSize(500, 500)
+    rendered_image_shape: Tuple[int, int] = (500, 500)
     sigmainv: float = 7000
     features: str = 'deep'
     mesh_normalize: bool = False

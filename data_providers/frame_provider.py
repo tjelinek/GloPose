@@ -27,7 +27,7 @@ class SyntheticDataProvider:
         from models.rendering import RenderingKaolin
         from models.encoder import init_gt_encoder
 
-        self.image_shape: ImageSize = config.renderer.rendered_image_shape
+        self.image_shape: ImageSize = ImageSize(*config.renderer.rendered_image_shape)
         self.device = config.run.device
         self.num_frames = config.input.input_frames
 
