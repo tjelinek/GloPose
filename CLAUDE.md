@@ -99,7 +99,8 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 ### Key directories
 
 - `adapters/` — External repository wrappers and vendored code: `cnos_adapter.py` (descriptor extractor protocol),
-  `dino_descriptor.py` (vendored DINOv2/v3 model), `dino_utils.py` (vendored utilities), `sam2_adapter.py` (SAM2)
+  `dino_descriptor.py` (vendored DINOv2/v3 model), `dino_utils.py` (vendored utilities), `sam2_adapter.py` (SAM2),
+  `hot3d_adapter.py` (HOT3D FISHEYE624→pinhole undistortion via `hand_tracking_toolkit`)
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring, NMS (`nms.py`)

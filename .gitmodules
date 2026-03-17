@@ -10,3 +10,6 @@
 [submodule "repositories/vggt"]
 	path = repositories/vggt
 	url = https://github.com/facebookresearch/vggt.git
+[submodule "repositories/hot3d"]
+	path = repositories/hot3d
+	url = https://github.com/facebookresearch/hot3d.git

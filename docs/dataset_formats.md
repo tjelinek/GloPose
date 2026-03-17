@@ -897,8 +897,14 @@ HOT3D uses a different folder structure and camera model from other BOP datasets
   (grayscale only). GloPose uses Aria RGB by default.
 - **No up/down**: Static sequences have a single capture per scene (33 scenes, one per object).
 - **File naming**: `scene_camera_rgb.json`, `scene_gt_rgb.json`, `mask_visib_rgb/` (camera-specific suffixes).
-- **Camera model**: FISHEYE624 (not pinhole). GloPose uses a pinhole approximation (focal length + principal
-  point from `projection_params`, ignoring distortion). This may cause reconstruction artifacts at image edges.
+- **Camera model**: FISHEYE624 (Meta Aria — arctan projection + OVR624 distortion, 12 distortion coefficients).
+  GloPose undistorts fisheye images to pinhole before they enter the pipeline via `adapters/hot3d_adapter.py`.
+  The adapter uses `hand_tracking_toolkit` to parse the camera model from `scene_camera_rgb.json`, computes
+  `cv2.remap` lookup tables once per sequence (all frames share the same Aria RGB intrinsics), and writes
+  undistorted images to `{cache_folder}/hot3d_undistorted/{sequence}_{type}/`. Masks are remapped with
+  `INTER_NEAREST` to preserve binary values. The returned pinhole intrinsics replace the approximate
+  `get_pinhole_params_from_hot3d()` extraction. Undistortion is triggered automatically in
+  `run_on_bop_sequences()` when `dataset == 'hot3d'`.
 - **No depth maps** in reference sequences (only in `train_pbr`).
 - **Dynamic sequences**: No pre-computed segmentation masks — SAM2 must generate them at runtime.
 - **Runner**: `run_HOT3D.py`, sequences named `{scene_id}_static` or `{scene_id}_dynamic`.

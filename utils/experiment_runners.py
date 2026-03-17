@@ -11,7 +11,8 @@ from eval.eval_onboarding import evaluate_onboarding
 from configs.glopose_config import GloPoseConfig
 from onboarding.pipeline import OnboardingPipeline
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
-    read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id
+    read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id, \
+    get_sequence_folder, _scene_camera_filename
 from utils.data_utils import load_texture, load_mesh
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 
@@ -154,6 +155,17 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         get_bop_images_and_segmentations(bop_folder, dataset, sequence, sequence_type,
                                          onboarding_type, static_onboarding_sequence, scene_obj_id=scene_obj_id)
 
+    # HOT3D fisheye undistortion: replace distorted images/masks with pinhole-undistorted versions
+    hot3d_pinhole_params = None
+    if dataset == 'hot3d':
+        from adapters.hot3d_adapter import undistort_hot3d_sequence
+        sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type)
+        scene_camera_path = sequence_folder / _scene_camera_filename(dataset)
+        undistort_cache = config.paths.cache_folder / 'hot3d_undistorted' / f'{sequence}_{onboarding_type}'
+        gt_images, gt_segs, hot3d_pinhole_params = undistort_hot3d_sequence(
+            scene_camera_path, gt_images, gt_segs, undistort_cache,
+            scale=config.input.image_downsample, device=config.run.device)
+
     # Get camera-to-object transformations
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(bop_folder, dataset, sequence, sequence_type,
                                                               gt_cam_scale, onboarding_type,
@@ -180,10 +192,13 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     first_segmentation = PrecomputedSegmentationProvider.get_initial_segmentation(gt_images, gt_segs,
                                                                                   segmentation_channel=0)
 
-    # Get camera parameters
-    pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.input.image_downsample,
-                                         onboarding_type, static_onboarding_sequence, sequence_starts,
-                                         config.run.device)
+    # Get camera parameters (HOT3D: use undistorted pinhole params, others: read from JSON)
+    if hot3d_pinhole_params is not None:
+        pinhole_params = hot3d_pinhole_params
+    else:
+        pinhole_params = read_pinhole_params(bop_folder, dataset, sequence, sequence_type, config.input.image_downsample,
+                                             onboarding_type, static_onboarding_sequence, sequence_starts,
+                                             config.run.device)
 
     gt_Se3_world2cam = None
     if onboarding_type == 'static' or sequence_type in ['val', 'train']:
