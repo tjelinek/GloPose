@@ -239,6 +239,9 @@ def undistort_hot3d_sequence(
                 logger.warning(f"Could not read image: {src_img_path}")
                 continue
             undist_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
+            # Convert grayscale to BGR for downstream pipeline (DINOv2, SAM2, matchers expect RGB)
+            if undist_img.ndim == 2:
+                undist_img = cv2.cvtColor(undist_img, cv2.COLOR_GRAY2BGR)
             cv2.imwrite(str(dst_img_path), undist_img)
 
         # Undistort segmentation mask (if available)
