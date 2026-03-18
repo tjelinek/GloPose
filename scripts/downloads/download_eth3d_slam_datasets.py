@@ -150,8 +150,8 @@ if __name__ == '__main__':
     print(os.getcwd())
     print('If you want to download them into another directory, please re-start the script from that directory.')
 
-    training_datasets_path = os.path.join('.', 'training')
-    test_datasets_path = os.path.join('.', 'test')
+    training_datasets_path = os.path.join('..', 'training')
+    test_datasets_path = os.path.join('..', 'test')
 
     print('')
     print('Please enter a number to choose an action:')
@@ -245,7 +245,7 @@ if __name__ == '__main__':
                 if not os.path.isfile(calibration_dataset_path):
                     print('Error: No calibration_dataset.txt found for raw dataset: ' + dataset)
                 else:
-                    calibration_path = os.path.join('.', 'calibration')
+                    calibration_path = os.path.join('..', 'calibration')
                     MakeDirsExistOk(calibration_path)
 
                     calibration_dataset_name = ''

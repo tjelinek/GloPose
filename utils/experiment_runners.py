@@ -12,7 +12,7 @@ from configs.glopose_config import GloPoseConfig
 from onboarding.pipeline import OnboardingPipeline
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_pinhole_params, read_static_onboarding_world2cam, add_extrinsics_to_pinhole_params, read_object_id, \
-    get_sequence_folder, _scene_camera_filename
+    get_sequence_folder, _scene_camera_filename, _hot3d_camera_suffix
 from utils.data_utils import load_texture, load_mesh
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
 
@@ -166,7 +166,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         from adapters.hot3d_adapter import undistort_hot3d_sequence
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
                                                direction=static_onboarding_sequence, hot3d_device=hot3d_dev)
-        scene_camera_path = sequence_folder / _scene_camera_filename(dataset)
+        scene_camera_path = sequence_folder / _scene_camera_filename(dataset, hot3d_dev)
         undistort_cache = config.paths.cache_folder / 'hot3d_undistorted' / f'{hot3d_prefix}{sequence}_{onboarding_type}'
         gt_images, gt_segs, hot3d_pinhole_params = undistort_hot3d_sequence(
             scene_camera_path, gt_images, gt_segs, undistort_cache,
@@ -204,7 +204,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
         # No mask available (e.g. HOT3D dynamic) — read bbox from scene_gt_info for SAM2 box prompt
         first_segmentation = None
         import json
-        gt_info_filename = 'scene_gt_info_rgb.json' if dataset == 'hot3d' else 'scene_gt_info.json'
+        gt_info_filename = f'scene_gt_info_{_hot3d_camera_suffix(hot3d_dev)}.json' if dataset == 'hot3d' else 'scene_gt_info.json'
         sequence_folder = get_sequence_folder(bop_folder, dataset, sequence, sequence_type, onboarding_type,
                                                hot3d_device=hot3d_dev)
         gt_info_path = sequence_folder / gt_info_filename
