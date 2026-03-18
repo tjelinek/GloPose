@@ -662,13 +662,7 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
 
     Sim3d_first_image_colmap2gt = gt_world_from_cam_scaled * colmap_world_from_cam_sim3d.inverse()
 
-    for point3D_id, point3D in reconstruction.points3D.items():
-        point3D.xyz = Sim3d_first_image_colmap2gt * point3D.xyz
-
-    for image_id, image in reconstruction.images.items():
-        if image.has_pose:
-            new_pose = Sim3d_first_image_colmap2gt.transform_camera_world(image.cam_from_world())
-            image.set_cam_from_world(image.camera_id, new_pose)
+    reconstruction.transform(Sim3d_first_image_colmap2gt)
 
     return reconstruction, True
 
