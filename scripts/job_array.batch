@@ -7,8 +7,8 @@
 #SBATCH --mem=256G
 #SBATCH --partition=h200fast
 #SBATCH --job-name=FlowTracker
-#SBATCH --err=/mnt/personal/jelint19/results/FlowTracker_%A_%a.err
-#SBATCH --out=/mnt/personal/jelint19/results/FlowTracker_%A_%a.out
+#SBATCH --err=/mnt/personal/jelint19/logs/FlowTracker.err
+#SBATCH --out=/mnt/personal/jelint19/logs/FlowTracker.out
 
 dataset_runner=""
 config_file_path=""
