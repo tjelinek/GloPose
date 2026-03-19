@@ -295,15 +295,17 @@ class FrameFilterPassThrough(BaseFrameFilter):
         if frame_i % self.onboarding.passthrough_skip == 0:
             self.add_keyframe(frame_i)
 
+        # Set matching_source_keyframe for every frame (nearest preceding keyframe)
+        frame_data = self.data_graph.get_frame_data(frame_i)
+        nearest_keyframe = frame_i - (frame_i % self.onboarding.passthrough_skip)
+        frame_data.matching_source_keyframe = nearest_keyframe if nearest_keyframe >= 0 else 0
+
     def add_keyframe(self, frame_i: int):
         forward_edges = [(i, frame_i) for i in range(frame_i)]
         backward_edges = [(frame_i, i) for i in range(frame_i)]
 
         self.keyframe_graph.add_edges_from(forward_edges)
         self.keyframe_graph.add_edges_from(backward_edges)
-
-        frame_data = self.data_graph.get_frame_data(frame_i)
-        frame_data.matching_source_keyframe = frame_i - 1 if frame_i > 0 else 0
 
 
 class FrameFilterSift(BaseFrameFilter):
