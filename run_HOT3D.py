@@ -54,7 +54,7 @@ def main():
 
             config.input.depth_scale_to_meter = 0.001
 
-            config.input.skip_indices *= 1
+            config.input.skip_indices *= 4
 
             output_folder = args.output_folder
 
