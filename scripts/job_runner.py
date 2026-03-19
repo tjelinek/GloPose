@@ -90,8 +90,12 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
     print('----------------------------------------')
 
 
-def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path) -> None:
-    """Submit all sequences for a config as a single SLURM job array."""
+def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path,
+                   chunk_size: int = 4) -> None:
+    """Submit all sequences for a config as a single SLURM job array.
+
+    Each array task processes `chunk_size` sequences sequentially, reducing the total number of SLURM jobs.
+    """
     if not all_sequences:
         return
 
@@ -106,7 +110,8 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
             f.write(seq + '\n')
 
     n = len(all_sequences)
-    array_spec = f'0-{n - 1}'
+    n_tasks = (n + chunk_size - 1) // chunk_size  # ceiling division
+    array_spec = f'0-{n_tasks - 1}'
 
     batch_script = 'job_array.batch' if os.path.basename(os.getcwd()) == 'scripts' else 'scripts/job_array.batch'
 
@@ -118,13 +123,15 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
         '--experiment', experiment,
         '--output-folder', str(output_folder),
         '--sequence-list', str(seq_list_path),
+        '--chunk-size', str(chunk_size),
     ]
     extra = runner_extra_args.get(dataset)
     if extra:
         cmd.extend(['--runner-extra-args', extra])
 
     print('----------------------------------------')
-    print(f'Submitting job array ({n} tasks) for {configuration_name} on {dataset.value}')
+    print(f'Submitting job array ({n_tasks} tasks, {chunk_size} seq/task, {n} total) '
+          f'for {configuration_name} on {dataset.value}')
     print(' '.join(cmd))
     subprocess.run(cmd)
     print('----------------------------------------')

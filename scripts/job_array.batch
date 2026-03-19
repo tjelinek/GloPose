@@ -16,6 +16,7 @@ output_folder=""
 experiment=""
 sequence_list_file=""
 runner_extra_args=""
+chunk_size=1
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -25,6 +26,7 @@ while [[ "$#" -gt 0 ]]; do
         --output-folder) output_folder="$2"; shift ;;
         --sequence-list) sequence_list_file="$2"; shift ;;
         --runner-extra-args) runner_extra_args="$2"; shift ;;
+        --chunk-size) chunk_size="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -35,11 +37,13 @@ if [ -z "$dataset_runner" ] || [ -z "$config_file_path" ] || [ -z "$output_folde
     exit 1
 fi
 
-# Read the sequence for this array task
-sequence=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$sequence_list_file")
+# Read the chunk of sequences for this array task
+start_line=$(( SLURM_ARRAY_TASK_ID * chunk_size + 1 ))
+end_line=$(( start_line + chunk_size - 1 ))
+mapfile -t sequences < <(sed -n "${start_line},${end_line}p" "$sequence_list_file")
 
-if [ -z "$sequence" ]; then
-    echo "No sequence found for SLURM_ARRAY_TASK_ID=${SLURM_ARRAY_TASK_ID}"
+if [ ${#sequences[@]} -eq 0 ]; then
+    echo "No sequences found for SLURM_ARRAY_TASK_ID=${SLURM_ARRAY_TASK_ID} (lines ${start_line}-${end_line})"
     exit 1
 fi
 
@@ -53,10 +57,14 @@ cd ~/projects/GloPose/
 
 mkdir -p "${output_folder}/logs"
 
-echo "Array task ${SLURM_ARRAY_TASK_ID}: sequence=${sequence}"
+echo "Array task ${SLURM_ARRAY_TASK_ID}: ${#sequences[@]} sequences (lines ${start_line}-${end_line})"
 echo "Config: ${config_file_path}"
 echo "Output: ${output_folder}"
 
-python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
-        --config="$config_file_path" $runner_extra_args --sequences \
-        "${sequence}" > "${output_folder}/logs/${runner_stem}_${sequence}.log" 2>&1
+for sequence in "${sequences[@]}"; do
+    echo "--- Processing sequence: ${sequence} ---"
+    python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
+            --config="$config_file_path" $runner_extra_args --sequences \
+            "${sequence}" > "${output_folder}/logs/${runner_stem}_${sequence}.log" 2>&1
+    echo "--- Done: ${sequence} (exit code: $?) ---"
+done
