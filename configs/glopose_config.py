@@ -84,7 +84,7 @@ class OnboardingConfig:
     # Matching settings
     filter_matcher: str = 'UFM'
     reconstruction_matcher: str = 'UFM'
-    allow_disk_cache: bool = True
+    allow_disk_cache: bool = False
     roma: BaseRomaConfig = field(default_factory=BaseRomaConfig)
     ufm: BaseUFMConfig = field(default_factory=BaseUFMConfig)
     sift: BaseSiftConfig = field(default_factory=BaseSiftConfig)
