@@ -232,10 +232,12 @@ class OnboardingPipeline:
                                       overwrite=True, to_cpu=True)
             self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction,
                                                        known_gt_poses,
-                                                       self.colmap_image_path, self.colmap_seg_path)
+                                                       self.colmap_image_path, self.colmap_seg_path,
+                                                       gt_model_path=view_graph.gt_model_path)
         elif reconstruction is not None:
             self.results_writer.visualize_colmap_track(self.config.input.input_frames - 1, reconstruction, False,
-                                                       self.colmap_image_path, self.colmap_seg_path)
+                                                       self.colmap_image_path, self.colmap_seg_path,
+                                                       gt_model_path=view_graph.gt_model_path)
             logger.warning("Reconstruction succeeded but alignment failed for %s/%s",
                            self.config.run.dataset, self.config.run.sequence)
         else:

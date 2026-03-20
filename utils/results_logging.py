@@ -1,4 +1,5 @@
 import itertools
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,12 +10,14 @@ import pycolmap
 import rerun as rr
 import rerun.blueprint as rrb
 import torch
+import trimesh
 from PIL import Image
 from kornia.geometry import Se3
 from matplotlib import pyplot as plt
 from data_structures.data_graph import DataGraph
 from data_structures.rerun_annotations import RerunAnnotations
 from configs.glopose_config import GloPoseConfig
+from eval.eval_point_cloud import _load_ply_without_edges
 from onboarding.colmap_utils import world2cam_from_reconstruction
 from utils.data_utils import load_texture, load_mesh_using_trimesh
 from utils.general import normalize_vertices, extract_intrinsics_from_tensor
@@ -22,6 +25,8 @@ from visualizations.rerun_utils import (init_rerun_recording, register_matching_
                                         visualize_certainty_map, log_matching_correspondences,
                                         log_colmap_point_projections)
 from utils.image_utils import overlay_mask
+
+logger = logging.getLogger(__name__)
 
 
 class WriteResults:
@@ -161,6 +166,19 @@ class WriteResults:
                                 ],
                                 grid_columns=9,
                                 name='Point Projections'
+                            ),
+                            rrb.Horizontal(
+                                contents=[
+                                    rrb.GraphView(
+                                        name='COLMAP Co-visibility',
+                                        origin=RerunAnnotations.colmap_covisibility_graph,
+                                    ),
+                                    rrb.GraphView(
+                                        name='Initial Viewgraph',
+                                        origin=RerunAnnotations.initial_viewgraph,
+                                    ),
+                                ],
+                                name='Graph Comparison'
                             ),
                         ],
                         name='3D Space'
@@ -461,7 +479,8 @@ class WriteResults:
     def visualize_colmap_track(self, frame_i: int, colmap_reconstruction: pycolmap.Reconstruction,
                                visualize_also_gt_poses: bool,
                                colmap_images_dir: Path | None = None,
-                               colmap_segmentations_dir: Path | None = None):
+                               colmap_segmentations_dir: Path | None = None,
+                               gt_model_path: Path | None = None):
         rr.set_time("frame", sequence=frame_i)
 
         points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
@@ -564,6 +583,130 @@ class WriteResults:
             im2_t = image_id_to_poses[im_id2]
 
             strips.append([im1_t, im2_t])
+
+        # --- Visualization 1: GT model + reconstruction pointcloud in "3D Ground Truth" ---
+        # Log reconstruction pointcloud into the 3D Ground Truth view
+        rr.log(RerunAnnotations.space_reconstruction_pointcloud,
+               rr.Points3D(points_3d_coords, colors=points_3d_colors, radii=0.001),
+               static=True)
+
+        # Load and log GT mesh if available
+        if gt_model_path is not None and gt_model_path.exists():
+            self._log_gt_mesh(gt_model_path)
+
+        # --- Visualization 2: COLMAP co-visibility graph + our initial viewgraph ---
+        self._log_graph_comparison(colmap_reconstruction, image_name_to_image_id, G_reliable)
+
+    def _log_gt_mesh(self, gt_model_path: Path):
+        """Load GT mesh and log it as rr.Mesh3D to the 3D Ground Truth view.
+
+        Supports textured meshes (UV + albedo texture), vertex-colored meshes,
+        and falls back to a default grey if neither is available.
+        """
+        import io
+
+        try:
+            if gt_model_path.suffix.lower() == '.ply':
+                cleaned = _load_ply_without_edges(gt_model_path)
+                mesh = trimesh.load(io.BytesIO(cleaned), file_type='ply', force='mesh')
+            else:
+                mesh = trimesh.load(gt_model_path, force='mesh')
+
+            vertices = np.asarray(mesh.vertices, dtype=np.float32)
+            faces = np.asarray(mesh.faces, dtype=np.uint32)
+
+            mesh3d_kwargs = dict(
+                vertex_positions=vertices,
+                triangle_indices=faces,
+            )
+
+            if isinstance(mesh.visual, trimesh.visual.TextureVisuals) and mesh.visual.material is not None:
+                # Textured mesh: extract UV coordinates and albedo texture image
+                uv = mesh.visual.uv
+                if uv is not None:
+                    vertex_texcoords = np.asarray(uv, dtype=np.float32).copy()
+                    # Flip V for OpenGL convention (trimesh uses bottom-left origin)
+                    vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
+                    mesh3d_kwargs['vertex_texcoords'] = vertex_texcoords
+
+                    # Get the texture image from the material
+                    material = mesh.visual.material
+                    texture_image = None
+                    if hasattr(material, 'image') and material.image is not None:
+                        texture_image = np.asarray(material.image.convert('RGB'), dtype=np.uint8)
+                    elif hasattr(material, 'baseColorTexture') and material.baseColorTexture is not None:
+                        texture_image = np.asarray(material.baseColorTexture.convert('RGB'), dtype=np.uint8)
+
+                    if texture_image is not None:
+                        mesh3d_kwargs['albedo_texture'] = texture_image
+                    else:
+                        # Has UVs but no texture image — fall back to vertex colors
+                        mesh3d_kwargs.pop('vertex_texcoords', None)
+                        mesh3d_kwargs['vertex_colors'] = np.asarray(
+                            mesh.visual.to_color().vertex_colors)[:, :3]
+                else:
+                    mesh3d_kwargs['vertex_colors'] = np.asarray(
+                        mesh.visual.to_color().vertex_colors)[:, :3]
+
+            elif isinstance(mesh.visual, trimesh.visual.ColorVisuals):
+                vertex_colors = np.asarray(mesh.visual.vertex_colors)[:, :3]
+                mesh3d_kwargs['vertex_colors'] = vertex_colors
+            else:
+                mesh3d_kwargs['vertex_colors'] = np.full((len(vertices), 3), 180, dtype=np.uint8)
+
+            rr.log(RerunAnnotations.space_gt_mesh, rr.Mesh3D(**mesh3d_kwargs), static=True)
+
+        except Exception as e:
+            logger.warning("Failed to load GT mesh from %s: %s", gt_model_path, e)
+
+    def _log_graph_comparison(self, colmap_reconstruction: pycolmap.Reconstruction,
+                              image_name_to_image_id: dict, G_reliable: nx.Graph):
+        """Log COLMAP co-visibility graph and our initial viewgraph side by side."""
+        # Build COLMAP co-visibility graph: two images are connected if they share 3D points
+        G_covis = nx.Graph()
+        for image_id in colmap_reconstruction.images:
+            G_covis.add_node(image_id)
+
+        # For each 3D point, connect all image pairs that observe it
+        for point3D in colmap_reconstruction.points3D.values():
+            observer_image_ids = [elem.image_id for elem in point3D.track.elements]
+            for i in range(len(observer_image_ids)):
+                for j in range(i + 1, len(observer_image_ids)):
+                    if G_covis.has_edge(observer_image_ids[i], observer_image_ids[j]):
+                        G_covis[observer_image_ids[i]][observer_image_ids[j]]['weight'] += 1
+                    else:
+                        G_covis.add_edge(observer_image_ids[i], observer_image_ids[j], weight=1)
+
+        # Log COLMAP co-visibility graph
+        covis_node_ids = sorted(G_covis.nodes)
+        covis_labels = [colmap_reconstruction.images[nid].name.replace('.png', '')
+                        for nid in covis_node_ids]
+        rr.log(
+            RerunAnnotations.colmap_covisibility_graph,
+            rr.GraphNodes(node_ids=covis_node_ids, labels=covis_labels),
+            static=True
+        )
+        rr.log(
+            RerunAnnotations.colmap_covisibility_graph,
+            rr.GraphEdges(edges=[(u, v) for u, v in G_covis.edges]),
+            static=True
+        )
+
+        # Log our initial viewgraph (reliable matching graph)
+        reliable_node_ids = sorted(G_reliable.nodes)
+        reliable_labels = [colmap_reconstruction.images[nid].name.replace('.png', '')
+                           if nid in colmap_reconstruction.images else str(nid)
+                           for nid in reliable_node_ids]
+        rr.log(
+            RerunAnnotations.initial_viewgraph,
+            rr.GraphNodes(node_ids=reliable_node_ids, labels=reliable_labels),
+            static=True
+        )
+        rr.log(
+            RerunAnnotations.initial_viewgraph,
+            rr.GraphEdges(edges=[(u, v) for u, v in G_reliable.edges]),
+            static=True
+        )
 
     def visualize_3d_camera_space(self, frame_i: int, keyframe_graph: nx.DiGraph):
 

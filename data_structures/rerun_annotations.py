@@ -57,6 +57,13 @@ class RerunAnnotations:
     space_predicted_closest_keypoint: Final[str] = '/3d_space/predicted_closest_keypoint'
     space_predicted_reliable_templates: Final[str] = '/3d_space/predicted_reliable_templates'
 
+    # 3D Space — GT model & reconstruction overlay
+    space_reconstruction_pointcloud: Final[str] = '/3d_space/reconstruction_pointcloud'
+
+    # Graph comparison
+    colmap_covisibility_graph: Final[str] = '/graphs/colmap_covisibility'
+    initial_viewgraph: Final[str] = '/graphs/initial_viewgraph'
+
     # COLMAP
     colmap_pointcloud: Final[str] = '/3d_colmap/pointcloud'
     colmap_gt_camera_pose: Final[str] = '/3d_colmap/gt_camera_pose'
