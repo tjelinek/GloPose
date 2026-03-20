@@ -131,6 +131,7 @@ def _write_colmap_database(images: List[Path],
                            matching_edges_certainties: Dict[Tuple[int, int], torch.Tensor],
                            single_camera: bool, camera_K: Optional[torch.Tensor],
                            database_path: Path, device: str) -> Path:
+    print(f"[pycolmap4-debug] _write_colmap_database: opening {database_path}")
     database = pycolmap.Database.open(str(database_path))
 
     keypoints, edge_match_indices = unique_keypoints_from_matches(matching_edges, None, matching_edges_certainties,
@@ -169,6 +170,8 @@ def _write_colmap_database(images: List[Path],
         database.write_matches(colmap_image_u, colmap_image_v, match_indices_np)
 
     database.close()
+    print(f"[pycolmap4-debug] _write_colmap_database: done, wrote {len(keypoints)} image keypoints, "
+          f"{len(edge_match_indices)} match pairs")
     return database_path
 
 
@@ -225,11 +228,13 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         progress(1.0, desc="Reconstruction finished.")
 
     path_to_rec = colmap_output_path / '0'
+    print(f"[pycolmap4-debug] reconstruct_images_using_sfm: loading reconstruction from {path_to_rec}")
     try:
         reconstruction = pycolmap.Reconstruction(path_to_rec)
+        print(f"[pycolmap4-debug] reconstruct_images_using_sfm: loaded OK")
         print(reconstruction.summary())
     except Exception as e:
-        print(e)
+        print(f"[pycolmap4-debug] reconstruct_images_using_sfm: load FAILED: {e}")
         return None
 
     if filter_points_by_seg:
@@ -301,6 +306,7 @@ def filter_points_by_segmentation(reconstruction: pycolmap.Reconstruction,
 
 def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_poses: Dict[str, Se3]) \
         -> Tuple[pycolmap.Reconstruction, bool]:
+    print(f"[pycolmap4-debug] align_with_kabsch: starting (deepcopy)")
     reconstruction = copy.deepcopy(reconstruction)
 
     gt_camera_centers = []
@@ -327,15 +333,19 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
     else:
         sim3d = pycolmap.estimate_sim3d(pred_camera_centers, gt_camera_centers)
 
+    print(f"[pycolmap4-debug] align_with_kabsch: applying transform")
     reconstruction.transform(sim3d)
+    print(f"[pycolmap4-debug] align_with_kabsch: done")
 
     return reconstruction, True
 
 
 def two_view_geometry(colmap_db_path: Path):
+    print(f"[pycolmap4-debug] two_view_geometry: starting match_exhaustive")
     opts = TwoViewGeometryOptions()
     opts.detect_watermark = False
     pycolmap.match_exhaustive(str(colmap_db_path), verification_options=opts)
+    print(f"[pycolmap4-debug] two_view_geometry: done")
 
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
@@ -417,10 +427,14 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
             opts.init_image_id1 = first_image_id
             opts.init_image_id2 = second_image_id
 
+        print(f"[pycolmap4-debug] run_mapper: starting incremental_mapping")
         maps = pycolmap.incremental_mapping(str(colmap_db_path), str(colmap_image_path), str(colmap_output_path),
                                             options=opts)
+        print(f"[pycolmap4-debug] run_mapper: incremental_mapping returned {len(maps)} maps")
         if len(maps) > 0:
+            print(f"[pycolmap4-debug] run_mapper: writing map 0 to {colmap_output_path}")
             maps[0].write(str(colmap_output_path))
+            print(f"[pycolmap4-debug] run_mapper: write done")
     else:
         raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 

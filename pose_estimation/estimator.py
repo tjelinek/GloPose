@@ -12,7 +12,7 @@ from configs.glopose_config import PoseEstimationConfig
 from data_providers.flow_provider import MatchingProvider
 from data_structures.types import Detection, PoseEstimate, ObjectId
 from data_structures.view_graph import ViewGraph
-from onboarding.colmap_utils import get_image_Se3_world2cam
+from onboarding.colmap_utils import get_image_Se3_world2cam, create_database_cache, PYCOLMAP4
 from onboarding.frame_filter import compute_matching_reliability
 from onboarding.reconstruction import unique_keypoints_from_matches
 from visualizations.pose_estimation_visualizations import PoseEstimatorLogger
@@ -256,26 +256,26 @@ class PoseEstimator:
                     path_to_reconstruction: Path) -> Se3 | None:
         """Load existing reconstruction, register the query image, extract pose."""
 
-        cache_opts = pycolmap.DatabaseCacheOptions()
-        cache_opts.min_num_matches = 0
-        database_cache = pycolmap.DatabaseCache.create(database, cache_opts)
+        database_cache = create_database_cache(database)
 
         reconstruction = pycolmap.Reconstruction()
         reconstruction.read(str(path_to_reconstruction))
         reconstruction.add_camera(new_camera)
 
-        # pycolmap 4.0: images need Frame→Rig chain
-        cam = new_camera
-        rig_id = cam.camera_id
-        if rig_id not in reconstruction.rigs:
-            rig = pycolmap.Rig(rig_id=rig_id)
-            rig.add_ref_sensor(cam.sensor_id)
-            reconstruction.add_rig(rig)
+        if PYCOLMAP4:
+            # pycolmap 4.0: images need Frame→Rig chain
+            cam = new_camera
+            rig_id = cam.camera_id
+            if rig_id not in reconstruction.rigs:
+                rig = pycolmap.Rig(rig_id=rig_id)
+                rig.add_ref_sensor(cam.sensor_id)
+                reconstruction.add_rig(rig)
 
-        new_database_image.frame_id = new_image_id
-        frame = pycolmap.Frame(frame_id=new_image_id, rig_id=rig_id)
-        frame.add_data_id(new_database_image.data_id)
-        reconstruction.add_frame(frame)
+            new_database_image.frame_id = new_image_id
+            frame = pycolmap.Frame(frame_id=new_image_id, rig_id=rig_id)
+            frame.add_data_id(new_database_image.data_id)
+            reconstruction.add_frame(frame)
+
         reconstruction.add_image(new_database_image)
 
         mapper = pycolmap.IncrementalMapper(database_cache)

@@ -201,8 +201,10 @@ class OnboardingPipeline:
         # Always create a ViewGraph (even if reconstruction failed)
         colmap_db_path = self.colmap_base_path / 'database.db'
         colmap_output_path = self.colmap_base_path / 'output'
+        print(f"[pycolmap4-debug] run_pipeline: creating ViewGraph from datagraph")
         view_graph = view_graph_from_datagraph(keyframe_graph, self.data_graph, reconstruction, colmap_db_path,
                                                colmap_output_path, self.config.run.object_id)
+        print(f"[pycolmap4-debug] run_pipeline: ViewGraph created")
 
         # Populate metadata on the ViewGraph
         view_graph.alignment_success = alignment_success and reconstruction is not None
@@ -316,7 +318,9 @@ class OnboardingPipeline:
             # Save reconstruction to disk so evaluation can load it
             rec_output_path = self.colmap_base_path / 'output' / '0'
             rec_output_path.mkdir(exist_ok=True, parents=True)
+            print(f"[pycolmap4-debug] run_reconstruction: writing reconstruction to {rec_output_path}")
             reconstruction.write(str(rec_output_path))
+            print(f"[pycolmap4-debug] run_reconstruction: write done")
 
         # Alignment
         if reconstruction is None or self.gt_Se3_world2cam is None:

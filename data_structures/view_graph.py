@@ -86,7 +86,9 @@ class ViewGraph:
 
         reconstruction_path = save_dir / 'reconstruction' / '0'
         reconstruction_path.mkdir(exist_ok=True, parents=True)
+        print(f"[pycolmap4-debug] save_viewgraph: writing reconstruction to {reconstruction_path}")
         colmap_reconstruction.write(str(reconstruction_path))
+        print(f"[pycolmap4-debug] save_viewgraph: write done")
         self.colmap_reconstruction_path = reconstruction_path
 
         new_db_path = save_dir / self.colmap_db_path.name
@@ -160,6 +162,8 @@ def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
                            data_graph.storage_device)
 
     if colmap_reconstruction is not None:
+        print(f"[pycolmap4-debug] view_graph_from_datagraph: reading poses from reconstruction "
+              f"({colmap_reconstruction.num_images()} images)")
         from adapters.cnos_adapter import create_descriptor_extractor
 
         descriptor_extractor = create_descriptor_extractor()

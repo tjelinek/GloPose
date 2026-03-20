@@ -6,6 +6,16 @@ import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 
+# pycolmap 4.0 introduces Rig→Frame→Image hierarchy; 3.x has Image.set_cam_from_world()
+PYCOLMAP_MAJOR = int(pycolmap.__version__.split('.')[0])
+PYCOLMAP4 = PYCOLMAP_MAJOR >= 4
+
+
+def make_point2d_list(points: list | None = None):
+    """Create a Point2D list container, compatible with both pycolmap 3.x and 4.x."""
+    cls = pycolmap.Point2DList if hasattr(pycolmap, 'Point2DList') else pycolmap.ListPoint2D
+    return cls(points) if points is not None else cls()
+
 
 def add_posed_image_to_reconstruction(
     rec: pycolmap.Reconstruction,
@@ -13,40 +23,53 @@ def add_posed_image_to_reconstruction(
     camera_id: int,
     name: str,
     cam_from_world: pycolmap.Rigid3d,
-    points2D: pycolmap.Point2DList | None = None,
+    points2D=None,
 ) -> pycolmap.Image:
-    """Add an image with its pose to a reconstruction, creating the Rig→Frame→Image chain.
+    """Add an image with its pose to a reconstruction.
 
-    pycolmap 4.0 stores poses on Frames (not Images). Each Frame belongs to a Rig.
-    This helper creates the required Rig (one per camera, reused) and Frame objects,
-    sets the pose, and registers the frame.
+    Handles both pycolmap 3.x (Image.set_cam_from_world) and
+    4.x (Rig→Frame→Image chain) transparently.
     """
-    cam = rec.cameras[camera_id]
-
-    # One rig per camera (reused across images sharing the same camera)
-    rig_id = camera_id
-    if rig_id not in rec.rigs:
-        rig = pycolmap.Rig(rig_id=rig_id)
-        rig.add_ref_sensor(cam.sensor_id)
-        rec.add_rig(rig)
-
-    # Create image
     if points2D is not None:
         img = pycolmap.Image(name=name, points2D=points2D, camera_id=camera_id, image_id=image_id)
     else:
         img = pycolmap.Image(image_id=image_id, camera_id=camera_id, name=name)
 
-    # Create frame, link to image, add to reconstruction, then set pose
-    frame_id = image_id  # 1:1 mapping between frames and images
-    img.frame_id = frame_id
-    frame = pycolmap.Frame(frame_id=frame_id, rig_id=rig_id)
-    frame.add_data_id(img.data_id)
-    rec.add_frame(frame)
-    rec.frames[frame_id].set_cam_from_world(camera_id, cam_from_world)
+    if PYCOLMAP4:
+        cam = rec.cameras[camera_id]
 
-    rec.add_image(img)
-    rec.register_frame(frame_id)
+        # One rig per camera (reused across images sharing the same camera)
+        rig_id = camera_id
+        if rig_id not in rec.rigs:
+            rig = pycolmap.Rig(rig_id=rig_id)
+            rig.add_ref_sensor(cam.sensor_id)
+            rec.add_rig(rig)
+
+        # Create frame, link to image, add to reconstruction, then set pose
+        frame_id = image_id  # 1:1 mapping between frames and images
+        img.frame_id = frame_id
+        frame = pycolmap.Frame(frame_id=frame_id, rig_id=rig_id)
+        frame.add_data_id(img.data_id)
+        rec.add_frame(frame)
+        rec.frames[frame_id].set_cam_from_world(camera_id, cam_from_world)
+
+        rec.add_image(img)
+        rec.register_frame(frame_id)
+    else:
+        img.set_cam_from_world(camera_id, cam_from_world)
+        rec.add_image(img)
+
     return img
+
+
+def create_database_cache(database: pycolmap.Database):
+    """Create a DatabaseCache, compatible with both pycolmap 3.x and 4.x."""
+    if PYCOLMAP4:
+        cache_opts = pycolmap.DatabaseCacheOptions()
+        cache_opts.min_num_matches = 0
+        return pycolmap.DatabaseCache.create(database, cache_opts)
+    else:
+        return pycolmap.DatabaseCache().create(database, 0, False, set())
 
 
 def get_image_Se3_world2cam(image: pycolmap.Image, device: str) -> Se3:
@@ -132,7 +155,7 @@ def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.R
         max_image_id += 1
 
         # Create clean points2D without 3D point associations
-        clean_points2D = pycolmap.Point2DList()
+        clean_points2D = make_point2d_list()
         for point2D in image.points2D:
             # Create new Point2D without the 3D point association
             clean_point2D = pycolmap.Point2D(xy=point2D.xy)

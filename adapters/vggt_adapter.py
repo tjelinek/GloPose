@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 import pycolmap
 
-from onboarding.colmap_utils import add_posed_image_to_reconstruction
+from onboarding.colmap_utils import add_posed_image_to_reconstruction, make_point2d_list
 
 VGGT_REPO = Path(__file__).resolve().parent.parent / 'repositories' / 'vggt'
 
@@ -190,7 +190,7 @@ def reconstruct_with_vggt(
 
         add_posed_image_to_reconstruction(
             reconstruction, fidx + 1, fidx + 1, image_names[fidx],
-            cam_from_world, points2D=pycolmap.Point2DList(points2D_list))
+            cam_from_world, points2D=make_point2d_list(points2D_list))
 
     print(f"VGGT reconstruction: {num_frames} images, "
           f"{len(filtered_pts3d)} 3D points")
