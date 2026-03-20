@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import pycolmap
 
+from onboarding.colmap_utils import add_posed_image_to_reconstruction
+
 MAST3R_REPO = Path(__file__).resolve().parent.parent / 'repositories' / 'mast3r'
 DUST3R_REPO = MAST3R_REPO / 'dust3r'
 
@@ -196,11 +198,8 @@ def reconstruct_with_mast3r(
 
         cam_from_world = pycolmap.Rigid3d(pycolmap.Rotation3d(R), t)
 
-        image = pycolmap.Image(
-            image_id=fidx + 1, name=image_names[fidx],
-            camera_id=fidx + 1)
-        image.set_cam_from_world(fidx + 1, cam_from_world)
-        reconstruction.add_image(image)
+        add_posed_image_to_reconstruction(
+            reconstruction, fidx + 1, fidx + 1, image_names[fidx], cam_from_world)
 
     print(f"Mast3r reconstruction: {num_frames} images, "
           f"{len(all_pts3d)} 3D points")

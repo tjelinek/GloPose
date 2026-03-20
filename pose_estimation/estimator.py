@@ -256,11 +256,26 @@ class PoseEstimator:
                     path_to_reconstruction: Path) -> Se3 | None:
         """Load existing reconstruction, register the query image, extract pose."""
 
-        database_cache = pycolmap.DatabaseCache().create(database, 0, False, set())
+        cache_opts = pycolmap.DatabaseCacheOptions()
+        cache_opts.min_num_matches = 0
+        database_cache = pycolmap.DatabaseCache.create(database, cache_opts)
 
         reconstruction = pycolmap.Reconstruction()
         reconstruction.read(str(path_to_reconstruction))
         reconstruction.add_camera(new_camera)
+
+        # pycolmap 4.0: images need Frame→Rig chain
+        cam = new_camera
+        rig_id = cam.camera_id
+        if rig_id not in reconstruction.rigs:
+            rig = pycolmap.Rig(rig_id=rig_id)
+            rig.add_ref_sensor(cam.sensor_id)
+            reconstruction.add_rig(rig)
+
+        new_database_image.frame_id = new_image_id
+        frame = pycolmap.Frame(frame_id=new_image_id, rig_id=rig_id)
+        frame.add_data_id(new_database_image.data_id)
+        reconstruction.add_frame(frame)
         reconstruction.add_image(new_database_image)
 
         mapper = pycolmap.IncrementalMapper(database_cache)

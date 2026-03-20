@@ -7,6 +7,48 @@ import torch
 from kornia.geometry import Se3, Quaternion
 
 
+def add_posed_image_to_reconstruction(
+    rec: pycolmap.Reconstruction,
+    image_id: int,
+    camera_id: int,
+    name: str,
+    cam_from_world: pycolmap.Rigid3d,
+    points2D: pycolmap.Point2DList | None = None,
+) -> pycolmap.Image:
+    """Add an image with its pose to a reconstruction, creating the Rig→Frame→Image chain.
+
+    pycolmap 4.0 stores poses on Frames (not Images). Each Frame belongs to a Rig.
+    This helper creates the required Rig (one per camera, reused) and Frame objects,
+    sets the pose, and registers the frame.
+    """
+    cam = rec.cameras[camera_id]
+
+    # One rig per camera (reused across images sharing the same camera)
+    rig_id = camera_id
+    if rig_id not in rec.rigs:
+        rig = pycolmap.Rig(rig_id=rig_id)
+        rig.add_ref_sensor(cam.sensor_id)
+        rec.add_rig(rig)
+
+    # Create image
+    if points2D is not None:
+        img = pycolmap.Image(name=name, points2D=points2D, camera_id=camera_id, image_id=image_id)
+    else:
+        img = pycolmap.Image(image_id=image_id, camera_id=camera_id, name=name)
+
+    # Create frame, link to image, add to reconstruction, then set pose
+    frame_id = image_id  # 1:1 mapping between frames and images
+    img.frame_id = frame_id
+    frame = pycolmap.Frame(frame_id=frame_id, rig_id=rig_id)
+    frame.add_data_id(img.data_id)
+    rec.add_frame(frame)
+    rec.frames[frame_id].set_cam_from_world(camera_id, cam_from_world)
+
+    rec.add_image(img)
+    rec.register_frame(frame_id)
+    return img
+
+
 def get_image_Se3_world2cam(image: pycolmap.Image, device: str) -> Se3:
     image_world2cam: pycolmap.Rigid3d = image.cam_from_world()
     image_t_cam = torch.tensor(image_world2cam.translation).to(device).to(torch.float)
@@ -90,21 +132,16 @@ def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.R
         max_image_id += 1
 
         # Create clean points2D without 3D point associations
-        clean_points2D = pycolmap.ListPoint2D()
+        clean_points2D = pycolmap.Point2DList()
         for point2D in image.points2D:
             # Create new Point2D without the 3D point association
             clean_point2D = pycolmap.Point2D(xy=point2D.xy)
             clean_points2D.append(clean_point2D)
 
-        # Create new image with cleaned points2D
-        new_image = pycolmap.Image(
-            name=image.name,
-            points2D=clean_points2D,
-            camera_id=camera_id_mapping[image.camera_id],
-            image_id=max_image_id
-        )
-        new_image.set_cam_from_world(camera_id_mapping[image.camera_id], image.cam_from_world())
-        rec1.add_image(new_image)
+        new_camera_id = camera_id_mapping[image.camera_id]
+        add_posed_image_to_reconstruction(
+            rec1, max_image_id, new_camera_id, image.name,
+            image.cam_from_world(), points2D=clean_points2D)
         image_id_mapping[old_image_id] = max_image_id
 
     # Add all 3D points from rec2, updating track image IDs

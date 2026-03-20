@@ -153,57 +153,57 @@ def create_unused_folder(output_folder: Path):
 def get_configurations():
     return [
         # --- Baseline ---
-        'onboarding/ufm_c0975r05',
+        # 'onboarding/ufm_c0975r05',
 
         # --- P3.1: Frame selection ablation ---
-        'onboarding/passthroughs/every_frame',
-        'onboarding/passthroughs/every_2nd_frame',
+        # 'onboarding/passthroughs/every_frame',
+        # 'onboarding/passthroughs/every_2nd_frame',
         'onboarding/passthroughs/every_4th_frame',
         'onboarding/passthroughs/every_8th_frame',
         'onboarding/passthroughs/every_16th_frame',
         'onboarding/passthroughs/every_32th_frame',
         'onboarding/passthroughs/every_64th_frame',
-
-        # --- P3.2: ViewGraph density ablation ---
-        'onboarding/ufm_c0975r05_dense',            # all-to-all edges
-
-        # --- P3.3: Matching method ablation ---
-        'onboarding/roma_c0975r05',                  # RoMa matcher
-        'onboarding/sift_matching',                   # SIFT + LightGlue
-
-        # --- P3.4: External reconstruction methods ---
-        # VGGT — adaptive keyframes
-        'reconstruction/vggt',                        # white bg (convention)
-        'reconstruction/vggt_black_bg',
-        'reconstruction/vggt_original_bg',
-        # VGGT — every 8th frame
-        'reconstruction/vggt_every_8th',              # white bg (convention)
-        'reconstruction/vggt_every_8th_original_bg',
-        # Mast3r — adaptive keyframes
-        'reconstruction/mast3r',                      # black bg (convention)
-        'reconstruction/mast3r_white_bg',
-        'reconstruction/mast3r_original_bg',
-        # Mast3r — every 8th frame
-        'reconstruction/mast3r_every_8th',            # black bg (convention)
-        'reconstruction/mast3r_every_8th_original_bg',
-
-        # --- P3.5: Background removal ablation ---
-        'onboarding/ufm_c0975r05_bbg',               # black background
-
-        # --- P3.6: Track merging ablation ---
-        'onboarding/ufm_c0975r05_no_track_merging',
-
-        # --- Additional ablations ---
-        # RANSAC-based frame adding
-        'onboarding/ufm_ransac_pycolmap',
-        'onboarding/ufm_ransac_magsac',
-        # Bundle adjustment after segmentation filtering
-        'reconstruction/colmap_seg_filter',
-        'reconstruction/colmap_seg_filter_black_bg',
-        # Otsu vs fixed certainty threshold
-        'onboarding/ufm_c0975r05_fixed_threshold',
-        # Matchability-based reliability
-        'onboarding/ufm_c0975r05_matchability',
+        # 
+        # # --- P3.2: ViewGraph density ablation ---
+        # 'onboarding/ufm_c0975r05_dense',            # all-to-all edges
+        # 
+        # # --- P3.3: Matching method ablation ---
+        # 'onboarding/roma_c0975r05',                  # RoMa matcher
+        # 'onboarding/sift_matching',                   # SIFT + LightGlue
+        # 
+        # # --- P3.4: External reconstruction methods ---
+        # # VGGT — adaptive keyframes
+        # 'reconstruction/vggt',                        # white bg (convention)
+        # 'reconstruction/vggt_black_bg',
+        # 'reconstruction/vggt_original_bg',
+        # # VGGT — every 8th frame
+        # 'reconstruction/vggt_every_8th',              # white bg (convention)
+        # 'reconstruction/vggt_every_8th_original_bg',
+        # # Mast3r — adaptive keyframes
+        # 'reconstruction/mast3r',                      # black bg (convention)
+        # 'reconstruction/mast3r_white_bg',
+        # 'reconstruction/mast3r_original_bg',
+        # # Mast3r — every 8th frame
+        # 'reconstruction/mast3r_every_8th',            # black bg (convention)
+        # 'reconstruction/mast3r_every_8th_original_bg',
+        # 
+        # # --- P3.5: Background removal ablation ---
+        # 'onboarding/ufm_c0975r05_bbg',               # black background
+        # 
+        # # --- P3.6: Track merging ablation ---
+        # 'onboarding/ufm_c0975r05_no_track_merging',
+        # 
+        # # --- Additional ablations ---
+        # # RANSAC-based frame adding
+        # 'onboarding/ufm_ransac_pycolmap',
+        # 'onboarding/ufm_ransac_magsac',
+        # # Bundle adjustment after segmentation filtering
+        # 'reconstruction/colmap_seg_filter',
+        # 'reconstruction/colmap_seg_filter_black_bg',
+        # # Otsu vs fixed certainty threshold
+        # 'onboarding/ufm_c0975r05_fixed_threshold',
+        # # Matchability-based reliability
+        # 'onboarding/ufm_c0975r05_matchability',
     ]
 
 
