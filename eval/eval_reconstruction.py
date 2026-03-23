@@ -136,7 +136,8 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
                                           sequence: str, reconstruction_success: bool, pose_alignment_success: bool,
                                           frame_filtering_time: float, reconstruction_time: float,
                                           input_translation_unit: str = 'mm', output_translation_unit: str = 'cm',
-                                          reconstruction_quality: dict | None = None):
+                                          reconstruction_quality: dict | None = None,
+                                          colmap_num_reconstructions: int = 1):
     # Read the input CSV file containing reconstruction data
     if csv_per_frame_stats.exists():
         df = pd.read_csv(csv_per_frame_stats)
@@ -159,6 +160,7 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
         'num_keyframes': num_keyframes,
         'input_frames': input_frames,
         'colmap_registered_keyframes': reconstruction.num_reg_images() if reconstruction is not None else None,
+        'colmap_num_reconstructions': colmap_num_reconstructions,
         'mean_rotation_error': None,
         f'mean_translation_error_{output_translation_unit}': None,
         'rot_accuracy_at_2_deg': None,

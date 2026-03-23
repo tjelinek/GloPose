@@ -1,4 +1,5 @@
 import copy
+import logging
 import select
 import shutil
 import subprocess
@@ -13,6 +14,8 @@ import torch
 from kornia.geometry import Se3
 from kornia.image import ImageSize
 from pycolmap import TwoViewGeometryOptions
+
+logger = logging.getLogger(__name__)
 from tqdm import tqdm
 
 from data_providers.flow_provider import MatchingProvider
@@ -180,7 +183,7 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
                                  match_sample_size: int, colmap_working_dir: Path, add_track_merging_matches: bool,
                                  camera_K: Optional[torch.Tensor] = None, device: str = 'cpu',
                                  progress=None, filter_points_by_seg: bool = False) \
-        -> Optional[pycolmap.Reconstruction]:
+        -> Tuple[Optional[pycolmap.Reconstruction], int]:
     if len(matching_pairs) == 0:
         raise ValueError("Needed at least 1 match.")
     if len(images) == 0:
@@ -221,8 +224,8 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         progress(0.5, desc="Running reconstruction...")
 
     ignore_two_view_tracks = not add_track_merging_matches
-    run_mapper(colmap_output_path, database_path, colmap_image_path, mapper, first_image_id, second_image_id,
-               ignore_two_view_tracks)
+    num_reconstructions = run_mapper(colmap_output_path, database_path, colmap_image_path, mapper, first_image_id,
+                                     second_image_id, ignore_two_view_tracks)
 
     if progress is not None:
         progress(1.0, desc="Reconstruction finished.")
@@ -235,12 +238,12 @@ def reconstruct_images_using_sfm(images: List[Path], segmentations: List[Path], 
         print(reconstruction.summary())
     except Exception as e:
         print(f"[pycolmap4-debug] reconstruct_images_using_sfm: load FAILED: {e}")
-        return None
+        return None, num_reconstructions
 
     if filter_points_by_seg:
         reconstruction = filter_points_by_segmentation(reconstruction, segmentations, images)
 
-    return reconstruction
+    return reconstruction, num_reconstructions
 
 
 def filter_points_by_segmentation(reconstruction: pycolmap.Reconstruction,
@@ -358,7 +361,8 @@ def two_view_geometry(colmap_db_path: Path):
 
 def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path: Path, mapper: str = 'pycolmap',
                first_image_id: Optional[int] = None, second_image_id: Optional[int] = None,
-               ignore_two_view_tracks: bool = True):
+               ignore_two_view_tracks: bool = True) -> int:
+    """Run COLMAP/glomap mapper. Returns the number of reconstructions produced."""
     colmap_output_path.mkdir(exist_ok=True, parents=True)
 
     initial_pair_provided = first_image_id is not None and second_image_id is not None
@@ -424,6 +428,10 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 print(f"Error: {error_message}")
                 raise subprocess.CalledProcessError(process.returncode, command, output=None, stderr=error_message)
 
+        # Count output reconstruction directories
+        num_recs = sum(1 for d in colmap_output_path.iterdir() if d.is_dir() and d.name.isdigit())
+        return num_recs
+
     elif mapper == 'pycolmap':
 
         opts = pycolmap.IncrementalPipelineOptions()
@@ -440,9 +448,16 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                                             options=opts)
         print(f"[pycolmap4-debug] run_mapper: incremental_mapping returned {len(maps)} maps")
         if len(maps) > 0:
-            print(f"[pycolmap4-debug] run_mapper: writing map 0 to {colmap_output_path}")
-            maps[0].write(str(colmap_output_path))
+            # Pick the largest reconstruction (most registered images)
+            best = max(maps.values(), key=lambda r: r.num_reg_images())
+            if len(maps) > 1:
+                sizes = [r.num_reg_images() for r in maps.values()]
+                logger.warning("COLMAP produced %d reconstructions (sizes: %s), using largest (%d images)",
+                               len(maps), sizes, best.num_reg_images())
+            print(f"[pycolmap4-debug] run_mapper: writing best map ({best.num_reg_images()} images) to {colmap_output_path}")
+            best.write(str(colmap_output_path))
             print(f"[pycolmap4-debug] run_mapper: write done")
+        return len(maps)
     else:
         raise ValueError(f"Need to run either glomap or colmap, got mapper={mapper}")
 

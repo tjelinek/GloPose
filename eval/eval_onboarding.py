@@ -117,6 +117,7 @@ def evaluate_onboarding(
         sequence_name, reconstruction_success, alignment_success,
         view_graph.frame_filtering_time, view_graph.reconstruction_time,
         reconstruction_quality=reconstruction_quality,
+        colmap_num_reconstructions=view_graph.colmap_num_reconstructions,
     )
 
     # Per-dataset aggregate statistics

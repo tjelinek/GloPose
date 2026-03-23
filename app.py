@@ -334,7 +334,7 @@ def on_reconstruct_click(
     colmap_base_path.mkdir(parents=True, exist_ok=True)
 
     with torch.inference_mode():
-        colmap_rec = reconstruct_images_using_sfm(
+        colmap_rec, _ = reconstruct_images_using_sfm(
             _custom_state.images_for_reconstruction,
             _custom_state.segmentation_for_reconstruction,
             _custom_state.matching_pairs,

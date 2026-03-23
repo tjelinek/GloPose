@@ -56,6 +56,7 @@ class ViewGraph:
         self.frame_filtering_time: float = 0.0
         self.reconstruction_time: float = 0.0
         self.num_input_frames: int = 0
+        self.colmap_num_reconstructions: int = 1
         self.image_name_to_frame_id: dict[str, int] = {}
         self.gt_model_path: Path | None = None
 
