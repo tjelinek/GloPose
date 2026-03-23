@@ -29,6 +29,278 @@ from utils.image_utils import overlay_mask
 logger = logging.getLogger(__name__)
 
 
+def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
+    """Build the standard onboarding rerun blueprint. Reusable for both normal and merged runs."""
+    if config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
+        match_reliability_statistics = rrb.TimeSeriesView(
+            name=f"{config.onboarding.frame_filter} Matching Reliability",
+            origin=RerunAnnotations.matching_reliability_plot,
+            axis_y=rrb.ScalarAxis(range=(0.0, 1.2), zoom_lock=True),
+            plot_legend=rrb.PlotLegend(visible=True))
+    else:
+        max_range = 3.0 * config.onboarding.sift_filter_good_to_add_matches
+        match_reliability_statistics = rrb.TimeSeriesView(
+            name="SIFT Num of Matches",
+            origin=RerunAnnotations.matching_reliability_plot,
+            axis_y=rrb.ScalarAxis(range=(0.0, max_range), zoom_lock=False),
+            plot_legend=rrb.PlotLegend(visible=True))
+
+    blueprint = rrb.Blueprint(
+        rrb.Tabs(
+            contents=[
+                rrb.Tabs(
+                    contents=[
+                        rrb.Vertical(
+                            contents=[
+                                rrb.Horizontal(
+                                    contents=[
+                                        rrb.Spatial2DView(name="Template Image Current",
+                                                          origin=RerunAnnotations.template_image),
+                                        rrb.Spatial2DView(name="Observed Image",
+                                                          origin=RerunAnnotations.observed_image),
+                                    ],
+                                    name='Observed Images'
+                                ),
+                                rrb.Grid(
+                                    contents=[
+                                        rrb.Spatial2DView(name=f"Keyframe {i}",
+                                                          origin=f'{RerunAnnotations.keyframe_images}/{i}')
+                                        for i in range(27)
+                                    ],
+                                    grid_columns=9,
+                                    name='Templates'
+                                ),
+                                rrb.GraphView(
+                                    name='View Graph',
+                                    origin=RerunAnnotations.view_graph,
+                                ),
+                            ],
+                            row_shares=[0.3, 0.5, 0.2],
+                            name='Keyframe Images'
+                        ),
+                        rrb.GraphView(
+                            name='Keyframe Graph',
+                            origin=RerunAnnotations.keyframe_graph,
+                        ),
+                        rrb.GraphView(
+                            name='View Graph',
+                            origin=RerunAnnotations.view_graph,
+                        ),
+                    ],
+                    name='Keyframes'
+                ),
+                rrb.Tabs(
+                    contents=[
+                        rrb.Spatial3DView(
+                            origin=RerunAnnotations.colmap_visualization,
+                            name='COLMAP',
+                            background=[255, 255, 255]
+                        ),
+                        rrb.Spatial3DView(
+                            origin=RerunAnnotations.space_visualization,
+                            name='3D Ground Truth',
+                            background=[255, 255, 255]
+                        ),
+                        rrb.Grid(
+                            contents=[
+                                rrb.Spatial2DView(
+                                    name=f"Keyframe {i}",
+                                    origin=f'{RerunAnnotations.colmap_point_projections}/{i}'
+                                )
+                                for i in range(1, 28)
+                            ],
+                            grid_columns=9,
+                            name='Point Projections'
+                        ),
+                        rrb.Horizontal(
+                            contents=[
+                                rrb.GraphView(
+                                    name='COLMAP Co-visibility',
+                                    origin=RerunAnnotations.colmap_covisibility_graph,
+                                ),
+                                rrb.GraphView(
+                                    name='Initial Viewgraph',
+                                    origin=RerunAnnotations.initial_viewgraph,
+                                ),
+                            ],
+                            name='Graph Comparison'
+                        ),
+                    ],
+                    name='3D Space'
+                ),
+                rrb.Grid(
+                    contents=[
+                        rrb.TimeSeriesView(name="Pose Estimation (w.o. flow computation)",
+                                           origin=RerunAnnotations.pose_estimation_timing),
+                    ],
+                    grid_columns=2,
+                    name='Timings'
+                ),
+                rrb.Tabs(
+                    contents=[
+                        rrb.Vertical(
+                            contents=[
+                                rrb.Horizontal(
+                                    contents=[
+                                        rrb.Spatial2DView(
+                                            name=f"{config.onboarding.filter_matcher} Matches High Certainty",
+                                            origin=RerunAnnotations.matches_high_certainty),
+                                        rrb.Spatial2DView(
+                                            name=f"{config.onboarding.filter_matcher} Matches Low Certainty",
+                                            origin=RerunAnnotations.matches_low_certainty),
+                                        *([rrb.Spatial2DView(
+                                            name=f"{config.onboarding.filter_matcher} Matching Certainty",
+                                            origin=RerunAnnotations.matching_certainty)]
+                                          if config.onboarding.frame_filter in ('dense_matching', 'RANSAC') else [])
+                                    ],
+                                    name='Matching'
+                                ),
+                                match_reliability_statistics,
+                            ],
+                            row_shares=[0.8, 0.2],
+                            name='Matching'
+                        ),
+                        *([rrb.Vertical(
+                            contents=[
+                                rrb.Horizontal(
+                                    contents=[
+                                        rrb.Spatial2DView(
+                                            name=f"{config.onboarding.filter_matcher} Matches High Certainty",
+                                            origin=RerunAnnotations.matches_high_certainty_matchable),
+                                        rrb.Spatial2DView(
+                                            name=f"{config.onboarding.filter_matcher} Matches Low Certainty",
+                                            origin=RerunAnnotations.matches_low_certainty_matchable),
+                                        rrb.Spatial2DView(name="Template",
+                                                          origin=RerunAnnotations.matchability)
+                                    ],
+                                    name='Matching'
+                                ),
+                                rrb.TimeSeriesView(name="Matchable Area Share",
+                                                   origin=RerunAnnotations.matching_matchability_plot,
+                                                   axis_y=rrb.ScalarAxis(range=(0.0, 1.2), zoom_lock=True),
+                                                   plot_legend=rrb.PlotLegend(visible=True)),
+                                rrb.TimeSeriesView(name=f"{config.onboarding.filter_matcher} Min Certainty",
+                                                   origin=RerunAnnotations.matching_min_roma_certainty_plot,
+                                                   axis_y=rrb.ScalarAxis(range=(0.0, 1.2), zoom_lock=True),
+                                                   plot_legend=rrb.PlotLegend(visible=True)),
+                            ],
+                            row_shares=[4, 1, 1],
+                            name='Matchability'
+                        )] if config.onboarding.frame_filter == 'dense_matching' and config.onboarding.matchability_based_reliability
+                          else []),
+                    ],
+                    name='Matching'
+                ),
+                rrb.Tabs(
+                    contents=[
+                        rrb.Grid(
+                            contents=[
+                                rrb.TimeSeriesView(name="RANSAC - Frontview",
+                                                   origin=RerunAnnotations.ransac_stats),
+                                rrb.TimeSeriesView(name="Pose - Rotation",
+                                                   origin=RerunAnnotations.obj_rot_1st_to_last),
+                                rrb.TimeSeriesView(name="Pose - Translation",
+                                                   origin=RerunAnnotations.obj_tran_1st_to_last),
+                            ],
+                            grid_columns=2,
+                            name='Epipolar'
+                        ),
+                        rrb.Grid(
+                            contents=[
+                                rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
+                                                   origin=RerunAnnotations.cam_rot_ref_to_last),
+                                rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
+                                                   origin=RerunAnnotations.cam_tran_ref_to_last),
+                                rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
+                                                   origin=RerunAnnotations.obj_rot_ref_to_last),
+                                rrb.TimeSeriesView(name="Object Translation Ref -> Last",
+                                                   origin=RerunAnnotations.obj_tran_ref_to_last),
+                            ],
+                            grid_columns=2,
+                            name='Pose'
+                        ),
+                    ],
+                    name='Pose'
+                ),
+            ],
+            name=f'Results - {config.run.sequence}'
+        )
+    )
+    return blueprint
+
+
+def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_model_path: Path | None = None):
+    """Log a COLMAP reconstruction (pointcloud + cameras) to rerun. Standalone, no WriteResults needed."""
+    import io
+
+    # 3D point cloud
+    if reconstruction.points3D:
+        points_3d_coords = np.stack([p.xyz for p in reconstruction.points3D.values()], axis=0)
+        points_3d_colors = np.stack([p.color for p in reconstruction.points3D.values()], axis=0)
+        rr.log(RerunAnnotations.colmap_pointcloud,
+               rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
+        rr.log(RerunAnnotations.space_reconstruction_pointcloud,
+               rr.Points3D(points_3d_coords, colors=points_3d_colors, radii=0.001), static=True)
+
+    # Camera poses
+    for image_id, image in sorted(reconstruction.images.items()):
+        cam_from_world = image.cam_from_world()
+        pred_t = torch.tensor(cam_from_world.translation)
+        pred_q_xyzw = torch.tensor(cam_from_world.rotation.quat)
+
+        camera = reconstruction.cameras[image.camera_id]
+        entity = f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}'
+
+        rr.log(entity,
+               rr.Transform3D(translation=pred_t,
+                              rotation=rr.Quaternion(xyzw=pred_q_xyzw),
+                              from_parent=True),
+               static=True)
+        rr.log(entity,
+               rr.Pinhole(resolution=[camera.width, camera.height],
+                          focal_length=[camera.params[0], camera.params[0]],
+                          principal_point=[camera.params[2], camera.params[3]]),
+               static=True)
+
+    # GT mesh
+    if gt_model_path is not None and gt_model_path.exists():
+        try:
+            if gt_model_path.suffix.lower() == '.ply':
+                cleaned = _load_ply_without_edges(gt_model_path)
+                mesh = trimesh.load(io.BytesIO(cleaned), file_type='ply', force='mesh')
+            else:
+                mesh = trimesh.load(gt_model_path, force='mesh')
+            vertices = np.asarray(mesh.vertices, dtype=np.float32)
+            faces = np.asarray(mesh.faces, dtype=np.uint32)
+            mesh3d_kwargs = dict(vertex_positions=vertices, triangle_indices=faces)
+            if isinstance(mesh.visual, trimesh.visual.TextureVisuals) and mesh.visual.material is not None:
+                uv = mesh.visual.uv
+                if uv is not None:
+                    vertex_texcoords = np.asarray(uv, dtype=np.float32).copy()
+                    vertex_texcoords[:, 1] = 1.0 - vertex_texcoords[:, 1]
+                    mesh3d_kwargs['vertex_texcoords'] = vertex_texcoords
+                    material = mesh.visual.material
+                    texture_image = None
+                    if hasattr(material, 'image') and material.image is not None:
+                        texture_image = np.asarray(material.image.convert('RGB'), dtype=np.uint8)
+                    elif hasattr(material, 'baseColorTexture') and material.baseColorTexture is not None:
+                        texture_image = np.asarray(material.baseColorTexture.convert('RGB'), dtype=np.uint8)
+                    if texture_image is not None:
+                        mesh3d_kwargs['albedo_texture'] = texture_image
+                    else:
+                        mesh3d_kwargs.pop('vertex_texcoords', None)
+                        mesh3d_kwargs['vertex_colors'] = np.asarray(mesh.visual.to_color().vertex_colors)[:, :3]
+                else:
+                    mesh3d_kwargs['vertex_colors'] = np.asarray(mesh.visual.to_color().vertex_colors)[:, :3]
+            elif isinstance(mesh.visual, trimesh.visual.ColorVisuals):
+                mesh3d_kwargs['vertex_colors'] = np.asarray(mesh.visual.vertex_colors)[:, :3]
+            else:
+                mesh3d_kwargs['vertex_colors'] = np.full((len(vertices), 3), 180, dtype=np.uint8)
+            rr.log(RerunAnnotations.space_gt_mesh, rr.Mesh3D(**mesh3d_kwargs), static=True)
+        except Exception as e:
+            logger.warning("Failed to load GT mesh from %s: %s", gt_model_path, e)
+
+
 class WriteResults:
 
     def __init__(self, write_folder, tracking_config: GloPoseConfig, data_graph: DataGraph):
@@ -85,212 +357,7 @@ class WriteResults:
             RerunAnnotations.translation_scale
         }
 
-        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
-            match_reliability_statistics = rrb.TimeSeriesView(
-                name=f"{self.config.onboarding.frame_filter} Matching Reliability",
-                origin=RerunAnnotations.matching_reliability_plot,
-                axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
-                                      zoom_lock=True),
-                plot_legend=rrb.PlotLegend(visible=True))
-        else:
-            max_range = 3.0 * self.config.onboarding.sift_filter_good_to_add_matches
-            match_reliability_statistics = rrb.TimeSeriesView(name="SIFT Num of Matches",
-                                                              origin=RerunAnnotations.matching_reliability_plot,
-                                                              axis_y=rrb.ScalarAxis(range=(0.0, max_range),
-                                                                                    zoom_lock=False),
-                                                              plot_legend=rrb.PlotLegend(visible=True))
-
-        blueprint = rrb.Blueprint(
-            rrb.Tabs(
-                contents=[
-                    rrb.Tabs(
-                        contents=[
-                            rrb.Vertical(
-                                contents=[
-                                    rrb.Horizontal(
-                                        contents=[
-                                            rrb.Spatial2DView(name="Template Image Current",
-                                                              origin=RerunAnnotations.template_image),
-                                            rrb.Spatial2DView(name="Observed Image",
-                                                              origin=RerunAnnotations.observed_image),
-                                        ],
-                                        name='Observed Images'
-                                    ),
-                                    rrb.Grid(
-                                        contents=[
-                                            rrb.Spatial2DView(name=f"Keyframe {i}",
-                                                              origin=f'{RerunAnnotations.keyframe_images}/{i}')
-                                            for i in range(27)
-                                        ],
-                                        grid_columns=9,
-                                        name='Templates'
-                                    ),
-                                    rrb.GraphView(
-                                        name='View Graph',
-                                        origin=RerunAnnotations.view_graph,
-                                    ),
-                                ],
-                                row_shares=[0.3, 0.5, 0.2],
-                                name='Keyframe Images'
-                            ),
-                            rrb.GraphView(
-                                name='Keyframe Graph',
-                                origin=RerunAnnotations.keyframe_graph,
-                            ),
-                            rrb.GraphView(
-                                name='View Graph',
-                                origin=RerunAnnotations.view_graph,
-                            ),
-                        ],
-                        name='Keyframes'
-                    ),
-                    rrb.Tabs(
-                        contents=[
-                            rrb.Spatial3DView(
-                                origin=RerunAnnotations.colmap_visualization,
-                                name='COLMAP',
-                                background=[255, 255, 255]
-                            ),
-                            rrb.Spatial3DView(
-                                origin=RerunAnnotations.space_visualization,
-                                name='3D Ground Truth',
-                                background=[255, 255, 255]
-                            ),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.Spatial2DView(
-                                        name=f"Keyframe {i}",
-                                        origin=f'{RerunAnnotations.colmap_point_projections}/{i}'
-                                    )
-                                    for i in range(1, 28)
-                                ],
-                                grid_columns=9,
-                                name='Point Projections'
-                            ),
-                            rrb.Horizontal(
-                                contents=[
-                                    rrb.GraphView(
-                                        name='COLMAP Co-visibility',
-                                        origin=RerunAnnotations.colmap_covisibility_graph,
-                                    ),
-                                    rrb.GraphView(
-                                        name='Initial Viewgraph',
-                                        origin=RerunAnnotations.initial_viewgraph,
-                                    ),
-                                ],
-                                name='Graph Comparison'
-                            ),
-                        ],
-                        name='3D Space'
-                    ),
-                    rrb.Grid(
-                        contents=[
-                            rrb.TimeSeriesView(name="Pose Estimation (w.o. flow computation)",
-                                               origin=RerunAnnotations.pose_estimation_timing),
-                        ],
-                        grid_columns=2,
-                        name='Timings'
-                    ),
-                    rrb.Tabs(
-                        contents=[
-                            rrb.Vertical(
-                                contents=[
-                                    rrb.Horizontal(
-                                        contents=[
-                                            rrb.Spatial2DView(
-                                                name=f"{self.config.onboarding.filter_matcher} Matches High Certainty",
-                                                origin=RerunAnnotations.matches_high_certainty),
-                                            rrb.Spatial2DView(
-                                                name=f"{self.config.onboarding.filter_matcher} Matches Low Certainty",
-                                                origin=RerunAnnotations.matches_low_certainty),
-                                            *([rrb.Spatial2DView(
-                                                name=f"{self.config.onboarding.filter_matcher} Matching Certainty",
-                                                origin=RerunAnnotations.matching_certainty)]
-                                              if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC') else [])
-                                        ],
-                                        name='Matching'
-                                    ),
-                                    match_reliability_statistics,
-                                ],
-                                row_shares=[0.8, 0.2],
-                                name='Matching'
-                            ),
-                            *([rrb.Vertical(
-                                contents=[
-                                    rrb.Horizontal(
-                                        contents=[
-                                            rrb.Spatial2DView(
-                                                name=f"{self.config.onboarding.filter_matcher} Matches High Certainty",
-                                                origin=RerunAnnotations.matches_high_certainty_matchable),
-                                            rrb.Spatial2DView(
-                                                name=f"{self.config.onboarding.filter_matcher} Matches Low Certainty",
-                                                origin=RerunAnnotations.matches_low_certainty_matchable),
-                                            rrb.Spatial2DView(name="Template",
-                                                              origin=RerunAnnotations.matchability)
-
-                                        ],
-                                        name='Matching'
-                                    ),
-                                    rrb.TimeSeriesView(name="Matchable Area Share",
-                                                       origin=RerunAnnotations.matching_matchability_plot,
-                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
-                                                                             zoom_lock=True),
-                                                       plot_legend=rrb.PlotLegend(visible=True)),
-                                    rrb.TimeSeriesView(name=f"{self.config.onboarding.filter_matcher} Min Certainty",
-                                                       origin=RerunAnnotations.matching_min_roma_certainty_plot,
-                                                       axis_y=rrb.ScalarAxis(range=(0.0, 1.2),
-                                                                             zoom_lock=True),
-                                                       plot_legend=rrb.PlotLegend(visible=True)),
-                                ],
-                                row_shares=[4, 1, 1],
-                                name='Matchability'
-                            )] if self.config.onboarding.frame_filter == 'dense_matching' and self.config.onboarding.matchability_based_reliability
-                              else []),
-                        ],
-                        name='Matching'
-                    ),
-                    rrb.Tabs(
-                        contents=[
-                            rrb.Grid(
-                                contents=[
-                                    rrb.TimeSeriesView(name="RANSAC - Frontview",
-                                                       origin=RerunAnnotations.ransac_stats
-                                                       ),
-                                    rrb.TimeSeriesView(name="Pose - Rotation",
-                                                       origin=RerunAnnotations.obj_rot_1st_to_last
-                                                       ),
-                                    rrb.TimeSeriesView(name="Pose - Translation",
-                                                       origin=RerunAnnotations.obj_tran_1st_to_last
-                                                       ),
-                                ],
-                                grid_columns=2,
-                                name='Epipolar'
-                            ),
-                            rrb.Grid(
-                                contents=[
-                                    rrb.TimeSeriesView(name="Camera Rotation Ref -> Last",
-                                                       origin=RerunAnnotations.cam_rot_ref_to_last
-                                                       ),
-                                    rrb.TimeSeriesView(name="Camera Translation Ref -> Last",
-                                                       origin=RerunAnnotations.cam_tran_ref_to_last
-                                                       ),
-                                    rrb.TimeSeriesView(name="Object Rotation Ref -> Last",
-                                                       origin=RerunAnnotations.obj_rot_ref_to_last
-                                                       ),
-                                    rrb.TimeSeriesView(name="Object Translation Ref -> Last",
-                                                       origin=RerunAnnotations.obj_tran_ref_to_last
-                                                       ),
-                                ],
-                                grid_columns=2,
-                                name='Pose'
-                            ),
-                        ],
-                        name='Pose'
-                    ),
-                ],
-                name=f'Results - {self.config.run.sequence}'
-            )
-        )
+        blueprint = build_onboarding_blueprint(self.config)
 
         axes_colors = {
             'x': (0, 127, 0),
