@@ -324,6 +324,10 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
         gt_camera_centers.append(gt_cam_center)
         pred_camera_centers.append(pred_cam_center)
 
+    if len(gt_camera_centers) < 3:
+        print(f"[pycolmap4-debug] align_with_kabsch: too few matched cameras ({len(gt_camera_centers)}), skipping")
+        return reconstruction, False
+
     gt_camera_centers = np.stack(gt_camera_centers)
     pred_camera_centers = np.stack(pred_camera_centers)
 
@@ -332,6 +336,10 @@ def align_with_kabsch(reconstruction: pycolmap.Reconstruction, gt_Se3_world2cam_
         sim3d = sim3d_report['tgt_from_src']
     else:
         sim3d = pycolmap.estimate_sim3d(pred_camera_centers, gt_camera_centers)
+
+    if sim3d is None:
+        print(f"[pycolmap4-debug] align_with_kabsch: Sim3d estimation failed")
+        return reconstruction, False
 
     print(f"[pycolmap4-debug] align_with_kabsch: applying transform")
     reconstruction.transform(sim3d)
