@@ -1,5 +1,7 @@
 import pickle
 import shutil
+import sys
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Tuple
@@ -13,9 +15,22 @@ from tqdm import tqdm
 
 import adapters.cnos_adapter  # noqa: F401 — ensures cnos on sys.path for pickle deserialization
 
+
+def _ensure_pathlib_compat():
+    """Register a pathlib._local shim so pickles created with Python 3.13+ can be loaded on older Pythons."""
+    if 'pathlib._local' not in sys.modules:
+        import pathlib
+        mod = types.ModuleType('pathlib._local')
+        for name in dir(pathlib):
+            if not name.startswith('__'):
+                setattr(mod, name, getattr(pathlib, name))
+        sys.modules['pathlib._local'] = mod
+
+
 from data_structures.data_graph import DataGraph
 from data_structures.keyframe_buffer import FrameObservation
 from onboarding.colmap_utils import merge_two_databases, merge_colmap_reconstructions
+
 
 @dataclass
 class ViewGraphNode:
@@ -136,15 +151,40 @@ class ViewGraph:
             node_data.dino_descriptor = node_data.dino_descriptor.to(device)
 
 
-def load_view_graph(load_dir: Path, device='cuda') -> ViewGraph:
-    """Loads the graph structure and associated images/segmentations from disk."""
+def load_view_graph(load_dir: Path, device='cuda',
+                    remap_paths: dict[str, str] | None = None) -> ViewGraph:
+    """Loads the graph structure and associated images/segmentations from disk.
+
+    Args:
+        load_dir: Directory containing graph.pkl and reconstruction.
+        device: Device to send tensors to.
+        remap_paths: Optional dict of prefix substitutions to apply to stored paths
+                     (e.g. {'/mnt/personal/jelint19/': '/home/tom/rci_data/'}).
+    """
+    _ensure_pathlib_compat()
+
     graph_path = load_dir / "graph.pkl"
 
     with open(graph_path, "rb") as f:
         view_graph: ViewGraph = pickle.load(f)
-        view_graph.send_to_device(device)
+
+    if remap_paths:
+        _remap_view_graph_paths(view_graph, remap_paths)
+
+    view_graph.send_to_device(device)
 
     return view_graph
+
+
+def _remap_view_graph_paths(view_graph: ViewGraph, remap: dict[str, str]) -> None:
+    """Replace path prefixes in a ViewGraph's stored paths (colmap_db_path, colmap_reconstruction_path)."""
+    for old_prefix, new_prefix in remap.items():
+        db_str = str(view_graph.colmap_db_path)
+        if db_str.startswith(old_prefix):
+            view_graph.colmap_db_path = Path(db_str.replace(old_prefix, new_prefix, 1))
+        rec_str = str(view_graph.colmap_reconstruction_path)
+        if rec_str.startswith(old_prefix):
+            view_graph.colmap_reconstruction_path = Path(rec_str.replace(old_prefix, new_prefix, 1))
 
 
 def view_graph_from_datagraph(structure: nx.DiGraph, data_graph: DataGraph,
@@ -257,7 +297,6 @@ def compute_dino_descriptors_for_view_graph(view_graph: ViewGraph, dino_model) -
 
 
 def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):
-
     if merged_folder.exists():
         shutil.rmtree(merged_folder)
     merged_folder.mkdir(parents=True, exist_ok=True)
@@ -273,8 +312,10 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
 
     merged_db = pycolmap.Database.open(str(merged_db_path))
 
-    viewgraph1_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph1, db1_image_rename_dict)
-    viewgraph2_node_relabel_mapping = relabel_viewgraph_nodes(merged_db, view_graph2, db2_image_rename_dict)
+    viewgraph1_node_relabel_mapping, vg1_colmap_id_map = relabel_viewgraph_nodes(merged_db, view_graph1,
+                                                                                 db1_image_rename_dict)
+    viewgraph2_node_relabel_mapping, vg2_colmap_id_map = relabel_viewgraph_nodes(merged_db, view_graph2,
+                                                                                 db2_image_rename_dict)
 
     copy_relabeled_images(viewgraph1_folder, viewgraph1_node_relabel_mapping, merged_folder)
     copy_relabeled_images(viewgraph2_folder, viewgraph2_node_relabel_mapping, merged_folder)
@@ -284,7 +325,11 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     reconstruction1 = pycolmap.Reconstruction(str(view_graph1.colmap_reconstruction_path))
     reconstruction2 = pycolmap.Reconstruction(str(view_graph2.colmap_reconstruction_path))
 
-    merged_reconstruction = merge_colmap_reconstructions(reconstruction1, reconstruction2)
+    merged_reconstruction = merge_colmap_reconstructions(
+        reconstruction1, reconstruction2,
+        vg1_colmap_id_map, vg2_colmap_id_map,
+        db1_image_rename_dict, db2_image_rename_dict,
+    )
 
     merged_viewgraph = ViewGraph(view_graph1.object_id, merged_db_path, merged_reconstruction_path, view_graph1.device)
 
@@ -315,12 +360,19 @@ def copy_relabeled_images(source_viewgraph_folder, viewgraph_node_relabel_mappin
 
 
 def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
-                            db_image_rename_dict: Dict[str, str] = None) -> Dict[Any, Any]:
+                            db_image_rename_dict: Dict[str, str] = None) -> tuple[Dict[Any, Any], Dict[int, int]]:
+    """Relabel viewgraph nodes to match merged DB image IDs and names.
+
+    Returns:
+        viewgraph_node_relabel_mapping: {old_node_id: new_colmap_image_id}
+        colmap_id_mapping: {old_colmap_image_id: new_colmap_image_id}
+    """
     all_merged_images = {image.name: image for image in merged_db.read_all_images()}
     viewgraph_node_relabel_mapping = {}
-    image_rename_mapping = {}
+    colmap_id_mapping = {}
     for node_id in view_graph.view_graph.nodes:
         node = view_graph.get_node_data(node_id)
+        old_colmap_id = node.colmap_db_image_id
         old_image_name = node.colmap_db_image_name
         new_image_name = db_image_rename_dict[old_image_name]
 
@@ -331,15 +383,15 @@ def relabel_viewgraph_nodes(merged_db: pycolmap.Database, view_graph: ViewGraph,
         node.colmap_db_image_name = new_image_name
 
         viewgraph_node_relabel_mapping[node_id] = new_image_colmap_id
-        image_rename_mapping[old_image_name] = new_image_name
+        colmap_id_mapping[old_colmap_id] = new_image_colmap_id
 
     view_graph.view_graph = nx.relabel_nodes(view_graph.view_graph, viewgraph_node_relabel_mapping)
 
-    return viewgraph_node_relabel_mapping
+    return viewgraph_node_relabel_mapping, colmap_id_mapping
 
 
-def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: str, device) -> Dict[Any, ViewGraph]:
-
+def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: str, device,
+                                  remap_paths: dict[str, str] | None = None) -> Dict[Any, ViewGraph]:
     view_graphs: Dict[Any, ViewGraph] = {}
     total_dirs = sum(1 for d in view_graph_save_paths.iterdir() if d.is_dir())
     for i, view_graph_dir in tqdm(enumerate(view_graph_save_paths.iterdir()), total=total_dirs,
@@ -360,7 +412,8 @@ def load_view_graphs_by_object_id(view_graph_save_paths: Path, onboarding_type: 
                 pass
                 # raise ValueError(f"Unknown onboarding type {onboarding_type}")
 
-            view_graph: ViewGraph = load_view_graph(view_graph_dir, device=device)
+            view_graph: ViewGraph = load_view_graph(view_graph_dir, device=device,
+                                                    remap_paths=remap_paths)
             view_graphs[view_graph.object_id] = view_graph
 
     return view_graphs
@@ -412,7 +465,6 @@ def export_viewgraphs_to_cnos_format(viewgraphs_home: Path, bop_home: Path, expe
 
 
 if __name__ == '__main__':
-
     export_viewgraphs_to_cnos_format(
         viewgraphs_home=Path('/mnt/personal/jelint19/cache/view_graph_cache/'),
         bop_home=Path('/mnt/personal/jelint19/data/bop/'),

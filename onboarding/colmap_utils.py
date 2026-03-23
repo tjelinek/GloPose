@@ -130,56 +130,55 @@ def merge_two_databases(colmap_db1_path: Path, colmap_db2_path: Path, merged_db_
     return db1_rename_dict, db2_rename_dict
 
 
-def merge_colmap_reconstructions(rec1: pycolmap.Reconstruction, rec2: pycolmap.Reconstruction) \
-        -> pycolmap.Reconstruction:
-    max_camera_id = max(rec1.cameras.keys()) if rec1.cameras else 0
+def merge_colmap_reconstructions(
+        rec1: pycolmap.Reconstruction, rec2: pycolmap.Reconstruction,
+        rec1_id_map: Dict[int, int], rec2_id_map: Dict[int, int],
+        rec1_name_map: Dict[str, str], rec2_name_map: Dict[str, str],
+) -> pycolmap.Reconstruction:
+    """Merge two COLMAP reconstructions, remapping image IDs and names to match a merged DB.
 
-    # Find the max image ID in rec1 to avoid conflicts
-    max_image_id = max(rec1.images.keys()) if rec1.images else 0
+    Args:
+        rec1, rec2: Source reconstructions.
+        rec1_id_map, rec2_id_map: old_colmap_image_id → new_merged_image_id for each reconstruction.
+        rec1_name_map, rec2_name_map: old_image_name → new_prefixed_image_name for each reconstruction.
+    """
+    merged = pycolmap.Reconstruction()
+    next_camera_id = 0
 
-    # Map old camera IDs to new camera IDs
-    camera_id_mapping = {}
+    def _add_reconstruction(rec, id_map, name_map):
+        nonlocal next_camera_id
+        camera_id_remap = {}
 
-    # Map old image IDs to new image IDs
-    image_id_mapping = {}
+        for old_cam_id, camera in rec.cameras.items():
+            new_cam_id = next_camera_id
+            next_camera_id += 1
+            camera.camera_id = new_cam_id
+            merged.add_camera(camera)
+            camera_id_remap[old_cam_id] = new_cam_id
 
-    # Add all cameras from rec2, assigning new IDs
-    for old_camera_id, camera in rec2.cameras.items():
-        max_camera_id += 1
-        camera.camera_id = max_camera_id
-        rec1.add_camera(camera)
-        camera_id_mapping[old_camera_id] = max_camera_id
+        for old_image_id, image in rec.images.items():
+            new_image_id = id_map[old_image_id]
+            new_name = name_map[image.name]
+            new_camera_id = camera_id_remap[image.camera_id]
 
-    # Add all images from rec2, creating new images with updated camera and image IDs
-    for old_image_id, image in rec2.images.items():
-        max_image_id += 1
+            clean_points2D = make_point2d_list()
+            for point2D in image.points2D:
+                clean_points2D.append(pycolmap.Point2D(xy=point2D.xy))
 
-        # Create clean points2D without 3D point associations
-        clean_points2D = make_point2d_list()
-        for point2D in image.points2D:
-            # Create new Point2D without the 3D point association
-            clean_point2D = pycolmap.Point2D(xy=point2D.xy)
-            clean_points2D.append(clean_point2D)
+            add_posed_image_to_reconstruction(
+                merged, new_image_id, new_camera_id, new_name,
+                image.cam_from_world(), points2D=clean_points2D)
 
-        new_camera_id = camera_id_mapping[image.camera_id]
-        add_posed_image_to_reconstruction(
-            rec1, max_image_id, new_camera_id, image.name,
-            image.cam_from_world(), points2D=clean_points2D)
-        image_id_mapping[old_image_id] = max_image_id
+        for point3D in rec.points3D.values():
+            new_track = pycolmap.Track()
+            for elem in point3D.track.elements:
+                new_track.add_element(id_map[elem.image_id], elem.point2D_idx)
+            merged.add_point3D(point3D.xyz, new_track, point3D.color)
 
-    # Add all 3D points from rec2, updating track image IDs
-    for point3D in rec2.points3D.values():
-        # Create new track with updated image IDs
-        new_track = pycolmap.Track()
-        for track_element in point3D.track.elements:
-            new_track.add_element(
-                image_id_mapping[track_element.image_id],
-                track_element.point2D_idx
-            )
+    _add_reconstruction(rec1, rec1_id_map, rec1_name_map)
+    _add_reconstruction(rec2, rec2_id_map, rec2_name_map)
 
-        rec1.add_point3D(point3D.xyz, new_track, point3D.color)
-
-    return rec1
+    return merged
 
 
 def colmap_K_params_vec(camera_K, camera_type=pycolmap.CameraModelId.PINHOLE):
