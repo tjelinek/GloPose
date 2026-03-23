@@ -70,7 +70,7 @@ class RANSACConfig:
 class OnboardingConfig:
     # Frame filter settings
     frame_filter: str = 'dense_matching'
-    view_graph_strategy: str = 'from_matching'
+    view_graph_strategy: str = 'from_matching'  # 'from_matching' | 'dense' (clique — all pairs)
     always_add_last_frame: bool = True
     edge_strategy: str = 'on_unreliable'  # 'always' | 'on_unreliable'
     passthrough_skip: int = 1
