@@ -297,7 +297,16 @@ def compute_dino_descriptors_for_view_graph(view_graph: ViewGraph, dino_model) -
     return cls_descriptors, dense_descriptors
 
 
-def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path):
+def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path) \
+        -> tuple['ViewGraph', 'pycolmap.Reconstruction', Dict[str, str], Dict[str, str]]:
+    """Merge two ViewGraphs (e.g. down + up) into one.
+
+    Returns:
+        merged_viewgraph: The merged ViewGraph object.
+        merged_reconstruction: The merged pycolmap.Reconstruction.
+        db1_image_rename_dict: {original_name -> prefixed_name} for viewgraph1.
+        db2_image_rename_dict: {original_name -> prefixed_name} for viewgraph2.
+    """
     if merged_folder.exists():
         shutil.rmtree(merged_folder)
     merged_folder.mkdir(parents=True, exist_ok=True)
@@ -338,6 +347,8 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     merged_viewgraph.view_graph = merged_viewgraph_G
     merged_viewgraph.save_viewgraph(merged_folder, merged_reconstruction, save_images=True, overwrite=False,
                                     to_cpu=True)
+
+    return merged_viewgraph, merged_reconstruction, db1_image_rename_dict, db2_image_rename_dict
 
 
 def copy_relabeled_images(source_viewgraph_folder, viewgraph_node_relabel_mapping, target_viewgraph_folder):

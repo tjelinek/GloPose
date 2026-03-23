@@ -33,7 +33,7 @@ def merge_reconstructions_for_experiment(experiment_name: str, datasets: List[st
 
             output_path = down_sequence_folder.parent / f'{down_sequences_names[pair_down_i]}_merged'
 
-            merge_two_view_graphs(down_sequence_folder, up_sequences_folder, output_path)
+            merge_two_view_graphs(down_sequence_folder, up_sequences_folder, output_path)  # return value unused
 
 
 if __name__ == '__main__':

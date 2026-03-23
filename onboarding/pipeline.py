@@ -104,6 +104,7 @@ class OnboardingPipeline:
 
         # Other utilities and flags
         self.results_writer = None
+        self._colmap_num_reconstructions: int = 1
 
         self.data_graph: DataGraph = DataGraph(out_device=self.config.run.device)
 
@@ -212,6 +213,7 @@ class OnboardingPipeline:
         view_graph.frame_filtering_time = frame_filtering_time
         view_graph.reconstruction_time = reconstruction_time
         view_graph.num_input_frames = self.config.input.input_frames
+        view_graph.colmap_num_reconstructions = self._colmap_num_reconstructions
         view_graph.gt_model_path = resolve_gt_model_path(self.config.run, self.config.paths)
 
         # Build image_name_to_frame_id mapping
@@ -357,15 +359,16 @@ class OnboardingPipeline:
     def _reconstruct_colmap(self, images_paths, segmentation_paths, matching_pairs, camera_K) \
             -> Optional[Reconstruction]:
         try:
-            reconstruction = reconstruct_images_using_sfm(images_paths, segmentation_paths, matching_pairs,
-                                                          self.config.onboarding.init_with_first_two_images,
-                                                          self.config.onboarding.mapper,
-                                                          self.match_provider_reconstruction,
-                                                          self.config.onboarding.sample_size,
-                                                          self.colmap_base_path,
-                                                          self.config.onboarding.add_track_merging_matches,
-                                                          camera_K, self.config.run.device,
-                                                          filter_points_by_seg=self.config.onboarding.filter_points_by_segmentation)
+            reconstruction, self._colmap_num_reconstructions = reconstruct_images_using_sfm(
+                images_paths, segmentation_paths, matching_pairs,
+                self.config.onboarding.init_with_first_two_images,
+                self.config.onboarding.mapper,
+                self.match_provider_reconstruction,
+                self.config.onboarding.sample_size,
+                self.colmap_base_path,
+                self.config.onboarding.add_track_merging_matches,
+                camera_K, self.config.run.device,
+                filter_points_by_seg=self.config.onboarding.filter_points_by_segmentation)
         except Exception as e:
             print(f"Reconstruction failed: {e}")
             reconstruction = None
