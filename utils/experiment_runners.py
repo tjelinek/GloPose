@@ -1,4 +1,6 @@
+import copy
 import hashlib
+import logging
 from pathlib import Path
 from typing import Dict, List, Any
 
@@ -15,6 +17,8 @@ from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_ca
     get_sequence_folder, _scene_camera_filename, _hot3d_camera_suffix
 from utils.data_utils import load_texture, load_mesh
 from utils.math_utils import Se3_obj_relative_to_Se3_cam2obj
+
+logger = logging.getLogger(__name__)
 
 
 def run_on_synthetic_data(config: GloPoseConfig, dataset: str, sequence: str, experiment=None, output_folder=None,
@@ -147,6 +151,13 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     else:
         raise ValueError("This should not happen")
 
+    # --- Strategy: 'separate' for _both sequences — run up and down independently, then merge ---
+    if (static_onboarding_sequence == 'both'
+            and config.onboarding.both_merge_strategy == 'separate'):
+        _run_separate_merge(dataset, experiment_name, sequence_type, config, gt_cam_scale,
+                            output_folder, scene_obj_id)
+        return
+
     # Determine output folder
     if output_folder is not None:
         write_folder = Path(output_folder) / dataset / f'{sequence}_{config.run.special_hash}'
@@ -194,6 +205,20 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     if gt_depths is not None:
         gt_depths = [gt_depths[i] for i in valid_frames]
     dict_gt_Se3_cam2obj = reindex_frame_dict(dict_gt_Se3_cam2obj, valid_frames)
+
+    # Compute sequence boundaries for the frame filter (after reindexing to 0-based)
+    sequence_boundaries = None
+    if static_onboarding_sequence == 'both' and sequence_starts:
+        # sequence_starts contains the original boundary index; map it through valid_frames reindexing
+        boundary_orig = sequence_starts[0] if len(sequence_starts) == 1 else sequence_starts[1]
+        # Find the reindexed position of the first frame >= boundary_orig
+        boundary_reindexed = None
+        for new_idx, orig_idx in enumerate(valid_frames):
+            if orig_idx >= boundary_orig:
+                boundary_reindexed = new_idx
+                break
+        if boundary_reindexed is not None and boundary_reindexed > 0:
+            sequence_boundaries = [boundary_reindexed]
 
     # Get initial image and segmentation
     initial_bbox = None
@@ -252,7 +277,80 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     # Initialize and run the tracker
     tracker = OnboardingPipeline(config, write_folder, input_images=gt_images, gt_Se3_world2cam=gt_Se3_world2cam,
                                  gt_pinhole_params=pinhole_params, input_segmentations=gt_segs, depth_paths=gt_depths,
-                                 initial_segmentation=first_segmentation, initial_bbox=initial_bbox)
+                                 initial_segmentation=first_segmentation, initial_bbox=initial_bbox,
+                                 sequence_boundaries=sequence_boundaries)
 
     view_graph = tracker.run_pipeline()
     evaluate_onboarding(view_graph, gt_Se3_world2cam, config.run, config.bop, write_folder)
+
+
+def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, config: GloPoseConfig, gt_cam_scale,
+                        output_folder: Path = None, scene_obj_id: int = None):
+    """Run up and down onboarding separately, then merge the two ViewGraphs.
+
+    Called from run_on_bop_sequences() when both_merge_strategy='separate' and
+    static_onboarding_sequence='both'.
+    """
+    from data_structures.view_graph import merge_two_view_graphs
+
+    sequence = config.run.sequence
+    hot3d_prefix = f'{config.input.hot3d_device}_' if dataset == 'hot3d' else ''
+
+    # Run 'down' pass
+    config_down = copy.deepcopy(config)
+    config_down.bop.static_onboarding_sequence = 'down'
+    config_down.run.special_hash = f'{hot3d_prefix}down'
+    logger.info("Separate merge: running 'down' pass for %s", sequence)
+    run_on_bop_sequences(dataset, experiment_name, sequence_type, config_down, gt_cam_scale,
+                         output_folder, scene_obj_id)
+
+    # Run 'up' pass
+    config_up = copy.deepcopy(config)
+    config_up.bop.static_onboarding_sequence = 'up'
+    config_up.run.special_hash = f'{hot3d_prefix}up'
+    logger.info("Separate merge: running 'up' pass for %s", sequence)
+    run_on_bop_sequences(dataset, experiment_name, sequence_type, config_up, gt_cam_scale,
+                         output_folder, scene_obj_id)
+
+    # Merge the two ViewGraphs
+    cache_root = config.paths.cache_folder / 'view_graph_cache' / experiment_name / dataset
+    down_cache = cache_root / f'{sequence}_{hot3d_prefix}down'
+    up_cache = cache_root / f'{sequence}_{hot3d_prefix}up'
+    merged_cache = cache_root / f'{sequence}_{hot3d_prefix}both'
+
+    if not down_cache.exists() or not up_cache.exists():
+        logger.warning("Separate merge: missing cached ViewGraph(s) for %s (down=%s, up=%s)",
+                       sequence, down_cache.exists(), up_cache.exists())
+        return
+
+    logger.info("Separate merge: merging down + up ViewGraphs for %s", sequence)
+    merge_two_view_graphs(down_cache, up_cache, merged_cache)
+
+    # Evaluate the merged ViewGraph
+    from data_structures.view_graph import load_view_graph
+    merged_vg = load_view_graph(merged_cache, device='cpu')
+
+    config.run.special_hash = f'{hot3d_prefix}both'
+    if output_folder is not None:
+        write_folder = Path(output_folder) / dataset / f'{sequence}_{config.run.special_hash}'
+    else:
+        write_folder = config.paths.results_folder / experiment_name / dataset / f'{sequence}_{config.run.special_hash}'
+    write_folder.mkdir(parents=True, exist_ok=True)
+
+    # Build combined GT poses for evaluation (union of down and up GT)
+    bop_folder = config.paths.bop_data_folder
+    hot3d_dev = config.input.hot3d_device
+    gt_images_combined, _, _, sequence_starts = get_bop_images_and_segmentations(
+        bop_folder, dataset, sequence, sequence_type, 'static', 'both',
+        scene_obj_id=scene_obj_id, hot3d_device=hot3d_dev)
+
+    dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(
+        bop_folder, dataset, sequence, sequence_type, gt_cam_scale, 'static',
+        sequence_starts, 'both', scene_obj_id, device='cpu', hot3d_device=hot3d_dev)
+
+    if dict_gt_Se3_cam2obj is not None:
+        gt_Se3_world2cam = {i: cam2obj.inverse() for i, cam2obj in dict_gt_Se3_cam2obj.items()}
+    else:
+        gt_Se3_world2cam = None
+
+    evaluate_onboarding(merged_vg, gt_Se3_world2cam, config.run, config.bop, write_folder)

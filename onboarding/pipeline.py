@@ -38,7 +38,8 @@ class OnboardingPipeline:
                  input_segmentations: Union[List[Path], Path] = None, depth_paths: Optional[List[Path]] = None,
                  initial_segmentation: Union[torch.Tensor, List[torch.Tensor]] = None,
                  initial_bbox=None,
-                 progress=None):
+                 progress=None,
+                 sequence_boundaries: list[int] | None = None):
 
         self.write_folder: Path = write_folder
         self.config: GloPoseConfig = config
@@ -121,7 +122,7 @@ class OnboardingPipeline:
             self.config.onboarding.reconstruction_matcher, self.config.onboarding, self.config.run.device)
         self.frame_filter = create_frame_filter(
             self.config.onboarding, self.config.run.device, self.config.input.input_frames,
-            self.data_graph, self.match_provider_filtering)
+            self.data_graph, self.match_provider_filtering, sequence_boundaries=sequence_boundaries)
 
     def initialize_frame_provider(self, gt_mesh: torch.Tensor, gt_texture: torch.Tensor,
                                   images_paths: List[Path] | Path, initial_segmentation: torch.Tensor,

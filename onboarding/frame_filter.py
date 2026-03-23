@@ -13,12 +13,14 @@ from utils.image_utils import otsu_threshold
 
 
 class BaseFrameFilter:
-    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, device: str = 'cuda'):
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, device: str = 'cuda',
+                 sequence_boundaries: list[int] | None = None):
         self.onboarding: OnboardingConfig = onboarding
         self.n_frames: int = n_frames
         self.device: str = device
         self.data_graph: DataGraph = data_graph
         self.keyframe_graph: nx.DiGraph = nx.DiGraph()
+        self.sequence_boundaries: set[int] = set(sequence_boundaries) if sequence_boundaries else set()
 
     def get_keyframe_graph(self) -> nx.DiGraph:
         # if len(self.keyframe_graph.nodes) <= 2:
@@ -50,9 +52,10 @@ class BaseFrameFilter:
 
 class RoMaFrameFilter(BaseFrameFilter):
 
-    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, flow_provider: MatchingProvider, device: str = 'cuda'):
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, flow_provider: MatchingProvider,
+                 device: str = 'cuda', sequence_boundaries: list[int] | None = None):
 
-        super().__init__(onboarding, n_frames, data_graph, device)
+        super().__init__(onboarding, n_frames, data_graph, device, sequence_boundaries)
 
         self.flow_provider: MatchingProvider = flow_provider
 
@@ -101,6 +104,23 @@ class RoMaFrameFilter(BaseFrameFilter):
 
     def _find_source(self, frame_i: int, preceding_source: int, preceding_reliable: bool
                      ) -> Tuple[int, set]:
+        is_boundary = frame_i in self.sequence_boundaries
+
+        if is_boundary:
+            # Sequence boundary (e.g. transition from down to up sub-sequence).
+            # Force last frame of previous sub-sequence as keyframe, then match
+            # against all existing keyframes — pick best even if below threshold.
+            prev = frame_i - 1
+            if prev >= 0:
+                self._ensure_last_frame_keyframe(prev, preceding_source, set())
+            reliable_kfs, best_source = self._match_to_all_keyframes(frame_i)
+            if best_source is not None:
+                return best_source, reliable_kfs
+            # No reliable match — still use the best-matching keyframe (don't
+            # fall back to adding frame_i-1 which belongs to a different sub-seq)
+            best_kf = self._best_matching_keyframe(frame_i)
+            return best_kf, set()
+
         need_all_keyframes = (
             self.onboarding.edge_strategy == 'always' or not preceding_reliable
         )
@@ -181,6 +201,17 @@ class RoMaFrameFilter(BaseFrameFilter):
         node.current_flow_reliability_threshold = self.matching_reliability_threshold
         node.reliable_sources = {source} | reliable_kfs
         node.matching_source_keyframe = source
+
+    def _best_matching_keyframe(self, frame_i: int) -> int:
+        """Return the keyframe with highest reliability to frame_i, regardless of threshold."""
+        best_kf = 0
+        best_rel = -1.
+        for kf in list(self.keyframe_graph.nodes):
+            rel = self.flow_reliability(kf, frame_i)
+            if rel > best_rel:
+                best_kf = kf
+                best_rel = rel
+        return best_kf
 
     def _match_to_all_keyframes(self, frame_i: int) -> Tuple[set, int | None]:
         best_source: int = 0
@@ -448,7 +479,8 @@ def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.
 
 def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int,
                         data_graph: DataGraph,
-                        flow_provider: MatchingProvider = None) -> BaseFrameFilter:
+                        flow_provider: MatchingProvider = None,
+                        sequence_boundaries: list[int] | None = None) -> BaseFrameFilter:
     """Factory that maps a config string to a BaseFrameFilter instance.
 
     Args:
@@ -457,16 +489,18 @@ def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int
         n_frames: Total number of input frames.
         data_graph: The shared DataGraph.
         flow_provider: Flow provider for dense-matching-based filters.
+        sequence_boundaries: Frame indices where a new sub-sequence starts (e.g. [N] for
+            concatenated up+down with N down frames). Used for boundary-aware filtering.
     """
 
     def _dense_matching():
-        return RoMaFrameFilter(onboarding, n_frames, data_graph, flow_provider, device)
+        return RoMaFrameFilter(onboarding, n_frames, data_graph, flow_provider, device, sequence_boundaries)
 
     def _ransac():
-        return FrameFilterRANSAC(onboarding, n_frames, data_graph, flow_provider, device)
+        return FrameFilterRANSAC(onboarding, n_frames, data_graph, flow_provider, device, sequence_boundaries)
 
     def _passthrough():
-        return FrameFilterPassThrough(onboarding, n_frames, data_graph)
+        return FrameFilterPassThrough(onboarding, n_frames, data_graph, sequence_boundaries=sequence_boundaries)
 
     def _sift():
         from data_providers.matching_provider_sift import (
