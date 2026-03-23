@@ -91,7 +91,7 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path,
-                   chunk_size: int = 4) -> None:
+                   chunk_size: int = 2) -> None:
     """Submit all sequences for a config as a single SLURM job array.
 
     Each array task processes `chunk_size` sequences sequentially, reducing the total number of SLURM jobs.
@@ -253,10 +253,32 @@ def get_results_root():
     return Path("/mnt/personal/jelint19/results/FlowTracker/")
 
 
+def subsample_sequences(sequences: dict, max_per_dataset: int, seed: int = 42) -> dict:
+    """Deterministically subsample up to max_per_dataset sequences from each dataset."""
+    subsampled = {}
+    for dataset, seqs in sequences.items():
+        if len(seqs) <= max_per_dataset:
+            subsampled[dataset] = seqs
+        else:
+            rng = random.Random(seed)
+            subsampled[dataset] = sorted(rng.sample(seqs, max_per_dataset))
+    return subsampled
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--quick', action='store_true',
+                        help='Run on 20 random (but deterministic) sequences per dataset')
+    args = parser.parse_args()
+
     configurations = get_configurations()
     sequences = get_sequences()
     output_folder_root = get_results_root()
+
+    if args.quick:
+        sequences = subsample_sequences(sequences, max_per_dataset=20)
+        total = sum(len(s) for s in sequences.values())
+        print(f"[--quick] Subsampled to {total} sequences total (max 20 per dataset)")
 
     for configuration in configurations:
         output_folder = create_unused_folder(output_folder_root / configuration)
