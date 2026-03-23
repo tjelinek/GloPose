@@ -1,4 +1,6 @@
+import argparse
 import os
+import random
 import subprocess
 from enum import Enum
 from pathlib import Path
@@ -21,8 +23,10 @@ class Datasets(Enum):
     HANDAL = "HANDAL"
     BOP_HANDAL = "BOP_HANDAL"
     BOP_HANDAL_ONBOARDING_STATIC = "BOP_HANDAL_ONBOARDING_STATIC"
+    BOP_HANDAL_ONBOARDING_BOTH = "BOP_HANDAL_ONBOARDING_BOTH"
     BOP_HANDAL_ONBOARDING_DYNAMIC = "BOP_HANDAL_ONBOARDING_DYNAMIC"
     HOPE_ONBOARDING_STATIC = "HOPE_ONBOARDING_STATIC"
+    HOPE_ONBOARDING_BOTH = "HOPE_ONBOARDING_BOTH"
     HOPE_ONBOARDING_DYNAMIC = "HOPE_ONBOARDING_DYNAMIC"
     BOP_CLASSIC_ONBOARDING_SEQUENCES = "BOP_CLASSIC_ONBOARDING_SEQUENCES"
     HOT3D_ARIA_ONBOARDING_STATIC = "HOT3D_ARIA_ONBOARDING_STATIC"
@@ -42,8 +46,10 @@ runners = {
     Datasets.HANDAL: "run_HANDAL.py",
     Datasets.BOP_HANDAL: "run_bop_HANDAL.py",
     Datasets.BOP_HANDAL_ONBOARDING_STATIC: "run_bop_HANDAL_onboarding.py",
+    Datasets.BOP_HANDAL_ONBOARDING_BOTH: "run_bop_HANDAL_onboarding.py",
     Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: "run_bop_HANDAL_onboarding.py",
     Datasets.HOPE_ONBOARDING_STATIC: "run_HOPE.py",
+    Datasets.HOPE_ONBOARDING_BOTH: "run_HOPE.py",
     Datasets.HOPE_ONBOARDING_DYNAMIC: "run_HOPE.py",
     Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: "run_BOP_classic_onboarding.py",
     Datasets.HOT3D_ARIA_ONBOARDING_STATIC: "run_HOT3D.py",
@@ -219,10 +225,12 @@ def get_sequences():
     hot3d_quest3_dynamic, hot3d_quest3_static = get_hot3d_onboarding_sequences(bop_path, device='quest3')
 
     return {
-        # --- BOP onboarding: static + dynamic ---
-        Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_both,
+        # --- BOP onboarding: static (up+down separate), both (up+down combined), dynamic ---
+        Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_up + handal_down,
+        Datasets.BOP_HANDAL_ONBOARDING_BOTH: handal_both,
         Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_dynamic,
-        Datasets.HOPE_ONBOARDING_STATIC: hope_both,
+        Datasets.HOPE_ONBOARDING_STATIC: hope_up + hope_down,
+        Datasets.HOPE_ONBOARDING_BOTH: hope_both,
         Datasets.HOPE_ONBOARDING_DYNAMIC: hope_dynamic,
         Datasets.HOT3D_ARIA_ONBOARDING_STATIC: hot3d_aria_static,
         # Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: hot3d_aria_dynamic,  # TODO: needs depth-based alignment support

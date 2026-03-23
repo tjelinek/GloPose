@@ -21,8 +21,10 @@ from scripts.job_runner import get_configurations, get_results_root, get_sequenc
 # or the raw dataset name for others.
 DATASET_CSV_NAMES = {
     Datasets.BOP_HANDAL_ONBOARDING_STATIC: 'handal_static_onboarding',
+    Datasets.BOP_HANDAL_ONBOARDING_BOTH: 'handal_static_onboarding',
     Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: 'handal_dynamic_onboarding',
     Datasets.HOPE_ONBOARDING_STATIC: 'hope_static_onboarding',
+    Datasets.HOPE_ONBOARDING_BOTH: 'hope_static_onboarding',
     Datasets.HOPE_ONBOARDING_DYNAMIC: 'hope_dynamic_onboarding',
     Datasets.HOT3D_ARIA_ONBOARDING_STATIC: 'hot3d_static_onboarding',
     Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: 'hot3d_dynamic_onboarding',
@@ -44,8 +46,10 @@ def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> 
     for seq in sequences:
         parts = seq.split('_')
 
-        if dataset_enum in (Datasets.BOP_HANDAL_ONBOARDING_STATIC, Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC,
-                            Datasets.HOPE_ONBOARDING_STATIC, Datasets.HOPE_ONBOARDING_DYNAMIC):
+        if dataset_enum in (Datasets.BOP_HANDAL_ONBOARDING_STATIC, Datasets.BOP_HANDAL_ONBOARDING_BOTH,
+                            Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC,
+                            Datasets.HOPE_ONBOARDING_STATIC, Datasets.HOPE_ONBOARDING_BOTH,
+                            Datasets.HOPE_ONBOARDING_DYNAMIC):
             # e.g., obj_000001_both → csv sequence = obj_000001_both_down (or _both, _up, _dynamic)
             # The sequence name in CSV includes special_hash suffix
             if len(parts) == 3:
