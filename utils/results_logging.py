@@ -392,7 +392,7 @@ class WriteResults:
             'z': (255, 155, 255),
         }
 
-        rerun_name = f'{self.config.run.sequence}-{self.config.run.experiment_name}'
+        rerun_name = f'{self.config.run.sequence}-{self.config.run.experiment_name}-{self.config.run.special_hash}'
         init_rerun_recording(rerun_name, rerun_file, blueprint)
 
         if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
