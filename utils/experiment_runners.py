@@ -291,7 +291,10 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
     Called from run_on_bop_sequences() when both_merge_strategy='separate' and
     static_onboarding_sequence='both'.
     """
-    from data_structures.view_graph import merge_two_view_graphs
+    import shutil
+    from data_structures.view_graph import merge_two_view_graphs, load_view_graph
+    from utils.results_logging import build_onboarding_blueprint, log_reconstruction_to_rerun
+    from visualizations.rerun_utils import init_rerun_recording
 
     sequence = config.run.sequence
     hot3d_prefix = f'{config.input.hot3d_device}_' if dataset == 'hot3d' else ''
@@ -312,7 +315,7 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
     run_on_bop_sequences(dataset, experiment_name, sequence_type, config_up, gt_cam_scale,
                          output_folder, scene_obj_id)
 
-    # Merge the two ViewGraphs
+    # Check cached ViewGraphs exist
     cache_root = config.paths.cache_folder / 'view_graph_cache' / experiment_name / dataset
     down_cache = cache_root / f'{sequence}_{hot3d_prefix}down'
     up_cache = cache_root / f'{sequence}_{hot3d_prefix}up'
@@ -323,13 +326,15 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
                        sequence, down_cache.exists(), up_cache.exists())
         return
 
+    # Load sub-ViewGraphs to read their metadata before merge overwrites them
+    vg_down = load_view_graph(down_cache, device='cpu')
+    vg_up = load_view_graph(up_cache, device='cpu')
+
+    # Merge
     logger.info("Separate merge: merging down + up ViewGraphs for %s", sequence)
-    merge_two_view_graphs(down_cache, up_cache, merged_cache)
+    merged_vg, merged_rec, db1_rename, db2_rename = merge_two_view_graphs(down_cache, up_cache, merged_cache)
 
-    # Evaluate the merged ViewGraph
-    from data_structures.view_graph import load_view_graph
-    merged_vg = load_view_graph(merged_cache, device='cpu')
-
+    # --- Set up write folder ---
     config.run.special_hash = f'{hot3d_prefix}both'
     if output_folder is not None:
         write_folder = Path(output_folder) / dataset / f'{sequence}_{config.run.special_hash}'
@@ -337,12 +342,47 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
         write_folder = config.paths.results_folder / experiment_name / dataset / f'{sequence}_{config.run.special_hash}'
     write_folder.mkdir(parents=True, exist_ok=True)
 
+    # --- (a) Copy reconstruction to results folder ---
+    glomap_folder = write_folder / f'glomap_{sequence}'
+    glomap_output = glomap_folder / 'output' / '0'
+    glomap_output.mkdir(parents=True, exist_ok=True)
+    merged_rec.write(str(glomap_output))
+    shutil.copy(merged_cache / 'database.db', glomap_folder / 'database.db')
+    # Copy keyframe images/segmentations
+    for subdir in ('images', 'segmentations'):
+        src = merged_cache / subdir
+        dst = glomap_folder / subdir
+        if src.exists():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+
+    # --- (c) Populate ViewGraph metadata ---
+    merged_vg.reconstruction_success = vg_down.reconstruction_success and vg_up.reconstruction_success
+    merged_vg.alignment_success = vg_down.alignment_success and vg_up.alignment_success
+    merged_vg.num_input_frames = vg_down.num_input_frames + vg_up.num_input_frames
+    merged_vg.colmap_num_reconstructions = vg_down.colmap_num_reconstructions + vg_up.colmap_num_reconstructions
+    merged_vg.frame_filtering_time = vg_down.frame_filtering_time + vg_up.frame_filtering_time
+    merged_vg.reconstruction_time = vg_down.reconstruction_time + vg_up.reconstruction_time
+    merged_vg.gt_model_path = vg_down.gt_model_path
+
     # Build combined GT poses for evaluation (union of down and up GT)
     bop_folder = config.paths.bop_data_folder
     hot3d_dev = config.input.hot3d_device
-    gt_images_combined, _, _, sequence_starts = get_bop_images_and_segmentations(
+    _, _, _, sequence_starts = get_bop_images_and_segmentations(
         bop_folder, dataset, sequence, sequence_type, 'static', 'both',
         scene_obj_id=scene_obj_id, hot3d_device=hot3d_dev)
+
+    # Build image_name_to_frame_id: map prefixed reconstruction image names to combined GT frame indices
+    # db1_rename: {"0.png" -> "db1_0.png"} for down sequence (frame indices stay as-is)
+    # db2_rename: {"0.png" -> "db2_0.png"} for up sequence (frame indices offset by num_down_frames)
+    up_offset = sequence_starts[0] if len(sequence_starts) == 1 else sequence_starts[1]
+    image_name_to_frame_id = {}
+    for orig_name, prefixed_name in db1_rename.items():
+        frame_id = int(Path(orig_name).stem)
+        image_name_to_frame_id[prefixed_name] = frame_id
+    for orig_name, prefixed_name in db2_rename.items():
+        frame_id = int(Path(orig_name).stem) + up_offset
+        image_name_to_frame_id[prefixed_name] = frame_id
+    merged_vg.image_name_to_frame_id = image_name_to_frame_id
 
     dict_gt_Se3_cam2obj = read_gt_Se3_cam2obj_transformations(
         bop_folder, dataset, sequence, sequence_type, gt_cam_scale, 'static',
@@ -353,4 +393,15 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
     else:
         gt_Se3_world2cam = None
 
+    # --- (b) Create rerun file with same blueprint as normal onboarding ---
+    import rerun as rr
+    rerun_file = write_folder / f'rerun_{experiment_name}_{sequence}_{config.run.special_hash}.rrd'
+    blueprint = build_onboarding_blueprint(config)
+    rerun_name = f'{sequence}-{experiment_name}-merged'
+    init_rerun_recording(rerun_name, rerun_file, blueprint)
+    rr.set_time('frame', sequence=0)
+    log_reconstruction_to_rerun(merged_rec, gt_model_path=merged_vg.gt_model_path,
+                                gt_Se3_world2cam=gt_Se3_world2cam)
+
+    # Evaluate
     evaluate_onboarding(merged_vg, gt_Se3_world2cam, config.run, config.bop, write_folder)
