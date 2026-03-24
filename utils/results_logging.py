@@ -229,9 +229,11 @@ def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
     return blueprint
 
 
-def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_model_path: Path | None = None):
-    """Log a COLMAP reconstruction (pointcloud + cameras) to rerun. Standalone, no WriteResults needed."""
+def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_model_path: Path | None = None,
+                                gt_Se3_world2cam: dict | None = None):
+    """Log a COLMAP reconstruction (pointcloud + cameras + GT track) to rerun. Standalone, no WriteResults needed."""
     import io
+    from matplotlib import pyplot as plt
 
     # 3D point cloud
     if reconstruction.points3D:
@@ -249,6 +251,7 @@ def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_mode
         pred_q_xyzw = torch.tensor(cam_from_world.rotation.quat)
 
         camera = reconstruction.cameras[image.camera_id]
+        K = camera.calibration_matrix()
         entity = f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}'
 
         rr.log(entity,
@@ -258,9 +261,27 @@ def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_mode
                static=True)
         rr.log(entity,
                rr.Pinhole(resolution=[camera.width, camera.height],
-                          focal_length=[camera.params[0], camera.params[0]],
-                          principal_point=[camera.params[2], camera.params[3]]),
+                          focal_length=[K[0, 0], K[1, 1]],
+                          principal_point=[K[0, 2], K[1, 2]]),
                static=True)
+
+    # GT camera track
+    if gt_Se3_world2cam is not None and len(gt_Se3_world2cam) >= 2:
+        gt_centers = np.stack([
+            gt_Se3_world2cam[i].inverse().translation.numpy(force=True)
+            for i in sorted(gt_Se3_world2cam.keys())
+        ])
+        n_gt = len(gt_centers)
+        cmap_gt = plt.get_cmap('Reds')
+        gradient = np.linspace(1., 0.5, n_gt)
+        colors_gt = (np.asarray([cmap_gt(gradient[i])[:3] for i in range(n_gt)]) * 255).astype(np.uint8)
+        strips_gt = np.stack([gt_centers[:-1], gt_centers[1:]], axis=1)
+        object_size = 1.0
+        if reconstruction.points3D:
+            object_size = np.max(np.linalg.norm(points_3d_coords - np.mean(points_3d_coords, axis=0), axis=1))
+        strips_radii = [0.005 * object_size] * n_gt
+        rr.log(RerunAnnotations.colmap_gt_camera_track,
+               rr.LineStrips3D(strips=strips_gt, colors=colors_gt, radii=strips_radii), static=True)
 
     # GT mesh
     if gt_model_path is not None and gt_model_path.exists():
