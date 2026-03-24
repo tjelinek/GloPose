@@ -750,20 +750,26 @@ class WriteResults:
     def _log_graph_comparison(self, colmap_reconstruction: pycolmap.Reconstruction,
                               image_name_to_image_id: dict, G_reliable: nx.Graph):
         """Log COLMAP co-visibility graph and our initial viewgraph side by side."""
-        # Build COLMAP co-visibility graph: two images are connected if they share 3D points
+        # Build COLMAP co-visibility graph from shared 3D point tracks.
+        # Count shared 3D points per image pair, then keep only edges above the median.
+        from collections import Counter
+        pair_counts: Counter = Counter()
+        for point3D in colmap_reconstruction.points3D.values():
+            observer_ids = sorted(elem.image_id for elem in point3D.track.elements)
+            for i in range(len(observer_ids)):
+                for j in range(i + 1, len(observer_ids)):
+                    pair_counts[(observer_ids[i], observer_ids[j])] += 1
+
         G_covis = nx.Graph()
         for image_id in colmap_reconstruction.images:
             G_covis.add_node(image_id)
 
-        # For each 3D point, connect all image pairs that observe it
-        for point3D in colmap_reconstruction.points3D.values():
-            observer_image_ids = [elem.image_id for elem in point3D.track.elements]
-            for i in range(len(observer_image_ids)):
-                for j in range(i + 1, len(observer_image_ids)):
-                    if G_covis.has_edge(observer_image_ids[i], observer_image_ids[j]):
-                        G_covis[observer_image_ids[i]][observer_image_ids[j]]['weight'] += 1
-                    else:
-                        G_covis.add_edge(observer_image_ids[i], observer_image_ids[j], weight=1)
+        if pair_counts:
+            counts = np.array(list(pair_counts.values()))
+            threshold = max(int(np.median(counts)), 1)
+            for (id_a, id_b), count in pair_counts.items():
+                if count >= threshold:
+                    G_covis.add_edge(id_a, id_b, weight=count)
 
         # Log COLMAP co-visibility graph
         covis_node_ids = sorted(G_covis.nodes)
