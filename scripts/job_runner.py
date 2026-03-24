@@ -97,10 +97,10 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path,
-                   chunk_size: int = 2) -> None:
+                  batch_size: int) -> None:
     """Submit all sequences for a config as a single SLURM job array.
 
-    Each array task processes `chunk_size` sequences sequentially, reducing the total number of SLURM jobs.
+    Each array task passes `batch_size` sequences to the runner script, which processes them sequentially.
     """
     if not all_sequences:
         return
@@ -116,7 +116,7 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
             f.write(seq + '\n')
 
     n = len(all_sequences)
-    n_tasks = (n + chunk_size - 1) // chunk_size  # ceiling division
+    n_tasks = (n + batch_size - 1) // batch_size  # ceiling division
     array_spec = f'0-{n_tasks - 1}'
 
     batch_script = 'job_array.batch' if os.path.basename(os.getcwd()) == 'scripts' else 'scripts/job_array.batch'
@@ -129,14 +129,14 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
         '--experiment', experiment,
         '--output-folder', str(output_folder),
         '--sequence-list', str(seq_list_path),
-        '--chunk-size', str(chunk_size),
+        '--batch-size', str(batch_size),
     ]
     extra = runner_extra_args.get(dataset)
     if extra:
         cmd.extend(['--runner-extra-args', extra])
 
     print('----------------------------------------')
-    print(f'Submitting job array ({n_tasks} tasks, {chunk_size} seq/task, {n} total) '
+    print(f'Submitting job array ({n_tasks} tasks, {batch_size} seq/task, {n} total) '
           f'for {configuration_name} on {dataset.value}')
     print(' '.join(cmd))
     subprocess.run(cmd)
@@ -277,6 +277,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--quick', action='store_true',
                         help='Run on 20 random (but deterministic) sequences per dataset')
+    parser.add_argument('--batch-size', type=int, default=4,
+                        help='Number of sequences per SLURM array task (default: 2)')
     args = parser.parse_args()
 
     configurations = get_configurations()
@@ -292,7 +294,7 @@ def main():
         output_folder = create_unused_folder(output_folder_root / configuration)
 
         for dataset in sequences:
-            run_job_array(configuration, sequences[dataset], dataset, output_folder)
+            run_job_array(configuration, sequences[dataset], dataset, output_folder, batch_size=args.batch_size)
 
 
 if __name__ == "__main__":

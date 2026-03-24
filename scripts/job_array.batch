@@ -16,7 +16,7 @@ output_folder=""
 experiment=""
 sequence_list_file=""
 runner_extra_args=""
-chunk_size=1
+batch_size=1
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -26,7 +26,7 @@ while [[ "$#" -gt 0 ]]; do
         --output-folder) output_folder="$2"; shift ;;
         --sequence-list) sequence_list_file="$2"; shift ;;
         --runner-extra-args) runner_extra_args="$2"; shift ;;
-        --chunk-size) chunk_size="$2"; shift ;;
+        --batch-size) batch_size="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -37,9 +37,9 @@ if [ -z "$dataset_runner" ] || [ -z "$config_file_path" ] || [ -z "$output_folde
     exit 1
 fi
 
-# Read the chunk of sequences for this array task
-start_line=$(( SLURM_ARRAY_TASK_ID * chunk_size + 1 ))
-end_line=$(( start_line + chunk_size - 1 ))
+# Read the batch of sequences for this array task
+start_line=$(( SLURM_ARRAY_TASK_ID * batch_size + 1 ))
+end_line=$(( start_line + batch_size - 1 ))
 mapfile -t sequences < <(sed -n "${start_line},${end_line}p" "$sequence_list_file")
 
 if [ ${#sequences[@]} -eq 0 ]; then
@@ -60,11 +60,10 @@ mkdir -p "${output_folder}/logs"
 echo "Array task ${SLURM_ARRAY_TASK_ID}: ${#sequences[@]} sequences (lines ${start_line}-${end_line})"
 echo "Config: ${config_file_path}"
 echo "Output: ${output_folder}"
+echo "Sequences: ${sequences[*]}"
 
-for sequence in "${sequences[@]}"; do
-    echo "--- Processing sequence: ${sequence} ---"
-    python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
-            --config="$config_file_path" $runner_extra_args --sequences \
-            "${sequence}" > "${output_folder}/logs/${runner_stem}_${sequence}.log" 2>&1
-    echo "--- Done: ${sequence} (exit code: $?) ---"
-done
+log_file="${output_folder}/logs/${runner_stem}_task_${SLURM_ARRAY_TASK_ID}.log"
+python "$dataset_runner" --output_folder="${output_folder}" --experiment="${experiment}" \
+        --config="$config_file_path" $runner_extra_args --sequences \
+        "${sequences[@]}" > "${log_file}" 2>&1
+echo "Done (exit code: $?)"
