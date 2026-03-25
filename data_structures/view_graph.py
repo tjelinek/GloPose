@@ -108,9 +108,9 @@ class ViewGraph:
         self.colmap_reconstruction_path = reconstruction_path
 
         new_db_path = save_dir / self.colmap_db_path.name
-        if self.colmap_db_path != new_db_path:
+        if self.colmap_db_path != new_db_path and self.colmap_db_path.exists():
             shutil.copy(self.colmap_db_path, new_db_path)
-        self.colmap_db_path = new_db_path
+            self.colmap_db_path = new_db_path
 
         graph_path.parent.mkdir(parents=True, exist_ok=True)
         graph_path.is_file()
