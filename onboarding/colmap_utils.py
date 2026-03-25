@@ -1,10 +1,14 @@
+import copy
 import shutil
 from pathlib import Path
 from typing import Dict, Tuple
 
+import numpy as np
 import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
+from scipy.spatial import KDTree
+from scipy.spatial.transform import Rotation
 
 # pycolmap 4.0 introduces Rig→Frame→Image hierarchy; 3.x has Image.set_cam_from_world()
 PYCOLMAP_MAJOR = int(pycolmap.__version__.split('.')[0])
@@ -179,6 +183,160 @@ def merge_colmap_reconstructions(
     _add_reconstruction(rec2, rec2_id_map, rec2_name_map)
 
     return merged
+
+
+def _apply_rigid_to_reconstruction(
+        rec: pycolmap.Reconstruction, rotation_matrix: np.ndarray, translation: np.ndarray,
+) -> pycolmap.Reconstruction:
+    """Apply a rigid transform (R, t) to a reconstruction via pycolmap Sim3d (scale=1)."""
+    rec_out = copy.deepcopy(rec)
+    quat_xyzw = Rotation.from_matrix(rotation_matrix).as_quat()  # scipy returns [x, y, z, w]
+    sim3d = pycolmap.Sim3d(
+        scale=1.0,
+        rotation=pycolmap.Rotation3d(np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])),
+        translation=translation,
+    )
+    rec_out.transform(sim3d)
+    return rec_out
+
+
+def _procrustes_svd(source: np.ndarray, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Solve for rigid (R, t) that minimizes ||R @ source.T + t - target.T||.
+
+    Args:
+        source: (N, 3) matched points from source.
+        target: (N, 3) matched points from target.
+
+    Returns:
+        R: (3, 3) rotation matrix.
+        t: (3,) translation vector.
+    """
+    centroid_src = source.mean(axis=0)
+    centroid_tgt = target.mean(axis=0)
+
+    src_centered = source - centroid_src
+    tgt_centered = target - centroid_tgt
+
+    H = src_centered.T @ tgt_centered  # (3, 3)
+    U, S, Vt = np.linalg.svd(H)
+
+    # Ensure proper rotation (det = +1)
+    d = np.linalg.det(Vt.T @ U.T)
+    sign_matrix = np.diag([1, 1, np.sign(d)])
+    R = Vt.T @ sign_matrix @ U.T
+
+    t = centroid_tgt - R @ centroid_src
+
+    return R, t
+
+
+def align_reconstructions_icp(
+        rec_target: pycolmap.Reconstruction,
+        rec_source: pycolmap.Reconstruction,
+        max_correspondence_distance: float | None = None,
+        max_iterations: int = 10,
+) -> Tuple[pycolmap.Reconstruction, dict]:
+    """Align rec_source to rec_target using centroid prewarp + gated Procrustes.
+
+    Both reconstructions should already be roughly aligned (e.g. via GT Kabsch).
+    This refines the residual misalignment:
+    1. Translate rec_source so its centroid matches rec_target's centroid.
+    2. Iteratively: find mutual nearest neighbors within a distance gate,
+       solve rigid transform via SVD Procrustes on those pairs only.
+
+    Args:
+        rec_target: Reference reconstruction (kept fixed).
+        rec_source: Source reconstruction (will be transformed).
+        max_correspondence_distance: Max NN distance for a pair to count as inlier.
+            If None, uses 2× median NN distance after centroid prewarp.
+        max_iterations: Number of Procrustes refinement iterations.
+
+    Returns:
+        rec_source_aligned: Deep copy of rec_source with alignment applied.
+        info: Dict with alignment metrics.
+    """
+    points_target = np.array([p.xyz for p in rec_target.points3D.values()])
+    points_source = np.array([p.xyz for p in rec_source.points3D.values()])
+
+    if len(points_target) < 10 or len(points_source) < 10:
+        print(f"[align] Too few points (target={len(points_target)}, source={len(points_source)}), skipping")
+        return copy.deepcopy(rec_source), {
+            'num_points_target': len(points_target), 'num_points_source': len(points_source),
+            'num_inliers': 0, 'converged': False,
+        }
+
+    # Step 1: Centroid prewarp
+    centroid_target = points_target.mean(axis=0)
+    centroid_source = points_source.mean(axis=0)
+    centroid_shift = centroid_target - centroid_source
+
+    points_source_shifted = points_source + centroid_shift
+
+    print(f"[align] points: target={len(points_target)}, source={len(points_source)}")
+    print(f"[align] centroid shift: {np.linalg.norm(centroid_shift):.4f}")
+
+    # Step 2: Iterative gated Procrustes
+    R_total = np.eye(3)
+    t_total = centroid_shift.copy()
+    current_source = points_source_shifted.copy()
+
+    for iteration in range(max_iterations):
+        tree = KDTree(points_target)
+        distances, indices = tree.query(current_source)
+
+        # Distance gate
+        if max_correspondence_distance is None:
+            gate = 2.0 * np.median(distances)
+        else:
+            gate = max_correspondence_distance
+
+        inlier_mask = distances < gate
+        num_inliers = inlier_mask.sum()
+
+        if num_inliers < 10:
+            print(f"[align] iter {iteration}: only {num_inliers} inliers, stopping")
+            break
+
+        matched_source = current_source[inlier_mask]
+        matched_target = points_target[indices[inlier_mask]]
+
+        R_iter, t_iter = _procrustes_svd(matched_source, matched_target)
+
+        # Apply incremental transform
+        current_source = (R_iter @ current_source.T).T + t_iter
+
+        # Accumulate: new_total = R_iter @ old_total, t = R_iter @ t_old + t_iter
+        R_total = R_iter @ R_total
+        t_total = R_iter @ t_total + t_iter
+
+        mean_dist = np.mean(distances[inlier_mask])
+        rot_angle = np.degrees(np.arccos(np.clip((np.trace(R_iter) - 1) / 2, -1, 1)))
+        print(f"[align] iter {iteration}: inliers={num_inliers}, mean_dist={mean_dist:.4f}, "
+              f"rot={rot_angle:.4f}°, trans={np.linalg.norm(t_iter):.4f}")
+
+        if rot_angle < 0.01 and np.linalg.norm(t_iter) < 1e-5:
+            print(f"[align] converged at iteration {iteration}")
+            break
+
+    # Apply total transform to reconstruction
+    rec_source_aligned = _apply_rigid_to_reconstruction(rec_source, R_total, t_total)
+
+    total_rot_deg = np.degrees(np.arccos(np.clip((np.trace(R_total) - 1) / 2, -1, 1)))
+    total_trans = np.linalg.norm(t_total)
+    print(f"[align] total: rotation={total_rot_deg:.4f}°, translation={total_trans:.4f}")
+
+    info = {
+        'num_points_target': len(points_target),
+        'num_points_source': len(points_source),
+        'num_inliers': int(num_inliers),
+        'rotation_deg': total_rot_deg,
+        'translation_norm': total_trans,
+        'transform_R': R_total,
+        'transform_t': t_total,
+        'converged': True,
+    }
+
+    return rec_source_aligned, info
 
 
 def colmap_K_params_vec(camera_K, camera_type=pycolmap.CameraModelId.PINHOLE):
