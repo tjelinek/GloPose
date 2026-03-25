@@ -105,6 +105,8 @@ class OnboardingConfig:
     filter_points_by_segmentation: bool = False
     export_view_graph: bool = False
 
+    vggt_depth_conf_threshold: float = 0.1
+
 
 @dataclass
 class CondensationConfig:

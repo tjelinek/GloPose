@@ -382,11 +382,14 @@ class OnboardingPipeline:
         try:
             if method == 'vggt':
                 from adapters.vggt_adapter import reconstruct_with_vggt
+                conf_threshold = self.config.onboarding.vggt_depth_conf_threshold
                 reconstruction = reconstruct_with_vggt(
                     image_paths=images_paths,
                     image_names=image_names,
                     device=self.config.run.device,
                     camera_K=camera_K,
+                    conf_threshold=conf_threshold,
+                    segmentation_paths=segmentation_paths,
                 )
             elif method == 'mast3r':
                 from adapters.mast3r_adapter import reconstruct_with_mast3r
@@ -396,6 +399,7 @@ class OnboardingPipeline:
                     matching_pairs=matching_pairs,
                     device=self.config.run.device,
                     camera_K=camera_K,
+                    segmentation_paths=segmentation_paths,
                 )
             else:
                 raise ValueError(f'Unknown external method: {method}')
