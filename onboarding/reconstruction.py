@@ -660,16 +660,23 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
     pred_first_image_point_depths = []
     gt_first_image_point_depths = []
 
+    depth_map = image_depths[first_image_name]
+    depth_h, depth_w = depth_map.shape[:2]
+
     for point2D in first_image.points2D:
         if point2D.has_point3D():
             point2D_x, point2D_y = point2D.xy.astype('int')
+
+            # Clamp to depth map bounds (external methods may use different resolution)
+            point2D_x = min(max(point2D_x, 0), depth_w - 1)
+            point2D_y = min(max(point2D_y, 0), depth_h - 1)
 
             point3D_id = point2D.point3D_id
             point3D = reconstruction.point3D(point3D_id)
 
             point3D_cam = cam_from_world * point3D.xyz  # Transform 3D point from world to camera coordinates
             depth_pred = point3D_cam[2]
-            depth_gt = image_depths[first_image_name][point2D_y, point2D_x].item()
+            depth_gt = depth_map[point2D_y, point2D_x].item()
 
             pred_first_image_point_depths.append(depth_pred)
             gt_first_image_point_depths.append(depth_gt)
@@ -677,7 +684,17 @@ def align_reconstruction_with_pose(reconstruction: pycolmap.Reconstruction, firs
     pred_first_image_point_depths = np.asarray(pred_first_image_point_depths)
     gt_first_image_point_depths = np.asarray(gt_first_image_point_depths)
 
-    scale = np.median(gt_first_image_point_depths) / np.median(pred_first_image_point_depths)
+    if len(pred_first_image_point_depths) == 0:
+        print("Alignment error: no 3D point observations in the first image (empty tracks).")
+        return reconstruction, False
+
+    median_gt = np.median(gt_first_image_point_depths)
+    median_pred = np.median(pred_first_image_point_depths)
+    if median_pred == 0 or median_gt == 0:
+        print(f"Alignment error: degenerate depths (median_gt={median_gt:.4f}, median_pred={median_pred:.4f}).")
+        return reconstruction, False
+
+    scale = median_gt / median_pred
 
     colmap_cam_from_world = first_image_colmap.cam_from_world()
     gt_cam_from_world = Se3_to_Rigid3d(first_image_gt_Se3_world2cam)
