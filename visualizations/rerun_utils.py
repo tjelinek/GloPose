@@ -127,7 +127,10 @@ def log_colmap_point_projections(reconstruction,
                                   jpeg_quality: int = 75):
     """Log 2D projections of COLMAP 3D points onto each keyframe image in Rerun.
 
-    For each registered image, overlays colored dots at the 2D locations of tracked 3D points.
+    Projects all 3D points through each image's camera model to get 2D positions,
+    rather than relying on stored point2D.xy (which may be in a different coordinate
+    space for external reconstruction methods like VGGT).
+
     If segmentations_dir is provided, points are colored green (inside mask) or red (outside mask).
 
     Args:
@@ -136,25 +139,44 @@ def log_colmap_point_projections(reconstruction,
         segmentations_dir: optional directory with segmentation masks ({image.name}.png)
         jpeg_quality: JPEG compression quality for rerun image logging
     """
+    if len(reconstruction.points3D) == 0:
+        return
+
+    # Gather all 3D points once
+    point3d_ids = list(reconstruction.points3D.keys())
+    points_3d = np.stack([reconstruction.points3D[pid].xyz for pid in point3d_ids], axis=0)
+    points_3d_colors = np.stack([reconstruction.points3D[pid].color for pid in point3d_ids], axis=0)
+
     for image_id, image in sorted(reconstruction.images.items(), key=lambda x: x[0]):
         image_path = images_dir / image.name
         if not image_path.exists():
             continue
 
         image_np = iio.imread(image_path)
+        h, w = image_np.shape[:2]
 
-        # Collect 2D points that have an associated 3D point
-        points_xy = []
-        point3d_ids = []
-        for point2D in image.points2D:
-            if point2D.has_point3D():
-                points_xy.append(point2D.xy)
-                point3d_ids.append(point2D.point3D_id)
+        # Project all 3D points through this image's camera
+        camera = reconstruction.cameras[image.camera_id]
+        cam_from_world = image.cam_from_world()
+
+        # Transform to camera coordinates
+        points_cam = (cam_from_world.rotation.matrix() @ points_3d.T).T + cam_from_world.translation
+        # Keep only points in front of camera
+        in_front = points_cam[:, 2] > 0
+        if not np.any(in_front):
+            continue
+
+        # Project to 2D using camera model
+        points_2d = np.stack([camera.img_from_cam(p) for p in points_cam[in_front]], axis=0)
+
+        # Keep only points within image bounds
+        in_bounds = ((points_2d[:, 0] >= 0) & (points_2d[:, 0] < w) &
+                     (points_2d[:, 1] >= 0) & (points_2d[:, 1] < h))
+        points_xy = points_2d[in_bounds]
+        visible_colors = points_3d_colors[in_front][in_bounds]
 
         if len(points_xy) == 0:
             continue
-
-        points_xy = np.stack(points_xy, axis=0)
 
         # Color by segmentation mask membership if available
         if segmentations_dir is not None:
@@ -164,8 +186,6 @@ def log_colmap_point_projections(reconstruction,
                 if seg_mask.ndim == 3:
                     seg_mask = seg_mask[..., 0]
 
-                # Clamp coordinates to image bounds
-                h, w = seg_mask.shape[:2]
                 px = np.clip(points_xy[:, 0].astype(int), 0, w - 1)
                 py = np.clip(points_xy[:, 1].astype(int), 0, h - 1)
                 inside = seg_mask[py, px] > 127
@@ -176,8 +196,7 @@ def log_colmap_point_projections(reconstruction,
             else:
                 colors = np.full((len(points_xy), 4), [0, 200, 0, 255], dtype=np.uint8)
         else:
-            # Use 3D point colors from reconstruction
-            colors = np.stack([reconstruction.points3D[pid].color for pid in point3d_ids], axis=0)
+            colors = visible_colors
 
         entity_path = f'{RerunAnnotations.colmap_point_projections}/{image_id}'
         rr.log(entity_path, rr.Image(image_np).compress(jpeg_quality=jpeg_quality), static=True)

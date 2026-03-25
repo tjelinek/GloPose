@@ -639,11 +639,11 @@ class WriteResults:
                 static=True
             )
 
-            camera_params = colmap_reconstruction.cameras[1]
+            camera_params = colmap_reconstruction.cameras[image.camera_id]
             rr.log(
                 f'{RerunAnnotations.colmap_predicted_camera_poses}/{image_id}',
                 rr.Pinhole(resolution=[camera_params.width, camera_params.height],
-                           focal_length=[camera_params.params[0], camera_params.params[0]],
+                           focal_length=[camera_params.params[0], camera_params.params[1]],
                            camera_xyz=None  # rr.ViewCoordinates.RUB
                            ),
                 static=True
