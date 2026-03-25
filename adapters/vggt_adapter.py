@@ -42,8 +42,9 @@ def reconstruct_with_vggt(
     image_names: list[str],
     device: str = 'cuda',
     camera_K: Optional[torch.Tensor] = None,
-    conf_threshold: float = 5.0,
+    conf_threshold: float = 0.0,
     max_points: int = 100_000,
+    segmentation_paths: Optional[list[Path]] = None,
     model=None,
 ) -> Optional[pycolmap.Reconstruction]:
     """Run VGGT feed-forward reconstruction on a set of images.
@@ -126,6 +127,15 @@ def reconstruct_with_vggt(
 
     # Filter by confidence
     conf_mask = depth_conf >= conf_threshold
+
+    # Filter by segmentation masks (keep only object points)
+    if segmentation_paths is not None:
+        from PIL import Image
+        for fidx, seg_path in enumerate(segmentation_paths):
+            seg = np.array(Image.open(seg_path).convert('L').resize(
+                (vggt_resolution, vggt_resolution), Image.NEAREST))
+            conf_mask[fidx] &= (seg > 127)
+
     conf_mask = randomly_limit_trues(conf_mask, max_points)
 
     filtered_pts3d = points_3d[conf_mask]
@@ -140,12 +150,32 @@ def reconstruct_with_vggt(
         reconstruction.add_point3D(
             filtered_pts3d[idx], pycolmap.Track(), filtered_rgb[idx])
 
-    # Rescale intrinsics from VGGT resolution to original image resolution
+    # Rescale intrinsics and 2D points from VGGT's 518px padded-square space
+    # to the original image pixel space.
+    #
+    # original_coords: [x1, y1, x2, y2, width, height] per frame
+    #   (x1,y1)-(x2,y2) = bounding box of original image content in the 1024px padded square
+    #   width, height = original image dimensions
+    #
+    # Mapping: grid_518 → padded_1024 → original_image
+    #   padded = grid * (1024 / 518)
+    #   original_x = (padded_x - x1) * (width / (x2 - x1))
+    #   original_y = (padded_y - y1) * (height / (y2 - y1))
     original_coords_np = original_coords.cpu().numpy()
+    grid_to_padded = img_load_resolution / vggt_resolution  # 1024 / 518
 
     for fidx in range(num_frames):
-        real_image_size = original_coords_np[fidx, -2:]  # (width, height)
-        resize_ratio = max(real_image_size) / vggt_resolution
+        x1, y1, x2, y2, orig_w, orig_h = original_coords_np[fidx]
+        content_w = x2 - x1  # width of original image in 1024px space
+        content_h = y2 - y1  # height of original image in 1024px space
+
+        # Scale and offset from 518px grid to original image
+        scale_x = grid_to_padded * orig_w / content_w
+        scale_y = grid_to_padded * orig_h / content_h
+        offset_x = x1 * orig_w / content_w
+        offset_y = y1 * orig_h / content_h
+
+        cam_w, cam_h = int(orig_w), int(orig_h)
 
         # Override with known intrinsics if provided
         if camera_K is not None:
@@ -153,18 +183,14 @@ def reconstruct_with_vggt(
             fx, fy = K_np[0, 0], K_np[1, 1]
             cx, cy = K_np[0, 2], K_np[1, 2]
             cam_params = np.array([fx, fy, cx, cy])
-            cam_w, cam_h = int(real_image_size[0]), int(real_image_size[1])
         else:
-            # Rescale VGGT intrinsics to original resolution
+            # Transform VGGT intrinsics (518px padded-square) to original image space
             K = intrinsic[fidx].copy()
-            K[:2, :] *= resize_ratio
-            real_pp = real_image_size / 2
-            K[0, 2] = real_pp[0]
-            K[1, 2] = real_pp[1]
-            fx, fy = K[0, 0], K[1, 1]
-            cx, cy = K[0, 2], K[1, 2]
+            fx = K[0, 0] * scale_x
+            fy = K[1, 1] * scale_y
+            cx = K[0, 2] * scale_x - offset_x
+            cy = K[1, 2] * scale_y - offset_y
             cam_params = np.array([fx, fy, cx, cy])
-            cam_w, cam_h = int(real_image_size[0]), int(real_image_size[1])
 
         camera = pycolmap.Camera(
             model='PINHOLE', width=cam_w, height=cam_h,
@@ -177,13 +203,16 @@ def reconstruct_with_vggt(
             extrinsic[fidx][:3, 3])
 
         # Add 2D point observations for points belonging to this frame
+        # Transform grid coordinates to original image space
         points2D_list = []
         point2D_idx = 0
         points_in_frame = (filtered_xyf[:, 2].astype(np.int32) == fidx)
         for batch_idx in np.nonzero(points_in_frame)[0]:
             point3D_id = int(batch_idx) + 1
-            xy = filtered_xyf[batch_idx, :2] * resize_ratio
-            points2D_list.append(pycolmap.Point2D(xy, point3D_id))
+            gx, gy = filtered_xyf[batch_idx, :2]
+            px = gx * scale_x - offset_x
+            py = gy * scale_y - offset_y
+            points2D_list.append(pycolmap.Point2D(np.array([px, py]), point3D_id))
             track = reconstruction.points3D[point3D_id].track
             track.add_element(fidx + 1, point2D_idx)
             point2D_idx += 1

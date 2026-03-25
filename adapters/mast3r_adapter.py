@@ -45,6 +45,7 @@ def reconstruct_with_mast3r(
     shared_intrinsics: bool = False,
     niter1: int = 300,
     niter2: int = 300,
+    segmentation_paths: Optional[list[Path]] = None,
     model=None,
 ) -> Optional[pycolmap.Reconstruction]:
     """Run Mast3r sparse global alignment on a set of images.
@@ -120,6 +121,13 @@ def reconstruct_with_mast3r(
     # Get 3D points (sparse)
     sparse_pts3d = scene.get_sparse_pts3d()
 
+    # Load segmentation masks if provided
+    seg_masks = {}
+    if segmentation_paths is not None:
+        from PIL import Image
+        for fidx, seg_path in enumerate(segmentation_paths):
+            seg_masks[fidx] = np.array(Image.open(seg_path).convert('L')) > 127
+
     # Collect all 3D points and their colors
     all_pts3d = []
     all_colors = []
@@ -132,6 +140,15 @@ def reconstruct_with_mast3r(
             continue
         # Filter out invalid points (NaN, Inf, very large)
         valid = np.all(np.isfinite(pts_np), axis=-1) & (np.abs(pts_np).max(axis=-1) < 1000)
+
+        # Filter by segmentation mask
+        if fidx in seg_masks and pts_np.ndim == 3:
+            seg = seg_masks[fidx]
+            h, w = pts_np.shape[:2]
+            if seg.shape != (h, w):
+                seg = np.array(Image.fromarray(seg).resize((w, h), Image.NEAREST))
+            valid &= seg
+
         if pts_np.ndim == 3:
             # (H, W, 3) dense format — flatten
             valid_flat = valid.reshape(-1)
@@ -184,11 +201,12 @@ def reconstruct_with_mast3r(
             fx, fy = K_np[0, 0], K_np[1, 1]
             cx, cy = K_np[0, 2], K_np[1, 2]
             # Use the original image dimensions from camera_K
-            cam_h, cam_w = int(true_shapes[fidx][0]), int(true_shapes[fidx][1])
+            # true_shape is np.int32 with shape (1, 2) containing [H, W]
+            cam_h, cam_w = int(true_shapes[fidx][0, 0]), int(true_shapes[fidx][0, 1])
         else:
             fx = fy = focals[fidx]
             cx, cy = pp[fidx, 0], pp[fidx, 1]
-            cam_h, cam_w = int(true_shapes[fidx][0]), int(true_shapes[fidx][1])
+            cam_h, cam_w = int(true_shapes[fidx][0, 0]), int(true_shapes[fidx][0, 1])
 
         cam_params = np.array([fx, fy, cx, cy])
         camera = pycolmap.Camera(
