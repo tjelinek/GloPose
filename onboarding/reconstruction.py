@@ -454,8 +454,9 @@ def run_mapper(colmap_output_path: Path, colmap_db_path: Path, colmap_image_path
                 sizes = [r.num_reg_images() for r in maps.values()]
                 logger.warning("COLMAP produced %d reconstructions (sizes: %s), using largest (%d images)",
                                len(maps), sizes, best.num_reg_images())
-            print(f"[pycolmap4-debug] run_mapper: writing best map ({best.num_reg_images()} images) to {colmap_output_path}")
-            best.write(str(colmap_output_path))
+            best_output_path = colmap_output_path / '0'
+            print(f"[pycolmap4-debug] run_mapper: writing best map ({best.num_reg_images()} images) to {best_output_path}")
+            best.write(str(best_output_path))
             print(f"[pycolmap4-debug] run_mapper: write done")
         return len(maps)
     else:
