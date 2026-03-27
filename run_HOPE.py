@@ -38,7 +38,8 @@ def main():
 
             set_config_for_bop_onboarding(config, sequence)
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, write_folder)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, write_folder,
+                                merge_only=args.merge_only)
 
 
 if __name__ == "__main__":

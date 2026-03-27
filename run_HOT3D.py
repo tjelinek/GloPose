@@ -15,6 +15,8 @@ def parse_hot3d_args():
     parser.add_argument("--experiment", required=False, default='default')
     parser.add_argument("--device", required=False, default='aria', choices=['aria', 'quest3'],
                         help="HOT3D camera device: 'aria' or 'quest3'")
+    parser.add_argument("--merge-only", action='store_true', default=False,
+                        help="Skip up/down onboarding, only run the merge step (requires cached ViewGraphs)")
     return parser.parse_args()
 
 
@@ -62,7 +64,8 @@ def main():
 
             sequence_type = 'onboarding'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder,
+                                merge_only=args.merge_only)
 
 
 if __name__ == "__main__":

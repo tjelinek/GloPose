@@ -41,7 +41,8 @@ def main():
 
             sequence_type = 'onboarding'
 
-            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder)
+            run_on_bop_sequences(dataset, experiment_name, sequence_type, config, 1.0, output_folder,
+                                merge_only=args.merge_only)
 
 
 if __name__ == "__main__":

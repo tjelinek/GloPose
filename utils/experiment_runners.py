@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any
 
+import pycolmap
 import torch
 from kornia.geometry import Se3, Quaternion
 
@@ -129,7 +130,7 @@ def reindex_frame_dict(frame_dict: Dict[int, Any], valid_frames: List[int]):
 
 
 def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str, config: GloPoseConfig, gt_cam_scale,
-                         output_folder: Path = None, scene_obj_id: int = None):
+                         output_folder: Path = None, scene_obj_id: int = None, merge_only: bool = False):
     onboarding_type = config.bop.onboarding_type
     sequence = config.run.sequence
 
@@ -155,7 +156,7 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
     if (static_onboarding_sequence == 'both'
             and config.onboarding.both_merge_strategy == 'separate'):
         _run_separate_merge(dataset, experiment_name, sequence_type, config, gt_cam_scale,
-                            output_folder, scene_obj_id)
+                            output_folder, scene_obj_id, merge_only=merge_only)
         return
 
     # Determine output folder
@@ -285,35 +286,42 @@ def run_on_bop_sequences(dataset: str, experiment_name: str, sequence_type: str,
 
 
 def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, config: GloPoseConfig, gt_cam_scale,
-                        output_folder: Path = None, scene_obj_id: int = None):
+                        output_folder: Path = None, scene_obj_id: int = None, merge_only: bool = False):
     """Run up and down onboarding separately, then merge the two ViewGraphs.
 
     Called from run_on_bop_sequences() when both_merge_strategy='separate' and
     static_onboarding_sequence='both'.
+
+    Args:
+        merge_only: If True, skip the up/down onboarding runs and go straight to
+            merging. Requires cached ViewGraphs from a previous run.
     """
     import shutil
     from data_structures.view_graph import merge_two_view_graphs, load_view_graph
-    from utils.results_logging import build_onboarding_blueprint, log_reconstruction_to_rerun
+    from utils.results_logging import build_onboarding_blueprint, log_merge_to_rerun, log_reconstruction_to_rerun
     from visualizations.rerun_utils import init_rerun_recording
 
     sequence = config.run.sequence
     hot3d_prefix = f'{config.input.hot3d_device}_' if dataset == 'hot3d' else ''
 
-    # Run 'down' pass
-    config_down = copy.deepcopy(config)
-    config_down.bop.static_onboarding_sequence = 'down'
-    config_down.run.special_hash = f'{hot3d_prefix}down'
-    logger.info("Separate merge: running 'down' pass for %s", sequence)
-    run_on_bop_sequences(dataset, experiment_name, sequence_type, config_down, gt_cam_scale,
-                         output_folder, scene_obj_id)
+    if not merge_only:
+        # Run 'down' pass
+        config_down = copy.deepcopy(config)
+        config_down.bop.static_onboarding_sequence = 'down'
+        config_down.run.special_hash = f'{hot3d_prefix}down'
+        logger.info("Separate merge: running 'down' pass for %s", sequence)
+        run_on_bop_sequences(dataset, experiment_name, sequence_type, config_down, gt_cam_scale,
+                             output_folder, scene_obj_id)
 
-    # Run 'up' pass
-    config_up = copy.deepcopy(config)
-    config_up.bop.static_onboarding_sequence = 'up'
-    config_up.run.special_hash = f'{hot3d_prefix}up'
-    logger.info("Separate merge: running 'up' pass for %s", sequence)
-    run_on_bop_sequences(dataset, experiment_name, sequence_type, config_up, gt_cam_scale,
-                         output_folder, scene_obj_id)
+        # Run 'up' pass
+        config_up = copy.deepcopy(config)
+        config_up.bop.static_onboarding_sequence = 'up'
+        config_up.run.special_hash = f'{hot3d_prefix}up'
+        logger.info("Separate merge: running 'up' pass for %s", sequence)
+        run_on_bop_sequences(dataset, experiment_name, sequence_type, config_up, gt_cam_scale,
+                             output_folder, scene_obj_id)
+    else:
+        logger.info("Separate merge: --merge-only, skipping up/down onboarding for %s", sequence)
 
     # Check cached ViewGraphs exist
     cache_root = config.paths.cache_folder / 'view_graph_cache' / experiment_name / dataset
@@ -330,9 +338,15 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
     vg_down = load_view_graph(down_cache, device='cpu')
     vg_up = load_view_graph(up_cache, device='cpu')
 
+    # Load unaligned reconstructions for visualization (before merge overwrites them)
+    rec_down = pycolmap.Reconstruction(str(vg_down.colmap_reconstruction_path))
+    rec_up = pycolmap.Reconstruction(str(vg_up.colmap_reconstruction_path))
+
     # Merge
     logger.info("Separate merge: merging down + up ViewGraphs for %s", sequence)
-    merged_vg, merged_rec, db1_rename, db2_rename = merge_two_view_graphs(down_cache, up_cache, merged_cache)
+    merged_vg, merged_rec, db1_rename, db2_rename, align_info = merge_two_view_graphs(
+        down_cache, up_cache, merged_cache,
+        onboarding_config=config.onboarding, device=config.run.device)
 
     # --- Set up write folder ---
     config.run.special_hash = f'{hot3d_prefix}both'
@@ -393,15 +407,18 @@ def _run_separate_merge(dataset: str, experiment_name: str, sequence_type: str, 
     else:
         gt_Se3_world2cam = None
 
-    # --- (b) Create rerun file with same blueprint as normal onboarding ---
+    # --- (b) Create rerun file with merge-specific blueprint ---
     import rerun as rr
     rerun_file = write_folder / f'rerun_{experiment_name}_{sequence}_{config.run.special_hash}.rrd'
     blueprint = build_onboarding_blueprint(config)
     rerun_name = f'{sequence}-{experiment_name}-merged'
     init_rerun_recording(rerun_name, rerun_file, blueprint)
     rr.set_time('frame', sequence=0)
-    log_reconstruction_to_rerun(merged_rec, gt_model_path=merged_vg.gt_model_path,
-                                gt_Se3_world2cam=gt_Se3_world2cam)
+    log_merge_to_rerun(rec_down, rec_up, merged_rec, align_info,
+                       down_cache / 'images', up_cache / 'images',
+                       down_cache / 'segmentations', up_cache / 'segmentations',
+                       gt_model_path=merged_vg.gt_model_path,
+                       gt_Se3_world2cam=gt_Se3_world2cam)
 
     # Evaluate
     evaluate_onboarding(merged_vg, gt_Se3_world2cam, config.run, config.bop, write_folder)

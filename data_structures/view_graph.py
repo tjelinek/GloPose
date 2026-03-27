@@ -298,7 +298,9 @@ def compute_dino_descriptors_for_view_graph(view_graph: ViewGraph, dino_model) -
 
 
 def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merged_folder: Path,
-                          use_icp: bool = True) \
+                          use_icp: bool = True,
+                          onboarding_config: 'OnboardingConfig | None' = None,
+                          device: str = 'cuda') \
         -> tuple['ViewGraph', 'pycolmap.Reconstruction', Dict[str, str], Dict[str, str]]:
     """Merge two ViewGraphs (e.g. down + up) into one.
 
@@ -306,7 +308,10 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
         viewgraph1_folder: Path to first (target/fixed) ViewGraph cache folder.
         viewgraph2_folder: Path to second (source) ViewGraph cache folder.
         merged_folder: Output path for the merged ViewGraph.
-        use_icp: If True, refine alignment of rec2 → rec1 via ICP before merging.
+        use_icp: If True, align rec2 → rec1 before merging.
+        onboarding_config: If provided, use matching-based alignment (preferred).
+            Falls back to ICP-only when None.
+        device: PyTorch device string for matching.
 
     Returns:
         merged_viewgraph: The merged ViewGraph object.
@@ -342,9 +347,30 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     reconstruction1 = pycolmap.Reconstruction(str(view_graph1.colmap_reconstruction_path))
     reconstruction2 = pycolmap.Reconstruction(str(view_graph2.colmap_reconstruction_path))
 
-    if use_icp:
+    align_info = {}
+    if use_icp and onboarding_config is not None:
+        # Matching-based alignment (uses dense/sparse matcher to find 3D correspondences)
+        from data_providers.flow_provider import create_matching_provider
+        from onboarding.colmap_utils import align_reconstructions_matching
+        match_provider = create_matching_provider(
+            onboarding_config.filter_matcher, onboarding_config, device)
+        reconstruction2, align_info = align_reconstructions_matching(
+            reconstruction1, reconstruction2, match_provider,
+            target_images_dir=viewgraph1_folder / 'images',
+            source_images_dir=viewgraph2_folder / 'images',
+            target_segs_dir=viewgraph1_folder / 'segmentations',
+            source_segs_dir=viewgraph2_folder / 'segmentations',
+            sample_size=onboarding_config.sample_size,
+            certainty_threshold=onboarding_config.min_certainty_threshold,
+            reliability_threshold=onboarding_config.flow_reliability_threshold,
+            black_background=onboarding_config.merge_black_background,
+            use_procrustes=onboarding_config.merge_use_procrustes,
+            refine_with_icp=onboarding_config.merge_refine_with_icp,
+            icp_centroid_prewarp=onboarding_config.merge_icp_centroid_prewarp,
+            device=device)
+    elif use_icp:
         from onboarding.colmap_utils import align_reconstructions_icp
-        reconstruction2, icp_info = align_reconstructions_icp(reconstruction1, reconstruction2)
+        reconstruction2, align_info = align_reconstructions_icp(reconstruction1, reconstruction2)
 
     merged_reconstruction = merge_colmap_reconstructions(
         reconstruction1, reconstruction2,
@@ -359,7 +385,7 @@ def merge_two_view_graphs(viewgraph1_folder: Path, viewgraph2_folder: Path, merg
     merged_viewgraph.save_viewgraph(merged_folder, merged_reconstruction, save_images=True, overwrite=False,
                                     to_cpu=True)
 
-    return merged_viewgraph, merged_reconstruction, db1_image_rename_dict, db2_image_rename_dict
+    return merged_viewgraph, merged_reconstruction, db1_image_rename_dict, db2_image_rename_dict, align_info
 
 
 def copy_relabeled_images(source_viewgraph_folder, viewgraph_node_relabel_mapping, target_viewgraph_folder):

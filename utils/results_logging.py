@@ -222,6 +222,45 @@ def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
                     ],
                     name='Pose'
                 ),
+            # Tab 6: Model Merging (used by separate merge strategy)
+            rrb.Tabs(
+                rrb.Spatial3DView(
+                    name='Before Alignment',
+                    origin=RerunAnnotations.merge_before,
+                    background=[255, 255, 255],
+                ),
+                rrb.Spatial3DView(
+                    name='After Procrustes',
+                    origin=RerunAnnotations.merge_after_procrustes,
+                    background=[255, 255, 255],
+                ),
+                rrb.Spatial3DView(
+                    name='Before ICP',
+                    origin=RerunAnnotations.merge_before_icp,
+                    background=[255, 255, 255],
+                ),
+                rrb.Spatial3DView(
+                    name='After ICP',
+                    origin=RerunAnnotations.merge_after_icp,
+                    background=[255, 255, 255],
+                ),
+                rrb.Spatial3DView(
+                    name='After Alignment (Merged)',
+                    origin=RerunAnnotations.merge_after,
+                    background=[255, 255, 255],
+                ),
+                rrb.Vertical(
+                    rrb.Horizontal(
+                        *[rrb.Spatial2DView(name=f'Match Pair {i}',
+                                            origin=f'{RerunAnnotations.merge_match_pairs}/{i}')
+                          for i in range(5)],
+                    ),
+                    rrb.TextLogView(name='Match Info', origin=RerunAnnotations.merge_match_info),
+                    row_shares=[0.8, 0.2],
+                    name='Match Pair Images',
+                ),
+                name='Model Merging',
+            ),
             ],
             name=f'Results - {config.run.sequence}'
         )
@@ -320,6 +359,195 @@ def log_reconstruction_to_rerun(reconstruction: pycolmap.Reconstruction, gt_mode
             rr.log(RerunAnnotations.space_gt_mesh, rr.Mesh3D(**mesh3d_kwargs), static=True)
         except Exception as e:
             logger.warning("Failed to load GT mesh from %s: %s", gt_model_path, e)
+
+
+
+def _estimate_object_radius(reconstruction: pycolmap.Reconstruction) -> float:
+    """Estimate a reasonable point radius from the reconstruction extent."""
+    if not reconstruction.points3D:
+        return 0.001
+    pts = np.stack([p.xyz for p in reconstruction.points3D.values()], axis=0)
+    extent = np.max(np.linalg.norm(pts - pts.mean(axis=0), axis=1))
+    return max(extent * 0.002, 0.001)
+
+
+def _log_reconstruction_pointcloud(entity: str, reconstruction: pycolmap.Reconstruction,
+                                    color: tuple, radius: float | None = None):
+    """Log a reconstruction's point cloud to rerun with a uniform color."""
+    if not reconstruction.points3D:
+        return
+    pts = np.stack([p.xyz for p in reconstruction.points3D.values()], axis=0)
+    colors = np.full((len(pts), 3), color, dtype=np.uint8)
+    if radius is None:
+        radius = _estimate_object_radius(reconstruction)
+    rr.log(entity, rr.Points3D(pts, colors=colors, radii=radius), static=True)
+
+
+def _log_reconstruction_cameras(entity_prefix: str, reconstruction: pycolmap.Reconstruction,
+                                 color: tuple):
+    """Log camera poses from a reconstruction as colored line strips (camera track)."""
+    centers = []
+    for image_id in sorted(reconstruction.images.keys()):
+        image = reconstruction.images[image_id]
+        cam_center = image.cam_from_world().inverse().translation
+        centers.append(cam_center)
+    if len(centers) < 2:
+        return
+    centers = np.array(centers)
+    strips = np.stack([centers[:-1], centers[1:]], axis=1)
+    rr.log(entity_prefix,
+           rr.LineStrips3D(strips=strips, colors=[color] * len(strips), radii=0.002),
+           static=True)
+    rr.log(f'{entity_prefix}/positions',
+           rr.Points3D(centers, colors=[color] * len(centers), radii=0.005),
+           static=True)
+
+
+def log_merge_to_rerun(rec_target: pycolmap.Reconstruction, rec_source: pycolmap.Reconstruction,
+                        merged_rec: pycolmap.Reconstruction, align_info: dict,
+                        target_images_dir: Path, source_images_dir: Path,
+                        target_segs_dir: Path, source_segs_dir: Path,
+                        gt_model_path: Path | None = None,
+                        gt_Se3_world2cam: dict | None = None):
+    """Log merge visualization data to rerun.
+
+    Shows:
+    - Target (down) point cloud in blue, source (up) in red — before alignment
+    - Merged point cloud with original colors
+    - Camera tracks for both reconstructions
+    - GT mesh and GT camera track
+    - Source images used for matching (from align_info)
+    """
+    import io
+
+    RA = RerunAnnotations
+
+    def _log_merge_stage(prefix: str, rec_fixed: pycolmap.Reconstruction,
+                         rec_moved: pycolmap.Reconstruction | None):
+        """Log a blue/red point cloud pair + GT mesh/track to a given entity prefix."""
+        _log_reconstruction_pointcloud(f'{prefix}/target_pointcloud', rec_fixed, color=(70, 130, 255))
+        _log_reconstruction_cameras(f'{prefix}/target_cameras', rec_fixed, color=(70, 130, 255))
+        if rec_moved is not None:
+            _log_reconstruction_pointcloud(f'{prefix}/source_pointcloud', rec_moved, color=(255, 70, 70))
+            _log_reconstruction_cameras(f'{prefix}/source_cameras', rec_moved, color=(255, 70, 70))
+        if gt_mesh_kwargs is not None:
+            rr.log(f'{prefix}/gt_mesh', rr.Mesh3D(**gt_mesh_kwargs), static=True)
+        if gt_strips is not None:
+            rr.log(f'{prefix}/gt_camera_track',
+                   rr.LineStrips3D(strips=gt_strips, colors=[(200, 50, 50)] * len(gt_strips), radii=0.003),
+                   static=True)
+
+    # Pre-load GT mesh once
+    gt_mesh_kwargs = None
+    if gt_model_path is not None and gt_model_path.exists():
+        try:
+            if gt_model_path.suffix.lower() == '.ply':
+                cleaned = _load_ply_without_edges(gt_model_path)
+                mesh = trimesh.load(io.BytesIO(cleaned), file_type='ply', force='mesh')
+            else:
+                mesh = trimesh.load(gt_model_path, force='mesh')
+            vertices = np.asarray(mesh.vertices, dtype=np.float32)
+            faces = np.asarray(mesh.faces, dtype=np.uint32)
+            gt_mesh_kwargs = dict(vertex_positions=vertices, triangle_indices=faces,
+                                  vertex_colors=np.full((len(vertices), 3), 180, dtype=np.uint8))
+        except Exception as e:
+            logger.warning("Failed to load GT mesh for merge viz: %s", e)
+
+    # Pre-compute GT camera track
+    gt_strips = None
+    if gt_Se3_world2cam is not None and len(gt_Se3_world2cam) >= 2:
+        gt_centers = np.stack([
+            gt_Se3_world2cam[i].inverse().translation.numpy(force=True)
+            for i in sorted(gt_Se3_world2cam.keys())
+        ])
+        gt_strips = np.stack([gt_centers[:-1], gt_centers[1:]], axis=1)
+
+    # Before alignment: unmodified target (down) and source (up)
+    _log_merge_stage(RA.merge_before, rec_target, rec_source)
+
+    # After Procrustes (None if Procrustes was not applied)
+    rec_after_procrustes = align_info.get('rec_after_procrustes')
+    _log_merge_stage(RA.merge_after_procrustes, rec_target, rec_after_procrustes)
+
+    # Before ICP (= after Procrustes if applied, or unmodified source if Procrustes failed)
+    rec_before_icp = align_info.get('rec_before_icp')
+    _log_merge_stage(RA.merge_before_icp, rec_target, rec_before_icp)
+
+    # After ICP
+    rec_after_icp = align_info.get('rec_after_icp')
+    _log_merge_stage(RA.merge_after_icp, rec_target, rec_after_icp)
+
+    # After alignment: final merged with original colors
+    if merged_rec.points3D:
+        pts = np.stack([p.xyz for p in merged_rec.points3D.values()], axis=0)
+        colors = np.stack([p.color for p in merged_rec.points3D.values()], axis=0)
+        radius = _estimate_object_radius(merged_rec)
+        rr.log(RA.merge_after_pointcloud, rr.Points3D(pts, colors=colors, radii=radius), static=True)
+    _log_reconstruction_cameras(RA.merge_after_cameras, merged_rec, color=(70, 200, 70))
+    if gt_mesh_kwargs is not None:
+        rr.log(RA.merge_after_gt_mesh, rr.Mesh3D(**gt_mesh_kwargs), static=True)
+    if gt_strips is not None:
+        rr.log(RA.merge_after_gt_camera_track,
+               rr.LineStrips3D(strips=gt_strips, colors=[(200, 50, 50)] * len(gt_strips), radii=0.003),
+               static=True)
+
+    # Log match pair images with correspondences (if available in align_info)
+    match_pairs = align_info.get('match_pairs', [])
+    for i, pair in enumerate(match_pairs[:5]):
+        src_stem = Path(pair['src_name']).stem
+        tgt_stem = Path(pair['tgt_name']).stem
+        src_img_path = source_images_dir / f'{src_stem}_image.png'
+        tgt_img_path = target_images_dir / f'{tgt_stem}_image.png'
+        if not src_img_path.exists() or not tgt_img_path.exists():
+            continue
+
+        src_img = np.asarray(Image.open(src_img_path))
+        tgt_img = np.asarray(Image.open(tgt_img_path))
+        h1, w1 = src_img.shape[:2]
+
+        # Overlay segmentation masks (darken background like in onboarding)
+        src_seg_path = source_segs_dir / f'{src_stem}_seg.png'
+        tgt_seg_path = target_segs_dir / f'{tgt_stem}_seg.png'
+        if src_seg_path.exists():
+            src_seg = np.asarray(Image.open(src_seg_path).convert('L')).astype(np.float32) / 255.0
+            src_img = overlay_mask(src_img, ~src_seg.astype(bool), alpha=0.7, color=(0, 0, 0))
+        if tgt_seg_path.exists():
+            tgt_seg = np.asarray(Image.open(tgt_seg_path).convert('L')).astype(np.float32) / 255.0
+            tgt_img = overlay_mask(tgt_img, ~tgt_seg.astype(bool), alpha=0.7, color=(0, 0, 0))
+
+        # Stack images vertically: source on top, target on bottom
+        combined = np.concatenate([src_img, tgt_img], axis=0)
+        pair_entity = f'{RA.merge_match_pairs}/{i}'
+        rr.log(pair_entity, rr.Image(combined), static=True)
+
+        # Log info text to shared text log panel (each at a different time so all are visible)
+        reliability = pair.get('reliability', 0)
+        threshold = pair.get('reliability_threshold', 0)
+        passes = "PASS" if reliability >= threshold else "FAIL"
+        info_text = (f"[Pair {i}] src={pair['src_name']} -> tgt={pair['tgt_name']}  |  "
+                     f"matches={pair['num_matches']}  "
+                     f"med_cert={pair.get('median_certainty', 0):.3f}  "
+                     f"reliability={reliability:.3f} ({passes}, thr={threshold:.3f})  "
+                     f"3D_corr={pair.get('num_correspondences', 0)}")
+        rr.set_time('match_pair', sequence=i)
+        rr.log(RA.merge_match_info, rr.TextLog(info_text))
+
+        # Draw correspondences as line strips from match_pts if available
+        match_pts = pair.get('match_pts')
+        if match_pts is not None:
+            src_2d, tgt_2d = match_pts
+            # Offset target points by source image height
+            tgt_2d_shifted = tgt_2d.copy()
+            tgt_2d_shifted[:, 1] += h1
+            # Subsample for visualization (max 200 lines)
+            n = len(src_2d)
+            step = max(1, n // 200)
+            src_sub = src_2d[::step]
+            tgt_sub = tgt_2d_shifted[::step]
+            strips = np.stack([src_sub, tgt_sub], axis=1).astype(np.float32)
+            rr.log(f'{pair_entity}/correspondences',
+                   rr.LineStrips2D(strips, colors=[(0, 255, 0)] * len(strips), radii=0.5),
+                   static=True)
 
 
 class WriteResults:

@@ -1,7 +1,9 @@
 import copy
+import logging
+import random
 import shutil
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pycolmap
@@ -9,6 +11,8 @@ import torch
 from kornia.geometry import Se3, Quaternion
 from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation
+
+logger = logging.getLogger(__name__)
 
 # pycolmap 4.0 introduces Rig→Frame→Image hierarchy; 3.x has Image.set_cam_from_world()
 PYCOLMAP_MAJOR = int(pycolmap.__version__.split('.')[0])
@@ -235,6 +239,7 @@ def align_reconstructions_icp(
         rec_source: pycolmap.Reconstruction,
         max_correspondence_distance: float | None = None,
         max_iterations: int = 10,
+        skip_centroid_prewarp: bool = False,
 ) -> Tuple[pycolmap.Reconstruction, dict]:
     """Align rec_source to rec_target using centroid prewarp + gated Procrustes.
 
@@ -265,20 +270,22 @@ def align_reconstructions_icp(
             'num_inliers': 0, 'converged': False,
         }
 
-    # Step 1: Centroid prewarp
-    centroid_target = points_target.mean(axis=0)
-    centroid_source = points_source.mean(axis=0)
-    centroid_shift = centroid_target - centroid_source
-
-    points_source_shifted = points_source + centroid_shift
-
+    # Step 1: Centroid prewarp (skip when input is already roughly aligned, e.g. after Procrustes)
     print(f"[align] points: target={len(points_target)}, source={len(points_source)}")
-    print(f"[align] centroid shift: {np.linalg.norm(centroid_shift):.4f}")
+    if skip_centroid_prewarp:
+        centroid_shift = np.zeros(3)
+        print(f"[align] centroid prewarp: SKIPPED (input already aligned)")
+    else:
+        centroid_target = points_target.mean(axis=0)
+        centroid_source = points_source.mean(axis=0)
+        centroid_shift = centroid_target - centroid_source
+        print(f"[align] centroid shift: {np.linalg.norm(centroid_shift):.4f}")
+
+    current_source = points_source + centroid_shift
 
     # Step 2: Iterative gated Procrustes
     R_total = np.eye(3)
     t_total = centroid_shift.copy()
-    current_source = points_source_shifted.copy()
 
     for iteration in range(max_iterations):
         tree = KDTree(points_target)
@@ -323,7 +330,8 @@ def align_reconstructions_icp(
 
     total_rot_deg = np.degrees(np.arccos(np.clip((np.trace(R_total) - 1) / 2, -1, 1)))
     total_trans = np.linalg.norm(t_total)
-    print(f"[align] total: rotation={total_rot_deg:.4f}°, translation={total_trans:.4f}")
+    print(f"[align] total: rotation={total_rot_deg:.4f}°, translation={total_trans:.4f}"
+          f" (skip_centroid_prewarp={skip_centroid_prewarp})")
 
     info = {
         'num_points_target': len(points_target),
@@ -337,6 +345,373 @@ def align_reconstructions_icp(
     }
 
     return rec_source_aligned, info
+
+
+def _build_2d_to_3d_index(image: pycolmap.Image, reconstruction: pycolmap.Reconstruction
+                           ) -> Tuple[np.ndarray, np.ndarray, KDTree | None]:
+    """Build a KDTree of 2D projections for an image's 3D-linked points.
+
+    Returns:
+        pts_2d: (M, 2) array of 2D coordinates of points with 3D links.
+        pts_3d: (M, 3) array of corresponding 3D world coordinates.
+        tree: KDTree built on pts_2d, or None if no linked points.
+    """
+    pts_2d_list = []
+    pts_3d_list = []
+    for point2D in image.points2D:
+        if point2D.has_point3D():
+            pts_2d_list.append(point2D.xy)
+            pts_3d_list.append(reconstruction.point3D(point2D.point3D_id).xyz)
+    if not pts_2d_list:
+        return np.empty((0, 2)), np.empty((0, 3)), None
+    pts_2d = np.array(pts_2d_list)
+    pts_3d = np.array(pts_3d_list)
+    return pts_2d, pts_3d, KDTree(pts_2d)
+
+
+def _select_diverse_images(images: List[pycolmap.Image], reconstruction: pycolmap.Reconstruction,
+                           n: int) -> List[pycolmap.Image]:
+    """Select n images: top half by 3D point count, then farthest point sampling for viewpoint diversity.
+
+    1. Sort all images by number of 3D-linked points (descending).
+    2. Take the top 2*n candidates (images with most structure).
+    3. From those, greedily pick n images with maximally spread camera centers
+       (farthest point sampling).
+    """
+    # Sort by number of 3D-linked points
+    imgs_with_counts = []
+    for img in images:
+        n_3d = sum(1 for p in img.points2D if p.has_point3D())
+        center = img.cam_from_world().inverse().translation
+        imgs_with_counts.append((img, n_3d, np.array(center)))
+    imgs_with_counts.sort(key=lambda x: x[1], reverse=True)
+
+    # Take top 2*n candidates
+    candidates = imgs_with_counts[:2 * n]
+    print(f"[match-align] Top {len(candidates)} candidates by 3D points: "
+          f"{[(c[0].name, c[1]) for c in candidates]}")
+
+    if len(candidates) <= n:
+        return [c[0] for c in candidates]
+
+    # Farthest point sampling on camera centers
+    centers = np.array([c[2] for c in candidates])
+    selected_idx = [0]  # Start with the image with most 3D points
+    for _ in range(n - 1):
+        selected_centers = centers[selected_idx]
+        # For each candidate, compute min distance to any selected center
+        min_dists = np.full(len(centers), np.inf)
+        for si in selected_idx:
+            dists = np.linalg.norm(centers - centers[si], axis=1)
+            min_dists = np.minimum(min_dists, dists)
+        # Zero out already selected
+        for si in selected_idx:
+            min_dists[si] = -1.0
+        # Pick the candidate farthest from all selected
+        best = int(np.argmax(min_dists))
+        selected_idx.append(best)
+
+    selected = [candidates[i][0] for i in selected_idx]
+    print(f"[match-align] After viewpoint diversity sampling: "
+          f"{[(candidates[i][0].name, candidates[i][1]) for i in selected_idx]}")
+    return selected
+
+
+def find_3d_correspondences_via_matching(
+        rec_target: pycolmap.Reconstruction,
+        rec_source: pycolmap.Reconstruction,
+        match_provider: 'MatchingProvider',
+        target_images_dir: Path,
+        source_images_dir: Path,
+        target_segs_dir: Path,
+        source_segs_dir: Path,
+        sample_size: int,
+        certainty_threshold: float,
+        reliability_threshold: float,
+        max_pairs: int = 5,
+        max_2d_distance: float = 5.0,
+        black_background: bool = False,
+        device: str = 'cuda',
+) -> Tuple[np.ndarray, np.ndarray, List[dict]]:
+    """Find 3D-3D correspondences between two reconstructions via 2D image matching.
+
+    For each of up to `max_pairs` randomly selected source images, matches against
+    all target images, picks the best match (by reliability), and extracts 3D-3D
+    correspondences by looking up the nearest 3D-linked 2D point on each side.
+
+    Args:
+        rec_target: Reference (fixed) reconstruction.
+        rec_source: Source reconstruction to be aligned.
+        match_provider: Dense or sparse matcher (same type as onboarding filter_matcher).
+        target_images_dir: Directory with target keyframe images ({colmap_image_name_stem}_image.png).
+        source_images_dir: Directory with source keyframe images.
+        target_segs_dir: Directory with target segmentations ({colmap_image_name_stem}_seg.png).
+        source_segs_dir: Directory with source segmentations.
+        sample_size: Number of match samples per image pair.
+        certainty_threshold: Per-match certainty threshold for reliability computation.
+        reliability_threshold: Minimum reliability to consider a pair acceptable.
+        max_pairs: Maximum number of source images to try.
+        max_2d_distance: Maximum pixel distance for 2D-to-3D lookup.
+        device: PyTorch device string.
+
+    Returns:
+        source_pts_3d: (N, 3) matched 3D points in source frame.
+        target_pts_3d: (N, 3) matched 3D points in target frame.
+        match_pair_info: List of dicts with per-pair diagnostics.
+    """
+    from onboarding.frame_filter import compute_matching_reliability
+    from onboarding.reconstruction import _load_image_and_segmentation
+
+    # Select source images: top by 3D point count, then subsample for viewpoint diversity
+    source_images = list(rec_source.images.values())
+    print(f"[match-align] Source reconstruction: {len(source_images)} images, "
+          f"{len(rec_source.points3D)} 3D points")
+    print(f"[match-align] Target reconstruction: {len(rec_target.images)} images, "
+          f"{len(rec_target.points3D)} 3D points")
+    if len(source_images) > max_pairs:
+        source_images = _select_diverse_images(source_images, rec_source, max_pairs)
+    print(f"[match-align] Selected {len(source_images)} source images: "
+          f"{[img.name for img in source_images]}")
+
+    target_images = list(rec_target.images.values())
+
+    # Pre-build 2D→3D indices for all target images
+    target_indices = {}
+    for tgt_img in target_images:
+        pts_2d, pts_3d, tree = _build_2d_to_3d_index(tgt_img, rec_target)
+        if tree is not None:
+            target_indices[tgt_img.image_id] = (pts_2d, pts_3d, tree)
+    print(f"[match-align] Target images with 3D points: {len(target_indices)}/{len(target_images)}")
+    print(f"[match-align] Certainty threshold: {certainty_threshold}, sample size: {sample_size}")
+
+    all_source_3d = []
+    all_target_3d = []
+    seen_pairs = set()
+    match_pair_info = []  # Collected for rerun visualization
+
+    for src_img in source_images:
+        # Build 2D→3D index for this source image (with point3D_ids for dedup)
+        src_pts_2d, src_pts_3d, src_tree = _build_2d_to_3d_index(src_img, rec_source)
+        if src_tree is None:
+            print(f"[match-align]   Source {src_img.name}: no 3D-linked points, skipping")
+            continue
+        src_point3d_ids = [p.point3D_id for p in src_img.points2D if p.has_point3D()]
+        print(f"[match-align]   Source {src_img.name}: {len(src_pts_2d)} points with 3D links")
+
+        # Load source image and segmentation
+        src_stem = Path(src_img.name).stem
+        src_img_path = source_images_dir / f'{src_stem}_image.png'
+        src_seg_path = source_segs_dir / f'{src_stem}_seg.png'
+        if not src_img_path.exists() or not src_seg_path.exists():
+            print(f"[match-align]   Source {src_img.name}: MISSING files "
+                  f"(img={src_img_path.exists()}, seg={src_seg_path.exists()})")
+            continue
+        src_image_tensor, src_seg_tensor, _, _ = _load_image_and_segmentation(
+            src_img_path, src_seg_path, device)
+        src_seg_tensor = src_seg_tensor.squeeze()
+        if black_background:
+            src_image_tensor = src_image_tensor * src_seg_tensor
+        print(f"[match-align]   Source {src_img.name}: loaded, shape={src_image_tensor.shape}, "
+              f"seg_shape={src_seg_tensor.shape}, seg_fg={float(src_seg_tensor.sum()):.0f}px")
+
+        # Match against all target images, pick best by reliability
+        best_reliability = -1.0
+        best_target_img = None
+        best_match_pts = None
+        best_num_matches = 0
+        best_median_cert = 0.0
+
+        for tgt_img in target_images:
+            if tgt_img.image_id not in target_indices:
+                continue
+
+            tgt_stem = Path(tgt_img.name).stem
+            tgt_img_path = target_images_dir / f'{tgt_stem}_image.png'
+            tgt_seg_path = target_segs_dir / f'{tgt_stem}_seg.png'
+            if not tgt_img_path.exists() or not tgt_seg_path.exists():
+                print(f"[match-align]     Target {tgt_img.name}: MISSING files")
+                continue
+            tgt_image_tensor, tgt_seg_tensor, _, _ = _load_image_and_segmentation(
+                tgt_img_path, tgt_seg_path, device)
+            tgt_seg_tensor = tgt_seg_tensor.squeeze()
+            if black_background:
+                tgt_image_tensor = tgt_image_tensor * tgt_seg_tensor
+
+            # Get matches
+            src_pts_xy, dst_pts_xy, certainty = match_provider.get_source_target_points(
+                src_image_tensor, tgt_image_tensor, sample=sample_size,
+                source_image_segmentation=src_seg_tensor, target_image_segmentation=tgt_seg_tensor,
+                as_int=True, zero_certainty_outside_segmentation=True, only_foreground_matches=True)
+
+            num_matches = len(src_pts_xy)
+            if num_matches == 0:
+                print(f"[match-align]     vs target {tgt_img.name}: 0 matches")
+                continue
+
+            reliability = compute_matching_reliability(
+                src_pts_xy, certainty, src_seg_tensor,
+                certainty_threshold, min_num_of_certain_matches=0)
+
+            print(f"[match-align]     vs target {tgt_img.name}: {num_matches} matches, "
+                  f"reliability={reliability:.3f} (cert: min={certainty.min():.3f}, "
+                  f"med={certainty.median():.3f}, max={certainty.max():.3f})")
+
+            if reliability > best_reliability:
+                best_reliability = reliability
+                best_target_img = tgt_img
+                best_match_pts = (src_pts_xy.cpu().numpy(), dst_pts_xy.cpu().numpy())
+                best_num_matches = num_matches
+                best_median_cert = float(certainty.median())
+
+        if best_target_img is None:
+            print(f"[match-align]   Source {src_img.name}: no matches found")
+            continue
+
+        print(f"[match-align]   Source {src_img.name} -> Target {best_target_img.name} "
+              f"(reliability={best_reliability:.3f}, {best_num_matches} matches)")
+
+        # Extract 3D-3D correspondences from the best pair
+        tgt_pts_2d, tgt_pts_3d, tgt_tree = target_indices[best_target_img.image_id]
+        tgt_point3d_ids = [p.point3D_id for p in best_target_img.points2D if p.has_point3D()]
+        match_src_2d, match_tgt_2d = best_match_pts
+
+        # Query source 2D→3D
+        src_dists, src_indices = src_tree.query(match_src_2d)
+        # Query target 2D→3D
+        tgt_dists, tgt_indices = tgt_tree.query(match_tgt_2d)
+
+        # Accept only matches where both sides have a nearby 3D point
+        valid = (src_dists < max_2d_distance) & (tgt_dists < max_2d_distance)
+        n_valid = valid.sum()
+        n_src_close = (src_dists < max_2d_distance).sum()
+        n_tgt_close = (tgt_dists < max_2d_distance).sum()
+        print(f"[match-align]   2D→3D lookup: src_close={n_src_close}, tgt_close={n_tgt_close}, "
+              f"both_close={n_valid} (max_2d_dist={max_2d_distance}px)")
+        if len(src_dists) > 0:
+            print(f"[match-align]   src_dists: median={np.median(src_dists):.1f}, "
+                  f"mean={np.mean(src_dists):.1f}, min={np.min(src_dists):.1f}, max={np.max(src_dists):.1f}")
+            print(f"[match-align]   tgt_dists: median={np.median(tgt_dists):.1f}, "
+                  f"mean={np.mean(tgt_dists):.1f}, min={np.min(tgt_dists):.1f}, max={np.max(tgt_dists):.1f}")
+
+        pair_corr_count = 0
+        for i in np.where(valid)[0]:
+            si = src_indices[i]
+            ti = tgt_indices[i]
+            pair_key = (src_point3d_ids[si], tgt_point3d_ids[ti])
+            if pair_key not in seen_pairs:
+                seen_pairs.add(pair_key)
+                all_source_3d.append(src_pts_3d[si])
+                all_target_3d.append(tgt_pts_3d[ti])
+                pair_corr_count += 1
+
+        print(f"[match-align]   -> {pair_corr_count} new 3D-3D correspondences from this pair")
+        match_pair_info.append({
+            'src_name': src_img.name, 'tgt_name': best_target_img.name,
+            'reliability': best_reliability, 'reliability_threshold': reliability_threshold,
+            'num_matches': best_num_matches,
+            'median_certainty': best_median_cert, 'num_correspondences': pair_corr_count,
+            'match_pts': best_match_pts,
+        })
+
+    print(f"[match-align] Total: {len(all_source_3d)} 3D-3D correspondences from "
+          f"{len(match_pair_info)} accepted pairs")
+
+    if all_source_3d:
+        return np.array(all_source_3d), np.array(all_target_3d), match_pair_info
+    return np.empty((0, 3)), np.empty((0, 3)), match_pair_info
+
+
+def align_reconstructions_matching(
+        rec_target: pycolmap.Reconstruction,
+        rec_source: pycolmap.Reconstruction,
+        match_provider: 'MatchingProvider',
+        target_images_dir: Path,
+        source_images_dir: Path,
+        target_segs_dir: Path,
+        source_segs_dir: Path,
+        sample_size: int,
+        certainty_threshold: float,
+        reliability_threshold: float,
+        max_pairs: int = 5,
+        black_background: bool = False,
+        use_procrustes: bool = True,
+        refine_with_icp: bool = True,
+        icp_centroid_prewarp: bool = False,
+        device: str = 'cuda',
+) -> Tuple[pycolmap.Reconstruction, dict]:
+    """Align rec_source to rec_target using 2D-matching-derived 3D correspondences.
+
+    1. Find 3D-3D correspondences by matching images across reconstructions.
+    2. Optionally solve rigid alignment via Procrustes SVD.
+    3. Optionally refine with ICP.
+
+    Falls back to ICP-only if Procrustes is disabled or too few correspondences.
+
+    Returns:
+        rec_source_aligned: Transformed copy of rec_source.
+        info: Dict with alignment metrics.
+    """
+    print(f"[match-align] black_background={black_background}, use_procrustes={use_procrustes}, "
+          f"refine_with_icp={refine_with_icp}, icp_centroid_prewarp={icp_centroid_prewarp}")
+
+    match_pair_info = []
+    info = {
+        'method': 'matching',
+        'match_pairs': match_pair_info,
+        'rec_after_procrustes': None,
+        'rec_before_icp': None,
+        'rec_after_icp': None,
+    }
+
+    # Step 1: Find 3D-3D correspondences via image matching
+    source_pts, target_pts, match_pair_info = find_3d_correspondences_via_matching(
+        rec_target, rec_source, match_provider,
+        target_images_dir, source_images_dir,
+        target_segs_dir, source_segs_dir,
+        sample_size, certainty_threshold=certainty_threshold,
+        reliability_threshold=reliability_threshold,
+        max_pairs=max_pairs, black_background=black_background, device=device)
+    info['match_pairs'] = match_pair_info
+
+    num_correspondences = len(source_pts)
+    print(f"[match-align] Found {num_correspondences} 3D-3D correspondences")
+    info['num_correspondences'] = num_correspondences
+
+    # Step 2: Procrustes alignment
+    rec_current = rec_source
+    if use_procrustes and num_correspondences >= 10:
+        R, t = _procrustes_svd(source_pts, target_pts)
+        rec_after_procrustes = _apply_rigid_to_reconstruction(rec_source, R, t)
+
+        rot_deg = np.degrees(np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1)))
+        trans_norm = np.linalg.norm(t)
+        print(f"[match-align] Procrustes: rotation={rot_deg:.4f} deg, translation={trans_norm:.4f}")
+
+        aligned_source_pts = (R @ source_pts.T).T + t
+        residuals = np.linalg.norm(aligned_source_pts - target_pts, axis=1)
+        print(f"[match-align] Residual: mean={residuals.mean():.4f}, "
+              f"median={np.median(residuals):.4f}, max={residuals.max():.4f}")
+
+        info['rotation_deg'] = rot_deg
+        info['translation_norm'] = trans_norm
+        info['residual_mean'] = float(residuals.mean())
+        info['residual_median'] = float(np.median(residuals))
+        info['rec_after_procrustes'] = rec_after_procrustes
+        rec_current = rec_after_procrustes
+    elif use_procrustes:
+        print(f"[match-align] Too few correspondences ({num_correspondences}) for Procrustes, skipping")
+
+    # Step 3: ICP refinement
+    info['rec_before_icp'] = rec_current
+    if refine_with_icp:
+        skip_prewarp = not icp_centroid_prewarp
+        rec_after_icp, icp_info = align_reconstructions_icp(
+            rec_target, rec_current, max_iterations=5, skip_centroid_prewarp=skip_prewarp)
+        info['icp_refinement'] = icp_info
+        info['rec_after_icp'] = rec_after_icp
+        rec_current = rec_after_icp
+
+    return rec_current, info
 
 
 def colmap_K_params_vec(camera_K, camera_type=pycolmap.CameraModelId.PINHOLE):
