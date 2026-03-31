@@ -334,7 +334,27 @@ because Kabsch/depths methods require multiple cameras.
 
 These can be done in parallel with the module work.
 
-#### 4.2 Visualization
+#### 4.2 SAM3D installation on RCI
+
+SAM3D (`repositories/sam3d/`) requires gated HuggingFace access and extra dependencies
+beyond the base GloPose env (PyTorch 2.10, CUDA 12.8).
+
+- [ ] Request access at https://huggingface.co/facebook/sam-3d-objects, then `huggingface-cli login`
+- [ ] Download weights:
+  ```bash
+  huggingface-cli download --repo-type model --local-dir /mnt/personal/jelint19/weights/SAM3D/hf-download facebook/sam-3d-objects
+  mv /mnt/personal/jelint19/weights/SAM3D/hf-download/checkpoints /mnt/personal/jelint19/weights/SAM3D/hf
+  ```
+- [ ] Install SAM3D into glopose conda env. Key new dependencies:
+  - `pytorch3d` (build from source for CUDA 12.8: `pip install "git+https://github.com/facebookresearch/pytorch3d.git"`)
+  - `utils3d`, `xatlas`, `open3d`, `gsplat`, `moge` (MoGe depth model)
+  - `loguru`, `safetensors`
+  - Inspect `requirements.txt`, `requirements.inference.txt`, `requirements.p3d.txt` — skip
+    version-pinned packages already present (torch, torchvision, kaolin)
+  - Apply hydra patch: `./patching/hydra`
+- [ ] Verify: `python -c "from adapters.sam3d_adapter import load_sam3d_model"` succeeds on RCI
+
+#### 4.3 Visualization
 
 - [ ] **Update Rerun SDK from ~0.21 to 0.30** — review breaking API changes (blueprint API, logging API,
   annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
