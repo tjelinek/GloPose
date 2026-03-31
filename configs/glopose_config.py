@@ -94,7 +94,7 @@ class OnboardingConfig:
     sift_filter_good_to_add_matches: int = 450
 
     # Reconstruction settings
-    reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r'
+    reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r' | 'sam3d'
     mapper: str = 'pycolmap'
     init_with_first_two_images: bool = False
     add_track_merging_matches: bool = True
@@ -106,6 +106,16 @@ class OnboardingConfig:
     export_view_graph: bool = False
 
     vggt_depth_conf_threshold: float = 0.1
+
+    # SAM3D settings
+    sam3d_checkpoint_path: str = '/mnt/personal/jelint19/weights/SAM3D/hf/'
+    sam3d_seed: int = 42
+
+    # Separate merge settings (both_merge_strategy='separate')
+    merge_matching_black_background: bool = True   # Zero out background using segmentation mask before matching
+    merge_use_procrustes: bool = False     # Use matching-based Procrustes alignment
+    merge_refine_with_icp: bool = False    # Run ICP refinement after Procrustes
+    merge_icp_centroid_prewarp: bool = False  # Centroid prewarp before ICP (off when Procrustes is used)
 
 
 @dataclass

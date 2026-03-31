@@ -320,6 +320,38 @@ class FrameFilterRANSAC(RoMaFrameFilter):
         return reliability
 
 
+class FrameFilterMaxVisible(BaseFrameFilter):
+    """Selects the single frame with the maximum number of visible object pixels.
+
+    Iterates through all frames, tracking the one with the highest foreground
+    segmentation pixel count. After all frames are processed, get_keyframe_graph()
+    returns a graph with only that single best frame as a node.
+    """
+
+    def __init__(self, onboarding: OnboardingConfig, n_frames: int, data_graph: DataGraph, **kwargs):
+        super().__init__(onboarding, n_frames, data_graph, **kwargs)
+        self.best_frame: int = 0
+        self.best_pixel_count: int = 0
+
+    def filter_frames(self, frame_i: int):
+        seg = self.data_graph.get_frame_data(frame_i).frame_observation.observed_segmentation
+        pixel_count = int((seg > 0.5).sum())
+        if pixel_count > self.best_pixel_count:
+            self.best_pixel_count = pixel_count
+            self.best_frame = frame_i
+        self.data_graph.get_frame_data(frame_i).matching_source_keyframe = self.best_frame
+
+    def add_keyframe(self, frame_i: int):
+        self.keyframe_graph.add_node(frame_i)
+
+    def get_keyframe_graph(self) -> nx.DiGraph:
+        self.keyframe_graph = nx.DiGraph()
+        self.keyframe_graph.add_node(self.best_frame)
+        print(f"FrameFilterMaxVisible: selected frame {self.best_frame} "
+              f"with {self.best_pixel_count} visible pixels")
+        return self.keyframe_graph
+
+
 class FrameFilterPassThrough(BaseFrameFilter):
 
     def filter_frames(self, frame_i: int):
@@ -512,11 +544,15 @@ def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int
                                                device=device)
         return FrameFilterSift(onboarding, n_frames, data_graph, sift_provider)
 
+    def _max_visible():
+        return FrameFilterMaxVisible(onboarding, n_frames, data_graph, sequence_boundaries=sequence_boundaries)
+
     filters = {
         'dense_matching': _dense_matching,
         'RANSAC': _ransac,
         'passthrough': _passthrough,
         'SIFT': _sift,
+        'max_visible': _max_visible,
     }
     if onboarding.frame_filter not in filters:
         raise ValueError(f"Unknown frame filter '{onboarding.frame_filter}'. Options: {list(filters.keys())}")

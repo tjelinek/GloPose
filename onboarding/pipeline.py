@@ -316,6 +316,8 @@ class OnboardingPipeline:
         elif method in ('vggt', 'mast3r'):
             reconstruction = self._reconstruct_external(method, images_paths, segmentation_paths,
                                                         matching_pairs, camera_K)
+        elif method == 'sam3d':
+            reconstruction = self._reconstruct_sam3d(images_paths, segmentation_paths, camera_K)
         else:
             raise ValueError(f'Unknown reconstruction method: {method}')
 
@@ -329,6 +331,12 @@ class OnboardingPipeline:
 
         # Alignment
         if reconstruction is None or self.gt_Se3_world2cam is None:
+            return reconstruction, False
+        if method == 'sam3d':
+            # SAM3D produces a single-camera reconstruction with its own pose estimate.
+            # Kabsch/depths alignment requires multiple cameras — skip for now.
+            # TODO: implement SAM3D-specific alignment (see CLAUDE.md Phase 3.1)
+            logger.warning("Skipping alignment for SAM3D reconstruction (single camera)")
             return reconstruction, False
         if self.config.onboarding.similarity_transformation == 'depths':
 
@@ -405,6 +413,36 @@ class OnboardingPipeline:
                 raise ValueError(f'Unknown external method: {method}')
         except Exception as e:
             print(f"External reconstruction ({method}) failed: {e}")
+            reconstruction = None
+
+        return reconstruction
+
+    def _reconstruct_sam3d(self, images_paths, segmentation_paths, camera_K) \
+            -> Optional[Reconstruction]:
+        """Run SAM3D single-image 3D reconstruction."""
+        if len(images_paths) == 0:
+            print("SAM3D: no images provided")
+            return None
+
+        # SAM3D uses a single image (the best frame selected by FrameFilterMaxVisible)
+        image_path = images_paths[0]
+        segmentation_path = segmentation_paths[0]
+        image_name = image_path.name
+
+        try:
+            from adapters.sam3d_adapter import reconstruct_with_sam3d
+            mesh, reconstruction = reconstruct_with_sam3d(
+                image_path=image_path,
+                segmentation_path=segmentation_path,
+                image_name=image_name,
+                device=self.config.run.device,
+                camera_K=camera_K,
+                checkpoint_path=self.config.onboarding.sam3d_checkpoint_path,
+                output_dir=self.colmap_base_path,
+                seed=self.config.onboarding.sam3d_seed,
+            )
+        except Exception as e:
+            print(f"SAM3D reconstruction failed: {e}")
             reconstruction = None
 
         return reconstruction

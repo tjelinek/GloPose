@@ -13,3 +13,6 @@
 [submodule "repositories/hot3d"]
 	path = repositories/hot3d
 	url = https://github.com/facebookresearch/hot3d.git
+[submodule "repositories/sam3d"]
+	path = repositories/sam3d
+	url = https://github.com/facebookresearch/sam-3d-objects.git
