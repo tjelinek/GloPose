@@ -9,6 +9,8 @@ def parse_args():
     parser.add_argument("--sequences", required=False, nargs='*', default=None)
     parser.add_argument("--output_folder", required=False)
     parser.add_argument("--experiment", required=False, default='default')  # Experiment name
+    parser.add_argument("--merge-only", action='store_true', default=False,
+                        help="Skip up/down onboarding, only run the merge step (requires cached ViewGraphs)")
     return parser.parse_args()
 
 
