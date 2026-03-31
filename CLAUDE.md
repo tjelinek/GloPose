@@ -11,7 +11,7 @@ poses of the object in novel images.
 
 - **Environment:** Conda (`environment.yml`), env name `glopose`, Python 3.13
 - **Install:** `conda env create -f environment.yml && conda activate glopose`
-- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, SAM2, vggt, ho3d) — some installed as
+- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, SAM2, vggt, ho3d, sam3d) — some installed as
   editable pip packages
 
 ## Running
@@ -73,7 +73,7 @@ The system has three independent modules that communicate through well-defined d
 
 | Module             | Current location                                                                                           | Status                                                                                                                         |
 |--------------------|------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| A. Onboarding      | `onboarding/pipeline.py` (orchestrator), `onboarding/reconstruction.py` (SfM), `onboarding/frame_filter.py`, `data_providers/` | Working. Evaluation extracted to `eval/` module. `OnboardingPipeline` still tightly coupled to all providers.                  |
+| A. Onboarding      | `onboarding/pipeline.py` (orchestrator), `onboarding/reconstruction.py` (SfM), `onboarding/frame_filter.py`, `data_providers/`, `adapters/{vggt,mast3r,sam3d}_adapter.py` | Working. Evaluation extracted to `eval/` module. Reconstruction methods: COLMAP, VGGT, Mast3r, SAM3D. Frame filters: dense_matching, RANSAC, passthrough, SIFT, max_visible. |
 | B1. Representation | `detection/representation.py` (condensation), `data_structures/view_graph.py` (ViewGraph)                  | Working. `TemplateBank` dataclass in `data_structures/template_bank.py`. No clean `build_detection_model()` interface yet.     |
 | B2. Detection      | `detection/detector.py` (`BOPChallengePosePredictor`), `detection/nms.py` (`DetectionContainer`)           | Working. Runtime deps vendored (no Hydra/cnos at runtime). Config via `DetectionConfig`. Tangled with BOP I/O.                |
 | C. Pose estimation | `pose_estimation/estimator.py` (`PoseEstimator`)                                                           | Working. Matches query against ViewGraph templates, registers into COLMAP reconstruction, extracts 6DoF pose. Not yet evaluated on RCI. |
@@ -100,7 +100,8 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 
 - `adapters/` — External repository wrappers and vendored code: `cnos_adapter.py` (descriptor extractor protocol),
   `dino_descriptor.py` (vendored DINOv2/v3 model), `dino_utils.py` (vendored utilities), `sam2_adapter.py` (SAM2),
-  `hot3d_adapter.py` (HOT3D FISHEYE624→pinhole undistortion via `hand_tracking_toolkit`)
+  `hot3d_adapter.py` (HOT3D FISHEYE624→pinhole undistortion via `hand_tracking_toolkit`),
+  `sam3d_adapter.py` (SAM3D single-image 3D reconstruction), `vggt_adapter.py` (VGGT), `mast3r_adapter.py` (Mast3r)
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring, NMS (`nms.py`)
@@ -269,6 +270,13 @@ SAM2 video predictor is wrapped in `adapters/sam2_adapter.py` — the sole locat
 Hydra config initialization. `SAM2SegmentationProvider` in `data_providers/frame_provider.py` imports
 `build_video_predictor` and `mask_to_sam_prompt` from the adapter.
 
+SAM3D single-image 3D reconstruction is wrapped in `adapters/sam3d_adapter.py` — the sole location for
+SAM3D imports. Takes one RGB image + segmentation mask, runs SAM3D inference, converts the output mesh
+to `pycolmap.Reconstruction` with all mesh vertices as 3D points. Handles PyTorch3D→OpenCV coordinate
+frame conversion. Used via `reconstruction_method = 'sam3d'` with `frame_filter = 'max_visible'`
+(selects the single frame with the most visible object pixels). Alignment/scale recovery is not yet
+implemented (see TODO Phase 3.1).
+
 ---
 
 ## TODO
@@ -294,6 +302,20 @@ BOP path utilities extracted to `utils/bop_data.py`. Remaining:
 ### Phase 3: Module C — Pose estimation
 
 Goal: given detections and an onboarding result, produce 6DoF poses.
+
+#### 3.1 SAM3D coordinate frame alignment
+
+SAM3D produces a single-image 3D reconstruction with a local-to-camera pose (rotation, translation, scale)
+in PyTorch3D convention (X-left, Y-up, Z-forward). Currently alignment is skipped (`align_success = False`)
+because Kabsch/depths methods require multiple cameras.
+
+- [ ] Implement alignment for SAM3D reconstructions: convert PyTorch3D l2c → OpenCV cam_from_world,
+  then compose with GT camera pose (or depth-based scale estimation for production)
+- [ ] Scale recovery: SAM3D canonical space is [-0.5, 0.5]^3, BOP GT models are in mm.
+  Options: (a) known object diameter from `models_info.json`, (b) depth-based metric scale from MoGe,
+  (c) ICP alignment against multi-view reconstruction
+- [ ] Verify coordinate frame correctness by projecting SAM3D mesh vertices back to the input image
+  and visually comparing silhouettes
 
 #### 3.2 Evaluation
 
