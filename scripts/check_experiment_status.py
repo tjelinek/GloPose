@@ -13,12 +13,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.job_runner import get_configurations, get_results_root, get_sequences, Datasets
+from scripts.job_runner import get_configurations, get_results_root, get_sequences, subsample_sequences, Datasets
 
 
-# Maps Datasets enum → (csv_dataset_name, sequence_suffix_to_strip)
-# The CSV dataset name is constructed as {dataset}_{onboarding_type}_onboarding for BOP,
-# or the raw dataset name for others.
+# Maps Datasets enum → csv_dataset_name.
+# Note: lookups use _CSV_NAMES_BY_VALUE (keyed by .value) to avoid identity
+# mismatches when job_runner.py runs as __main__ vs scripts.job_runner.
 DATASET_CSV_NAMES = {
     Datasets.BOP_HANDAL_ONBOARDING_STATIC: 'handal_static_onboarding',
     Datasets.BOP_HANDAL_ONBOARDING_BOTH: 'handal_static_onboarding',
@@ -34,11 +34,26 @@ DATASET_CSV_NAMES = {
     Datasets.HO3D_train: 'HO3D',
     Datasets.NAVI: 'navi',
 }
+_CSV_NAMES_BY_VALUE = {k.value: v for k, v in DATASET_CSV_NAMES.items()}
 
 
-def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> list[tuple[str, str]]:
+_BOP_ONBOARDING_DATASETS = {
+    Datasets.BOP_HANDAL_ONBOARDING_STATIC.value, Datasets.BOP_HANDAL_ONBOARDING_BOTH.value,
+    Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC.value,
+    Datasets.HOPE_ONBOARDING_STATIC.value, Datasets.HOPE_ONBOARDING_BOTH.value,
+    Datasets.HOPE_ONBOARDING_DYNAMIC.value,
+}
+
+_HOT3D_DATASETS = {
+    Datasets.HOT3D_ARIA_ONBOARDING_STATIC.value, Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC.value,
+    Datasets.HOT3D_QUEST3_ONBOARDING_STATIC.value, Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC.value,
+}
+
+
+def get_expected_csv_sequences(dataset_enum, sequences: list[str]) -> list[tuple[str, str]]:
     """Return list of (csv_dataset_name, csv_sequence_name) expected in the CSV."""
-    csv_dataset = DATASET_CSV_NAMES.get(dataset_enum)
+    ds_value = dataset_enum.value
+    csv_dataset = _CSV_NAMES_BY_VALUE.get(ds_value)
     if csv_dataset is None:
         return []
 
@@ -46,12 +61,8 @@ def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> 
     for seq in sequences:
         parts = seq.split('_')
 
-        if dataset_enum in (Datasets.BOP_HANDAL_ONBOARDING_STATIC, Datasets.BOP_HANDAL_ONBOARDING_BOTH,
-                            Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC,
-                            Datasets.HOPE_ONBOARDING_STATIC, Datasets.HOPE_ONBOARDING_BOTH,
-                            Datasets.HOPE_ONBOARDING_DYNAMIC):
+        if ds_value in _BOP_ONBOARDING_DATASETS:
             # e.g., obj_000001_both → csv sequence = obj_000001_both_down (or _both, _up, _dynamic)
-            # The sequence name in CSV includes special_hash suffix
             if len(parts) == 3:
                 base_seq = f'{parts[0]}_{parts[1]}'
                 suffix = parts[2]  # both, up, down, dynamic
@@ -63,8 +74,7 @@ def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> 
             else:
                 results.append((csv_dataset, seq))
 
-        elif dataset_enum in (Datasets.HOT3D_ARIA_ONBOARDING_STATIC, Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC,
-                              Datasets.HOT3D_QUEST3_ONBOARDING_STATIC, Datasets.HOT3D_QUEST3_ONBOARDING_DYNAMIC):
+        elif ds_value in _HOT3D_DATASETS:
             # HOT3D: NNNNNN_static or NNNNNN_dynamic
             if len(parts) == 2:
                 base_seq = parts[0]
@@ -74,10 +84,7 @@ def get_expected_csv_sequences(dataset_enum: Datasets, sequences: list[str]) -> 
             else:
                 results.append((csv_dataset, seq))
 
-        elif dataset_enum == Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES:
-            # Classic: dataset_NNNNNN format, dataset name varies (tless, lmo, icbin)
-            # These are handled differently — the CSV dataset name includes the BOP dataset
-            # For now, use the sequence as-is since classic sequences include dataset prefix
+        elif ds_value == Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES.value:
             results.append((csv_dataset, seq))
 
         else:
@@ -92,53 +99,46 @@ def check_experiment(config_name: str, results_root: Path, expected_sequences: d
     experiment_folder = results_root / config_name
     csv_path = experiment_folder / 'reconstruction_sequence_stats.csv'
 
-    if not experiment_folder.exists():
-        return {
-            'status': 'NOT_STARTED',
-            'total_expected': sum(len(seqs) for seqs in expected_sequences.values()),
-            'completed': 0,
-            'failed_recon': 0,
-            'failed_align': 0,
-            'missing': sum(len(seqs) for seqs in expected_sequences.values()),
-            'details': [],
-        }
+    all_expected = sum(len(seqs) for seqs in expected_sequences.values())
 
-    if not csv_path.exists():
+    if not experiment_folder.exists() or not csv_path.exists():
         return {
-            'status': 'NO_CSV',
-            'total_expected': sum(len(seqs) for seqs in expected_sequences.values()),
+            'status': 'NOT_STARTED' if not experiment_folder.exists() else 'NO_CSV',
+            'total_expected': all_expected,
             'completed': 0,
             'failed_recon': 0,
             'failed_align': 0,
-            'missing': sum(len(seqs) for seqs in expected_sequences.values()),
+            'missing': all_expected,
             'details': [],
+            'missing_by_dataset': dict(expected_sequences),
         }
 
     df = pd.read_csv(csv_path)
-    csv_entries = set(zip(df['dataset'].astype(str), df['sequence'].astype(str)))
 
     total_expected = 0
     completed = 0
     failed_recon = 0
     failed_align = 0
     missing_list = []
+    missing_by_dataset: dict[Datasets, list[str]] = {}
 
     for dataset_enum, sequences in expected_sequences.items():
         expected_pairs = get_expected_csv_sequences(dataset_enum, sequences)
         total_expected += len(expected_pairs)
 
-        for csv_dataset, csv_seq in expected_pairs:
+        for (csv_dataset, csv_seq), orig_seq in zip(expected_pairs, sequences):
             # Try to find this entry in the CSV (may not match exactly due to BOP classic naming)
             matching = df[(df['dataset'].astype(str) == csv_dataset) &
                          (df['sequence'].astype(str) == csv_seq)]
 
             if matching.empty:
                 # Try partial match for BOP classic sequences
-                if dataset_enum == Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES:
+                if dataset_enum.value == Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES.value:
                     matching = df[df['sequence'].astype(str) == csv_seq]
 
                 if matching.empty:
                     missing_list.append(f'{csv_dataset}/{csv_seq}')
+                    missing_by_dataset.setdefault(dataset_enum, []).append(orig_seq)
                     continue
 
             row = matching.iloc[0]
@@ -164,6 +164,7 @@ def check_experiment(config_name: str, results_root: Path, expected_sequences: d
         'failed_align': failed_align,
         'missing': len(missing_list),
         'details': missing_list,
+        'missing_by_dataset': missing_by_dataset,
     }
 
 
@@ -171,10 +172,14 @@ def main():
     parser = argparse.ArgumentParser(description='Check experiment status')
     parser.add_argument('configs', nargs='*', help='Config names to check (default: all from job_runner)')
     parser.add_argument('--show-missing', action='store_true', help='List missing sequences')
+    parser.add_argument('--quick', action='store_true',
+                        help='Expect only the --quick subset (20 per dataset, matching job_runner --quick)')
     args = parser.parse_args()
 
     configurations = args.configs if args.configs else get_configurations()
     sequences = get_sequences()
+    if args.quick:
+        sequences = subsample_sequences(sequences, max_per_dataset=20)
     results_root = get_results_root()
 
     print(f'{"Experiment":<50} {"Status":<12} {"Done":>5} {"Fail":>5} {"NoAlign":>7} {"Miss":>5} {"Total":>6}')
