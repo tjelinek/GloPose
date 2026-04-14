@@ -11,7 +11,7 @@ poses of the object in novel images.
 
 - **Environment:** Conda (`environment.yml`), env name `glopose`, Python 3.13
 - **Install:** `conda env create -f environment.yml && conda activate glopose`
-- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, SAM2, vggt, ho3d, sam3d) — some installed as
+- **Submodules:** `repositories/` contains git submodules (cnos, mast3r, SAM2, vggt, ho3d, sam3d, map-anything) — some installed as
   editable pip packages
 
 ## Running
@@ -101,7 +101,8 @@ camera intrinsics formats, GT structures, and external method APIs lives in
 - `adapters/` — External repository wrappers and vendored code: `cnos_adapter.py` (descriptor extractor protocol),
   `dino_descriptor.py` (vendored DINOv2/v3 model), `dino_utils.py` (vendored utilities), `sam2_adapter.py` (SAM2),
   `hot3d_adapter.py` (HOT3D FISHEYE624→pinhole undistortion via `hand_tracking_toolkit`),
-  `sam3d_adapter.py` (SAM3D single-image 3D reconstruction), `vggt_adapter.py` (VGGT), `mast3r_adapter.py` (Mast3r)
+  `sam3d_adapter.py` (SAM3D single-image 3D reconstruction), `vggt_adapter.py` (VGGT), `mast3r_adapter.py` (Mast3r),
+  `map_anything_adapter.py` (Map Anything — unified wrapper for mapanything/vggt/moge/dust3r/mast3r/must3r/pow3r/pi3/anycalib/da3 backends)
 - `configs/` — Python-based config files (not YAML), loaded via `utils.general.load_config()`
 - `onboarding/` — OnboardingPipeline, SfM reconstruction, frame filtering, COLMAP utils
 - `detection/` — template condensation (representation building), detector (inference), scoring, NMS (`nms.py`)
