@@ -1,17 +1,11 @@
+from __future__ import annotations
+
 import argparse
 import os
 import random
 import subprocess
 from enum import Enum
 from pathlib import Path
-
-from configs.glopose_config import GloPoseConfig
-from utils.dataset_sequences import (
-    get_handal_sequences, get_navi_sequences, get_ho3d_sequences,
-    get_tum_rgbd_sequences, get_behave_sequences, get_google_scanned_objects_sequences,
-    get_bop_val_sequences, get_bop_onboarding_sequences, get_bop_classic_sequences,
-    get_hot3d_onboarding_sequences
-)
 
 
 class Datasets(Enum):
@@ -214,6 +208,13 @@ def get_configurations():
 
 
 def get_sequences():
+    from configs.glopose_config import GloPoseConfig
+    from utils.dataset_sequences import (
+        get_handal_sequences, get_navi_sequences, get_ho3d_sequences,
+        get_bop_onboarding_sequences, get_bop_classic_sequences,
+        get_hot3d_onboarding_sequences
+    )
+
     cfg = GloPoseConfig()
     bop_path = cfg.paths.bop_data_folder
 
@@ -277,6 +278,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--quick', action='store_true',
                         help='Run on 20 random (but deterministic) sequences per dataset')
+    parser.add_argument('--missing-only', action='store_true',
+                        help='Only submit sequences that are missing from the results CSV')
     parser.add_argument('--batch-size', type=int, default=4,
                         help='Number of sequences per SLURM array task (default: 2)')
     args = parser.parse_args()
@@ -293,8 +296,20 @@ def main():
     for configuration in configurations:
         output_folder = create_unused_folder(output_folder_root / configuration)
 
-        for dataset in sequences:
-            run_job_array(configuration, sequences[dataset], dataset, output_folder, batch_size=args.batch_size)
+        if args.missing_only:
+            from scripts.check_experiment_status import check_experiment
+            result = check_experiment(configuration, output_folder_root, sequences)
+            missing = result['missing_by_dataset']
+            total_missing = sum(len(s) for s in missing.values())
+            if total_missing == 0:
+                print(f'[--missing-only] {configuration}: all sequences complete, skipping')
+                continue
+            print(f'[--missing-only] {configuration}: submitting {total_missing} missing sequences')
+            for dataset in missing:
+                run_job_array(configuration, missing[dataset], dataset, output_folder, batch_size=args.batch_size)
+        else:
+            for dataset in sequences:
+                run_job_array(configuration, sequences[dataset], dataset, output_folder, batch_size=args.batch_size)
 
 
 if __name__ == "__main__":
