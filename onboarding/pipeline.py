@@ -316,6 +316,8 @@ class OnboardingPipeline:
         elif method in ('vggt', 'mast3r'):
             reconstruction = self._reconstruct_external(method, images_paths, segmentation_paths,
                                                         matching_pairs, camera_K)
+        elif method == 'map_anything':
+            reconstruction = self._reconstruct_map_anything(images_paths, segmentation_paths, camera_K)
         elif method == 'sam3d':
             reconstruction = self._reconstruct_sam3d(images_paths, segmentation_paths, camera_K)
         else:
@@ -415,6 +417,26 @@ class OnboardingPipeline:
             print(f"External reconstruction ({method}) failed: {e}")
             reconstruction = None
 
+        return reconstruction
+
+    def _reconstruct_map_anything(self, images_paths, segmentation_paths, camera_K) \
+            -> Optional[Reconstruction]:
+        """Run Map Anything reconstruction."""
+        image_names = [p.name for p in images_paths]
+        try:
+            from adapters.map_anything_adapter import reconstruct_with_map_anything
+            reconstruction = reconstruct_with_map_anything(
+                image_paths=images_paths,
+                image_names=image_names,
+                device=self.config.run.device,
+                camera_K=camera_K,
+                segmentation_paths=segmentation_paths,
+                backend=self.config.onboarding.map_anything_backend,
+                voxel_fraction=self.config.onboarding.map_anything_voxel_fraction,
+            )
+        except Exception as e:
+            print(f"Map Anything reconstruction failed: {e}")
+            reconstruction = None
         return reconstruction
 
     def _reconstruct_sam3d(self, images_paths, segmentation_paths, camera_K) \

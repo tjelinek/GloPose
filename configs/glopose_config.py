@@ -94,7 +94,7 @@ class OnboardingConfig:
     sift_filter_good_to_add_matches: int = 450
 
     # Reconstruction settings
-    reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r' | 'sam3d'
+    reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r' | 'map_anything' | 'sam3d'
     mapper: str = 'pycolmap'
     init_with_first_two_images: bool = True
     add_track_merging_matches: bool = True
@@ -106,6 +106,10 @@ class OnboardingConfig:
     export_view_graph: bool = False
 
     vggt_depth_conf_threshold: float = 0.1
+
+    # Map Anything settings
+    map_anything_backend: str = 'mapanything'  # mapanything | vggt | moge | dust3r | mast3r | must3r | pow3r | pow3r_ba | modular_dust3r | pi3 | pi3x | anycalib | da3
+    map_anything_voxel_fraction: float = 0.01
 
     # SAM3D settings
     sam3d_checkpoint_path: str = '/mnt/personal/jelint19/weights/SAM3D/hf/'
