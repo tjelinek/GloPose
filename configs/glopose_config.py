@@ -96,7 +96,7 @@ class OnboardingConfig:
     # Reconstruction settings
     reconstruction_method: str = 'colmap'  # 'colmap' | 'vggt' | 'mast3r' | 'sam3d'
     mapper: str = 'pycolmap'
-    init_with_first_two_images: bool = False
+    init_with_first_two_images: bool = True
     add_track_merging_matches: bool = True
     use_default_colmap_K: bool = True
     similarity_transformation: str = 'kabsch'
