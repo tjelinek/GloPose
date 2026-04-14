@@ -4,6 +4,7 @@ Usage:
     python scripts/check_experiment_status.py                    # check all experiments from job_runner
     python scripts/check_experiment_status.py onboarding/ufm_c0975r05 reconstruction/vggt  # check specific ones
 """
+from __future__ import annotations
 
 import argparse
 import sys
@@ -50,8 +51,21 @@ _HOT3D_DATASETS = {
 }
 
 
+def _hot3d_device_for(dataset_enum) -> str:
+    """Return 'aria' or 'quest3' for HOT3D dataset enums."""
+    if 'ARIA' in dataset_enum.value:
+        return 'aria'
+    if 'QUEST3' in dataset_enum.value:
+        return 'quest3'
+    raise ValueError(f'Not a HOT3D dataset: {dataset_enum}')
+
+
 def get_expected_csv_sequences(dataset_enum, sequences: list[str]) -> list[tuple[str, str]]:
-    """Return list of (csv_dataset_name, csv_sequence_name) expected in the CSV."""
+    """Return list of (csv_dataset_name, csv_sequence_name) expected in the CSV.
+
+    Mirrors how runners write rows: CSV dataset = `run.dataset` + `_{onboarding_type}_onboarding`
+    (for BOP-style onboarding runs), and CSV sequence = `run.sequence_{run.special_hash}`.
+    """
     ds_value = dataset_enum.value
     csv_dataset = _CSV_NAMES_BY_VALUE.get(ds_value)
     if csv_dataset is None:
@@ -62,33 +76,38 @@ def get_expected_csv_sequences(dataset_enum, sequences: list[str]) -> list[tuple
         parts = seq.split('_')
 
         if ds_value in _BOP_ONBOARDING_DATASETS:
-            # e.g., obj_000001_both → csv sequence = obj_000001_both_down (or _both, _up, _dynamic)
-            if len(parts) == 3:
-                base_seq = f'{parts[0]}_{parts[1]}'
-                suffix = parts[2]  # both, up, down, dynamic
-                if suffix == 'dynamic':
-                    csv_seq = f'{base_seq}_dynamic'
-                else:
-                    csv_seq = f'{base_seq}_{suffix}'
-                results.append((csv_dataset, csv_seq))
-            else:
-                results.append((csv_dataset, seq))
+            # Job-runner sequence: `obj_NNNNNN_{up|down|both|dynamic}`
+            # CSV sequence: `obj_NNNNNN_{up|down|both|dynamic}` (unchanged — special_hash equals suffix)
+            results.append((csv_dataset, seq))
 
         elif ds_value in _HOT3D_DATASETS:
-            # HOT3D: NNNNNN_static or NNNNNN_dynamic
-            if len(parts) == 2:
-                base_seq = parts[0]
-                suffix = parts[1]  # static, dynamic
-                csv_seq = f'{base_seq}_{suffix}'
+            # Job-runner sequence: `obj_NNNNNN_{up|down}` (aria/quest3 separated at dataset level)
+            # CSV sequence: `obj_NNNNNN_{device}_{up|down}` — special_hash is `{device}_{suffix}`
+            device = _hot3d_device_for(dataset_enum)
+            if len(parts) == 3:
+                base_seq = f'{parts[0]}_{parts[1]}'
+                suffix = parts[2]
+                csv_seq = f'{base_seq}_{device}_{suffix}'
                 results.append((csv_dataset, csv_seq))
             else:
                 results.append((csv_dataset, seq))
 
         elif ds_value == Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES.value:
-            results.append((csv_dataset, seq))
+            # Job-runner sequence: `{dataset}@{split}@{scene_id}` e.g. `tless@train_primesense@000001`
+            # CSV: dataset = `{dataset}` (not `bop_classic`), sequence = `{scene_id}`
+            split = seq.split('@')
+            if len(split) == 3:
+                results.append((split[0], split[2]))
+            else:
+                results.append((csv_dataset, seq))
+
+        elif ds_value == Datasets.NAVI.value:
+            # Job-runner sequence: `{obj_name}@{video_name}`
+            # CSV sequence: `{obj_name}_{video_name}` (@ replaced with _)
+            results.append((csv_dataset, seq.replace('@', '_', 1)))
 
         else:
-            # HO3D, NAVI: sequence name used as-is
+            # HO3D: sequence name used as-is
             results.append((csv_dataset, seq))
 
     return results
