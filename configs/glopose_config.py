@@ -108,7 +108,10 @@ class OnboardingConfig:
     vggt_depth_conf_threshold: float = 0.1
 
     # Map Anything settings
-    map_anything_backend: str = 'mapanything'  # mapanything | vggt | moge | dust3r | mast3r | must3r | pow3r | pow3r_ba | modular_dust3r | pi3 | pi3x | anycalib | da3
+    # Supported backends: mapanything | modular_dust3r | vggt | mast3r | must3r |
+    # dust3r | moge | pi3 | pi3x | pow3r | pow3r_ba | anycalib | da3
+    # See adapters/map_anything_adapter.py:SUPPORTED_BACKENDS for the authoritative list.
+    map_anything_backend: str = 'mapanything'
     map_anything_voxel_fraction: float = 0.01
 
     # SAM3D settings
