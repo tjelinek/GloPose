@@ -57,13 +57,18 @@ def evaluate_onboarding(
     keyframe_nodes = sorted(view_graph.view_graph.nodes)
     num_keyframes = len(keyframe_nodes)
 
-    # Determine whether we know GT poses for all keyframes
+    # Determine whether we know GT poses for any keyframe. For dynamic onboarding
+    # only a subset of frames have GT in scene_gt.json (sometimes only the first
+    # frame), so we evaluate against whatever subset is available rather than
+    # skipping the sequence entirely. evaluate_reconstruction() and the
+    # per-sequence aggregation both tolerate keyframes without a GT pose — those
+    # rows are simply skipped when computing pose errors.
     if gt_Se3_world2cam is not None and len(gt_Se3_world2cam) > 0:
-        known_gt_poses = all(idx in gt_Se3_world2cam for idx in keyframe_nodes)
+        have_gt_poses = any(idx in gt_Se3_world2cam for idx in keyframe_nodes)
     else:
-        known_gt_poses = False
+        have_gt_poses = False
 
-    if not known_gt_poses:
+    if not have_gt_poses:
         return
 
     # Build dataset/sequence names for CSV columns
@@ -88,7 +93,7 @@ def evaluate_onboarding(
             reconstruction = pycolmap.Reconstruction(str(rec_path))
 
     # Per-keyframe evaluation (rotation/translation errors)
-    if reconstruction is not None and known_gt_poses:
+    if reconstruction is not None and have_gt_poses:
         evaluate_reconstruction(
             reconstruction, gt_Se3_world2cam, view_graph.image_name_to_frame_id,
             rec_csv_detailed_stats, dataset_name_for_eval, sequence_name,

@@ -344,7 +344,14 @@ class OnboardingPipeline:
 
             first_image_filename = str(first_frame_data.image_filename)
 
-            gt_Se3_obj2cam = self.gt_Se3_world2cam[0]
+            # Depth-based alignment anchors on the first frame's GT pose. For
+            # dynamic onboarding only a subset of frames carry GT; if frame 0 has
+            # no GT pose we cannot anchor the alignment, so skip it gracefully
+            # rather than raising a KeyError.
+            gt_Se3_obj2cam = self.gt_Se3_world2cam.get(0)
+            if gt_Se3_obj2cam is None:
+                logger.warning("Skipping depth alignment: no GT pose for first frame")
+                return reconstruction, False
 
             image_depths = {}
             for i in self.data_graph.G.nodes:

@@ -192,8 +192,11 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
         stats['note'] = 'SfM reconstruction failed.'
     else:
         for _, row in sequence_df.iterrows():
-            # Skip if ground truth is not available
-            if row['gt_rotation'] is None or row['gt_translation'] is None:
+            # Skip if ground truth is not available. Missing GT is written as None
+            # but read back from CSV as NaN, so an `is None` check misses it — use
+            # pd.isna. This is the common case for dynamic onboarding, where only a
+            # subset of keyframes (often just the first frame) have a GT pose.
+            if pd.isna(row['gt_rotation']) or pd.isna(row['gt_translation']):
                 continue
 
             gt_rot_val = eval(row['gt_rotation'])
