@@ -352,29 +352,11 @@ BOP path utilities extracted to `utils/bop_data.py`. Remaining:
 
 Goal: given detections and an onboarding result, produce 6DoF poses.
 
-#### 3.1 SAM3D coordinate frame alignment
-
-SAM3D produces a single-image 3D reconstruction with a local-to-camera pose (rotation, translation, scale)
-in PyTorch3D convention (X-left, Y-up, Z-forward). Currently alignment is skipped (`align_success = False`)
-because Kabsch/depths methods require multiple cameras.
-
-- [ ] Implement alignment for SAM3D reconstructions: convert PyTorch3D l2c → OpenCV cam_from_world,
-  then compose with GT camera pose (or depth-based scale estimation for production)
-- [ ] Scale recovery: SAM3D canonical space is [-0.5, 0.5]^3, BOP GT models are in mm.
-  Options: (a) known object diameter from `models_info.json`, (b) depth-based metric scale from MoGe,
-  (c) ICP alignment against multi-view reconstruction
-- [ ] Verify coordinate frame correctness by projecting SAM3D mesh vertices back to the input image
-  and visually comparing silhouettes
-
 #### 3.2 Evaluation
 
 - [ ] Extend `eval/` with remaining evaluation types:
     - [ ] `evaluate_detections(detections, ground_truth) -> DetectionMetrics` (BOP COCO)
     - [ ] `evaluate_poses(pose_estimates, ground_truth) -> PoseMetrics` (BOP 6DoF)
-    - [x] `evaluate_reconstruction(reconstruction, ground_truth) -> ReconstructionMetrics`
-        — implemented in `eval/eval_point_cloud.py`: accuracy, completeness, overall, F-score@1/2/5mm,
-        pose AUC@5/10/30°. Wired into CSV pipeline via `eval/eval_onboarding.py`.
-- [x] `eval_bop_detection.py` moved from `utils/` to `eval/`
 - [ ] Gradually migrate functions from `utils/bop_challenge.py` into `utils/bop_data.py` (clean extraction already started)
 
 ---
@@ -382,26 +364,6 @@ because Kabsch/depths methods require multiple cameras.
 ### Phase 4: Infrastructure improvements
 
 These can be done in parallel with the module work.
-
-#### 4.2 SAM3D installation on RCI
-
-SAM3D (`repositories/sam3d/`) requires gated HuggingFace access and extra dependencies
-beyond the base GloPose env (PyTorch 2.10, CUDA 12.8).
-
-- [ ] Request access at https://huggingface.co/facebook/sam-3d-objects, then `huggingface-cli login`
-- [ ] Download weights:
-  ```bash
-  huggingface-cli download --repo-type model --local-dir /mnt/personal/jelint19/weights/SAM3D/hf-download facebook/sam-3d-objects
-  mv /mnt/personal/jelint19/weights/SAM3D/hf-download/checkpoints /mnt/personal/jelint19/weights/SAM3D/hf
-  ```
-- [ ] Install SAM3D into glopose conda env. Key new dependencies:
-  - `pytorch3d` (build from source for CUDA 12.8: `pip install "git+https://github.com/facebookresearch/pytorch3d.git"`)
-  - `utils3d`, `xatlas`, `open3d`, `gsplat`, `moge` (MoGe depth model)
-  - `loguru`, `safetensors`
-  - Inspect `requirements.txt`, `requirements.inference.txt`, `requirements.p3d.txt` — skip
-    version-pinned packages already present (torch, torchvision, kaolin)
-  - Apply hydra patch: `./patching/hydra`
-- [ ] Verify: `python -c "from adapters.sam3d_adapter import load_sam3d_model"` succeeds on RCI
 
 #### 4.3 Visualization
 
@@ -684,32 +646,9 @@ For each method: run on our selected keyframes AND on every-nth subsampled frame
 
 Goal: compare our reconstructed 3D model against GT mesh models.
 
-#### P4.1 GT model loading — DONE
-
-GT mesh loading (`trimesh.load` + surface sampling) is in `eval/eval_point_cloud.py:sample_points_from_mesh()`.
-GT model path resolution is in `eval/eval_onboarding.py:resolve_gt_model_path()` (BOP, NAVI, HO3D).
-Unit mapping (BOP→mm, NAVI/HO3D/GSO→m) is in `eval/eval_onboarding.py:gt_mesh_unit_for_dataset()`.
-
-#### P4.2 Reconstruction-to-GT alignment — DONE (via existing Kabsch)
-
-Reconstruction points are already in GT frame after Kabsch alignment (`onboarding/reconstruction.py`
-transforms `reconstruction.points3D` with the Sim3d alignment). No separate ICP step needed for
-static sequences with GT poses.
+#### P4.2 Reconstruction-to-GT alignment
 
 - [ ] For dynamic sequences or sequences without GT poses, implement ICP fallback alignment
-
-#### P4.3 3D distance metrics — DONE
-
-Implemented in `eval/eval_point_cloud.py:compute_reconstruction_metrics()`:
-- **Accuracy** (mm): mean NN-distance pred→GT, clamped at 20mm
-- **Completeness** (mm): mean NN-distance GT→pred, clamped at 20mm
-- **Overall** (mm): (accuracy + completeness) / 2
-- **F-score@τ** at τ = 1mm, 2mm, 5mm
-- Uses `scipy.spatial.KDTree` for efficient NN queries
-
-Also implemented `compute_pose_auc()` (AUC@5/10/30° over rotation errors, adapted from VGGT).
-
-All metrics are wired into the CSV pipeline at sequence, dataset, and experiment levels.
 
 #### P4.4 Run 3D evaluation
 
