@@ -201,35 +201,83 @@ NetworkX, Gradio, Rerun SDK, wandb, scipy (KDTree for point cloud eval), trimesh
 
 ### RCI (Remote Computing Infrastructure)
 
-The project runs on an RCI GPU cluster. Claude has **no direct access** to run code on RCI — only syntax-check locally.
+The project runs on an RCI GPU (SLURM) cluster. **Claude CAN run code on RCI** — it has
+non-interactive SSH access to the login node and submits jobs with `sbatch`.
 
-**Running on RCI:**
+**SSH access (Claude, non-interactive):**
 
 ```bash
-~/run_gpu.sh -p glotracker -d gpu      # default gpufast partition, 1 GPU, 256G RAM
-~/run_gpu.sh -p glotracker -d h200     # h200fast partition, 1024G RAM
-~/run_gpu.sh -p glotracker -d amd      # amdgpufast partition, 512G RAM
+ssh -i ~/ssh/ssh_fel jelint19@login3.rci.cvut.cz '<command>'
+```
+
+The private key is `~/ssh/ssh_fel` (NOT in `~/.ssh/`; the only credential RCI accepts — the default
+`~/.ssh/git` key is rejected). `login3.rci.cvut.cz` is the login node. The mounts (below) are set up by
+`~/rci.sh`, which also drops the user into an interactive shell. Submit jobs from the login node:
+`ssh ... 'sbatch <script>'`; monitor with `squeue -j <id>` / `sacct -j <id>`. There are no SLURM
+clients locally — everything goes through the login node.
+
+**Code sync (local → RCI):** the RCI copy at `~/projects/GloPose/` is **not** a git repo; it is kept in
+sync from the local repo by **PyCharm SFTP auto-upload** (`.idea/deployment.xml`) — files Claude edits
+locally appear on RCI automatically within seconds. Manual fallback: write through the RW mount at
+`~/rci_home/projects/GloPose/`. Always verify the edit landed on RCI (e.g. `grep` the changed line in
+`~/rci_home/projects/GloPose/...`) before launching a job.
+
+**Running a batch job — module setup gotcha:** compute nodes do **not** initialize Lmod (`MODULEPATH`
+is empty, `~/.bashrc` early-returns for non-interactive shells, and SLURM strips `-l` from the shebang).
+An sbatch script must set up modules explicitly before loading them. numpy/torch/pycolmap come from the
+**modules**, not the venv. Working template:
+
+```bash
+#!/bin/bash
+#SBATCH --partition=gpufast        # also: h200fast, amdgpufast
+#SBATCH --gres=gpu:1               # gpufast REQUIRES a GPU request
+#SBATCH --mem=128G --cpus-per-task=12 --time=4:00:00
+#SBATCH --output=/home/jelint19/logs/%x_%j.out
+#SBATCH --error=/home/jelint19/logs/%x_%j.err
+
+export MODULEPATH=/opt/ohpc/pub/modulefiles
+source /opt/ohpc/admin/lmod/lmod/init/bash
+ml purge
+ml $(<~/scripts/modules_glotracker_foss2025b.txt)   # PyTorch-Lightning/2.5.5-foss-2025b, COLMAP/3.13.0, etc.
+source ~/envs/glopose/bin/activate                  # venv layered on the modules
+cd ~/projects/GloPose/
+python run_bop_HANDAL_onboarding.py --config configs/onboarding/roma_c0975r05.py \
+  --sequences obj_000001_dynamic obj_000017_dynamic --experiment my_experiment
+```
+
+`#!/bin/bash -l`, `source /etc/profile`, and `source ~/.bashrc` all FAIL to provide `ml` on compute
+nodes — only the explicit `MODULEPATH` + Lmod-init recipe above works.
+
+**Interactive (for the user, not Claude):**
+
+```bash
+~/run_gpu.sh -p glotracker -d gpu      # gpufast partition, 1 GPU, 128G RAM
+~/run_gpu.sh -p glotracker -d h200     # h200fast partition, 512G RAM
+~/run_gpu.sh -p glotracker -d amd      # amdgpufast partition, 256G RAM
 # Add -n 2 for multi-GPU
 ```
 
-This calls `srun` with the selected partition and drops into an interactive bash shell.
+This calls `srun --pty bash --init-file ...` and drops into an interactive shell with modules + venv loaded.
 
-**Modules loaded** (from `~/scripts/modules_glotracker_login4.txt`):
-PyTorch-Lightning/2.4.0 (CUDA 12.4.0), torchvision/0.19.0, maturin/1.5.1, scikit-image/0.23.2, git/2.42.0, CMake/3.29.3,
-Eigen/3.4.0, Boost/1.83.0, FLANN/1.9.2, METIS/5.1.0, CeresSolver/2.2.0, glog/0.6.0, SQLite/3.43.1, CGAL/5.6.1,
-Qt5/5.15.13, FreeImage/3.18.0, glew/2.2.0, GMP/6.3.0, MPFR/4.2.1
+**Results:** `/mnt/personal/jelint19/results/FlowTracker/<experiment>/<dataset>/<sequence>/`
+(readable locally at `~/rci_data/results/...` or `/mnt/personal/jelint19/results/...`).
+**SLURM logs:** write `--output`/`--error` to `~/logs/` on RCI, never into the results folder.
 
-**RCI project home:** `~/projects/GloPose/` (on RCI filesystem)
+### sshfs Mounts (local views of RCI)
 
-### sshfs Mount (read-only for Claude)
+`~/rci.sh` sshfs-mounts four RCI paths locally (all via `login3.rci.cvut.cz`):
 
-The RCI personal folder is sshfs-mounted locally:
+| Local mount | RCI path | Access | Contents |
+|-------------|----------|--------|----------|
+| `~/rci_home/` | `/home/jelint19` | **RW** | RCI home: `projects/GloPose`, `logs/`, `scripts/`, `envs/glopose` — Claude stages batch scripts here |
+| `~/rci_data/` and `/mnt/personal/jelint19/` | `/mnt/personal/jelint19` | read-only by convention | results, caches, weights, data — **never clobber** |
+| `~/public_datasets/` | `/mnt/data/` | read-only | BOP datasets at `vrg/public_datasets/bop/` |
+| `~/rci_archive/` | `/mnt/archive/jelint19` | read-only | archive |
 
-- **Mount point:** `/mnt/personal/jelint19/`
-- **Claude can read** this directory to inspect results, caches, logs, weights, data
-- **Claude must NEVER write** to this directory
+- **Claude may write** to `~/rci_home/` (RCI home — for batch scripts, logs dir, manual code staging).
+- **Claude must NEVER clobber** `/mnt/personal/jelint19/` (results/caches/weights/data) — read only.
 
-**Directory layout on the mount:**
+**Directory layout of `/mnt/personal/jelint19/` (= `~/rci_data/`):**
 
 ```
 /mnt/personal/jelint19/
@@ -253,9 +301,9 @@ The RCI personal folder is sshfs-mounted locally:
 
 ### Local Machine Limitations
 
-- RoMa and UFM models are too large for the local GPU
+- RoMa and UFM models are too large for the local GPU — run GPU-heavy work on RCI via `sbatch` (see above)
 - Only passthrough onboarding (no dense matching) can run locally
-- Code changes are made locally, then synced to RCI for execution
+- Code is edited locally and auto-synced to RCI (PyCharm SFTP); GPU runs happen on RCI
 
 ---
 
