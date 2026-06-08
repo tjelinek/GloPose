@@ -363,6 +363,97 @@ beyond the base GloPose env (PyTorch 2.10, CUDA 12.8).
 
 ---
 
+## Publication
+
+The paper and its project page live **outside this repo** (each its own git repo, siblings of
+`GloPose/`). Set up 2026-06-08.
+
+### Paper title & framing
+
+**Dense Matchers for Dense Object Reconstruction** — Tomáš Jelínek, Dmytro Mishkin, Jiří Matas
+(Visual Recognition Group, CTU in Prague). WACV 2026 submission (in rebuttal). Three claimed
+contributions (from `sections/Intro.tex`):
+1. A simple, effective method for dense 3D object reconstruction from videos.
+2. A **matchability criterion** for online sparse-keyframe selection and view relocalization.
+3. A **sparse view graph** that speeds up reconstruction and beats the complete (all-to-all) edge set.
+
+("GloPose" is the codebase name; the paper/page brand may differ and can be finalized later.)
+
+### Project page (GitHub Pages)
+
+- Repo `github.com/tjelinek/glopose-page` (public) → live at
+  **https://tjelinek.github.io/glopose-page/**. Local clone: `/home/tom/Projects/glopose-page`.
+- Static Nerfies/Academic-Project-Page template (HTML/CSS/JS, `.nojekyll`). Title/authors/abstract/
+  BibTeX mirror the paper. Media sections are commented out until real assets exist; open items are
+  marked `TODO(...)` in `index.html` (venue, arXiv/PDF links, teaser + 1200×630 social image, favicon).
+- **Remote is SSH** (`git@github.com:tjelinek/glopose-page.git`) — the HTTPS credential helper does
+  not work on the local machine. Edit `index.html` → `git push` → Pages auto-redeploys.
+
+### Paper source (Overleaf)
+
+- Overleaf project `68c3d833f2e4e1ed3923c814`, cloned to `/home/tom/Projects/glopose-paper`.
+  Remote `origin` → `https://git@git.overleaf.com/68c3d833f2e4e1ed3923c814` (Premium git remote,
+  direct — no GitHub hop). Branch `master`. Sources: `main.tex`,
+  `sections/{Intro,RelatedWork,Method,Experiments}.tex` (abstract in `Intro.tex`), `main.bib`,
+  figures in `imgs/` and `figs/`.
+- **Workflow: `git pull` before editing**, then edit → commit → `git push` (lands in the Overleaf
+  web editor immediately). Co-authors edit in the Overleaf web UI. Token is stored
+  (`credential.helper store`) so sync is non-interactive. `glopose-paper/SYNC.md` documents this
+  (local-only via `.git/info/exclude`, never pushed to Overleaf).
+- Backup: `github.com/tjelinek/GloPosePaper` (private) — **manual** backup, not auto-synced.
+
+### Auto-sync rule (standing authorization)
+
+For the **project page** (`/home/tom/Projects/glopose-page`) and the **Overleaf paper**
+(`/home/tom/Projects/glopose-paper`) — and **only** these two repos — commit and push changes
+**automatically** after editing, without asking first. (This overrides the default "commit/push only
+when asked"; it does **not** apply to the main `GloPose` code repo or any other repo, where the
+default still holds.)
+
+- **Page:** after editing, `git add -A && git commit && git push` (remote is SSH). Pages auto-deploys.
+- **Paper:** `git pull` **first** (avoid clobbering co-authors' web-editor edits), then edit →
+  `git commit` → `git push` (lands in Overleaf immediately). If `pull` reports conflicts, stop and
+  surface them rather than force-anything.
+- End commit messages with the `Co-Authored-By: Claude Opus 4.8 (1M context)` trailer.
+- Still **report** what was committed/pushed in the reply.
+
+### Minimum viable paper — TODO
+
+The narrative is reconstruction-first; each result below backs a stated contribution. Detailed
+sub-steps live in the `## Paper: Onboarding Module Evaluation` checklist (P1–P6) — this is the
+curated MVP subset.
+
+**Core results (must-have):**
+- [ ] **Main reconstruction result** — static onboarding on HANDAL (40 objects, `_up`) with RoMa:
+  pose error, rot/trans accuracy, reconstruction success rate. → backs contribution 1. (see P1.1)
+- [ ] **Ablation A — keyframe selection** — our matchability criterion vs every-N subsampling:
+  accuracy vs mean #keyframes table + plot. → backs contribution 2. (see P3.1,
+  `scripts/ablation_frame_selection.py`)
+- [ ] **Ablation B — view-graph density** — sparse (ours) vs complete edge set: reconstruction
+  quality + runtime, showing speedup *and* quality win. → backs contribution 3. (see P3.2)
+- [ ] **3D reconstruction quality vs GT meshes** — accuracy / completeness / F-score, pose AUC on
+  HANDAL. → strengthens contribution 1. (see P4.4, `scripts/eval_3d_reconstruction.py`)
+- [ ] **One downstream-task demo** — the abstract claims the representation suffices for pose
+  estimation / 6DoF tracking / self-relocalization; include at least one minimal quantitative or
+  qualitative result. (see P5)
+
+**Figures & tables (deliverables):**
+- [ ] Teaser figure (also reused on the project page).
+- [ ] Method/pipeline figure — `glopose-paper/figs/scheme.tex`.
+- [ ] Qualitative reconstruction figure — input → selected keyframes → point cloud → GT overlay.
+- [ ] Frame-selection ablation table + plot; reconstruction-quality table.
+
+**Writing:**
+- [ ] Experiments section written up from the tables above.
+- [ ] Limitations + conclusion.
+- [ ] Tighten Intro/Related Work/Method (drafts exist).
+
+**Release gate (project page):**
+- [ ] Add teaser + qualitative figures to `glopose-page` (un-comment media sections).
+- [ ] Fill arXiv id + PDF link; switch BibTeX from `@misc` preprint to the published entry.
+
+---
+
 ## Paper: Onboarding Module Evaluation
 
 Checklist for producing the experimental results for a paper on the onboarding part of the pipeline.
