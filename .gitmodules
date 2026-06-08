@@ -6,10 +6,10 @@
 	url = git@github.com:tjelinek/ho3d.git
 [submodule "repositories/mast3r"]
 	path = repositories/mast3r
-	url = https://github.com/naver/mast3r.git
+	url = https://github.com/tjelinek/mast3r.git
 [submodule "repositories/vggt"]
 	path = repositories/vggt
-	url = https://github.com/facebookresearch/vggt.git
+	url = https://github.com/tjelinek/vggt.git
 [submodule "repositories/hot3d"]
 	path = repositories/hot3d
 	url = https://github.com/facebookresearch/hot3d.git
