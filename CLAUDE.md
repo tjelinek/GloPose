@@ -527,14 +527,6 @@ alignment to skip and no evaluation to run.
 
 - [ ] Compare scale recovery methods: (a) current depth-based median ratio, (b) using GT depth for
   first frame only vs predicted depth, (c) using multiple frames' depth for more robust scale estimation
-- [ ] If predicted depth is too noisy for reliable scale, consider fallback: use the known object diameter
-  (available in BOP `models_info.json`) as a scale reference
-
-#### P2.3 Run dynamic onboarding across datasets
-
-- [ ] Run on HANDAL dynamic sequences (40 objects × `_dynamic` suffix)
-- [ ] Run on HOPE dynamic sequences
-- [ ] Collect same metrics as static (rotation/translation error, accuracy at thresholds)
 
 ---
 

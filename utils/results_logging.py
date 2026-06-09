@@ -799,9 +799,13 @@ class WriteResults:
                                gt_model_path: Path | None = None):
         rr.set_time("frame", sequence=frame_i)
 
-        points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
-        points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
-        rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
+        # A reconstruction may register images but contain no triangulated 3D points
+        # (degenerate/empty tracks). np.stack on an empty list raises ValueError, so
+        # skip the point-cloud logging in that case rather than crashing the sequence.
+        if len(colmap_reconstruction.points3D) > 0:
+            points_3d_coords = np.stack([p.xyz for p in colmap_reconstruction.points3D.values()], axis=0)
+            points_3d_colors = np.stack([p.color for p in colmap_reconstruction.points3D.values()], axis=0)
+            rr.log(RerunAnnotations.colmap_pointcloud, rr.Points3D(points_3d_coords, colors=points_3d_colors), static=True)
 
         if colmap_images_dir is not None:
             log_colmap_point_projections(colmap_reconstruction, colmap_images_dir, colmap_segmentations_dir)

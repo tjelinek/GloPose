@@ -103,7 +103,10 @@ def extract_reconstruction_points(reconstruction) -> np.ndarray:
     Returns:
         (M, 3) array of reconstructed 3D points.
     """
-    return np.stack([p.xyz for p in reconstruction.points3D.values()])
+    pts = [p.xyz for p in reconstruction.points3D.values()]
+    if not pts:
+        return np.empty((0, 3), dtype=np.float64)
+    return np.stack(pts)
 
 
 def compute_reconstruction_metrics(

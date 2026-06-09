@@ -186,10 +186,13 @@ def update_sequence_reconstructions_stats(csv_per_frame_stats: Path, csv_per_seq
         'note': str()
     }
 
-    if not pose_alignment_success:
-        stats['note'] = 'Pose alignment failed.'
-    elif not reconstruction_success:
+    if not reconstruction_success:
+        # Check reconstruction first: a failed SfM reconstruction also forces
+        # alignment to fail, so attributing the failure to alignment would be
+        # misleading. The root cause is the missing reconstruction.
         stats['note'] = 'SfM reconstruction failed.'
+    elif not pose_alignment_success:
+        stats['note'] = 'Pose alignment failed.'
     else:
         for _, row in sequence_df.iterrows():
             # Skip if ground truth is not available. Missing GT is written as None
