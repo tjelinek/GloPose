@@ -91,10 +91,13 @@ def run_batch(configuration_name: str, sequences, dataset: Datasets, output_fold
 
 
 def run_job_array(configuration_name: str, all_sequences: list, dataset: Datasets, output_folder: Path,
-                  batch_size: int) -> None:
+                  batch_size: int, seq_list_tag: str = '') -> None:
     """Submit all sequences for a config as a single SLURM job array.
 
     Each array task passes `batch_size` sequences to the runner script, which processes them sequentially.
+
+    `seq_list_tag` is inserted into the sequence-manifest filename so a restricted
+    submission (e.g. ``--val``) never overwrites the manifest of a still-queued full run.
     """
     if not all_sequences:
         return
@@ -104,7 +107,7 @@ def run_job_array(configuration_name: str, all_sequences: list, dataset: Dataset
 
     # Write sequence list to a file in the output folder
     os.makedirs(output_folder, exist_ok=True)
-    seq_list_path = output_folder / f'{experiment}_{dataset.value}_sequences.txt'
+    seq_list_path = output_folder / f'{experiment}_{dataset.value}_{seq_list_tag}sequences.txt'
     with open(seq_list_path, 'w') as f:
         for seq in all_sequences:
             f.write(seq + '\n')
@@ -228,12 +231,14 @@ def get_sequences():
     hot3d_quest3_dynamic, hot3d_quest3_static = get_hot3d_onboarding_sequences(bop_path, device='quest3')
 
     return {
-        # --- BOP onboarding: static (up+down separate), both (up+down combined), dynamic ---
+        # --- BOP onboarding: static (up+down separate), dynamic ---
+        # '_both' (up+down merged) onboarding is disabled by default — re-enable by
+        # uncommenting, or run it ad hoc via `--sequences obj_NNNNNN_both`.
         Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_up + handal_down,
-        Datasets.BOP_HANDAL_ONBOARDING_BOTH: handal_both,
+        # Datasets.BOP_HANDAL_ONBOARDING_BOTH: handal_both,
         Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_dynamic,
         Datasets.HOPE_ONBOARDING_STATIC: hope_up + hope_down,
-        Datasets.HOPE_ONBOARDING_BOTH: hope_both,
+        # Datasets.HOPE_ONBOARDING_BOTH: hope_both,
         Datasets.HOPE_ONBOARDING_DYNAMIC: hope_dynamic,
         Datasets.HOT3D_ARIA_ONBOARDING_STATIC: hot3d_aria_static,
         # Datasets.HOT3D_ARIA_ONBOARDING_DYNAMIC: hot3d_aria_dynamic,  # TODO: needs depth-based alignment support
@@ -260,6 +265,59 @@ def get_sequences():
     }
 
 
+def get_validation_sequences():
+    """Fixed-seed validation subset of `get_sequences()` (run via `--val`).
+
+    Object-centric: per dataset the same objects back the static/both/dynamic keys
+    (8 objects, 12 sequences for NAVI, fewer if unavailable; BOP classic picks 8
+    scenes per sub-dataset). Selection logic lives in `utils.dataset_sequences`.
+    """
+    from configs.glopose_config import GloPoseConfig
+    from utils.dataset_sequences import (
+        get_navi_sequences, get_ho3d_sequences,
+        get_bop_onboarding_sequences, get_bop_classic_sequences,
+        get_hot3d_onboarding_sequences,
+        select_n_sequences, select_bop_onboarding_validation, select_bop_classic_validation,
+        VAL_N_DEFAULT, VAL_N_NAVI,
+    )
+
+    cfg = GloPoseConfig()
+    bop_path = cfg.paths.bop_data_folder
+
+    handal_dynamic, handal_up, handal_down, handal_both = get_bop_onboarding_sequences(bop_path, 'handal')
+    hope_dynamic, hope_up, hope_down, hope_both = get_bop_onboarding_sequences(bop_path, 'hope')
+    handal_val = select_bop_onboarding_validation(handal_dynamic, handal_up, handal_down, handal_both)
+    hope_val = select_bop_onboarding_validation(hope_dynamic, hope_up, hope_down, hope_both)
+
+    def _hot3d_val(device: str) -> list:
+        _dynamic, static = get_hot3d_onboarding_sequences(bop_path, device=device)
+        up = [s for s in static if s.endswith('_up')]
+        down = [s for s in static if s.endswith('_down')]
+        return select_bop_onboarding_validation(_dynamic, up, down, both=[])['static']
+
+    ho3d_train, _ = get_ho3d_sequences(cfg.paths.ho3d_data_folder)
+    classic = (
+        get_bop_classic_sequences(bop_path, 'tless', 'train_primesense') +
+        get_bop_classic_sequences(bop_path, 'lmo', 'train') +
+        get_bop_classic_sequences(bop_path, 'icbin', 'train')
+    )
+
+    return {
+        # '_both' (up+down merged) onboarding is disabled by default (see get_sequences).
+        Datasets.BOP_HANDAL_ONBOARDING_STATIC: handal_val['static'],
+        # Datasets.BOP_HANDAL_ONBOARDING_BOTH: handal_val['both'],
+        Datasets.BOP_HANDAL_ONBOARDING_DYNAMIC: handal_val['dynamic'],
+        Datasets.HOPE_ONBOARDING_STATIC: hope_val['static'],
+        # Datasets.HOPE_ONBOARDING_BOTH: hope_val['both'],
+        Datasets.HOPE_ONBOARDING_DYNAMIC: hope_val['dynamic'],
+        Datasets.HOT3D_ARIA_ONBOARDING_STATIC: _hot3d_val('aria'),
+        Datasets.HOT3D_QUEST3_ONBOARDING_STATIC: _hot3d_val('quest3'),
+        Datasets.BOP_CLASSIC_ONBOARDING_SEQUENCES: select_bop_classic_validation(classic),
+        Datasets.HO3D_train: select_n_sequences(ho3d_train, VAL_N_DEFAULT),
+        Datasets.NAVI: select_n_sequences(get_navi_sequences(cfg.paths.navi_data_folder), VAL_N_NAVI),
+    }
+
+
 def get_results_root():
     return Path("/mnt/personal/jelint19/results/FlowTracker/")
 
@@ -278,6 +336,9 @@ def subsample_sequences(sequences: dict, max_per_dataset: int, seed: int = 42) -
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--val', action='store_true',
+                        help='Run only on the fixed validation subset (see get_validation_sequences). '
+                             'Without this flag, all sequences run (the val subset included).')
     parser.add_argument('--quick', action='store_true',
                         help='Run on 20 random (but deterministic) sequences per dataset')
     parser.add_argument('--missing-only', action='store_true',
@@ -287,8 +348,16 @@ def main():
     args = parser.parse_args()
 
     configurations = get_configurations()
-    sequences = get_sequences()
     output_folder_root = get_results_root()
+    seq_list_tag = ''
+
+    if args.val:
+        sequences = get_validation_sequences()
+        total = sum(len(s) for s in sequences.values())
+        print(f"[--val] Restricted to validation subset: {total} sequences total")
+        seq_list_tag = 'val_'
+    else:
+        sequences = get_sequences()
 
     if args.quick:
         sequences = subsample_sequences(sequences, max_per_dataset=20)
@@ -308,10 +377,12 @@ def main():
                 continue
             print(f'[--missing-only] {configuration}: submitting {total_missing} missing sequences')
             for dataset in missing:
-                run_job_array(configuration, missing[dataset], dataset, output_folder, batch_size=args.batch_size)
+                run_job_array(configuration, missing[dataset], dataset, output_folder,
+                              batch_size=args.batch_size, seq_list_tag=seq_list_tag)
         else:
             for dataset in sequences:
-                run_job_array(configuration, sequences[dataset], dataset, output_folder, batch_size=args.batch_size)
+                run_job_array(configuration, sequences[dataset], dataset, output_folder,
+                              batch_size=args.batch_size, seq_list_tag=seq_list_tag)
 
 
 if __name__ == "__main__":

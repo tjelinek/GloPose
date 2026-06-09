@@ -1,5 +1,5 @@
 from utils.bop_challenge import set_config_for_bop_onboarding
-from utils.dataset_sequences import get_bop_onboarding_sequences
+from utils.dataset_sequences import get_bop_onboarding_sequences, select_bop_onboarding_validation
 from utils.experiment_runners import run_on_bop_sequences
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
@@ -15,8 +15,13 @@ def main():
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
+    elif args.val:
+        # '_both' (up+down merged) onboarding is disabled by default — pass it explicitly
+        # via --sequences obj_NNNNNN_both to run it.
+        val = select_bop_onboarding_validation(handal_dynamic, handal_up, handal_down, handal_both)
+        sequences = val['static'] + val['dynamic']
     else:
-        sequences = (handal_both + handal_up + handal_down + handal_dynamic)[31:32]
+        sequences = (handal_up + handal_down + handal_dynamic)[31:32]
 
     for sequence in sequences:
         with exception_logger(sequence):

@@ -5,7 +5,7 @@ from eval.eval_onboarding import evaluate_onboarding
 from onboarding.pipeline import OnboardingPipeline
 from utils.bop_challenge import get_bop_images_and_segmentations, read_gt_Se3_cam2obj_transformations, \
     read_object_id, read_pinhole_params
-from utils.dataset_sequences import get_bop_classic_sequences
+from utils.dataset_sequences import get_bop_classic_sequences, select_bop_classic_validation
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
@@ -22,6 +22,8 @@ def main():
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
+    elif args.val:
+        sequences = select_bop_classic_validation(tless_seqs + lmo_seqs + icbin_seqs)
     else:
         sequences = (tless_seqs + lmo_seqs + icbin_seqs)[0:1]
 

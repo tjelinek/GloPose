@@ -8,7 +8,7 @@ from kornia.geometry import Quaternion, Se3, PinholeCamera
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from eval.eval_onboarding import evaluate_onboarding
 from onboarding.pipeline import OnboardingPipeline
-from utils.dataset_sequences import get_ho3d_sequences
+from utils.dataset_sequences import get_ho3d_sequences, select_n_sequences
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
 
@@ -22,6 +22,8 @@ def main():
     train_sequences, test_sequences = get_ho3d_sequences(config.paths.ho3d_data_folder)
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
+    elif args.val:
+        sequences = select_n_sequences(train_sequences)
     else:
         if split == 'train':
             sequences = train_sequences[0:1]

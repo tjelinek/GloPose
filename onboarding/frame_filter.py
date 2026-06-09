@@ -36,6 +36,14 @@ class BaseFrameFilter:
                 for j in range(len(nodes_list)):
                     if i != j:  # Don't add self-loops
                         self.keyframe_graph.add_edge(nodes_list[i], nodes_list[j])
+        elif self.onboarding.view_graph_strategy == 'linear':
+            # Sequential chain over the sorted keyframes: edges (k0,k1),(k1,k2),(k2,k3),...
+            # Any pre-existing edges (e.g. the all-to-all set built by FrameFilterPassThrough)
+            # are discarded first so the graph fed to SfM is purely linear, not dense.
+            nodes_list = sorted(self.keyframe_graph.nodes)
+            self.keyframe_graph.remove_edges_from(list(self.keyframe_graph.edges))
+            for a, b in zip(nodes_list, nodes_list[1:]):
+                self.keyframe_graph.add_edge(a, b)
         else:
             assert self.onboarding.view_graph_strategy == 'from_matching'
 

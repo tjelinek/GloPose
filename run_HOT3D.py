@@ -1,7 +1,7 @@
 import argparse
 
 from utils.bop_challenge import set_config_for_bop_onboarding
-from utils.dataset_sequences import get_hot3d_onboarding_sequences
+from utils.dataset_sequences import get_hot3d_onboarding_sequences, select_bop_onboarding_validation
 from utils.experiment_runners import run_on_bop_sequences
 from utils.general import load_config
 from utils.runtime_utils import exception_logger
@@ -15,6 +15,9 @@ def parse_hot3d_args():
     parser.add_argument("--experiment", required=False, default='default')
     parser.add_argument("--device", required=False, default='aria', choices=['aria', 'quest3'],
                         help="HOT3D camera device: 'aria' or 'quest3'")
+    parser.add_argument("--val", action='store_true', default=False,
+                        help="When no explicit --sequences are given, default to the fixed "
+                             "validation subset instead of the full dataset")
     parser.add_argument("--merge-only", action='store_true', default=False,
                         help="Skip up/down onboarding, only run the merge step (requires cached ViewGraphs)")
     return parser.parse_args()
@@ -30,6 +33,11 @@ def main():
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
+    elif args.val:
+        up = [s for s in hot3d_static if s.endswith('_up')]
+        down = [s for s in hot3d_static if s.endswith('_down')]
+        val = select_bop_onboarding_validation(hot3d_dynamic, up, down, both=[])
+        sequences = val['static'] + val['dynamic']
     else:
         sequences = (hot3d_static + hot3d_dynamic)[0:1]
 

@@ -1,6 +1,99 @@
 import json
+import random
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
+
+
+# --- Validation set ---------------------------------------------------------
+# A small, fixed-seed subset of onboarding sequences used for development and
+# functionality testing (run via the `--val` flag). The selection is
+# object-centric and deterministic: the same objects are used for the static and
+# dynamic onboarding modes, and reruns are identical regardless of input order.
+# See CLAUDE.md "Validation set".
+VAL_SEED = 20260609
+VAL_N_DEFAULT = 8
+VAL_N_NAVI = 12
+
+
+def select_n_sequences(items: List[str], n: int = VAL_N_DEFAULT, seed: int = VAL_SEED) -> List[str]:
+    """Deterministically pick up to `n` items, independent of input ordering.
+
+    Samples from the sorted unique set so the result depends only on the contents
+    and the seed. Returns all items (sorted) if there are `n` or fewer.
+    """
+    unique = sorted(set(items))
+    if len(unique) <= n:
+        return unique
+    return sorted(random.Random(seed).sample(unique, n))
+
+
+def _object_id(seq: str) -> str:
+    """Strip a BOP onboarding suffix (_dynamic/_down/_up/_both) to get the object id."""
+    for suffix in ('_dynamic', '_down', '_up', '_both'):
+        if seq.endswith(suffix):
+            return seq[: -len(suffix)]
+    return seq
+
+
+def select_bop_onboarding_validation(dynamic: List[str], up: List[str], down: List[str],
+                                     both: List[str], n: int = VAL_N_DEFAULT,
+                                     seed: int = VAL_SEED) -> Dict[str, List[str]]:
+    """Pick the validation subset for a BOP onboarding dataset (HANDAL/HOPE/HOT3D shape).
+
+    Selects `n` objects (fewer if unavailable) that have both a static and a dynamic
+    capture (falls back to static-only objects when the dataset has no dynamic
+    sequences). For each selected object the result includes, when present:
+      - one static orientation (`_up` or `_down`), chosen at random with the fixed seed,
+      - the merged `_both` static run,
+      - the `_dynamic` run.
+    The same objects back all three lists.
+
+    Returns a dict with keys 'objects', 'static', 'both', 'dynamic'.
+    """
+    up_set, down_set, both_set, dyn_set = set(up), set(down), set(both), set(dynamic)
+    static_objects = {_object_id(s) for s in up} | {_object_id(s) for s in down}
+    dynamic_objects = {_object_id(s) for s in dynamic}
+
+    pool = sorted(static_objects & dynamic_objects) if dynamic_objects else sorted(static_objects)
+    objects = select_n_sequences(pool, n, seed)
+
+    val_static: List[str] = []
+    val_both: List[str] = []
+    val_dynamic: List[str] = []
+    for obj in objects:
+        variants = [v for v in (f'{obj}_up', f'{obj}_down') if v in up_set or v in down_set]
+        if variants:
+            # Per-object seed → choice is stable regardless of how many objects are picked.
+            val_static.append(random.Random(f'{seed}-{obj}').choice(variants))
+        if f'{obj}_both' in both_set:
+            val_both.append(f'{obj}_both')
+        if f'{obj}_dynamic' in dyn_set:
+            val_dynamic.append(f'{obj}_dynamic')
+
+    return {
+        'objects': objects,
+        'static': sorted(val_static),
+        'both': sorted(val_both),
+        'dynamic': sorted(val_dynamic),
+    }
+
+
+def select_bop_classic_validation(sequences: List[str], n: int = VAL_N_DEFAULT,
+                                  seed: int = VAL_SEED) -> List[str]:
+    """Pick the validation subset for BOP classic: `n` scenes per sub-dataset.
+
+    Sequences are formatted '{dataset}@{split}@{scene}'. Selection is grouped by the
+    '{dataset}' prefix so each of tless/lmo/icbin is represented (capped at what exists).
+    """
+    by_dataset: Dict[str, List[str]] = {}
+    for seq in sequences:
+        prefix = seq.split('@', 1)[0]
+        by_dataset.setdefault(prefix, []).append(seq)
+
+    selected: List[str] = []
+    for prefix in sorted(by_dataset):
+        selected.extend(select_n_sequences(by_dataset[prefix], n, seed))
+    return selected
 
 
 def get_handal_sequences(path: Path) -> Tuple[List[str], List[str]]:

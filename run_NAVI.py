@@ -8,7 +8,7 @@ from kornia.geometry import Se3, Quaternion, PinholeCamera
 from data_providers.frame_provider import PrecomputedSegmentationProvider
 from eval.eval_onboarding import evaluate_onboarding
 from onboarding.pipeline import OnboardingPipeline
-from utils.dataset_sequences import get_navi_sequences
+from utils.dataset_sequences import get_navi_sequences, select_n_sequences, VAL_N_NAVI
 from utils.experiment_runners import reindex_frame_dict
 from utils.general import load_config
 from utils.runtime_utils import parse_args, exception_logger
@@ -23,6 +23,8 @@ def main():
 
     if args.sequences is not None and len(args.sequences) > 0:
         sequences = args.sequences
+    elif args.val:
+        sequences = select_n_sequences(navi_sequences, VAL_N_NAVI)
     else:
         sequences = navi_sequences[4:5]
 

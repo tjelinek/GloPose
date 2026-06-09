@@ -16,7 +16,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.job_runner import get_configurations, get_results_root
+from scripts.job_runner import get_configurations, get_results_root, get_validation_sequences
+from scripts.check_experiment_status import get_expected_csv_sequences
 
 
 DATASET_COLUMNS = [
@@ -75,6 +76,8 @@ def main():
     parser = argparse.ArgumentParser(description='Collect experiment results')
     parser.add_argument('configs', nargs='*', help='Config names (default: all from job_runner)')
     parser.add_argument('--per-sequence', action='store_true', help='Show per-sequence results')
+    parser.add_argument('--val', action='store_true',
+                        help='Report only the fixed validation subset (implies --per-sequence)')
     parser.add_argument('--csv', type=str, help='Export results to CSV file')
     parser.add_argument('--dataset', type=str, help='Filter by dataset name (substring match)')
     parser.add_argument('--full', action='store_true', help='Show all columns')
@@ -82,6 +85,16 @@ def main():
 
     configurations = args.configs if args.configs else get_configurations()
     results_root = get_results_root()
+
+    val_allowed = None
+    if args.val:
+        # Dataset-level aggregates can't be re-filtered to a subset → report per-sequence.
+        args.per_sequence = True
+        val_allowed = set()
+        for dataset_enum, seqs in get_validation_sequences().items():
+            for csv_dataset, csv_seq in get_expected_csv_sequences(dataset_enum, seqs):
+                val_allowed.add((csv_dataset, csv_seq))
+        print(f'[--val] Reporting per-sequence over {len(val_allowed)} validation sequences')
 
     all_dfs = []
     missing = []
@@ -104,6 +117,10 @@ def main():
         return
 
     combined = pd.concat(all_dfs, ignore_index=True)
+
+    if val_allowed is not None:
+        combined = combined[combined.apply(
+            lambda r: (str(r['dataset']), str(r['sequence'])) in val_allowed, axis=1)]
 
     if args.dataset:
         combined = combined[combined['dataset'].str.contains(args.dataset, case=False, na=False)]

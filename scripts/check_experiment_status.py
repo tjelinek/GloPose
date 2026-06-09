@@ -14,7 +14,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.job_runner import get_configurations, get_results_root, get_sequences, subsample_sequences, Datasets
+from scripts.job_runner import (get_configurations, get_results_root, get_sequences,
+                                 get_validation_sequences, subsample_sequences, Datasets)
 
 
 # Maps Datasets enum → csv_dataset_name.
@@ -191,12 +192,14 @@ def main():
     parser = argparse.ArgumentParser(description='Check experiment status')
     parser.add_argument('configs', nargs='*', help='Config names to check (default: all from job_runner)')
     parser.add_argument('--show-missing', action='store_true', help='List missing sequences')
+    parser.add_argument('--val', action='store_true',
+                        help='Expect only the fixed validation subset (matching job_runner --val)')
     parser.add_argument('--quick', action='store_true',
                         help='Expect only the --quick subset (20 per dataset, matching job_runner --quick)')
     args = parser.parse_args()
 
     configurations = args.configs if args.configs else get_configurations()
-    sequences = get_sequences()
+    sequences = get_validation_sequences() if args.val else get_sequences()
     if args.quick:
         sequences = subsample_sequences(sequences, max_per_dataset=20)
     results_root = get_results_root()

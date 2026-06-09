@@ -196,6 +196,24 @@ NetworkX, Gradio, Rerun SDK, wandb, scipy (KDTree for point cloud eval), trimesh
 - **Test sequence selection:** When proposing RCI test commands, pick ~5 sequences uniformly spaced across the full
   dataset — not just the first few. For HANDAL (40 objects): `obj_000001`, `obj_000009`, `obj_000017`, `obj_000025`,
   `obj_000033`. This catches issues that only appear on specific object geometries or sequence lengths.
+- **Validation set (`--val`):** A fixed-seed subset for development and functionality testing, defined in
+  `utils/dataset_sequences.py` (`VAL_SEED`, `select_bop_onboarding_validation`, `select_bop_classic_validation`,
+  `select_n_sequences`). It is object-centric: per dataset it picks **8 objects** (NAVI: **12 sequences**; fewer only
+  if unavailable), uses the **same objects** for static and dynamic, and for each object includes — when present — one
+  static orientation (`_up`/`_down`, chosen at random with the seed) and the `_dynamic` run (the merged `_both` run is
+  **disabled by default** — see below). BOP classic picks 8 scenes **per sub-dataset** (tless/lmo/icbin). The
+  `--val` flag selects this subset in
+  `scripts/job_runner.py`, the `run_*.py` onboarding runners (when no explicit `--sequences`), and
+  `scripts/{check_experiment_status,collect_experiment_results}.py`. **Without `--val`, all sequences run** (the val
+  subset is a strict subset of a full run, written to the same output folders — not a separate experiment).
+  `scripts/job_runner.py --val` tags its SLURM sequence manifests (`*_val_sequences.txt`) so they never clobber a
+  full run's manifest; RCI batch scripts need no change. **Run development / functionality-testing experiments on the
+  validation set (`--val`) first**, before launching full sweeps.
+- **`_both` onboarding is disabled by default:** the merged up+down static onboarding mode (sequence suffix `_both`)
+  is **not** run by default — the `*_BOTH` dataset keys are commented out in `scripts/job_runner.py`
+  (`get_sequences`/`get_validation_sequences`) and the `run_bop_HANDAL_onboarding.py`/`run_HOPE.py` defaults exclude
+  it. Default runs do `_up`/`_down` (static) and `_dynamic` only. To run `_both` ad hoc, pass it explicitly via
+  `--sequences obj_NNNNNN_both`; to re-enable it in sweeps, uncomment the `*_BOTH` keys.
 
 ## Development Environment
 
@@ -227,10 +245,23 @@ is empty, `~/.bashrc` early-returns for non-interactive shells, and SLURM strips
 An sbatch script must set up modules explicitly before loading them. numpy/torch/pycolmap come from the
 **modules**, not the venv. Working template:
 
+**Partition / GPU choice — IMPORTANT:** prefer **`amdgpufast`** for dense-matching
+onboarding. Its g[01-12] nodes carry **NVIDIA A100** GPUs (the "amd" = AMD EPYC *CPUs*,
+not AMD GPUs — `Gres=gpu:a100:4`), 12 nodes, usually free.
+- **`gpufast` / `gpu` / `gpulong` (n[21-32]) = V100 (sm_70): AVOID for dense matchers.**
+  UFM *and* RoMa both crash with `RuntimeError: GET was unable to find an engine to execute
+  this computation` in a `conv_transpose2d` (the PyTorch-2.8/CUDA-12.9 module build has no
+  cuDNN engine for these convs on sm_70). The crash is in the matcher forward, before any
+  GloPose filtering code runs.
+- **`h200fast` / `h200` (h[01-03]) = H200:** modern, works, but only 3 nodes and frequently
+  saturated/preempted (jobs get `CANCELLED ... DUE TO JOB REQUEUE`). Use `--requeue` + disk
+  cache if you must run here. For many short runs, prefer a per-sequence `--array` so tasks
+  slip through preemption gaps independently.
+
 ```bash
 #!/bin/bash
-#SBATCH --partition=gpufast        # also: h200fast, amdgpufast
-#SBATCH --gres=gpu:1               # gpufast REQUIRES a GPU request
+#SBATCH --partition=amdgpufast     # A100 (preferred). V100 partitions break dense matchers; H200 is contended.
+#SBATCH --gres=gpu:1               # all GPU partitions REQUIRE a GPU request
 #SBATCH --mem=128G --cpus-per-task=12 --time=4:00:00
 #SBATCH --output=/home/jelint19/logs/%x_%j.out
 #SBATCH --error=/home/jelint19/logs/%x_%j.err
@@ -562,6 +593,31 @@ Compare our filtered ViewGraph (selective edges based on matching reliability) a
   our adaptive filter, but with all-to-all matching
 - [ ] Run with our default filtered ViewGraph on the same sequences
 - [ ] Add rows to the frame selection table or produce a separate **Table: ViewGraph density ablation**
+
+(Implementation note: the config field is `OnboardingConfig.view_graph_strategy`
+(`'from_matching'` | `'dense'` | `'linear'`), not the older `frame_filter_view_graph` name used above.)
+
+#### P3.2.1 Linear (sequential) view-graph topology
+
+Compare a **linear/sequential** keyframe graph — edges only between consecutive keyframes
+(`(k0,k1),(k1,k2),(k2,k3),…`) — against the dense all-to-all graph, for every-kth keyframe
+selection. Tests whether a chain of pairwise matches is enough for SfM, versus paying for
+all-to-all matching. Backs contribution 3 (sparse view graph beats the complete edge set).
+
+- [x] Implement `view_graph_strategy='linear'` in
+  `onboarding/frame_filter.py::BaseFrameFilter.get_keyframe_graph` — clears any pre-existing
+  (e.g. all-to-all) edges and rebuilds a consecutive chain over the sorted keyframe nodes.
+  Composes with any frame filter (passthrough, dense_matching, …).
+- [x] Add linear passthrough configs `configs/onboarding/passthroughs/every_{1,2,4,8,16,32,64}th_frame_linear.py`
+  (`frame_filter='passthrough'`, `passthrough_skip=k`, `view_graph_strategy='linear'`).
+- [ ] Run every-kth **linear** vs every-kth **dense** (default passthrough) on HANDAL static — run
+  the `--val` set first — with the same matcher (UFM/RoMa). Same keyframes per `k`, only the edge
+  topology differs.
+- [ ] Compare rot/trans error, reconstruction rate, #edges/matched pairs, matching time, total
+  runtime; produce **Table: View-graph topology ablation** (linear vs dense × k) or extend the
+  P3.2 density table. Expectation: linear is much cheaper (k−1 vs O(k²) pairs); quantify the
+  quality gap and where the chain breaks (COLMAP mapper failures when a single consecutive pair
+  has too few matches).
 
 #### P3.3 Matching method ablation
 
