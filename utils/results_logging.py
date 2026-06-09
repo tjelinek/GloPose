@@ -31,9 +31,12 @@ logger = logging.getLogger(__name__)
 
 def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
     """Build the standard onboarding rerun blueprint. Reusable for both normal and merged runs."""
-    if config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
+    if config.onboarding.frame_filter in ('dense_matching', 'RANSAC', 'depth'):
+        reliability_plot_name = ("Depth Geometric-Inlier Reliability"
+                                 if config.onboarding.frame_filter == 'depth'
+                                 else f"{config.onboarding.frame_filter} Matching Reliability")
         match_reliability_statistics = rrb.TimeSeriesView(
-            name=f"{config.onboarding.frame_filter} Matching Reliability",
+            name=reliability_plot_name,
             origin=RerunAnnotations.matching_reliability_plot,
             axis_y=rrb.ScalarAxis(range=(0.0, 1.2), zoom_lock=True),
             plot_legend=rrb.PlotLegend(visible=True))
@@ -151,7 +154,7 @@ def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
                                         *([rrb.Spatial2DView(
                                             name=f"{config.onboarding.filter_matcher} Matching Certainty",
                                             origin=RerunAnnotations.matching_certainty)]
-                                          if config.onboarding.frame_filter in ('dense_matching', 'RANSAC') else [])
+                                          if config.onboarding.frame_filter in ('dense_matching', 'RANSAC', 'depth') else [])
                                     ],
                                     name='Matching'
                                 ),
@@ -188,6 +191,12 @@ def build_onboarding_blueprint(config: GloPoseConfig) -> rrb.Blueprint:
                             name='Matchability'
                         )] if config.onboarding.frame_filter == 'dense_matching' and config.onboarding.matchability_based_reliability
                           else []),
+                        *([rrb.TimeSeriesView(
+                            name="Depth: Estimated vs GT Relative Pose Error",
+                            origin=RerunAnnotations.depth_pose_error_plot,
+                            axis_y=rrb.ScalarAxis(range=(0.0, 180.0), zoom_lock=False),
+                            plot_legend=rrb.PlotLegend(visible=True))]
+                          if config.onboarding.frame_filter == 'depth' else []),
                     ],
                     name='Matching'
                 ),
@@ -1194,11 +1203,19 @@ class WriteResults:
         template_data = self.data_graph.get_frame_data(flow_arc_source)
         target_data = self.data_graph.get_frame_data(flow_arc_target)
 
-        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC', 'depth'):
             reliability = arc_observation.reliability_score
             rr.log(RerunAnnotations.matching_reliability, rr.Scalars(reliability))
             rr.log(RerunAnnotations.matching_reliability_threshold_roma,
                    rr.Scalars(target_data.current_flow_reliability_threshold))
+            if self.config.onboarding.frame_filter == 'depth':
+                # Estimated (sim3d) vs GT relative camera pose error, when GT is available.
+                if arc_observation.depth_rotation_error_deg is not None:
+                    rr.log(RerunAnnotations.depth_rotation_error,
+                           rr.Scalars(arc_observation.depth_rotation_error_deg))
+                if arc_observation.depth_translation_error_deg is not None:
+                    rr.log(RerunAnnotations.depth_translation_error,
+                           rr.Scalars(arc_observation.depth_translation_error_deg))
             if self.config.onboarding.matchability_based_reliability:
                 matchability_share = template_data.relative_area_matchable
                 min_roma_certainty = template_data.roma_certainty_threshold
@@ -1236,7 +1253,7 @@ class WriteResults:
             rr.log(RerunAnnotations.matches_high_certainty_matchable, mathability_image_rerun)
             rr.log(RerunAnnotations.matches_low_certainty_matchable, mathability_image_rerun)
 
-        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC'):
+        if self.config.onboarding.frame_filter in ('dense_matching', 'RANSAC', 'depth'):
             certainties = arc_observation.src_dst_certainty_roma.numpy(force=True)
             threshold = template_data.roma_certainty_threshold
             if threshold is None:

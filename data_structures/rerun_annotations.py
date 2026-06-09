@@ -33,6 +33,11 @@ class RerunAnnotations:
     matching_reliability: Final[str] = '/matching/reliability_plot/reliability'
     matching_reliability_threshold_roma: Final[str] = '/matching/reliability_plot/reliability_threshold'
 
+    # Depth frame filter: estimated-vs-GT relative pose error plots
+    depth_pose_error_plot: Final[str] = '/matching/depth_pose_error_plot'
+    depth_rotation_error: Final[str] = '/matching/depth_pose_error_plot/rotation_error_deg'
+    depth_translation_error: Final[str] = '/matching/depth_pose_error_plot/translation_error_deg'
+
     matchability: Final[str] = 'matching/matchability'
     matches_high_certainty_matchable: Final[str] = '/matching/high_certainty_matchable'
     matches_low_certainty_matchable: Final[str] = '/matching/low_certainty_matchable'

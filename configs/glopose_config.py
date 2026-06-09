@@ -81,6 +81,9 @@ class OnboardingConfig:
     min_number_of_reliable_matches: int = 0
     matchability_based_reliability: bool = False
     sample_size: int = 10000
+    # 'depth' frame filter: max pixel reprojection error for a match to count as a
+    # geometric inlier (trust-but-verify layer on top of matchability, no GT poses needed)
+    depth_reprojection_threshold_px: float = 5.0
 
     # Matching settings
     filter_matcher: str = 'UFM'

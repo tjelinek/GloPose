@@ -102,6 +102,14 @@ class CrossFrameData(DataGraphStorage):
     ransac_inliers: torch.Tensor = None
     ransac_outliers: torch.Tensor = None
 
+    # Depth frame filter: relative pose recovered from depth-lifted matches (sim3d, no GT),
+    # and its error vs the GT relative camera pose when per-frame GT is available.
+    depth_estimated_R: torch.Tensor = None       # 3x3 rotation, target_from_source (camera frame)
+    depth_estimated_t: torch.Tensor = None        # 3, translation, target_from_source
+    depth_estimated_scale: float = None
+    depth_rotation_error_deg: float = None        # geodesic angle est vs GT relative rotation
+    depth_translation_error_deg: float = None     # angle between est/GT translation directions (scale-free)
+
     # SIFT
     num_matches: int = None
 

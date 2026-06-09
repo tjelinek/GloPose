@@ -328,6 +328,168 @@ class FrameFilterRANSAC(RoMaFrameFilter):
         return reliability
 
 
+class FrameFilterDepth(RoMaFrameFilter):
+    """Trust-but-verify reliability: instead of trusting how many matches the matcher
+    *reports*, measure what fraction are *geometrically consistent* with a single rigid
+    object motion.
+
+    Reuses everything RoMaFrameFilter does (match gathering, foreground masking, keyframe
+    graph, source selection) and overrides only ``flow_reliability``. The relative motion
+    between the two frames is recovered from the matches themselves via a robust 3D-3D
+    similarity fit (depth-lifted points + RANSAC) — so no GT poses are needed. Each match
+    is then scored by its pixel reprojection error: lift the source point to 3D with the
+    source depth, apply the recovered transform, project into the target image, and compare
+    to where the matcher said it lands. The reliability is the fraction of foreground
+    matches whose pixel error is below ``depth_reprojection_threshold_px``.
+
+    Depth comes from the existing per-frame depth provider (``frame_observation.depth``);
+    intrinsics from ``gt_pinhole_K`` (same source as FrameFilterRANSAC).
+    """
+
+    @torch.no_grad()
+    def flow_reliability(self, source_frame: int, target_frame: int) -> float:
+        source_node = self.data_graph.get_frame_data(source_frame)
+        target_node = self.data_graph.get_frame_data(target_frame)
+
+        src_pts_xy_int, dst_pts_xy_int, _ = (
+            self.flow_provider.get_source_target_points_datagraph(
+                source_frame, target_frame, self.onboarding.sample_size, as_int=True,
+                zero_certainty_outside_segmentation=True, only_foreground_matches=True))
+
+        edge_data = self.data_graph.get_edge_observations(source_frame, target_frame)
+
+        num_fg = src_pts_xy_int.shape[0]
+        inlier_mask, sim3d = self._geometric_inlier_mask(src_pts_xy_int, dst_pts_xy_int,
+                                                         source_node, target_node)
+
+        if inlier_mask is None or num_fg == 0:
+            reliability = 0.0
+        else:
+            # Denominator is ALL sampled foreground matches; matches we could not verify
+            # (missing/invalid depth, or that disagree with the recovered motion) do not
+            # count as confirmed visible surface.
+            reliability = float(inlier_mask.sum()) / (num_fg + 1e-5)
+            edge_data.ransac_inliers = src_pts_xy_int[inlier_mask]
+            edge_data.ransac_outliers = src_pts_xy_int[~inlier_mask]
+            # Stash the recovered relative pose and (when GT is available) its error.
+            # Skip degenerate self-pairs (source == target → identity, zero translation).
+            if source_frame != target_frame:
+                self._store_estimated_pose(edge_data, source_node, target_node, sim3d)
+
+        enough_matches = num_fg > self.onboarding.min_number_of_reliable_matches
+        reliability *= float(enough_matches)
+
+        edge_data.reliability_score = reliability
+        edge_data.is_match_reliable = reliability >= self.matching_reliability_threshold
+
+        if edge_data.depth_rotation_error_deg is not None:
+            t_err = edge_data.depth_translation_error_deg
+            print(f"[FrameFilterDepth] pair ({source_frame},{target_frame}) reliability={reliability:.3f} "
+                  f"rot_err={edge_data.depth_rotation_error_deg:.2f} deg "
+                  f"trans_dir_err={t_err if t_err is not None else float('nan'):.2f} deg")
+        return reliability
+
+    def _store_estimated_pose(self, edge_data, source_node, target_node, sim3d) -> None:
+        """Record the sim3d-recovered relative pose (target_from_source, camera frame) on the
+        edge, and compare it against the GT relative camera pose when both frames have GT."""
+        import numpy as np
+
+        M = np.asarray(sim3d.matrix(), dtype=np.float64)   # 3x4: [scale*R | t]
+        scale = float(np.cbrt(max(np.linalg.det(M[:, :3]), 1e-12)))
+        R_est = M[:, :3] / scale
+        t_est = M[:, 3]
+        edge_data.depth_estimated_R = torch.from_numpy(R_est)
+        edge_data.depth_estimated_t = torch.from_numpy(t_est)
+        edge_data.depth_estimated_scale = scale
+
+        gt_src = source_node.gt_Se3_world2cam
+        gt_tgt = target_node.gt_Se3_world2cam
+        if gt_src is None or gt_tgt is None:
+            return
+        # GT relative camera pose: target_from_source = world2cam_tgt @ (world2cam_src)^-1
+        M_src = gt_src.matrix().squeeze().numpy(force=True).astype(np.float64)
+        M_tgt = gt_tgt.matrix().squeeze().numpy(force=True).astype(np.float64)
+        M_rel = M_tgt @ np.linalg.inv(M_src)
+        R_gt, t_gt = M_rel[:3, :3], M_rel[:3, 3]
+
+        # Rotation error: geodesic angle (deg) — unit/scale independent.
+        cos_rot = (np.trace(R_est.T @ R_gt) - 1.0) / 2.0
+        edge_data.depth_rotation_error_deg = float(np.degrees(np.arccos(np.clip(cos_rot, -1.0, 1.0))))
+
+        # Translation error: angle between directions (deg) — robust to depth's scale/units.
+        n_est, n_gt = np.linalg.norm(t_est), np.linalg.norm(t_gt)
+        if n_est > 1e-9 and n_gt > 1e-9:
+            cos_t = float(np.dot(t_est, t_gt) / (n_est * n_gt))
+            edge_data.depth_translation_error_deg = float(np.degrees(np.arccos(np.clip(cos_t, -1.0, 1.0))))
+
+    def _geometric_inlier_mask(self, src_pts_xy_int: torch.Tensor, dst_pts_xy_int: torch.Tensor,
+                               source_node, target_node) -> tuple[torch.Tensor | None, object]:
+        """Return (mask, sim3d): a boolean mask (over the foreground matches) of matches whose
+        pixel reprojection error under the robustly-recovered similarity transform is below
+        threshold, plus the recovered ``pycolmap.Sim3d`` (target_from_source).
+
+        Returns (None, None) when depth/intrinsics are unavailable or too few matches have
+        valid depth on both sides for a robust fit.
+        """
+        import numpy as np
+        import pycolmap
+
+        src_depth = source_node.frame_observation.depth
+        tgt_depth = target_node.frame_observation.depth
+        K_src = source_node.gt_pinhole_K
+        K_tgt = target_node.gt_pinhole_K
+        if src_depth is None or tgt_depth is None or K_src is None or K_tgt is None:
+            if not getattr(self, '_warned_missing_depth', False):
+                missing = [n for n, v in (('src_depth', src_depth), ('tgt_depth', tgt_depth),
+                                          ('K_src', K_src), ('K_tgt', K_tgt)) if v is None]
+                print(f"[FrameFilterDepth] WARNING: missing {missing} during filtering — depth verification "
+                      f"cannot run, reliability will be 0 for all pairs (every frame becomes a keyframe). "
+                      f"The 'depth' frame filter requires per-frame depth maps (e.g. dynamic onboarding "
+                      f"sequences); static onboarding sequences ship no depth.")
+                self._warned_missing_depth = True
+            return None, None
+
+        src_depth = src_depth.squeeze()
+        tgt_depth = tgt_depth.squeeze()
+        K_src = K_src.numpy(force=True).astype(np.float64)
+        K_tgt = K_tgt.numpy(force=True).astype(np.float64)
+
+        src_xy = src_pts_xy_int.numpy(force=True).astype(np.int64)
+        dst_xy = dst_pts_xy_int.numpy(force=True).astype(np.int64)
+
+        # Depth is indexed [y, x]; matches are already clamped to image bounds by the matcher.
+        z_src = src_depth[src_xy[:, 1], src_xy[:, 0]].numpy(force=True).astype(np.float64)
+        z_tgt = tgt_depth[dst_xy[:, 1], dst_xy[:, 0]].numpy(force=True).astype(np.float64)
+
+        valid = (z_src > 0) & np.isfinite(z_src) & (z_tgt > 0) & np.isfinite(z_tgt)
+        if int(valid.sum()) < self.onboarding.ransac.min_num_matches:
+            return None, None
+
+        # Back-project both sides to 3D in their own camera frames.
+        p_src = _backproject_to_cam(src_xy[valid], z_src[valid], K_src)
+        p_tgt = _backproject_to_cam(dst_xy[valid], z_tgt[valid], K_tgt)
+
+        # Robust 3D-3D similarity (absorbs the global up-to-scale ambiguity of predicted depth).
+        report = pycolmap.estimate_sim3d_robust(p_src, p_tgt)
+        if report is None:
+            return None, None
+        sim3d = report['tgt_from_src']
+
+        # Reproject source 3D into the target image and compare to the matched pixel.
+        p_src_in_tgt = sim3d * p_src                       # (N, 3) in target camera frame
+        proj = p_src_in_tgt @ K_tgt.T                       # (N, 3)
+        depth_ok = proj[:, 2] > 1e-6
+        uv = proj[:, :2] / np.where(depth_ok[:, None], proj[:, 2:3], 1.0)
+
+        pixel_err = np.linalg.norm(uv - dst_xy[valid].astype(np.float64), axis=1)
+        valid_inliers = depth_ok & (pixel_err < self.onboarding.depth_reprojection_threshold_px)
+
+        # Scatter back to full foreground length: unverifiable matches stay False (outliers).
+        full_mask = torch.zeros(src_pts_xy_int.shape[0], dtype=torch.bool)
+        full_mask[torch.from_numpy(valid)] = torch.from_numpy(valid_inliers)
+        return full_mask, sim3d
+
+
 class FrameFilterMaxVisible(BaseFrameFilter):
     """Selects the single frame with the maximum number of visible object pixels.
 
@@ -504,6 +666,19 @@ class FrameFilterSift(BaseFrameFilter):
         return num_matches
 
 
+def _backproject_to_cam(pts_xy: 'np.ndarray', depths: 'np.ndarray', K: 'np.ndarray') -> 'np.ndarray':
+    """Back-project integer pixel coords (x, y) at given depths into 3D camera coords.
+
+    X = (x - cx) / fx * z, Y = (y - cy) / fy * z, Z = z. Returns (N, 3).
+    """
+    import numpy as np
+    fx, fy = K[0, 0], K[1, 1]
+    cx, cy = K[0, 2], K[1, 2]
+    x = (pts_xy[:, 0].astype(np.float64) - cx) / fx * depths
+    y = (pts_xy[:, 1].astype(np.float64) - cy) / fy * depths
+    return np.stack([x, y, depths], axis=1)
+
+
 def compute_matching_reliability(src_pts_xy_int: torch.Tensor, certainty: torch.Tensor,
                                  source_segmentation_mask: torch.Tensor, match_certainty_threshold: float,
                                  min_num_of_certain_matches: int = 0) -> float:
@@ -555,12 +730,16 @@ def create_frame_filter(onboarding: OnboardingConfig, device: str, n_frames: int
     def _max_visible():
         return FrameFilterMaxVisible(onboarding, n_frames, data_graph, sequence_boundaries=sequence_boundaries)
 
+    def _depth():
+        return FrameFilterDepth(onboarding, n_frames, data_graph, flow_provider, device, sequence_boundaries)
+
     filters = {
         'dense_matching': _dense_matching,
         'RANSAC': _ransac,
         'passthrough': _passthrough,
         'SIFT': _sift,
         'max_visible': _max_visible,
+        'depth': _depth,
     }
     if onboarding.frame_filter not in filters:
         raise ValueError(f"Unknown frame filter '{onboarding.frame_filter}'. Options: {list(filters.keys())}")
