@@ -196,24 +196,17 @@ NetworkX, Gradio, Rerun SDK, wandb, scipy (KDTree for point cloud eval), trimesh
 - **Test sequence selection:** When proposing RCI test commands, pick ~5 sequences uniformly spaced across the full
   dataset — not just the first few. For HANDAL (40 objects): `obj_000001`, `obj_000009`, `obj_000017`, `obj_000025`,
   `obj_000033`. This catches issues that only appear on specific object geometries or sequence lengths.
-- **Validation set (`--val`):** A fixed-seed subset for development and functionality testing, defined in
-  `utils/dataset_sequences.py` (`VAL_SEED`, `select_bop_onboarding_validation`, `select_bop_classic_validation`,
-  `select_n_sequences`). It is object-centric: per dataset it picks **8 objects** (NAVI: **12 sequences**; fewer only
-  if unavailable), uses the **same objects** for static and dynamic, and for each object includes — when present — one
-  static orientation (`_up`/`_down`, chosen at random with the seed) and the `_dynamic` run (the merged `_both` run is
-  **disabled by default** — see below). BOP classic picks 8 scenes **per sub-dataset** (tless/lmo/icbin). The
-  `--val` flag selects this subset in
-  `scripts/job_runner.py`, the `run_*.py` onboarding runners (when no explicit `--sequences`), and
-  `scripts/{check_experiment_status,collect_experiment_results}.py`. **Without `--val`, all sequences run** (the val
-  subset is a strict subset of a full run, written to the same output folders — not a separate experiment).
-  `scripts/job_runner.py --val` tags its SLURM sequence manifests (`*_val_sequences.txt`) so they never clobber a
-  full run's manifest; RCI batch scripts need no change. **Run development / functionality-testing experiments on the
-  validation set (`--val`) first**, before launching full sweeps.
-- **`_both` onboarding is disabled by default:** the merged up+down static onboarding mode (sequence suffix `_both`)
-  is **not** run by default — the `*_BOTH` dataset keys are commented out in `scripts/job_runner.py`
-  (`get_sequences`/`get_validation_sequences`) and the `run_bop_HANDAL_onboarding.py`/`run_HOPE.py` defaults exclude
-  it. Default runs do `_up`/`_down` (static) and `_dynamic` only. To run `_both` ad hoc, pass it explicitly via
-  `--sequences obj_NNNNNN_both`; to re-enable it in sweeps, uncomment the `*_BOTH` keys.
+- **Validation set (`--val`):** A fixed-seed subset for development / functionality testing, defined in
+  `utils/dataset_sequences.py` (`VAL_SEED`, `select_bop_onboarding_validation`, …). **Run it before full sweeps.**
+  Object-centric: per dataset **8 objects** (NAVI: **12 sequences**), same objects for static and dynamic; per object
+  one static orientation (`_up`/`_down`, seeded) + the `_dynamic` run. BOP classic picks 8 scenes per sub-dataset
+  (tless/lmo/icbin). Honoured by `scripts/job_runner.py`, the `run_*.py` runners (when no explicit `--sequences`), and
+  `scripts/{check_experiment_status,collect_experiment_results}.py`. It is a strict subset of a full run written to the
+  same output folders (not a separate experiment); `--val` only tags SLURM manifests (`*_val_sequences.txt`) so they
+  don't clobber full runs. **Without `--val`, all sequences run.**
+- **`_both` onboarding is disabled by default:** the merged up+down static mode (suffix `_both`) is not run — the
+  `*_BOTH` keys are commented out in `scripts/job_runner.py` and excluded from the `run_*` defaults. Default runs do
+  `_up`/`_down` and `_dynamic` only. Run it ad hoc via `--sequences obj_NNNNNN_both`.
 
 ## Development Environment
 
@@ -279,16 +272,8 @@ python run_bop_HANDAL_onboarding.py --config configs/onboarding/roma_c0975r05.py
 `#!/bin/bash -l`, `source /etc/profile`, and `source ~/.bashrc` all FAIL to provide `ml` on compute
 nodes — only the explicit `MODULEPATH` + Lmod-init recipe above works.
 
-**Interactive (for the user, not Claude):**
-
-```bash
-~/run_gpu.sh -p glotracker -d gpu      # gpufast partition, 1 GPU, 128G RAM
-~/run_gpu.sh -p glotracker -d h200     # h200fast partition, 512G RAM
-~/run_gpu.sh -p glotracker -d amd      # amdgpufast partition, 256G RAM
-# Add -n 2 for multi-GPU
-```
-
-This calls `srun --pty bash --init-file ...` and drops into an interactive shell with modules + venv loaded.
+**Interactive (for the user, not Claude):** `~/run_gpu.sh -p glotracker -d {gpu|h200|amd}` (add `-n 2` for
+multi-GPU) drops into a shell with modules + venv loaded.
 
 **Results:** `/mnt/personal/jelint19/results/FlowTracker/<experiment>/<dataset>/<sequence>/`
 (readable locally at `~/rci_data/results/...` or `/mnt/personal/jelint19/results/...`).
@@ -308,25 +293,9 @@ This calls `srun --pty bash --init-file ...` and drops into an interactive shell
 - **Claude may write** to `~/rci_home/` (RCI home — for batch scripts, logs dir, manual code staging).
 - **Claude must NEVER clobber** `/mnt/personal/jelint19/` (results/caches/weights/data) — read only.
 
-**Directory layout of `/mnt/personal/jelint19/` (= `~/rci_data/`):**
-
-```
-/mnt/personal/jelint19/
-├── cache/          # Flow caches, descriptor caches, SAM caches, view graphs
-│   ├── UFM_cache/, SAM_cache/, sift_cache/, view_graph_cache/
-│   ├── detections_cache/, detections_templates_cache/
-│   └── dinov2_cache/, dinov3_cache/
-├── results/        # Experiment outputs
-│   ├── FlowTracker/    # Main onboarding results
-│   ├── PoseEstimation/ # Detection/pose results
-│   └── condensation/   # Template condensation results
-├── data/           # Datasets (HANDAL, HO3D, NAVI, BEHAVE, bop, GoogleScannedObjects, etc.)
-├── weights/        # Pre-trained model weights
-│   ├── RoMa/, SegmentAnything2/, DINO/, DepthAnythingV2/
-│   └── Dust3r/, FastSAM/, MFT/, RAFT/, XMem/
-├── logs/           # Job logs
-└── tmp/            # Temporary files (Gradio temp dir, etc.)
-```
+**Directory layout of `/mnt/personal/jelint19/` (= `~/rci_data/`):** `cache/` (flow/descriptor/SAM caches,
+view graphs), `results/` (`FlowTracker/` onboarding, `PoseEstimation/`, `condensation/`), `data/` (datasets),
+`weights/` (model weights), `logs/`, `tmp/`.
 
 **RCI run script also available locally (read-only):** `/home/tom/rci_home/run_gpu.sh`
 
@@ -355,52 +324,7 @@ SAM3D imports. Takes one RGB image + segmentation mask, runs SAM3D inference, co
 to `pycolmap.Reconstruction` with all mesh vertices as 3D points. Handles PyTorch3D→OpenCV coordinate
 frame conversion. Used via `reconstruction_method = 'sam3d'` with `frame_filter = 'max_visible'`
 (selects the single frame with the most visible object pixels). Alignment/scale recovery is not yet
-implemented (see TODO Phase 3.1).
-
----
-
-## TODO
-
-### Phase 2: Module B — Detection
-
-Goal: clear separation between offline representation building (B1) and online inference (B2).
-
-#### 2.2 Separate representation building from inference
-
-- [ ] Define clean `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel` interface
-- [ ] Condensation algorithms (Hart's CNN, imblearn) stay here
-- [ ] Statistical metadata computation (whitening, CSLS, Mahalanobis) stays here
-
-#### 2.4 Clean up BOP coupling
-
-BOP path utilities extracted to `utils/bop_data.py`. Remaining:
-
-- [ ] Detection module should accept images and models, not know about BOP folder layout
-
----
-
-### Phase 3: Module C — Pose estimation
-
-Goal: given detections and an onboarding result, produce 6DoF poses.
-
-#### 3.2 Evaluation
-
-- [ ] Extend `eval/` with remaining evaluation types:
-    - [ ] `evaluate_detections(detections, ground_truth) -> DetectionMetrics` (BOP COCO)
-    - [ ] `evaluate_poses(pose_estimates, ground_truth) -> PoseMetrics` (BOP 6DoF)
-- [ ] Gradually migrate functions from `utils/bop_challenge.py` into `utils/bop_data.py` (clean extraction already started)
-
----
-
-### Phase 4: Infrastructure improvements
-
-These can be done in parallel with the module work.
-
-#### 4.3 Visualization
-
-- [ ] **Update Rerun SDK from ~0.21 to 0.30** — review breaking API changes (blueprint API, logging API,
-  annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
-  `visualizations/pose_estimation_visualizations.py`, and `visualizations/rerun_utils.py`
+implemented.
 
 ---
 
@@ -458,59 +382,50 @@ default still holds.)
 - End commit messages with the `Co-Authored-By: Claude Opus 4.8 (1M context)` trailer.
 - Still **report** what was committed/pushed in the reply.
 
-### Minimum viable paper — TODO
-
-The narrative is reconstruction-first; each result below backs a stated contribution. Detailed
-sub-steps live in the `## Paper: Onboarding Module Evaluation` checklist (P1–P6) — this is the
-curated MVP subset.
-
-**Core results (must-have):**
-- [ ] **Main reconstruction result** — static onboarding on HANDAL (40 objects, `_up`) with RoMa:
-  pose error, rot/trans accuracy, reconstruction success rate. → backs contribution 1. (see P1.1)
-- [ ] **Ablation A — keyframe selection** — our matchability criterion vs every-N subsampling:
-  accuracy vs mean #keyframes table + plot. → backs contribution 2. (see P3.1,
-  `scripts/ablation_frame_selection.py`)
-- [ ] **Ablation B — view-graph density** — sparse (ours) vs complete edge set: reconstruction
-  quality + runtime, showing speedup *and* quality win. → backs contribution 3. (see P3.2)
-- [ ] **3D reconstruction quality vs GT meshes** — accuracy / completeness / F-score, pose AUC on
-  HANDAL. → strengthens contribution 1. (see P4.4, `scripts/eval_3d_reconstruction.py`)
-- [ ] **One downstream-task demo** — the abstract claims the representation suffices for pose
-  estimation / 6DoF tracking / self-relocalization; include at least one minimal quantitative or
-  qualitative result. (see P5)
-
-**Figures & tables (deliverables):**
-- [ ] Teaser figure (also reused on the project page).
-- [ ] Method/pipeline figure — `glopose-paper/figs/scheme.tex`.
-- [ ] Qualitative reconstruction figure — input → selected keyframes → point cloud → GT overlay.
-- [ ] Frame-selection ablation table + plot; reconstruction-quality table.
-
-**Writing:**
-- [ ] Experiments section written up from the tables above.
-- [ ] Limitations + conclusion.
-- [ ] Tighten Intro/Related Work/Method (drafts exist).
-
-**Release gate (project page):**
-- [ ] Add teaser + qualitative figures to `glopose-page` (un-comment media sections).
-- [ ] Fill arXiv id + PDF link; switch BibTeX from `@misc` preprint to the published entry.
-
 ---
 
-## Paper: Onboarding Module Evaluation
+## TODO
 
-Checklist for producing the experimental results for a paper on the onboarding part of the pipeline.
-Target deliverables: scripts that produce LaTeX-ready tables and qualitative figures.
+One consolidated list: engineering/architecture cleanup, then the paper experiment checklists.
 
-### Datasets
+### Engineering
 
-Primary evaluation datasets:
-- **HANDAL** (40 objects, static + dynamic onboarding sequences, BOP format)
-- **HO3D** (hand-object, GT from multi-cam rig)
-- **NAVI** (novel view synthesis benchmark)
-- **BOP classic** (T-LESS, LM-O, IC-BIN — static onboarding only)
-- **HOPE** (household objects, static + dynamic)
-- **HOT3D** (33 objects, hand-object tracking, fisheye cameras from Meta Aria/Quest3, BOP format)
+**B. Detection — separate representation building (B1) from inference (B2):**
+- [ ] Define clean `build_detection_model(onboarding_result: OnboardingResult, ...) -> DetectionModel` interface
+- [ ] Condensation algorithms (Hart's CNN, imblearn) and statistical metadata (whitening, CSLS, Mahalanobis) stay here
+- [ ] Detection module should accept images and models, not know about BOP folder layout (path utils already in `utils/bop_data.py`)
 
----
+**C. Pose estimation — evaluation:**
+- [ ] Extend `eval/` with `evaluate_detections(...) -> DetectionMetrics` (BOP COCO) and `evaluate_poses(...) -> PoseMetrics` (BOP 6DoF)
+- [ ] Gradually migrate functions from `utils/bop_challenge.py` into `utils/bop_data.py` (extraction started)
+
+**Infrastructure:**
+- [ ] **Update Rerun SDK from ~0.21 to 0.30** — review breaking API changes (blueprint API, logging API,
+  annotation classes, `rr.init`/`rr.spawn` signatures) and update all call sites in `results_logging.py`,
+  `visualizations/pose_estimation_visualizations.py`, and `visualizations/rerun_utils.py`
+
+### Paper — priorities (MVP)
+
+Reconstruction-first narrative; each must-have backs a stated contribution (detail in the per-experiment
+checklists below).
+
+- [ ] **Main reconstruction result** — static HANDAL (40 objects, `_up`) with RoMa: pose error, rot/trans
+  accuracy, reconstruction success rate → contribution 1 (P1.1)
+- [ ] **Ablation A — keyframe selection** — matchability criterion vs every-N subsampling → contribution 2 (P3.1)
+- [ ] **Ablation B — view-graph density** — sparse (ours) vs complete edge set, quality + runtime → contribution 3 (P3.2)
+- [ ] **3D reconstruction quality vs GT meshes** — accuracy/completeness/F-score, pose AUC on HANDAL (P4.4)
+- [ ] **One downstream-task demo** — minimal pose-estimation/tracking/relocalization result (P5)
+- [ ] **Figures:** teaser (reused on page); method/pipeline (`glopose-paper/figs/scheme.tex`); qualitative
+  reconstruction (input → keyframes → point cloud → GT overlay)
+- [ ] **Writing:** Experiments section from the tables; limitations + conclusion; tighten Intro/Related Work/Method
+- [ ] **Release gate (page):** add teaser + qualitative figures to `glopose-page` (un-comment media); fill
+  arXiv id + PDF link; switch BibTeX from `@misc` to the published entry
+
+### Paper — onboarding experiments
+
+Deliverables: scripts that produce LaTeX-ready tables and qualitative figures. Datasets: **HANDAL** (40
+objects, static + dynamic, BOP), **HO3D** (hand-object, multi-cam GT), **NAVI**, **BOP classic** (T-LESS,
+LM-O, IC-BIN — static only), **HOPE** (static + dynamic), **HOT3D** (33 objects, fisheye Aria/Quest3, BOP).
 
 ### P1. Reliable static onboarding baseline
 
@@ -587,15 +502,12 @@ Compare our adaptive frame filtering against fixed-interval subsampling.
 Compare our filtered ViewGraph (selective edges based on matching reliability) against a complete
 (all-to-all) ViewGraph.
 
-- [ ] Verify that `frame_filter_view_graph='dense'` config option creates all-to-all edges in the
-  ViewGraph (check `onboarding/frame_filter.py` and `onboarding/pipeline.py`)
-- [ ] Run with `frame_filter_view_graph='dense'` on HANDAL static sequences — same keyframes as
-  our adaptive filter, but with all-to-all matching
-- [ ] Run with our default filtered ViewGraph on the same sequences
-- [ ] Add rows to the frame selection table or produce a separate **Table: ViewGraph density ablation**
+The config field is `OnboardingConfig.view_graph_strategy` (`'from_matching'` | `'dense'` | `'linear'`).
 
-(Implementation note: the config field is `OnboardingConfig.view_graph_strategy`
-(`'from_matching'` | `'dense'` | `'linear'`), not the older `frame_filter_view_graph` name used above.)
+- [ ] Verify `view_graph_strategy='dense'` creates all-to-all edges (check `onboarding/frame_filter.py`,
+  `onboarding/pipeline.py`)
+- [ ] Run `view_graph_strategy='dense'` vs our default filtered ViewGraph on HANDAL static (same keyframes)
+- [ ] Add rows to the frame selection table or produce a separate **Table: ViewGraph density ablation**
 
 #### P3.2.1 Linear (sequential) view-graph topology
 
@@ -752,10 +664,9 @@ Summary of all scripts and outputs for the paper.
 
 ---
 
-## Paper: Detection Module Evaluation
+### Paper — detection experiments
 
-Checklist for the detection paper. Key experiment: 3-way comparison of CNOS + BOP onboarding frames
-vs CNOS + our keyframes vs GloPose detection.
+Key experiment: 3-way comparison of CNOS + BOP onboarding frames vs CNOS + our keyframes vs GloPose detection.
 
 ### D1. Verify vendored detection produces identical results
 
